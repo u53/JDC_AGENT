@@ -1,8 +1,8 @@
 import { v4 as uuid } from 'uuid'
 import path from 'node:path'
 import {
-  Session, type SessionEvents, AnthropicProvider, ConversationHistory,
-  loadAppConfig, getConfigDir, type ModelConfig, type SessionConfig, type StreamChunk,
+  Session, type SessionEvents, AnthropicProvider, OpenAIChatProvider, OpenAIResponsesProvider,
+  ConversationHistory, loadAppConfig, getConfigDir, type ModelConfig, type SessionConfig, type StreamChunk,
 } from '@jdcagnet/core'
 import type { ToolExecutionEvent } from '@jdcagnet/core'
 import type { BrowserWindow } from 'electron'
@@ -56,6 +56,18 @@ export class SessionManager {
     return Array.from(projects.values())
   }
 
+  private createProvider(group: { protocol?: string; apiKey: string; baseUrl?: string }) {
+    switch (group.protocol) {
+      case 'openai':
+        return new OpenAIChatProvider(group.apiKey, group.baseUrl)
+      case 'openai-responses':
+        return new OpenAIResponsesProvider(group.apiKey, group.baseUrl)
+      case 'anthropic':
+      default:
+        return new AnthropicProvider(group.apiKey, group.baseUrl || undefined)
+    }
+  }
+
   async activateSession(sessionId: string): Promise<void> {
     if (this.sessions.has(sessionId)) return
     const meta = this.history.listSessions().find(s => s.id === sessionId)
@@ -71,7 +83,7 @@ export class SessionManager {
     const sessionConfig: SessionConfig = {
       id: sessionId, projectName: meta.projectName, cwd: meta.cwd, modelConfig,
     }
-    const provider = new AnthropicProvider(active.group.apiKey, active.group.baseUrl || undefined)
+    const provider = this.createProvider(active.group)
     const session = new Session(sessionConfig, provider, this.history)
     session.loadHistory()
     this.sessions.set(sessionId, session)
