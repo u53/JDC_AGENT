@@ -3,9 +3,12 @@ import { useSession } from '../hooks/useSession'
 import { MessageBubble } from './MessageBubble'
 import { ToolCard } from './ToolCard'
 import { PromptInput } from './PromptInput'
+import { ModelSwitcher } from './ModelSwitcher'
+import { useSessionStore } from '../stores/session-store'
 
 export function ChatView() {
   const { messages, streamingText, isStreaming, toolEvents, sendMessage, abort } = useSession()
+  const { activeSessionId } = useSessionStore()
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -15,6 +18,12 @@ export function ChatView() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex items-center justify-between border-b border-[#EAEAEA] px-6 py-3">
+        <span className="text-sm font-medium text-[#2F3437]">
+          {activeSessionId ? activeSessionId.slice(0, 8) : ''}
+        </span>
+        <ModelSwitcher />
+      </div>
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
         <div className="mx-auto max-w-[720px]">
           {messages.map((msg) => (
