@@ -1,4 +1,5 @@
 import type { ToolExecutionEvent } from '@jdcagnet/core'
+import { BashToolCard } from './BashToolCard'
 import { GenericToolCard } from './GenericToolCard'
 import { parseMcpToolName } from './shared'
 
@@ -10,7 +11,7 @@ export interface ToolCardRouterProps {
 }
 
 const TOOL_CARD_REGISTRY: Record<string, React.ComponentType<ToolCardRouterProps>> = {
-  // Will be populated in subsequent tasks
+  Bash: BashToolCard,
 }
 
 export function ToolCardRouter(props: ToolCardRouterProps) {
