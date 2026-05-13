@@ -67,16 +67,19 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
   })
 
   ipcMain.handle(IPC_CHANNELS.SESSION_COMPACT, async (_event, { sessionId }) => {
+    console.log('[IPC] session:compact called for', sessionId)
     await sessionManager.compactSession(sessionId)
     return { success: true }
   })
 
   ipcMain.handle(IPC_CHANNELS.SESSION_CLEAR, async (_event, { sessionId }) => {
+    console.log('[IPC] session:clear called for', sessionId)
     sessionManager.clearSession(sessionId)
     return { success: true }
   })
 
   ipcMain.handle(IPC_CHANNELS.SESSION_SET_THINKING, async (_event, { sessionId, enabled, budget }) => {
+    console.log('[IPC] session:set-thinking called', sessionId, enabled)
     sessionManager.setThinking(sessionId, enabled, budget)
     return { success: true }
   })

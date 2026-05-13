@@ -266,6 +266,7 @@ export class SessionManager {
     const session = this.sessions.get(sessionId)
     if (session) {
       session.clearMessages()
+      this.window?.webContents.send('session:messages-updated', { sessionId, messages: [] })
     }
   }
 

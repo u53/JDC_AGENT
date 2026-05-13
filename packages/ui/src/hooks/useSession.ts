@@ -48,11 +48,19 @@ export function useSession() {
       setToolEvents([])
     })
 
+    // Listen for messages-updated (from compact, clear, etc.)
+    const unsubMessagesUpdated = window.electronAPI?.on('session:messages-updated', (_e: unknown, data: unknown) => {
+      const { sessionId, messages: msgs } = data as { sessionId: string; messages: any[] }
+      if (sessionId !== activeSessionId) return
+      useSessionStore.setState({ messages: msgs })
+    }) || (() => {})
+
     return () => {
       unsubStream()
       unsubTool()
       unsubComplete()
       unsubError()
+      unsubMessagesUpdated()
     }
   }, [activeSessionId])
 
