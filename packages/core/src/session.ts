@@ -5,6 +5,7 @@ import { ToolRegistry } from './tool-registry.js'
 import { ToolRunner, type ToolExecutionEvent } from './tool-runner.js'
 import { registerBuiltinTools } from './tools/index.js'
 import { ConversationHistory } from './history.js'
+import { assembleSystemPrompt } from './context.js'
 
 export interface SessionEvents {
   onStreamChunk: (chunk: StreamChunk) => void
@@ -42,6 +43,13 @@ export class Session {
   }
 
   async sendMessage(text: string, events: SessionEvents): Promise<void> {
+    // Assemble system prompt with current tool list
+    const toolNames = this.toolRegistry.getDefinitions().map(d => d.name)
+    this.config.modelConfig.systemPrompt = await assembleSystemPrompt({
+      cwd: this.config.cwd,
+      toolNames,
+    })
+
     const userMessage: Message = {
       id: uuid(),
       role: 'user',
