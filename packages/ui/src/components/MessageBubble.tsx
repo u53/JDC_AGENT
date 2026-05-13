@@ -1,4 +1,4 @@
-import ReactMarkdown from 'react-markdown'
+import { MarkdownRenderer } from './MarkdownRenderer'
 import type { ContentBlock } from '@jdcagnet/core'
 
 interface Props {
@@ -20,9 +20,16 @@ export function MessageBubble({ role, content }: Props) {
       >
         {content.map((block, i) => {
           if (block.type === 'text') {
+            if (isUser) {
+              return (
+                <p key={i} className="whitespace-pre-wrap">
+                  {block.text}
+                </p>
+              )
+            }
             return (
               <div key={i} className="prose prose-sm prose-invert max-w-none">
-                <ReactMarkdown>{block.text}</ReactMarkdown>
+                <MarkdownRenderer content={block.text} />
               </div>
             )
           }

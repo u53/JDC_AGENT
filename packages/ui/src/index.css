@@ -35,3 +35,11 @@ body::after {
   background: #E61919;
   color: #EAEAEA;
 }
+
+/* highlight.js theme override for CRT */
+.hljs { background: #050505 !important; color: #EAEAEA !important; }
+.hljs-keyword { color: #4AF626; }
+.hljs-string { color: #E6C619; }
+.hljs-comment { color: #666; }
+.hljs-number { color: #19B5E6; }
+.hljs-function .hljs-title { color: #EAEAEA; }
