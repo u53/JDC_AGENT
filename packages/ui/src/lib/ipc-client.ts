@@ -1,11 +1,24 @@
 import type { AppConfig, Message, StreamChunk, ToolExecutionEvent } from '@jdcagnet/core'
 
+export interface McpServerState {
+  name: string
+  config: { transport: string; command?: string; args?: string[]; url?: string; disabled?: boolean }
+  status: 'connected' | 'connecting' | 'failed' | 'disconnected' | 'disabled'
+  error?: string
+  tools: { name: string; description?: string }[]
+}
+
 declare global {
   interface Window {
     electronAPI?: {
       invoke: (channel: string, data?: unknown) => Promise<unknown>
       on: (channel: string, callback: (event: unknown, ...args: unknown[]) => void) => () => void
       send: (channel: string, data: unknown) => void
+      mcpListServers: () => Promise<McpServerState[]>
+      mcpReconnect: (serverName: string) => Promise<void>
+      mcpToggle: (serverName: string, enabled: boolean) => Promise<void>
+      mcpSaveConfig: (servers: any, scope: string, cwd?: string) => Promise<void>
+      onMcpStateChanged: (callback: (states: McpServerState[]) => void) => void
     }
   }
 }

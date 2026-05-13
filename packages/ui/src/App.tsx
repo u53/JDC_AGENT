@@ -1,15 +1,17 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { ChatView } from './components/ChatView'
 import { StatusBar } from './components/StatusBar'
 import { ModelManager } from './components/ModelManager'
 import { PermissionDialog } from './components/PermissionDialog'
+import { McpSettings } from './components/McpSettings'
 import { useSessionStore } from './stores/session-store'
 import { useModelStore } from './stores/model-store'
 
 export function App() {
   const { activeSessionId } = useSessionStore()
   const loadModels = useModelStore((s) => s.loadFromConfig)
+  const [mcpOpen, setMcpOpen] = useState(false)
 
   useEffect(() => { loadModels() }, [loadModels])
 
@@ -27,10 +29,11 @@ export function App() {
             </div>
           </div>
         )}
-        <StatusBar />
+        <StatusBar onOpenMcp={() => setMcpOpen(true)} />
       </div>
       <ModelManager />
       <PermissionDialog />
+      <McpSettings isOpen={mcpOpen} onClose={() => setMcpOpen(false)} />
     </div>
   )
 }
