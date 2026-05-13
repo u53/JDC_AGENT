@@ -30,6 +30,9 @@ export interface SessionEvents {
   onToolEvent: (event: ToolExecutionEvent) => void
   onMessageComplete: (message: Message) => void
   onError: (error: Error) => void
+  onAgentProgress?: (agentToolUseId: string, event: { toolName: string; toolStatus: 'start' | 'complete' | 'error'; toolInput?: Record<string, unknown>; toolResult?: { content: string; isError?: boolean }; toolCount: number }) => void
+  onAgentText?: (agentToolUseId: string, text: string) => void
+  onAgentComplete?: (agentToolUseId: string, result: { content: string; turns: number; toolsUsed: string[] }) => void
 }
 
 export class Session {
@@ -48,6 +51,8 @@ export class Session {
   private skillLoader: SkillLoader
   private skillsReady: Promise<void>
   private permissionChecker: PermissionChecker
+  private agentAbortControllers = new Map<string, AbortController>()
+  private currentEvents?: SessionEvents
 
   constructor(config: SessionConfig, provider: ModelProvider, history: ConversationHistory, onPermissionRequest?: PermissionCallback, mcpManager?: McpManager) {
     this.id = config.id
@@ -97,6 +102,16 @@ export class Session {
       onToolEvent: undefined,
       onPermissionRequest,
       isSubAgent: false,
+      onAgentProgress: (agentToolUseId, event) => {
+        this.currentEvents?.onAgentProgress?.(agentToolUseId, event)
+      },
+      onAgentText: (agentToolUseId, text) => {
+        this.currentEvents?.onAgentText?.(agentToolUseId, text)
+      },
+      onAgentComplete: (agentToolUseId, result) => {
+        this.currentEvents?.onAgentComplete?.(agentToolUseId, result)
+      },
+      agentAbortControllers: this.agentAbortControllers,
     }))
   }
 
@@ -221,6 +236,7 @@ export class Session {
 
   private async runLoop(events: SessionEvents): Promise<void> {
     this.abortController = new AbortController()
+    this.currentEvents = events
 
     if (this.shouldCompact()) {
       await this.compact(events)
@@ -301,9 +317,17 @@ export class Session {
     }
 
     this.abortController = null
+    this.currentEvents = undefined
   }
 
   abort(): void {
     this.abortController?.abort()
+  }
+
+  abortAgent(agentToolUseId: string): void {
+    const controller = this.agentAbortControllers.get(agentToolUseId)
+    if (controller) {
+      controller.abort()
+    }
   }
 }
