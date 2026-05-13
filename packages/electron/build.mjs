@@ -5,7 +5,7 @@ await build({
   bundle: true,
   platform: 'node',
   outdir: 'dist',
-  external: ['electron', 'better-sqlite3'],
+  external: ['electron', 'better-sqlite3', '@jdcagnet/core'],
   format: 'esm',
   banner: {
     js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url); import { fileURLToPath } from 'url'; const __filename = fileURLToPath(import.meta.url); import { dirname } from 'path'; const __dirname = dirname(__filename);",

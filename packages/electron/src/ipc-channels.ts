@@ -1,0 +1,15 @@
+export const IPC_CHANNELS = {
+  SESSION_CREATE: 'session:create',
+  SESSION_LIST: 'session:list',
+  SESSION_SWITCH: 'session:switch',
+  SESSION_DELETE: 'session:delete',
+  QUERY_SEND: 'query:send',
+  QUERY_ABORT: 'query:abort',
+  QUERY_STREAM: 'query:stream',
+  QUERY_TOOL_EVENT: 'query:tool-event',
+  QUERY_COMPLETE: 'query:complete',
+  QUERY_ERROR: 'query:error',
+  CONFIG_GET: 'config:get',
+  CONFIG_SET: 'config:set',
+  DIALOG_OPEN_FOLDER: 'dialog:open-folder',
+} as const
