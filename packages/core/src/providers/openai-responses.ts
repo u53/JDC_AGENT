@@ -1,0 +1,207 @@
+import OpenAI from 'openai'
+import type { ModelProvider } from '../model-provider.js'
+import type { ContentBlock, Message, ModelConfig, StreamChunk, ToolDefinition } from '../types.js'
+
+interface ResponsesInput {
+  role?: string
+  type?: string
+  content?: string
+  call_id?: string
+  output?: string
+}
+
+interface ResponsesTool {
+  type: 'function'
+  name: string
+  description: string
+  parameters: Record<string, unknown>
+}
+
+interface ResponsesOutputText {
+  type: 'output_text'
+  text: string
+}
+
+interface ResponsesMessageItem {
+  type: 'message'
+  content: ResponsesOutputText[]
+}
+
+interface ResponsesFunctionCallItem {
+  type: 'function_call'
+  call_id: string
+  name: string
+  arguments: string
+}
+
+type ResponsesOutputItem = ResponsesMessageItem | ResponsesFunctionCallItem
+
+interface ResponsesResult {
+  output: ResponsesOutputItem[]
+  usage?: { input_tokens?: number; output_tokens?: number }
+}
+
+export class OpenAIResponsesProvider implements ModelProvider {
+  name = 'openai-responses'
+  private client: OpenAI
+
+  constructor(apiKey: string, baseURL?: string) {
+    this.client = new OpenAI({
+      apiKey,
+      ...(baseURL ? { baseURL } : {}),
+    })
+  }
+
+  async chat(
+    messages: Message[],
+    tools: ToolDefinition[],
+    config: ModelConfig,
+    signal?: AbortSignal
+  ) {
+    const params: Record<string, unknown> = {
+      model: config.model,
+      input: this.formatInput(messages, config.systemPrompt),
+      ...(tools.length > 0 ? { tools: this.formatTools(tools) } : {}),
+      ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
+      ...(config.maxTokens ? { max_output_tokens: config.maxTokens } : {}),
+    }
+
+    const response = (await (this.client as any).responses.create(params, { signal })) as ResponsesResult
+
+    if (!response.output || response.output.length === 0) {
+      return {
+        content: [],
+        usage: { inputTokens: 0, outputTokens: 0 },
+      }
+    }
+
+    const content: ContentBlock[] = []
+
+    for (const item of response.output) {
+      if (item.type === 'message') {
+        for (const part of item.content) {
+          if (part.type === 'output_text') {
+            content.push({ type: 'text', text: part.text })
+          }
+        }
+      } else if (item.type === 'function_call') {
+        let parsedArgs: Record<string, unknown> = {}
+        try {
+          parsedArgs = JSON.parse(item.arguments || '{}')
+        } catch {
+          // Malformed JSON from API — fall back to empty object
+        }
+        content.push({
+          type: 'tool_use',
+          id: item.call_id,
+          name: item.name,
+          input: parsedArgs,
+        })
+      }
+    }
+
+    return {
+      content,
+      usage: {
+        inputTokens: response.usage?.input_tokens ?? 0,
+        outputTokens: response.usage?.output_tokens ?? 0,
+      },
+    }
+  }
+
+  async *stream(
+    messages: Message[],
+    tools: ToolDefinition[],
+    config: ModelConfig,
+    signal?: AbortSignal
+  ): AsyncIterable<StreamChunk> {
+    const params: Record<string, unknown> = {
+      model: config.model,
+      input: this.formatInput(messages, config.systemPrompt),
+      stream: true,
+      ...(tools.length > 0 ? { tools: this.formatTools(tools) } : {}),
+      ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
+      ...(config.maxTokens ? { max_output_tokens: config.maxTokens } : {}),
+    }
+
+    const stream = await (this.client as any).responses.create(params, { signal })
+
+    for await (const event of stream) {
+      if (event.type === 'response.output_text.delta') {
+        yield { type: 'text_delta', text: event.delta }
+      } else if (event.type === 'response.output_item.added' && event.item?.type === 'function_call') {
+        yield {
+          type: 'tool_use_start',
+          toolUse: { id: event.item.call_id || '', name: event.item.name || '', input: '' },
+        }
+      } else if (event.type === 'response.function_call_arguments.delta') {
+        yield {
+          type: 'tool_use_delta',
+          toolUse: { id: '', name: '', input: event.delta },
+        }
+      } else if (event.type === 'response.output_item.done' && event.item?.type === 'function_call') {
+        yield { type: 'tool_use_end' }
+      } else if (event.type === 'response.completed') {
+        yield {
+          type: 'message_end',
+          usage: {
+            inputTokens: event.response?.usage?.input_tokens ?? 0,
+            outputTokens: event.response?.usage?.output_tokens ?? 0,
+          },
+        }
+      }
+    }
+  }
+
+  private formatTools(tools: ToolDefinition[]): ResponsesTool[] {
+    return tools.map(t => ({
+      type: 'function' as const,
+      name: t.name,
+      description: t.description,
+      parameters: t.inputSchema,
+    }))
+  }
+
+  private formatInput(messages: Message[], systemPrompt?: string): ResponsesInput[] {
+    const input: ResponsesInput[] = []
+
+    if (systemPrompt) {
+      input.push({ role: 'system', content: systemPrompt })
+    }
+
+    for (const msg of messages) {
+      if (msg.role === 'system') continue
+
+      const textBlocks = msg.content.filter(b => b.type === 'text')
+      const toolResultBlocks = msg.content.filter(b => b.type === 'tool_result')
+
+      if (toolResultBlocks.length > 0) {
+        for (const block of toolResultBlocks) {
+          if (block.type === 'tool_result') {
+            input.push({
+              type: 'function_call_output',
+              call_id: block.tool_use_id,
+              output: block.content,
+            })
+          }
+        }
+      }
+
+      if (textBlocks.length > 0) {
+        const text = textBlocks
+          .filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text')
+          .map(b => b.text)
+          .join('\n')
+        if (text) {
+          if (msg.role === 'assistant') {
+            input.push({ role: 'assistant', content: text })
+          } else {
+            input.push({ role: 'user', content: text })
+          }
+        }
+      }
+    }
+
+    return input
+  }
+}
