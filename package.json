@@ -1,0 +1,14 @@
+{
+  "name": "jdcagnet",
+  "private": true,
+  "scripts": {
+    "dev": "tsx scripts/dev.ts",
+    "build": "pnpm -r build",
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "tsx": "^4.19.0",
+    "vitest": "^3.0.0"
+  }
+}
