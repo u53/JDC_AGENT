@@ -43,6 +43,19 @@ export function McpSettings({ isOpen, onClose }: McpSettingsProps) {
     await window.electronAPI?.mcpToggle(name, currentlyDisabled)
   }
 
+  const handleDelete = async (name: string) => {
+    // Load current config, remove the server, save back
+    const allServers: Record<string, any> = {}
+    for (const s of servers) {
+      if (s.name !== name) {
+        allServers[s.name] = s.config
+      }
+    }
+    await window.electronAPI?.mcpSaveConfig(allServers, 'global')
+    // Remove from local state immediately
+    setServers(prev => prev.filter(s => s.name !== name))
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="w-[560px] max-h-[80vh] border border-[#333] bg-[#0A0A0A] overflow-hidden flex flex-col">
@@ -164,6 +177,16 @@ export function McpSettings({ isOpen, onClose }: McpSettingsProps) {
                       </div>
                     </div>
                   )}
+
+                  {/* Delete button */}
+                  <div className="mt-3 pt-2 border-t border-[#333]">
+                    <button
+                      onClick={() => handleDelete(server.name)}
+                      className="text-[10px] uppercase tracking-[0.05em] text-red-500 hover:text-red-400 transition-colors"
+                    >
+                      [DELETE SERVER]
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
