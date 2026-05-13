@@ -105,6 +105,7 @@ export class AnthropicProvider implements ModelProvider {
           return block
         }),
       }))
+      .filter(m => Array.isArray(m.content) && m.content.length > 0)
 
     // Anthropic requires strict user/assistant alternation — merge consecutive same-role messages
     const merged: Anthropic.MessageParam[] = []
@@ -122,6 +123,59 @@ export class AnthropicProvider implements ModelProvider {
     // Ensure first message is user role
     if (merged.length > 0 && merged[0].role !== 'user') {
       merged.unshift({ role: 'user', content: [{ type: 'text', text: '.' }] })
+    }
+
+    // Fix orphaned tool_results: Anthropic requires tool_result to immediately follow
+    // the assistant message containing the matching tool_use. Convert orphaned ones to text.
+    const validToolUseIds = new Set<string>()
+    for (let i = 0; i < merged.length; i++) {
+      const m = merged[i]
+      const content = Array.isArray(m.content) ? m.content : []
+
+      if (m.role === 'assistant') {
+        validToolUseIds.clear()
+        for (const b of content) {
+          if ((b as any).type === 'tool_use') validToolUseIds.add((b as any).id)
+        }
+      } else if (m.role === 'user') {
+        const fixedContent: any[] = []
+        for (const b of content) {
+          if ((b as any).type === 'tool_result') {
+            if (validToolUseIds.has((b as any).tool_use_id)) {
+              fixedContent.push(b)
+              validToolUseIds.delete((b as any).tool_use_id)
+            } else {
+              fixedContent.push({ type: 'text', text: `[Tool output: ${(b as any).content?.slice(0, 200) || ''}]` })
+            }
+          } else {
+            fixedContent.push(b)
+          }
+        }
+        m.content = fixedContent as any
+        validToolUseIds.clear()
+      }
+    }
+
+    // Also remove tool_use blocks from assistant messages that have no following tool_result
+    for (let i = 0; i < merged.length - 1; i++) {
+      if (merged[i].role === 'assistant') {
+        const content = Array.isArray(merged[i].content) ? merged[i].content as any[] : []
+        const toolUseIds = content.filter((b: any) => b.type === 'tool_use').map((b: any) => b.id)
+        if (toolUseIds.length === 0) continue
+
+        const nextMsg = merged[i + 1]
+        if (nextMsg.role !== 'user') continue
+        const nextContent = Array.isArray(nextMsg.content) ? nextMsg.content as any[] : []
+        const resultIds = new Set(nextContent.filter((b: any) => b.type === 'tool_result').map((b: any) => b.tool_use_id))
+
+        const orphanedToolUses = toolUseIds.filter((id: string) => !resultIds.has(id))
+        if (orphanedToolUses.length > 0) {
+          merged[i].content = content.filter((b: any) => b.type !== 'tool_use' || !orphanedToolUses.includes(b.id)) as any
+          if ((merged[i].content as any[]).length === 0) {
+            merged[i].content = [{ type: 'text', text: '.' }] as any
+          }
+        }
+      }
     }
 
     return merged

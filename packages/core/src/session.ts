@@ -229,9 +229,7 @@ export class Session {
   private shouldCompact(): boolean {
     const compressAt = this.config.modelConfig.maxTokens * 0.8
     const tokenEstimate = estimateTokens(this.messages)
-    if (tokenEstimate > compressAt) return true
-    if (this.messages.length > 80) return true
-    return false
+    return tokenEstimate > compressAt
   }
 
   private async compact(events: SessionEvents): Promise<void> {
