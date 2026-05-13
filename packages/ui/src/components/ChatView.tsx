@@ -19,8 +19,15 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   const [responseExpanded, setResponseExpanded] = useState(false)
   const [thinkingEnabled, setThinkingEnabled] = useState(true)
   const [toast, setToast] = useState<string | null>(null)
+  const [skills, setSkills] = useState<{ name: string; description: string }[]>([])
 
   const activeModel = getActiveModel()
+
+  useEffect(() => {
+    if (activeSessionId && (window as any).electronAPI?.listSkills) {
+      (window as any).electronAPI.listSkills(activeSessionId).then(setSkills).catch(() => {})
+    }
+  }, [activeSessionId])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -149,6 +156,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         permissionMode={permissionMode}
         onPermissionChange={setPermissionMode}
         modelName={activeModel?.model.name}
+        skills={skills}
       />
     </div>
   )

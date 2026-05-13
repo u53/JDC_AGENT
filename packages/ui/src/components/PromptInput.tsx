@@ -11,9 +11,10 @@ interface Props {
   onPermissionChange?: (mode: string) => void
   modelName?: string
   onModelClick?: () => void
+  skills?: { name: string; description: string }[]
 }
 
-export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, permissionMode = 'standard', onPermissionChange, modelName, onModelClick }: Props) {
+export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, permissionMode = 'standard', onPermissionChange, modelName, onModelClick, skills }: Props) {
   const [text, setText] = useState('')
   const [images, setImages] = useState<{ data: string; mediaType: string }[]>([])
   const [showSlashMenu, setShowSlashMenu] = useState(false)
@@ -110,7 +111,7 @@ export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, perm
       <ImagePreview images={images} onRemove={(i) => setImages(prev => prev.filter((_, idx) => idx !== i))} />
       <div className="mx-auto max-w-[760px]">
         <div className="relative mb-2">
-          <SlashCommandMenu filter={slashFilter} visible={showSlashMenu} onSelect={handleSlashSelect} onClose={() => setShowSlashMenu(false)} />
+          <SlashCommandMenu filter={slashFilter} visible={showSlashMenu} onSelect={handleSlashSelect} onClose={() => setShowSlashMenu(false)} skills={skills} />
           <div className="flex items-end gap-3">
             <textarea
               ref={textareaRef}

@@ -56,4 +56,8 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
     if (result.canceled) return { path: null }
     return { path: result.filePaths[0] }
   })
+
+  ipcMain.handle(IPC_CHANNELS.SKILLS_LIST, async (_event, { sessionId }) => {
+    return sessionManager.getSkills(sessionId)
+  })
 }

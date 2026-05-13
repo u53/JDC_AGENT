@@ -22,13 +22,19 @@ interface Props {
   visible: boolean
   onSelect: (command: SlashCommand) => void
   onClose: () => void
+  skills?: { name: string; description: string }[]
 }
 
-export function SlashCommandMenu({ filter, visible, onSelect, onClose }: Props) {
+export function SlashCommandMenu({ filter, visible, onSelect, onClose, skills = [] }: Props) {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  const filtered = COMMANDS.filter(cmd =>
+  const allCommands: SlashCommand[] = [
+    ...COMMANDS,
+    ...skills.map(s => ({ name: s.name, description: `[SKILL] ${s.description}` })),
+  ]
+
+  const filtered = allCommands.filter(cmd =>
     cmd.name.toLowerCase().includes(filter.toLowerCase())
   )
 

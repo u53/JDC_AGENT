@@ -21,6 +21,7 @@ const api = {
   onMcpStateChanged: (callback: (states: any[]) => void) => {
     ipcRenderer.on('mcp:state-changed', (_event, states) => callback(states))
   },
+  listSkills: (sessionId: string) => ipcRenderer.invoke('skills:list', { sessionId }),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

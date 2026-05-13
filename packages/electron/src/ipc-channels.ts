@@ -16,4 +16,5 @@ export const IPC_CHANNELS = {
   MCP_RECONNECT: 'mcp:reconnect',
   MCP_TOGGLE: 'mcp:toggle',
   MCP_SAVE_CONFIG: 'mcp:save-config',
+  SKILLS_LIST: 'skills:list',
 } as const

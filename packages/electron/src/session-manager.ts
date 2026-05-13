@@ -206,6 +206,18 @@ export class SessionManager {
     }
   }
 
+  getSkills(sessionId: string): { name: string; description: string; argumentHint?: string }[] {
+    const session = this.sessions.get(sessionId)
+    if (!session) return []
+    const loader = session.getSkillLoader()
+    if (!loader) return []
+    return loader.getInvocable().map(s => ({
+      name: s.name,
+      description: s.description,
+      argumentHint: s.argumentHint,
+    }))
+  }
+
   saveMcpServers(servers: Record<string, McpServerConfig>, scope: 'global' | 'project', cwd?: string): void {
     saveMcpConfig(servers, scope, cwd)
   }
