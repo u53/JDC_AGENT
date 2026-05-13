@@ -38,6 +38,7 @@ export function getBasePrompt(opts: PromptOptions): string {
     sections.push(getMcpSection(mcpServers))
   }
 
+  sections.push(getConfigurationSection(environment))
   sections.push(getEnvironmentSection(environment))
 
   return sections.join('\n\n')
@@ -209,6 +210,104 @@ ${serverList}
 
 MCP tools are prefixed with \`mcp__<server_name>__<tool_name>\`. Use them like any other tool.
 You can also use \`list_mcp_resources\` to discover available resources and \`read_mcp_resource\` to read them.`
+}
+
+function getConfigurationSection(env: PromptEnvironment): string {
+  const home = process.env.HOME || '~'
+  return `# Configuration Paths
+
+JDCAGNET uses a two-level configuration system: global (user-wide) and project (per-project). Project-level configs override global ones.
+
+## MCP Servers
+
+MCP server configuration defines which external tool servers to connect to.
+
+- Global: \`${home}/.jdcagnet/mcp-servers.json\`
+- Project: \`${env.cwd}/.jdcagnet/mcp-servers.json\`
+
+Format:
+\`\`\`json
+{
+  "server-name": {
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path"],
+    "disabled": false
+  },
+  "sse-server": {
+    "transport": "sse",
+    "url": "http://localhost:3000/sse"
+  }
+}
+\`\`\`
+
+When the user asks to add an MCP server, write to the project-level file (\`${env.cwd}/.jdcagnet/mcp-servers.json\`) by default. Use global only if the user explicitly says "global" or the server is not project-specific.
+
+## Skills
+
+Skills are reusable instruction templates (markdown files with YAML frontmatter).
+
+- Global: \`${home}/.jdcagnet/skills/\`
+- Project: \`${env.cwd}/.jdcagnet/skills/\`
+
+Each skill is either a single file (\`skill-name.md\`) or a directory (\`skill-name/SKILL.md\`).
+
+Format:
+\`\`\`markdown
+---
+name: skill-name
+description: What this skill does
+user-invocable: true
+arguments:
+  - arg-name
+argument-hint: "<file-path>"
+allowed-tools:
+  - Bash
+  - file_edit
+---
+
+Skill instructions here. Use \${1}, \${2} for argument substitution.
+\`\`\`
+
+When the user asks to create a skill, write to the project-level directory (\`${env.cwd}/.jdcagnet/skills/\`) by default. Use global only if the user explicitly says "global" or the skill is not project-specific.
+
+## Hooks
+
+Hooks run shell commands before/after tool execution.
+
+- Global: \`${home}/.jdcagnet/hooks.json\`
+- Project: \`${env.cwd}/.jdcagnet/hooks.json\`
+
+Format:
+\`\`\`json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{ "type": "command", "command": "node check.js", "timeout": 10000 }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [{ "type": "command", "command": "echo done" }]
+      }
+    ]
+  }
+}
+\`\`\`
+
+Matcher patterns: \`"*"\` (all tools), \`"ToolName"\` (exact), \`"mcp__*"\` (prefix).
+Hook input is passed via stdin as JSON. Hook stdout is parsed as JSON: \`{"decision": "block", "reason": "..."}\` to block, or empty/allow to proceed.
+
+## Project Instructions
+
+- Global: \`${home}/.jdcagnet/JDCAGNET.md\`
+- Project: \`${env.cwd}/JDCAGNET.md\` or \`${env.cwd}/.jdcagnet/JDCAGNET.md\`
+- Project rules: \`${env.cwd}/.jdcagnet/rules/*.md\`
+
+These files contain instructions that are loaded into the system prompt automatically.`
 }
 
 function getEnvironmentSection(env: PromptEnvironment): string {
