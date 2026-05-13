@@ -77,7 +77,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
         currentToolUse = { id: chunk.toolUse.id, name: chunk.toolUse.name, input: '' }
       }
       if (chunk.type === 'tool_use_delta' && currentToolUse) {
-        currentToolUse.input += chunk.text || ''
+        currentToolUse.input += chunk.toolUse?.input || chunk.text || ''
       }
       if (chunk.type === 'tool_use_end' && currentToolUse) {
         toolUses.push(currentToolUse)
