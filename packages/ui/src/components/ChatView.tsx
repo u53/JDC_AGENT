@@ -6,6 +6,39 @@ import { PromptInput } from './PromptInput'
 import { useSessionStore } from '../stores/session-store'
 import { useModelStore } from '../stores/model-store'
 import { useSettingsStore } from '../stores/settings-store'
+import type { ToolExecutionEvent } from '@jdcagnet/core'
+
+type GroupedToolEvent =
+  | { type: 'single'; event: ToolExecutionEvent }
+  | { type: 'read-group'; events: ToolExecutionEvent[] }
+
+function groupToolEvents(events: ToolExecutionEvent[]): GroupedToolEvent[] {
+  const result: GroupedToolEvent[] = []
+  let readBuffer: ToolExecutionEvent[] = []
+
+  const flushReads = () => {
+    if (readBuffer.length >= 2 && readBuffer.every(e => e.type === 'complete')) {
+      result.push({ type: 'read-group', events: [...readBuffer] })
+    } else {
+      for (const e of readBuffer) {
+        result.push({ type: 'single', event: e })
+      }
+    }
+    readBuffer = []
+  }
+
+  for (const event of events) {
+    if (event.toolName === 'Read' && event.type === 'complete') {
+      readBuffer.push(event)
+    } else {
+      flushReads()
+      result.push({ type: 'single', event })
+    }
+  }
+  flushReads()
+
+  return result
+}
 
 interface ChatViewProps {
   onOpenMcp?: () => void
@@ -135,9 +168,25 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
           {visibleMessages.map((msg) => (
             <MessageBubble key={msg.id} role={msg.role} content={msg.content} nextMessage={messages[messages.indexOf(msg) + 1]} />
           ))}
-          {toolEvents.map((event, i) => (
-            <ToolCardRouter key={`${event.toolUseId}-${i}`} event={event} />
-          ))}
+          {groupToolEvents(toolEvents).map((group, i) => {
+            if (group.type === 'read-group') {
+              const files = group.events.map(e => {
+                const fp = (e.input?.file_path || e.input?.path || '') as string
+                return fp.split('/').pop() || fp
+              }).join(', ')
+              return (
+                <div key={`read-group-${i}`} className="mb-3 border border-[#333]">
+                  <div className="flex items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-[0.1em]">
+                    <span className="inline-block h-2 w-2 rounded-full bg-[#4AF626]" />
+                    <span className="text-[#EAEAEA]">READ</span>
+                    <span className="text-[#666] truncate">{group.events.length} files: {files}</span>
+                    <span className="text-[#4AF626]">[DONE]</span>
+                  </div>
+                </div>
+              )
+            }
+            return <ToolCardRouter key={`${group.event.toolUseId}-${i}`} event={group.event} />
+          })}
           {isThinking && (
             <div className="mb-3 border border-[#333]">
               <div className="flex items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-[0.1em]">
