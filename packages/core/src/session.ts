@@ -7,6 +7,13 @@ import { registerBuiltinTools } from './tools/index.js'
 import { ConversationHistory } from './history.js'
 import { assembleSystemPrompt } from './context.js'
 import { PermissionChecker } from './permissions.js'
+import { TaskStore } from './task-store.js'
+import { createTaskCreateTool } from './tools/task-create.js'
+import { createTaskGetTool } from './tools/task-get.js'
+import { createTaskListTool } from './tools/task-list.js'
+import { createTaskUpdateTool } from './tools/task-update.js'
+import { createTaskStopTool } from './tools/task-stop.js'
+import { createTodoWriteTool } from './tools/todo-write.js'
 
 export interface SessionEvents {
   onStreamChunk: (chunk: StreamChunk) => void
@@ -23,6 +30,7 @@ export class Session {
   private toolRunner: ToolRunner
   private toolRegistry: ToolRegistry
   private history: ConversationHistory
+  private taskStore = new TaskStore()
   private abortController: AbortController | null = null
 
   constructor(config: SessionConfig, provider: ModelProvider, history: ConversationHistory, onPermissionRequest?: PermissionCallback) {
@@ -32,6 +40,12 @@ export class Session {
     this.history = history
     this.toolRegistry = new ToolRegistry()
     registerBuiltinTools(this.toolRegistry)
+    this.toolRegistry.register(createTaskCreateTool(this.taskStore))
+    this.toolRegistry.register(createTaskGetTool(this.taskStore))
+    this.toolRegistry.register(createTaskListTool(this.taskStore))
+    this.toolRegistry.register(createTaskUpdateTool(this.taskStore))
+    this.toolRegistry.register(createTaskStopTool(this.taskStore))
+    this.toolRegistry.register(createTodoWriteTool(this.taskStore))
     this.toolRunner = new ToolRunner(this.toolRegistry, config.cwd, new PermissionChecker(), onPermissionRequest)
   }
 
