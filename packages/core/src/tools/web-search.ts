@@ -15,7 +15,10 @@ export const webSearchTool: ToolHandler = {
     },
   },
   async execute(input: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    const query = input.query as string
+    const query = input.query as string | undefined
+    if (!query) {
+      return { content: 'Error: query is required', isError: true }
+    }
     const count = Math.min((input.count as number) || 5, 20)
 
     const config = loadAppConfig()

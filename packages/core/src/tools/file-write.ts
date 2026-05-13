@@ -16,13 +16,19 @@ export const fileWriteTool: ToolHandler = {
     },
   },
   async execute(input: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    const filePath = path.isAbsolute(input.file_path as string)
-      ? (input.file_path as string)
-      : path.resolve(context.cwd, input.file_path as string)
+    const filePathInput = input.file_path as string | undefined
+    const contentInput = input.content as string | undefined
+    if (!filePathInput || contentInput === undefined) {
+      return { content: 'Error: file_path and content are required', isError: true }
+    }
+
+    const filePath = path.isAbsolute(filePathInput)
+      ? filePathInput
+      : path.resolve(context.cwd, filePathInput)
 
     try {
       await mkdir(path.dirname(filePath), { recursive: true })
-      await writeFile(filePath, input.content as string, 'utf-8')
+      await writeFile(filePath, contentInput, 'utf-8')
       return { content: `Successfully wrote to ${filePath}` }
     } catch (err: any) {
       return { content: `Error writing file: ${err.message}`, isError: true }

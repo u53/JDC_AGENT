@@ -18,12 +18,13 @@ export const grepTool: ToolHandler = {
     },
   },
   async execute(input: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    const pattern = input.pattern as string
+    const pattern = input.pattern as string | undefined
+    if (!pattern) {
+      return { content: 'Error: pattern is required', isError: true }
+    }
     const searchPath = input.path ? path.resolve(context.cwd, input.path as string) : context.cwd
     const glob = input.glob as string | undefined
     const countOnly = input.include_count as boolean | undefined
-
-    if (!pattern) return { content: 'Error: pattern is required', isError: true }
 
     const useRg = await commandExists('rg')
     const args = useRg

@@ -34,8 +34,11 @@ export const lspTool: ToolHandler = {
   },
 
   async execute(input: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    const operation = input.operation as Operation
-    const filePath = input.filePath as string
+    const operation = input.operation as Operation | undefined
+    const filePath = input.filePath as string | undefined
+    if (!operation || !filePath) {
+      return { content: 'Error: operation and filePath are required', isError: true }
+    }
     const line = (input.line as number) || 1
     const character = (input.character as number) || 1
     const query = (input.query as string) || ''

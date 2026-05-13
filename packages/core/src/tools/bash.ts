@@ -15,7 +15,10 @@ export const bashTool: ToolHandler = {
     },
   },
   async execute(input: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    const command = input.command as string
+    const command = input.command as string | undefined
+    if (!command) {
+      return { content: 'Error: command is required', isError: true }
+    }
     const timeout = (input.timeout as number) || 120000
 
     return new Promise((resolve) => {

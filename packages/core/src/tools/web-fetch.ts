@@ -22,8 +22,11 @@ export const webFetchTool: ToolHandler = {
   },
 
   async execute(input: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    const url = input.url as string
-    const prompt = input.prompt as string
+    const url = input.url as string | undefined
+    const prompt = input.prompt as string | undefined
+    if (!url || !prompt) {
+      return { content: 'Error: url and prompt are required', isError: true }
+    }
 
     try {
       new URL(url)

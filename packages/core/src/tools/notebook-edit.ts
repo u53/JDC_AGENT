@@ -28,9 +28,14 @@ export const notebookEditTool: ToolHandler = {
   },
 
   async execute(input: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    const nbPath = path.resolve(context.cwd, input.notebook_path as string)
+    const nbPathInput = input.notebook_path as string | undefined
+    const newSource = input.new_source as string | undefined
+    if (!nbPathInput || newSource === undefined) {
+      return { content: 'Error: notebook_path and new_source are required', isError: true }
+    }
+
+    const nbPath = path.resolve(context.cwd, nbPathInput)
     const cellNum = input.cell_number as number
-    const newSource = input.new_source as string
     const mode = (input.edit_mode as string) || 'replace'
     const cellType = (input.cell_type as string) || 'code'
 

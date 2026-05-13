@@ -18,10 +18,11 @@ export const globTool: ToolHandler = {
     },
   },
   async execute(input: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    const pattern = input.pattern as string
+    const pattern = input.pattern as string | undefined
+    if (!pattern) {
+      return { content: 'Error: pattern is required', isError: true }
+    }
     const searchPath = input.path ? path.resolve(context.cwd, input.path as string) : context.cwd
-
-    if (!pattern) return { content: 'Error: pattern is required', isError: true }
 
     try {
       const files = await fg(pattern, {
