@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useModelStore, type ModelGroup } from '../stores/model-store'
+import { useModelStore, type ModelGroup, type ApiProtocol } from '../stores/model-store'
 import { useSettingsStore } from '../stores/settings-store'
 
 function formatContextWindow(n: number): string {
@@ -14,6 +14,7 @@ export function ModelManager() {
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null)
   const [showNewGroup, setShowNewGroup] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
+  const [newGroupProtocol, setNewGroupProtocol] = useState<ApiProtocol>('anthropic')
   const [newGroupUrl, setNewGroupUrl] = useState('')
   const [newGroupKey, setNewGroupKey] = useState('')
 
@@ -25,8 +26,9 @@ export function ModelManager() {
 
   const handleAddGroup = () => {
     if (!newGroupName.trim()) return
-    addGroup(newGroupName.trim(), newGroupUrl.trim(), newGroupKey.trim())
+    addGroup(newGroupName.trim(), newGroupProtocol, newGroupUrl.trim(), newGroupKey.trim())
     setNewGroupName('')
+    setNewGroupProtocol('anthropic')
     setNewGroupUrl('')
     setNewGroupKey('')
     setShowNewGroup(false)
@@ -53,9 +55,19 @@ export function ModelManager() {
               <input
                 value={newGroupName}
                 onChange={(e) => setNewGroupName(e.target.value)}
-                placeholder="Anthropic"
+                placeholder="我的 Claude 代理"
                 className="mb-3 w-full rounded-[6px] border border-[#EAEAEA] bg-[#F7F6F3] px-3 py-2 text-sm outline-none"
               />
+              <label className="mb-1.5 block text-xs text-[#787774] uppercase tracking-wide font-medium">API 协议</label>
+              <select
+                value={newGroupProtocol}
+                onChange={(e) => setNewGroupProtocol(e.target.value as ApiProtocol)}
+                className="mb-3 w-full rounded-[6px] border border-[#EAEAEA] bg-[#F7F6F3] px-3 py-2 text-sm outline-none"
+              >
+                <option value="anthropic">Anthropic (/v1/messages)</option>
+                <option value="openai">OpenAI (/v1/chat/completions)</option>
+                <option value="openai-responses">OpenAI Responses (/v1/responses)</option>
+              </select>
               <label className="mb-1.5 block text-xs text-[#787774] uppercase tracking-wide font-medium">Base URL</label>
               <input
                 value={newGroupUrl}
@@ -140,7 +152,8 @@ function GroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddModel, 
         <div className="flex items-center gap-2">
           <span className="text-xs text-[#787774]">{expanded ? '▼' : '▶'}</span>
           <span className="text-sm font-medium text-[#2F3437]">{group.name}</span>
-          <span className="text-xs text-[#787774] font-mono truncate max-w-[200px]">{group.baseUrl}</span>
+          <span className="text-[10px] text-[#787774] border border-[#EAEAEA] rounded px-1.5 py-0.5">{group.protocol}</span>
+          <span className="text-xs text-[#787774] font-mono truncate max-w-[160px]">{group.baseUrl}</span>
         </div>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete() }}

@@ -9,9 +9,12 @@ export interface ModelEntry {
   compressAt: number
 }
 
+export type ApiProtocol = 'anthropic' | 'openai' | 'openai-responses'
+
 export interface ModelGroup {
   id: string
   name: string
+  protocol: ApiProtocol  // API 协议格式
   baseUrl: string
   apiKey: string
   models: ModelEntry[]
@@ -21,7 +24,7 @@ interface ModelState {
   groups: ModelGroup[]
   activeModelId: string | null
 
-  addGroup: (name: string, baseUrl: string, apiKey: string) => void
+  addGroup: (name: string, protocol: ApiProtocol, baseUrl: string, apiKey: string) => void
   removeGroup: (groupId: string) => void
   updateGroup: (groupId: string, updates: Partial<Omit<ModelGroup, 'id' | 'models'>>) => void
   addModel: (groupId: string, model: Omit<ModelEntry, 'id'>) => void
@@ -36,10 +39,11 @@ export const useModelStore = create<ModelState>((set, get) => ({
   groups: [],
   activeModelId: null,
 
-  addGroup: (name, baseUrl, apiKey) => {
+  addGroup: (name, protocol, baseUrl, apiKey) => {
     const group: ModelGroup = {
       id: crypto.randomUUID(),
       name,
+      protocol,
       baseUrl,
       apiKey,
       models: [],
