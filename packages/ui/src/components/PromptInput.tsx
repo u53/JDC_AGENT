@@ -10,16 +10,20 @@ interface Props {
   permissionMode?: string
   onPermissionChange?: (mode: string) => void
   modelName?: string
+  modelId?: string
+  models?: { id: string; name: string; groupName: string }[]
+  onModelChange?: (modelId: string) => void
   onModelClick?: () => void
   skills?: { name: string; description: string }[]
 }
 
-export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, permissionMode = 'standard', onPermissionChange, modelName, onModelClick, skills }: Props) {
+export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, permissionMode = 'standard', onPermissionChange, modelName, modelId, models, onModelChange, onModelClick, skills }: Props) {
   const [text, setText] = useState('')
   const [images, setImages] = useState<{ data: string; mediaType: string }[]>([])
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashFilter, setSlashFilter] = useState('')
   const [showPermMenu, setShowPermMenu] = useState(false)
+  const [showModelMenu, setShowModelMenu] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isComposingRef = useRef(false)
 
@@ -147,7 +151,26 @@ export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, perm
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={onModelClick} className="text-[#EAEAEA] hover:text-[#4AF626] transition-colors">{modelName || 'NO MODEL'} ▾</button>
+            <div className="relative">
+              <button onClick={() => { if (models && models.length > 0) setShowModelMenu(!showModelMenu); else onModelClick?.() }} className="text-[#EAEAEA] hover:text-[#4AF626] transition-colors">{modelName || 'NO MODEL'} ▾</button>
+              {showModelMenu && models && models.length > 0 && (
+                <div className="absolute bottom-full right-0 mb-1 border border-[#333] bg-[#0A0A0A] z-50 min-w-[200px] max-h-[240px] overflow-y-auto">
+                  {models.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => { onModelChange?.(m.id); setShowModelMenu(false) }}
+                      className={`block w-full text-left px-3 py-1.5 hover:bg-[#111] ${m.id === modelId ? 'text-[#4AF626]' : 'text-[#EAEAEA]'}`}
+                    >
+                      <span className="text-[10px]">{m.name}</span>
+                      <span className="text-[9px] text-[#666] ml-2">{m.groupName}</span>
+                    </button>
+                  ))}
+                  <button onClick={() => { setShowModelMenu(false); onModelClick?.() }} className="block w-full text-left px-3 py-1.5 hover:bg-[#111] text-[#666] border-t border-[#333]">
+                    <span className="text-[10px]">[SETTINGS]</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

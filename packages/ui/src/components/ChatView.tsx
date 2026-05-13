@@ -14,7 +14,7 @@ interface ChatViewProps {
 export function ChatView({ onOpenMcp }: ChatViewProps) {
   const { messages, streamingText, thinkingText, isStreaming, isThinking, toolEvents, sendMessage, abort } = useSession()
   const { activeSessionId } = useSessionStore()
-  const { getActiveModel } = useModelStore()
+  const { getActiveModel, groups, activeModelId, setActiveModel } = useModelStore()
   const openSettings = useSettingsStore((s) => s.open)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [permissionMode, setPermissionMode] = useState('standard')
@@ -24,6 +24,8 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   const [skills, setSkills] = useState<{ name: string; description: string }[]>([])
 
   const activeModel = getActiveModel()
+
+  const allModels = groups.flatMap(g => g.models.map(m => ({ id: m.id, name: m.name, groupName: g.name })))
 
   // Sync permission mode to backend when it changes
   const handlePermissionChange = useCallback((mode: string) => {
@@ -166,6 +168,9 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         permissionMode={permissionMode}
         onPermissionChange={handlePermissionChange}
         modelName={activeModel?.model.name}
+        modelId={activeModelId ?? undefined}
+        models={allModels}
+        onModelChange={setActiveModel}
         onModelClick={openSettings}
         skills={skills}
       />
