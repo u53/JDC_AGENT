@@ -261,6 +261,22 @@ export class OpenAIResponsesProvider implements ModelProvider {
       merged.push(item)
     }
 
-    return merged
+    // Fix orphaned function_call / function_call_output pairs
+    const functionCallIds = new Set(
+      merged.filter((item: any) => item.type === 'function_call').map((item: any) => item.call_id)
+    )
+    const functionOutputIds = new Set(
+      merged.filter((item: any) => item.type === 'function_call_output').map((item: any) => item.call_id)
+    )
+
+    return merged.filter((item: any) => {
+      if (item.type === 'function_call_output' && !functionCallIds.has(item.call_id)) {
+        return false
+      }
+      if (item.type === 'function_call' && !functionOutputIds.has(item.call_id)) {
+        return false
+      }
+      return true
+    })
   }
 }
