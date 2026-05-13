@@ -1,3 +1,5 @@
 export * from './types.js'
 export * from './model-provider.js'
 export { AnthropicProvider } from './providers/anthropic.js'
+export * from './tool-registry.js'
+export * from './tool-runner.js'
