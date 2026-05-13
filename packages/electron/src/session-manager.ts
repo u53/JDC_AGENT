@@ -218,6 +218,13 @@ export class SessionManager {
     }))
   }
 
+  setPermissionMode(sessionId: string, mode: string): void {
+    const session = this.sessions.get(sessionId)
+    if (session) {
+      session.setPermissionMode(mode as any)
+    }
+  }
+
   saveMcpServers(servers: Record<string, McpServerConfig>, scope: 'global' | 'project', cwd?: string): void {
     saveMcpConfig(servers, scope, cwd)
   }

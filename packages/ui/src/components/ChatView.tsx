@@ -5,6 +5,7 @@ import { ToolCard } from './ToolCard'
 import { PromptInput } from './PromptInput'
 import { useSessionStore } from '../stores/session-store'
 import { useModelStore } from '../stores/model-store'
+import { useSettingsStore } from '../stores/settings-store'
 
 interface ChatViewProps {
   onOpenMcp?: () => void
@@ -14,6 +15,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   const { messages, streamingText, thinkingText, isStreaming, isThinking, toolEvents, sendMessage, abort } = useSession()
   const { activeSessionId } = useSessionStore()
   const { getActiveModel } = useModelStore()
+  const openSettings = useSettingsStore((s) => s.open)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [permissionMode, setPermissionMode] = useState('standard')
   const [responseExpanded, setResponseExpanded] = useState(false)
@@ -22,6 +24,14 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   const [skills, setSkills] = useState<{ name: string; description: string }[]>([])
 
   const activeModel = getActiveModel()
+
+  // Sync permission mode to backend when it changes
+  const handlePermissionChange = useCallback((mode: string) => {
+    setPermissionMode(mode)
+    if (activeSessionId && (window as any).electronAPI?.setPermissionMode) {
+      (window as any).electronAPI.setPermissionMode(activeSessionId, mode)
+    }
+  }, [activeSessionId])
 
   useEffect(() => {
     if (activeSessionId && (window as any).electronAPI?.listSkills) {
@@ -74,7 +84,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         const modes = ['standard', 'relaxed', 'strict'] as const
         const idx = modes.indexOf(permissionMode as typeof modes[number])
         const next = modes[(idx + 1) % modes.length]
-        setPermissionMode(next)
+        handlePermissionChange(next)
         const labels: Record<string, string> = { standard: '标准模式', relaxed: '完全访问', strict: '严格模式' }
         showToast(`权限: ${labels[next]}`)
         break
@@ -154,8 +164,9 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         isStreaming={isStreaming}
         onSlashCommand={handleSlashCommand}
         permissionMode={permissionMode}
-        onPermissionChange={setPermissionMode}
+        onPermissionChange={handlePermissionChange}
         modelName={activeModel?.model.name}
+        onModelClick={openSettings}
         skills={skills}
       />
     </div>

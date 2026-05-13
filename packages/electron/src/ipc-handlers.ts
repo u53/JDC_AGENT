@@ -60,4 +60,9 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
   ipcMain.handle(IPC_CHANNELS.SKILLS_LIST, async (_event, { sessionId }) => {
     return sessionManager.getSkills(sessionId)
   })
+
+  ipcMain.handle(IPC_CHANNELS.SESSION_SET_PERMISSION, async (_event, { sessionId, mode }) => {
+    sessionManager.setPermissionMode(sessionId, mode)
+    return { success: true }
+  })
 }

@@ -5,7 +5,7 @@ import { StatusBar } from './components/StatusBar'
 import { ModelManager } from './components/ModelManager'
 import { PermissionDialog } from './components/PermissionDialog'
 import { McpSettings } from './components/McpSettings'
-import { SettingsPanel } from './components/SettingsPanel'
+import { AskUserDialog } from './components/AskUserDialog'
 import { useSessionStore } from './stores/session-store'
 import { useModelStore } from './stores/model-store'
 import { useSettingsStore } from './stores/settings-store'
@@ -37,7 +37,7 @@ export function App() {
       <ModelManager />
       <PermissionDialog />
       <McpSettings isOpen={mcpOpen} onClose={() => setMcpOpen(false)} />
-      <SettingsPanel />
+      <AskUserDialog />
     </div>
   )
 }

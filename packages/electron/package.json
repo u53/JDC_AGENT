@@ -5,7 +5,7 @@
   "type": "commonjs",
   "main": "dist/main.js",
   "scripts": {
-    "dev": "node build.mjs && electron dist/main.js",
+    "dev": "node build.mjs && NODE_ENV=development electron dist/main.js",
     "build": "node build.mjs",
     "start": "electron dist/main.js"
   },

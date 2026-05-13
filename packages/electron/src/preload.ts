@@ -22,6 +22,7 @@ const api = {
     ipcRenderer.on('mcp:state-changed', (_event, states) => callback(states))
   },
   listSkills: (sessionId: string) => ipcRenderer.invoke('skills:list', { sessionId }),
+  setPermissionMode: (sessionId: string, mode: string) => ipcRenderer.invoke('session:set-permission-mode', { sessionId, mode }),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

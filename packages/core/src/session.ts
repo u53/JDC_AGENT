@@ -47,6 +47,7 @@ export class Session {
   private hooksReady: Promise<void>
   private skillLoader: SkillLoader
   private skillsReady: Promise<void>
+  private permissionChecker: PermissionChecker
 
   constructor(config: SessionConfig, provider: ModelProvider, history: ConversationHistory, onPermissionRequest?: PermissionCallback, mcpManager?: McpManager) {
     this.id = config.id
@@ -77,7 +78,8 @@ export class Session {
       this.toolRegistry.register(createReadMcpResourceTool(mcpManager))
     }
     // Initialize ToolRunner without hooks first (will be updated once hooks load)
-    this.toolRunner = new ToolRunner(this.toolRegistry, config.cwd, new PermissionChecker(), onPermissionRequest)
+    this.permissionChecker = new PermissionChecker()
+    this.toolRunner = new ToolRunner(this.toolRegistry, config.cwd, this.permissionChecker, onPermissionRequest)
 
     // Asynchronously load hooks and rebuild ToolRunner
     this.hooksReady = this.initHooks(onPermissionRequest)
@@ -105,7 +107,7 @@ export class Session {
       this.toolRunner = new ToolRunner(
         this.toolRegistry,
         this.config.cwd,
-        new PermissionChecker(),
+        this.permissionChecker,
         onPermissionRequest,
         this.hookEngine,
         this.id
@@ -134,6 +136,10 @@ export class Session {
 
   getSkillLoader(): SkillLoader {
     return this.skillLoader
+  }
+
+  setPermissionMode(mode: import('./permissions.js').PermissionMode): void {
+    this.permissionChecker.setMode(mode)
   }
 
   registerTool(handler: import('./tool-registry.js').ToolHandler): void {

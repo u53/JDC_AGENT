@@ -19,6 +19,7 @@ export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, perm
   const [images, setImages] = useState<{ data: string; mediaType: string }[]>([])
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashFilter, setSlashFilter] = useState('')
+  const [showPermMenu, setShowPermMenu] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isComposingRef = useRef(false)
 
@@ -134,13 +135,15 @@ export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, perm
         </div>
         <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.05em]">
           <div className="flex items-center gap-3">
-            <div className="relative group">
-              <button className={`${permColor} hover:opacity-80 transition-opacity`}>{permLabel} ▾</button>
-              <div className="absolute bottom-full left-0 mb-1 hidden group-hover:block border border-[#333] bg-[#0A0A0A] z-50 min-w-[120px]">
-                <button onClick={() => onPermissionChange?.('relaxed')} className={`block w-full text-left px-3 py-1.5 hover:bg-[#111] ${permissionMode === 'relaxed' ? 'text-yellow-400' : 'text-[#EAEAEA]'}`}>完全访问</button>
-                <button onClick={() => onPermissionChange?.('standard')} className={`block w-full text-left px-3 py-1.5 hover:bg-[#111] ${permissionMode === 'standard' ? 'text-[#4AF626]' : 'text-[#EAEAEA]'}`}>标准模式</button>
-                <button onClick={() => onPermissionChange?.('strict')} className={`block w-full text-left px-3 py-1.5 hover:bg-[#111] ${permissionMode === 'strict' ? 'text-red-400' : 'text-[#EAEAEA]'}`}>严格模式</button>
-              </div>
+            <div className="relative">
+              <button onClick={() => setShowPermMenu(!showPermMenu)} className={`${permColor} hover:opacity-80 transition-opacity`}>{permLabel} ▾</button>
+              {showPermMenu && (
+                <div className="absolute bottom-full left-0 mb-1 border border-[#333] bg-[#0A0A0A] z-50 min-w-[120px]">
+                  <button onClick={() => { onPermissionChange?.('relaxed'); setShowPermMenu(false) }} className={`block w-full text-left px-3 py-1.5 hover:bg-[#111] ${permissionMode === 'relaxed' ? 'text-yellow-400' : 'text-[#EAEAEA]'}`}>完全访问</button>
+                  <button onClick={() => { onPermissionChange?.('standard'); setShowPermMenu(false) }} className={`block w-full text-left px-3 py-1.5 hover:bg-[#111] ${permissionMode === 'standard' ? 'text-[#4AF626]' : 'text-[#EAEAEA]'}`}>标准模式</button>
+                  <button onClick={() => { onPermissionChange?.('strict'); setShowPermMenu(false) }} className={`block w-full text-left px-3 py-1.5 hover:bg-[#111] ${permissionMode === 'strict' ? 'text-red-400' : 'text-[#EAEAEA]'}`}>严格模式</button>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-3">
