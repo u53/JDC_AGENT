@@ -25,12 +25,16 @@ export function useSession() {
     })
 
     const unsubComplete = ipc.query.onComplete(({ sessionId, message }) => {
-      store.clearSessionStreamState(sessionId)
       const current = useSessionStore.getState()
       if (sessionId === current.activeSessionId) {
         useSessionStore.setState((s) => ({ messages: [...s.messages, message] }))
       }
     })
+
+    const unsubFinished = window.electronAPI?.on('query:finished', (_e: unknown, data: unknown) => {
+      const { sessionId } = data as { sessionId: string }
+      store.finishSession(sessionId)
+    }) || (() => {})
 
     const unsubError = ipc.query.onError(({ sessionId, error }) => {
       store.clearSessionStreamState(sessionId)
@@ -53,6 +57,7 @@ export function useSession() {
       unsubStream()
       unsubTool()
       unsubComplete()
+      unsubFinished()
       unsubError()
       unsubRetrying()
       unsubMessagesUpdated()

@@ -32,21 +32,30 @@ export function Sidebar() {
                 const state = sessionStates[session.id]
                 const isBusy = state?.isStreaming
                 const hasError = state?.error && !state.error.retrying
+                const isFinished = state?.finished
+                const isActive = activeSessionId === session.id
+                const showLight = !isActive && (isBusy || hasError || isFinished)
                 return (
                   <button
                     key={session.id}
-                    onClick={() => switchSession(session.id)}
+                    onClick={() => {
+                      switchSession(session.id)
+                      if (isFinished) useSessionStore.getState().dismissFinished(session.id)
+                    }}
                     className={`w-full text-left px-2.5 py-1.5 text-xs truncate transition-colors flex items-center gap-1.5 ${
-                      activeSessionId === session.id
+                      isActive
                         ? 'border-l-2 border-[#4AF626] pl-2 text-[#EAEAEA] bg-[#111]'
                         : 'text-[#EAEAEA] hover:bg-[#111]'
                     }`}
                   >
-                    {isBusy && (
+                    {showLight && isBusy && (
                       <span className="inline-block h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse flex-shrink-0" />
                     )}
-                    {!isBusy && hasError && (
+                    {showLight && !isBusy && hasError && (
                       <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#E61919] flex-shrink-0" />
+                    )}
+                    {showLight && !isBusy && !hasError && isFinished && (
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#4AF626] flex-shrink-0" />
                     )}
                     <span className="block truncate">
                       {session.projectName || '新会话'}
