@@ -1,10 +1,12 @@
 import type { ToolExecutionEvent } from '@jdcagnet/core'
-import { AgentToolCard } from './AgentToolCard'
+import { GenericToolCard } from './GenericToolCard'
 import { BashToolCard } from './BashToolCard'
 import { EditToolCard } from './EditToolCard'
-import { GenericToolCard } from './GenericToolCard'
-import { ReadToolCard } from './ReadToolCard'
 import { WriteToolCard } from './WriteToolCard'
+import { ReadToolCard } from './ReadToolCard'
+import { AgentToolCard } from './AgentToolCard'
+import { SkillToolCard } from './SkillToolCard'
+import { McpToolCard } from './McpToolCard'
 import { parseMcpToolName } from './shared'
 
 export interface ToolCardRouterProps {
@@ -20,6 +22,7 @@ const TOOL_CARD_REGISTRY: Record<string, React.ComponentType<ToolCardRouterProps
   Write: WriteToolCard,
   Read: ReadToolCard,
   Agent: AgentToolCard,
+  Skill: SkillToolCard,
 }
 
 export function ToolCardRouter(props: ToolCardRouterProps) {
@@ -27,7 +30,7 @@ export function ToolCardRouter(props: ToolCardRouterProps) {
 
   const mcpParsed = parseMcpToolName(toolName)
   if (mcpParsed) {
-    return <GenericToolCard {...props} />
+    return <McpToolCard {...props} />
   }
 
   const Card = TOOL_CARD_REGISTRY[toolName]
