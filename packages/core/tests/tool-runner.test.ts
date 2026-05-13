@@ -17,6 +17,7 @@ describe('ToolRunner', () => {
 
     expect(result.content).toBe('hello')
     expect(events[0].type).toBe('start')
+    expect(events[0].input).toEqual({ text: 'hello' })
     expect(events[1].type).toBe('complete')
   })
 

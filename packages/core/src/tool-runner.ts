@@ -6,6 +6,7 @@ export interface ToolExecutionEvent {
   type: 'start' | 'progress' | 'complete' | 'error'
   toolName: string
   toolUseId: string
+  input?: Record<string, unknown>
   message?: string
   result?: ToolResult
 }
@@ -71,7 +72,7 @@ export class ToolRunner {
       }
     }
 
-    onEvent({ type: 'start', toolName, toolUseId })
+    onEvent({ type: 'start', toolName, toolUseId, input })
 
     // PreToolUse hooks
     if (this.hookEngine) {
