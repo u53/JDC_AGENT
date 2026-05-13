@@ -21,7 +21,16 @@ export interface ToolResultContent {
   is_error?: boolean
 }
 
-export type ContentBlock = TextContent | ToolUseContent | ToolResultContent
+export interface ImageContent {
+  type: 'image'
+  source: {
+    type: 'base64'
+    media_type: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
+    data: string
+  }
+}
+
+export type ContentBlock = TextContent | ToolUseContent | ToolResultContent | ImageContent
 
 export interface Message {
   id: string

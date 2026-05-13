@@ -47,8 +47,8 @@ export const ipc = {
   },
 
   query: {
-    send: (sessionId: string, text: string) =>
-      invoke('query:send', { sessionId, text }) as Promise<{ success: boolean }>,
+    send: (sessionId: string, text: string, images?: { data: string; mediaType: string }[]) =>
+      invoke('query:send', { sessionId, text, images }) as Promise<{ success: boolean }>,
     abort: (sessionId: string) =>
       invoke('query:abort', { sessionId }) as Promise<{ success: boolean }>,
     onStream: (cb: (data: { sessionId: string; chunk: StreamChunk }) => void) =>

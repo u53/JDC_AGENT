@@ -174,6 +174,18 @@ export class OpenAIResponsesProvider implements ModelProvider {
 
       const textBlocks = msg.content.filter(b => b.type === 'text')
       const toolResultBlocks = msg.content.filter(b => b.type === 'tool_result')
+      const imageBlocks = msg.content.filter(b => b.type === 'image')
+
+      // Handle user messages with images
+      if (msg.role === 'user' && imageBlocks.length > 0 && toolResultBlocks.length === 0) {
+        const parts: any[] = []
+        for (const block of msg.content) {
+          if (block.type === 'text') parts.push({ type: 'input_text', text: block.text })
+          if (block.type === 'image') parts.push({ type: 'input_image', image_url: `data:${block.source.media_type};base64,${block.source.data}` })
+        }
+        input.push({ role: 'user', content: parts })
+        continue
+      }
 
       if (toolResultBlocks.length > 0) {
         for (const block of toolResultBlocks) {

@@ -45,17 +45,26 @@ export function useSession() {
   }, [activeSessionId])
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, images?: { data: string; mediaType: string }[]) => {
       if (!activeSessionId) return
+      const content: any[] = [{ type: 'text' as const, text }]
+      if (images && images.length > 0) {
+        for (const img of images) {
+          content.push({
+            type: 'image' as const,
+            source: { type: 'base64' as const, media_type: img.mediaType, data: img.data },
+          })
+        }
+      }
       const userMessage = {
         id: crypto.randomUUID(),
         role: 'user' as const,
-        content: [{ type: 'text' as const, text }],
+        content,
         timestamp: Date.now(),
       }
       useSessionStore.setState((s) => ({ messages: [...s.messages, userMessage] }))
       setIsStreaming(true)
-      await ipc.query.send(activeSessionId, text)
+      await ipc.query.send(activeSessionId, text, images)
     },
     [activeSessionId]
   )

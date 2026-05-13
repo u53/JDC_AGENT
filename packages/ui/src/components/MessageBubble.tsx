@@ -33,6 +33,16 @@ export function MessageBubble({ role, content }: Props) {
               </div>
             )
           }
+          if (block.type === 'image') {
+            return (
+              <img
+                key={i}
+                src={`data:${block.source.media_type};base64,${block.source.data}`}
+                className="max-w-sm max-h-64 border border-[#333] my-2"
+                alt="Attached image"
+              />
+            )
+          }
           if (block.type === 'tool_use') {
             return (
               <span

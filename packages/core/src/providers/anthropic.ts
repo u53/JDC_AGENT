@@ -84,6 +84,7 @@ export class AnthropicProvider implements ModelProvider {
         role: m.role as 'user' | 'assistant',
         content: m.content.map(block => {
           if (block.type === 'text') return { type: 'text' as const, text: block.text }
+          if (block.type === 'image') return { type: 'image' as const, source: { type: 'base64' as const, media_type: block.source.media_type, data: block.source.data } }
           if (block.type === 'tool_use') return { type: 'tool_use' as const, id: block.id, name: block.name, input: block.input }
           if (block.type === 'tool_result') return { type: 'tool_result' as const, tool_use_id: block.tool_use_id, content: block.content }
           return block

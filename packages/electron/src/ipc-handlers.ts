@@ -32,8 +32,8 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
     return { success: true }
   })
 
-  ipcMain.handle(IPC_CHANNELS.QUERY_SEND, async (_event, { sessionId, text }) => {
-    sessionManager.sendMessage(sessionId, text)
+  ipcMain.handle(IPC_CHANNELS.QUERY_SEND, async (_event, { sessionId, text, images }) => {
+    sessionManager.sendMessage(sessionId, text, images)
     return { success: true }
   })
 

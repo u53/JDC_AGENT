@@ -176,6 +176,18 @@ export class OpenAIChatProvider implements ModelProvider {
       const textBlocks = msg.content.filter(b => b.type === 'text')
       const toolUseBlocks = msg.content.filter(b => b.type === 'tool_use')
       const toolResultBlocks = msg.content.filter(b => b.type === 'tool_result')
+      const imageBlocks = msg.content.filter(b => b.type === 'image')
+
+      // Handle user messages with images using content array format
+      if (msg.role === 'user' && imageBlocks.length > 0 && toolResultBlocks.length === 0) {
+        const parts: any[] = []
+        for (const block of msg.content) {
+          if (block.type === 'text') parts.push({ type: 'text', text: block.text })
+          if (block.type === 'image') parts.push({ type: 'image_url', image_url: { url: `data:${block.source.media_type};base64,${block.source.data}` } })
+        }
+        formatted.push({ role: 'user', content: parts })
+        continue
+      }
 
       if (toolResultBlocks.length > 0) {
         for (const block of toolResultBlocks) {

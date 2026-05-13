@@ -107,7 +107,7 @@ export class SessionManager {
     this.sessions.set(sessionId, session)
   }
 
-  async sendMessage(sessionId: string, text: string): Promise<void> {
+  async sendMessage(sessionId: string, text: string, images?: { data: string; mediaType: string }[]): Promise<void> {
     // Ensure session is activated with latest model config
     if (!this.sessions.has(sessionId)) {
       await this.activateSession(sessionId)
@@ -129,8 +129,18 @@ export class SessionManager {
       },
     }
 
+    // Convert images to ImageContent blocks
+    const extraContent = images?.map(img => ({
+      type: 'image' as const,
+      source: {
+        type: 'base64' as const,
+        media_type: img.mediaType as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp',
+        data: img.data,
+      },
+    }))
+
     try {
-      await session.sendMessage(text, events)
+      await session.sendMessage(text, events, extraContent)
     } catch (err: any) {
       this.window?.webContents.send('query:error', { sessionId, error: err.message })
     }

@@ -61,7 +61,7 @@ export class Session {
     this.messages = this.history.getMessages(this.id)
   }
 
-  async sendMessage(text: string, events: SessionEvents): Promise<void> {
+  async sendMessage(text: string, events: SessionEvents, extraContent?: import('./types.js').ContentBlock[]): Promise<void> {
     // Assemble system prompt with current tool list
     const toolNames = this.toolRegistry.getDefinitions().map(d => d.name)
     this.config.modelConfig.systemPrompt = await assembleSystemPrompt({
@@ -69,10 +69,15 @@ export class Session {
       toolNames,
     })
 
+    const content: import('./types.js').ContentBlock[] = [{ type: 'text', text }]
+    if (extraContent && extraContent.length > 0) {
+      content.push(...extraContent)
+    }
+
     const userMessage: Message = {
       id: uuid(),
       role: 'user',
-      content: [{ type: 'text', text }],
+      content,
       timestamp: Date.now(),
     }
     this.messages.push(userMessage)
