@@ -3,9 +3,12 @@ import { useSession } from '../hooks/useSession'
 import { MessageBubble } from './MessageBubble'
 import { ToolCardRouter } from './tool-cards'
 import { PromptInput } from './PromptInput'
+import { AgentDetailPanel } from './AgentDetailPanel'
 import { useSessionStore } from '../stores/session-store'
 import { useModelStore } from '../stores/model-store'
 import { useSettingsStore } from '../stores/settings-store'
+import { useAgentStore } from '../stores/agent-store'
+import { useAgentEvents } from '../hooks/useAgentEvents'
 import type { ToolExecutionEvent } from '@jdcagnet/core'
 
 type GroupedToolEvent =
@@ -49,6 +52,8 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   const { activeSessionId } = useSessionStore()
   const { getActiveModel, groups, activeModelId, setActiveModel } = useModelStore()
   const openSettings = useSettingsStore((s) => s.open)
+  useAgentEvents()
+  const activeAgentId = useAgentStore((s) => s.activeAgentId)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [permissionMode, setPermissionMode] = useState(() => {
     return localStorage.getItem('jdcagnet-permission-mode') || 'standard'
@@ -157,14 +162,16 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   const streamingCharCount = streamingText.length
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden relative">
-      <div className="flex items-center justify-center border-b border-[#333] px-4 py-2" style={{ WebkitAppRegion: 'drag' } as any}>
-        <span className="text-[10px] uppercase tracking-[0.1em] text-[#666]">
-          SESSION // {activeSessionId ? activeSessionId.slice(0, 8).toUpperCase() : '---'}
-        </span>
-      </div>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="mx-auto max-w-[760px]">
+    <div className="flex flex-1 overflow-hidden relative">
+      {/* Left: main chat */}
+      <div className={`flex flex-col overflow-hidden ${activeAgentId ? 'w-[60%]' : 'w-full'} transition-all`}>
+        <div className="flex items-center justify-center border-b border-[#333] px-4 py-2" style={{ WebkitAppRegion: 'drag' } as any}>
+          <span className="text-[10px] uppercase tracking-[0.1em] text-[#666]">
+            SESSION // {activeSessionId ? activeSessionId.slice(0, 8).toUpperCase() : '---'}
+          </span>
+        </div>
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
+          <div className="mx-auto max-w-[760px]">
           {visibleMessages.map((msg) => (
             <MessageBubble key={msg.id} role={msg.role} content={msg.content} nextMessage={messages[messages.indexOf(msg) + 1]} />
           ))}
@@ -242,6 +249,14 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         onModelClick={openSettings}
         skills={skills}
       />
+      </div>
+
+      {/* Right: agent detail panel */}
+      {activeAgentId && (
+        <div className="w-[40%]">
+          <AgentDetailPanel />
+        </div>
+      )}
     </div>
   )
 }
