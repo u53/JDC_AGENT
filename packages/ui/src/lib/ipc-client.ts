@@ -73,6 +73,8 @@ export const ipc = {
       on('query:complete', (_e, data) => cb(data as any)),
     onError: (cb: (data: { sessionId: string; error: string }) => void) =>
       on('query:error', (_e, data) => cb(data as any)),
+    onRetrying: (cb: (data: { sessionId: string; attempt: number; error: string; delayMs: number; category: string }) => void) =>
+      on('query:retrying', (_e, data) => cb(data as any)),
   },
 
   config: {

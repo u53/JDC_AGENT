@@ -32,8 +32,13 @@ export function useSession() {
       }
     })
 
-    const unsubError = ipc.query.onError(({ sessionId }) => {
+    const unsubError = ipc.query.onError(({ sessionId, error }) => {
       store.clearSessionStreamState(sessionId)
+      store.setError(sessionId, { message: error, category: 'unknown', retrying: false })
+    })
+
+    const unsubRetrying = ipc.query.onRetrying(({ sessionId, attempt, error, delayMs, category }) => {
+      store.setError(sessionId, { message: error, category, retrying: true, retryAttempt: attempt, retryIn: delayMs })
     })
 
     const unsubMessagesUpdated = window.electronAPI?.on('session:messages-updated', (_e: unknown, data: unknown) => {
@@ -49,6 +54,7 @@ export function useSession() {
       unsubTool()
       unsubComplete()
       unsubError()
+      unsubRetrying()
       unsubMessagesUpdated()
     }
   }, [])
@@ -90,7 +96,24 @@ export function useSession() {
     isStreaming: currentState.isStreaming,
     isThinking: currentState.isThinking,
     toolEvents: currentState.toolEvents,
+    error: currentState.error,
     sendMessage,
     abort,
+    retry: useCallback(() => {
+      if (!activeSessionId) return
+      useSessionStore.getState().setError(activeSessionId, null)
+      const msgs = useSessionStore.getState().messages
+      const lastUser = [...msgs].reverse().find(m => m.role === 'user')
+      if (lastUser) {
+        const textBlock = lastUser.content.find((b: any) => b.type === 'text') as any
+        if (textBlock?.text) {
+          sendMessage(textBlock.text)
+        }
+      }
+    }, [activeSessionId, sendMessage]),
+    dismissError: useCallback(() => {
+      if (!activeSessionId) return
+      useSessionStore.getState().setError(activeSessionId, null)
+    }, [activeSessionId]),
   }
 }

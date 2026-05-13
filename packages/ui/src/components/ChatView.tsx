@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useSession } from '../hooks/useSession'
 import { MessageBubble } from './MessageBubble'
 import { ToolCardRouter } from './tool-cards'
+import { ErrorCard } from './ErrorCard'
 import { PromptInput } from './PromptInput'
 import { AgentDetailPanel } from './AgentDetailPanel'
 import { useSessionStore } from '../stores/session-store'
@@ -48,7 +49,7 @@ interface ChatViewProps {
 }
 
 export function ChatView({ onOpenMcp }: ChatViewProps) {
-  const { messages, streamingText, thinkingText, isStreaming, isThinking, toolEvents, sendMessage, abort } = useSession()
+  const { messages, streamingText, thinkingText, isStreaming, isThinking, toolEvents, sendMessage, abort, error, retry, dismissError } = useSession()
   const { activeSessionId } = useSessionStore()
   const { getActiveModel, groups, activeModelId, setActiveModel } = useModelStore()
   const openSettings = useSettingsStore((s) => s.open)
@@ -227,6 +228,17 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
                 <span className="text-[#EAEAEA]">PROCESSING...</span>
               </div>
             </div>
+          )}
+          {error && (
+            <ErrorCard
+              message={error.message}
+              category={error.category}
+              retrying={error.retrying}
+              retryAttempt={error.retryAttempt}
+              retryIn={error.retryIn}
+              onRetry={retry}
+              onDismiss={dismissError}
+            />
           )}
         </div>
       </div>
