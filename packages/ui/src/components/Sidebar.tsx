@@ -11,7 +11,7 @@ export function Sidebar() {
 
   return (
     <aside className="w-[260px] border-r border-[#EAEAEA] bg-[#F7F6F3] overflow-y-auto flex flex-col">
-      <div className="p-4">
+      <div className="pt-10 px-4 pb-4">
         <button
           onClick={addProject}
           className="w-full rounded-[6px] bg-[#111111] px-3 py-2 text-sm text-white hover:opacity-90 transition-opacity"
