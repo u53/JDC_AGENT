@@ -255,6 +255,40 @@ export class OpenAIChatProvider implements ModelProvider {
       }
     }
 
-    return merged
+    // Fix orphaned tool messages: each tool message's tool_call_id must match
+    // a tool_call in a preceding assistant message
+    const validToolCallIds = new Set<string>()
+    for (const msg of merged) {
+      if (msg.role === 'assistant' && 'tool_calls' in msg && msg.tool_calls) {
+        for (const tc of msg.tool_calls) {
+          validToolCallIds.add(tc.id)
+        }
+      }
+    }
+
+    const result = merged.filter(msg => {
+      if (msg.role === 'tool') {
+        const toolMsg = msg as OpenAI.ChatCompletionToolMessageParam
+        return validToolCallIds.has(toolMsg.tool_call_id)
+      }
+      return true
+    })
+
+    // Also remove tool_calls from assistant messages that have no matching tool response
+    const toolResponseIds = new Set(
+      result.filter((m): m is OpenAI.ChatCompletionToolMessageParam => m.role === 'tool').map(m => m.tool_call_id)
+    )
+    for (const msg of result) {
+      if (msg.role === 'assistant' && 'tool_calls' in msg && msg.tool_calls) {
+        const filtered = msg.tool_calls.filter(tc => toolResponseIds.has(tc.id))
+        if (filtered.length === 0) {
+          delete (msg as any).tool_calls
+        } else {
+          msg.tool_calls = filtered
+        }
+      }
+    }
+
+    return result
   }
 }
