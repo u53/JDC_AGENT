@@ -1,5 +1,5 @@
 import { v4 as uuid } from 'uuid'
-import type { Message, SessionConfig, StreamChunk } from './types.js'
+import type { Message, ModelConfig, SessionConfig, StreamChunk } from './types.js'
 import type { ModelProvider } from './model-provider.js'
 import { ToolRegistry } from './tool-registry.js'
 import { ToolRunner, type ToolExecutionEvent, type PermissionCallback } from './tool-runner.js'
@@ -140,6 +140,25 @@ export class Session {
 
   setPermissionMode(mode: import('./permissions.js').PermissionMode): void {
     this.permissionChecker.setMode(mode)
+  }
+
+  updateProvider(provider: ModelProvider, modelConfig: ModelConfig): void {
+    this.provider = provider
+    this.config.modelConfig = { ...this.config.modelConfig, ...modelConfig }
+  }
+
+  setThinking(enabled: boolean, budget?: number): void {
+    this.config.modelConfig.thinking = enabled
+    if (budget !== undefined) this.config.modelConfig.thinkingBudget = budget
+  }
+
+  clearMessages(): void {
+    this.messages = []
+  }
+
+  async compactNow(events: SessionEvents): Promise<void> {
+    if (this.messages.length < 4) return
+    await this.compact(events)
   }
 
   registerTool(handler: import('./tool-registry.js').ToolHandler): void {

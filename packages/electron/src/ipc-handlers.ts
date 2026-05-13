@@ -65,4 +65,19 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
     sessionManager.setPermissionMode(sessionId, mode)
     return { success: true }
   })
+
+  ipcMain.handle(IPC_CHANNELS.SESSION_COMPACT, async (_event, { sessionId }) => {
+    await sessionManager.compactSession(sessionId)
+    return { success: true }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SESSION_CLEAR, async (_event, { sessionId }) => {
+    sessionManager.clearSession(sessionId)
+    return { success: true }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SESSION_SET_THINKING, async (_event, { sessionId, enabled, budget }) => {
+    sessionManager.setThinking(sessionId, enabled, budget)
+    return { success: true }
+  })
 }

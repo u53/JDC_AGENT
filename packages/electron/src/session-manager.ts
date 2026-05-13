@@ -119,6 +119,16 @@ export class SessionManager {
     }
     const session = this.sessions.get(sessionId)!
 
+    // Dynamic model switching: check if active model changed since session was created
+    const currentActive = getActiveModelConfig()
+    if (currentActive && session.config.modelConfig.model !== currentActive.model.modelId) {
+      const provider = this.createProvider(currentActive.group)
+      session.updateProvider(provider, {
+        model: currentActive.model.modelId,
+        maxTokens: currentActive.model.contextWindow || 8192,
+      })
+    }
+
     const events: SessionEvents = {
       onStreamChunk: (chunk: StreamChunk) => {
         this.window?.webContents.send('query:stream', { sessionId, chunk })
@@ -222,6 +232,38 @@ export class SessionManager {
     const session = this.sessions.get(sessionId)
     if (session) {
       session.setPermissionMode(mode as any)
+    }
+  }
+
+  async compactSession(sessionId: string): Promise<void> {
+    const session = this.sessions.get(sessionId)
+    if (!session) return
+    const events: SessionEvents = {
+      onStreamChunk: (chunk: StreamChunk) => {
+        this.window?.webContents.send('query:stream', { sessionId, chunk })
+      },
+      onToolEvent: () => {},
+      onMessageComplete: () => {},
+      onError: (error) => {
+        this.window?.webContents.send('query:error', { sessionId, error: error.message })
+      },
+    }
+    await session.compactNow(events)
+    const messages = session.getMessages()
+    this.window?.webContents.send('session:messages-updated', { sessionId, messages })
+  }
+
+  clearSession(sessionId: string): void {
+    const session = this.sessions.get(sessionId)
+    if (session) {
+      session.clearMessages()
+    }
+  }
+
+  setThinking(sessionId: string, enabled: boolean, budget?: number): void {
+    const session = this.sessions.get(sessionId)
+    if (session) {
+      session.setThinking(enabled, budget)
     }
   }
 

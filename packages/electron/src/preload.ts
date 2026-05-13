@@ -23,6 +23,9 @@ const api = {
   },
   listSkills: (sessionId: string) => ipcRenderer.invoke('skills:list', { sessionId }),
   setPermissionMode: (sessionId: string, mode: string) => ipcRenderer.invoke('session:set-permission-mode', { sessionId, mode }),
+  compactSession: (sessionId: string) => ipcRenderer.invoke('session:compact', { sessionId }),
+  clearSession: (sessionId: string) => ipcRenderer.invoke('session:clear', { sessionId }),
+  setThinking: (sessionId: string, enabled: boolean, budget?: number) => ipcRenderer.invoke('session:set-thinking', { sessionId, enabled, budget }),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

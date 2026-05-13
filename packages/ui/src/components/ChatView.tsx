@@ -61,23 +61,33 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   })
 
   const handleSlashCommand = (command: string) => {
+    const api = (window as any).electronAPI
     switch (command) {
       case '/compact':
-        showToast('正在压缩上下文...')
-        sendMessage('/compact')
+        if (activeSessionId && api?.compactSession) {
+          showToast('正在压缩上下文...')
+          api.compactSession(activeSessionId)
+        }
         break
       case '/clear':
-        showToast('对话已清空')
+        if (activeSessionId && api?.clearSession) {
+          api.clearSession(activeSessionId)
+          useSessionStore.setState({ messages: [] })
+          showToast('对话已清空')
+        }
         break
       case '/thinking':
         setThinkingEnabled(prev => {
           const next = !prev
+          if (activeSessionId && api?.setThinking) {
+            api.setThinking(activeSessionId, next)
+          }
           showToast(next ? '推理模式: 开启' : '推理模式: 关闭')
           return next
         })
         break
       case '/model':
-        showToast('请在底部栏选择模型')
+        openSettings()
         break
       case '/mcp':
         onOpenMcp?.()
@@ -92,7 +102,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         break
       }
       case '/status':
-        showToast(`Session: ${activeSessionId?.slice(0, 8)} | Msgs: ${messages.length} | Thinking: ${thinkingEnabled ? 'ON' : 'OFF'}`)
+        showToast(`Session: ${activeSessionId?.slice(0, 8)} | Msgs: ${messages.length} | Model: ${activeModel?.model.name || '-'} | Thinking: ${thinkingEnabled ? 'ON' : 'OFF'}`)
         break
       case '/help':
         showToast('/compact /clear /thinking /model /mcp /permission /status')

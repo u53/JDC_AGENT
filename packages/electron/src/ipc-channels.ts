@@ -18,4 +18,7 @@ export const IPC_CHANNELS = {
   MCP_SAVE_CONFIG: 'mcp:save-config',
   SKILLS_LIST: 'skills:list',
   SESSION_SET_PERMISSION: 'session:set-permission-mode',
+  SESSION_COMPACT: 'session:compact',
+  SESSION_CLEAR: 'session:clear',
+  SESSION_SET_THINKING: 'session:set-thinking',
 } as const
