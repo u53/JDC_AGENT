@@ -16,6 +16,10 @@ import { createTaskListTool } from './tools/task-list.js'
 import { createTaskUpdateTool } from './tools/task-update.js'
 import { createTaskStopTool } from './tools/task-stop.js'
 import { createTodoWriteTool } from './tools/todo-write.js'
+import { McpManager } from './mcp/manager.js'
+import { createMcpToolHandler } from './mcp/mcp-tool-handler.js'
+import { createListMcpResourcesTool } from './tools/list-mcp-resources.js'
+import { createReadMcpResourceTool } from './tools/read-mcp-resource.js'
 
 export interface SessionEvents {
   onStreamChunk: (chunk: StreamChunk) => void
@@ -34,8 +38,9 @@ export class Session {
   private history: ConversationHistory
   private taskStore = new TaskStore()
   private abortController: AbortController | null = null
+  private mcpManager?: McpManager
 
-  constructor(config: SessionConfig, provider: ModelProvider, history: ConversationHistory, onPermissionRequest?: PermissionCallback) {
+  constructor(config: SessionConfig, provider: ModelProvider, history: ConversationHistory, onPermissionRequest?: PermissionCallback, mcpManager?: McpManager) {
     this.id = config.id
     this.config = config
     this.provider = provider
@@ -48,6 +53,21 @@ export class Session {
     this.toolRegistry.register(createTaskUpdateTool(this.taskStore))
     this.toolRegistry.register(createTaskStopTool(this.taskStore))
     this.toolRegistry.register(createTodoWriteTool(this.taskStore))
+    this.mcpManager = mcpManager
+    if (mcpManager) {
+      const mcpTools = mcpManager.getTools()
+      for (const tool of mcpTools) {
+        const serverName = tool.name.split('__')[1]
+        const toolName = tool.name.split('__').slice(2).join('__')
+        this.toolRegistry.register(createMcpToolHandler(
+          serverName,
+          { name: toolName, description: tool.description, inputSchema: tool.inputSchema },
+          mcpManager
+        ))
+      }
+      this.toolRegistry.register(createListMcpResourcesTool(mcpManager))
+      this.toolRegistry.register(createReadMcpResourceTool(mcpManager))
+    }
     this.toolRunner = new ToolRunner(this.toolRegistry, config.cwd, new PermissionChecker(), onPermissionRequest)
   }
 
@@ -66,9 +86,14 @@ export class Session {
   async sendMessage(text: string, events: SessionEvents, extraContent?: import('./types.js').ContentBlock[]): Promise<void> {
     // Assemble system prompt with current tool list
     const toolNames = this.toolRegistry.getDefinitions().map(d => d.name)
+    const mcpServers = this.mcpManager?.getServerStates()
+      .filter(s => s.status === 'connected')
+      .map(s => ({ name: s.name, toolCount: s.tools.length }))
+
     this.config.modelConfig.systemPrompt = await assembleSystemPrompt({
       cwd: this.config.cwd,
       toolNames,
+      mcpServers,
     })
 
     const content: import('./types.js').ContentBlock[] = [{ type: 'text', text }]

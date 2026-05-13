@@ -12,6 +12,7 @@ const CONFIG_DIR = path.join(os.homedir(), '.jdcagnet')
 export interface ContextOptions {
   cwd: string
   toolNames: string[]
+  mcpServers?: { name: string; toolCount: number }[]
 }
 
 export async function loadProjectMd(cwd: string): Promise<string | null> {
@@ -80,6 +81,11 @@ export async function assembleSystemPrompt(opts: ContextOptions): Promise<string
   if (rules.length > 0) parts.push(`# Project Rules\n${rules.join('\n\n')}`)
 
   if (git.status) parts.push(`# Git Status\n${git.status}`)
+
+  if (opts.mcpServers && opts.mcpServers.length > 0) {
+    const mcpInfo = opts.mcpServers.map(s => `- ${s.name}: ${s.toolCount} tools`).join('\n')
+    parts.push(`# MCP Servers\n${mcpInfo}`)
+  }
 
   const date = new Date().toISOString().split('T')[0]
   parts.push(`# Current Date\n${date}`)
