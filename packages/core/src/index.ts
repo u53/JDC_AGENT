@@ -16,3 +16,7 @@ export { PermissionChecker, DEFAULT_RULES, type PermissionRule, type PermissionM
 export type { PermissionCallback } from './tool-runner.js'
 export { estimateTokens } from './token-estimation.js'
 export { compactMessages } from './compact.js'
+export { McpManager, loadMcpConfig, saveMcpConfig, createMcpToolHandler } from './mcp/index.js'
+export type { McpServerConfig, McpServerState, McpToolInfo, McpConnectionStatus, McpConfigFile } from './mcp/index.js'
+export { createListMcpResourcesTool } from './tools/list-mcp-resources.js'
+export { createReadMcpResourceTool } from './tools/read-mcp-resource.js'

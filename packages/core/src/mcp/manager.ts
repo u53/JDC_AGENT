@@ -155,9 +155,9 @@ export class McpManager {
     }
     const result = await server.client.readResource({ uri })
     const content = (result.contents || [])
-      .map((c: { text?: string }) => c.text || '')
+      .map((c) => ('text' in c ? c.text : ''))
       .join('\n')
-    return { content, mimeType: (result.contents?.[0] as { mimeType?: string })?.mimeType }
+    return { content, mimeType: result.contents?.[0]?.mimeType }
   }
 
   async close(): Promise<void> {

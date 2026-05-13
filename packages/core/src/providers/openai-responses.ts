@@ -183,7 +183,7 @@ export class OpenAIResponsesProvider implements ModelProvider {
           if (block.type === 'text') parts.push({ type: 'input_text', text: block.text })
           if (block.type === 'image') parts.push({ type: 'input_image', image_url: `data:${block.source.media_type};base64,${block.source.data}` })
         }
-        input.push({ role: 'user', content: parts })
+        input.push({ role: 'user', content: parts as any })
         continue
       }
 
