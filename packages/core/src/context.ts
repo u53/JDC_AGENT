@@ -16,6 +16,7 @@ export interface ContextOptions {
   toolNames: string[]
   mcpServers?: { name: string; toolCount: number; tools?: string[] }[]
   permissionMode?: string
+  skills?: { name: string; description: string }[]
 }
 
 export async function loadProjectMd(cwd: string): Promise<string | null> {
@@ -47,6 +48,20 @@ export async function loadProjectRules(cwd: string): Promise<string[]> {
     }
     return contents
   } catch { return [] }
+}
+
+export function getMemoryDir(cwd: string): string {
+  const sanitized = cwd.replace(/\//g, '-').replace(/^-/, '')
+  return path.join(CONFIG_DIR, 'projects', sanitized, 'memory')
+}
+
+export async function loadMemoryIndex(cwd: string): Promise<string | null> {
+  const memDir = getMemoryDir(cwd)
+  try {
+    const content = await readFile(path.join(memDir, 'MEMORY.md'), 'utf-8')
+    const lines = content.split('\n').slice(0, 200)
+    return lines.join('\n')
+  } catch { return null }
 }
 
 async function getGitInfo(cwd: string): Promise<{ branch?: string; status?: string; user?: string }> {
@@ -88,6 +103,17 @@ export async function assembleSystemPrompt(opts: ContextOptions): Promise<string
     permissionMode: opts.permissionMode,
   })]
 
+  // Skills listing
+  if (opts.skills && opts.skills.length > 0) {
+    const skillList = opts.skills.map(s => `- ${s.name}: ${s.description}`).join('\n')
+    parts.push(`# Available Skills\n\nThe following skills can be invoked using the Skill tool:\n\n${skillList}\n\nWhen the user's request matches a skill, invoke it using the Skill tool with the skill name. Skills are reusable instruction templates that guide you through specific workflows.`)
+  }
+
+  // Memory
+  const memoryIndex = await loadMemoryIndex(opts.cwd)
+  const memDir = getMemoryDir(opts.cwd)
+  parts.push(getMemoryPrompt(memDir, memoryIndex))
+
   const globalMd = await loadGlobalMd()
   if (globalMd) parts.push(`# Global Instructions\n${globalMd}`)
 
@@ -103,4 +129,58 @@ export async function assembleSystemPrompt(opts: ContextOptions): Promise<string
   parts.push(`# Current Date\n${date}`)
 
   return parts.join('\n\n---\n\n')
+}
+
+function getMemoryPrompt(memDir: string, memoryIndex: string | null): string {
+  const indexContent = memoryIndex
+    ? `\n\nCurrent memory index (MEMORY.md):\n${memoryIndex}`
+    : ''
+
+  return `# Memory
+
+You have a persistent, file-based memory system at \`${memDir}/\`. Use the file_write tool to create memory files and update the index.
+
+## How to save memories
+
+When you learn something worth remembering across conversations (user preferences, project context, feedback on your approach), save it:
+
+1. Write a memory file (e.g., \`${memDir}/topic-name.md\`) with this format:
+
+\`\`\`markdown
+---
+name: topic-name
+description: One-line summary
+type: user|feedback|project|reference
+---
+
+Memory content here.
+\`\`\`
+
+2. Add a one-line pointer to \`${memDir}/MEMORY.md\`:
+\`- [Title](topic-name.md) — one-line summary\`
+
+## Memory types
+
+- **user**: User's role, preferences, expertise level
+- **feedback**: Corrections or confirmations about how to work (what to avoid, what works well)
+- **project**: Ongoing work context not derivable from code (deadlines, decisions, who's doing what)
+- **reference**: Pointers to external systems (where bugs are tracked, which dashboard to check)
+
+## When to save
+
+- User explicitly asks you to remember something
+- You learn user preferences or corrections
+- Important project context is shared
+
+## When to access
+
+- When memories seem relevant to the current task
+- When the user asks you to recall something
+- Read memory files with file_read when you need the full content
+
+## What NOT to save
+
+- Code patterns (derivable from reading the code)
+- Git history (use git log)
+- Anything already in JDCAGNET.md or project rules${indexContent}`
 }

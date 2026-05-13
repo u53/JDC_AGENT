@@ -106,6 +106,8 @@ function getToolUsageSection(toolNames: string[]): string {
   const hasGlob = toolNames.includes('glob')
   const hasGrep = toolNames.includes('grep')
   const hasBash = toolNames.includes('bash')
+  const hasAgent = toolNames.includes('Agent')
+  const hasSkill = toolNames.includes('Skill')
 
   const items: string[] = [
     'Do NOT use bash to run commands when a relevant dedicated tool is provided. Using dedicated tools allows the user to better understand and review your work.',
@@ -117,6 +119,18 @@ function getToolUsageSection(toolNames: string[]): string {
   if (hasGlob) items.push('To search for files by name pattern, use glob instead of find.')
   if (hasGrep) items.push('To search file contents, use grep instead of shell grep or rg.')
   if (hasBash) items.push('Reserve bash exclusively for system commands and terminal operations that require shell execution.')
+
+  if (hasAgent) {
+    items.push(
+      'Use the Agent tool to dispatch a sub-agent for complex, multi-step tasks that are independent from the main conversation. The sub-agent runs with its own context and has access to the same tools (except Agent itself — no recursive dispatch). Good use cases: researching a codebase question, executing a multi-file refactor, running a series of commands to gather information. The sub-agent returns its final answer as text.',
+    )
+  }
+
+  if (hasSkill) {
+    items.push(
+      'Use the Skill tool to invoke a named skill when the user\'s request matches an available skill. Skills are listed in the "Available Skills" section of this prompt. When a skill matches, invoke it BEFORE generating other responses.',
+    )
+  }
 
   items.push(
     'You can call multiple tools in a single response. If there are no dependencies between calls, make all independent calls in parallel for efficiency.',

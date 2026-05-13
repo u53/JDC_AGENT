@@ -170,6 +170,7 @@ export class Session {
       toolDefs,
       toolNames,
       mcpServers,
+      skills: this.skillLoader.getAll().map(s => ({ name: s.name, description: s.description })),
     })
 
     const content: import('./types.js').ContentBlock[] = [{ type: 'text', text }]
