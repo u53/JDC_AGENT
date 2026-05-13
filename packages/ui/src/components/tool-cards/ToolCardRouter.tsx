@@ -2,6 +2,8 @@ import type { ToolExecutionEvent } from '@jdcagnet/core'
 import { BashToolCard } from './BashToolCard'
 import { EditToolCard } from './EditToolCard'
 import { GenericToolCard } from './GenericToolCard'
+import { ReadToolCard } from './ReadToolCard'
+import { WriteToolCard } from './WriteToolCard'
 import { parseMcpToolName } from './shared'
 
 export interface ToolCardRouterProps {
@@ -14,6 +16,8 @@ export interface ToolCardRouterProps {
 const TOOL_CARD_REGISTRY: Record<string, React.ComponentType<ToolCardRouterProps>> = {
   Bash: BashToolCard,
   Edit: EditToolCard,
+  Write: WriteToolCard,
+  Read: ReadToolCard,
 }
 
 export function ToolCardRouter(props: ToolCardRouterProps) {
