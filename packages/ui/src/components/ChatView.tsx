@@ -3,6 +3,7 @@ import { useSession } from '../hooks/useSession'
 import { MessageBubble } from './MessageBubble'
 import { ToolCardRouter } from './tool-cards'
 import { ErrorCard } from './ErrorCard'
+import { PermissionDialog } from './PermissionDialog'
 import { PromptInput } from './PromptInput'
 import { AgentDetailPanel } from './AgentDetailPanel'
 import { useSessionStore } from '../stores/session-store'
@@ -240,6 +241,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
               onDismiss={dismissError}
             />
           )}
+          <PermissionDialog sessionId={activeSessionId} />
         </div>
       </div>
       {toast && (

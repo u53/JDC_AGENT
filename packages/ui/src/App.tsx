@@ -3,7 +3,6 @@ import { Sidebar } from './components/Sidebar'
 import { ChatView } from './components/ChatView'
 import { StatusBar } from './components/StatusBar'
 import { ModelManager } from './components/ModelManager'
-import { PermissionDialog } from './components/PermissionDialog'
 import { McpSettings } from './components/McpSettings'
 import { AskUserDialog } from './components/AskUserDialog'
 import { useSessionStore } from './stores/session-store'
@@ -35,7 +34,6 @@ export function App() {
         <StatusBar onOpenMcp={() => setMcpOpen(true)} onOpenSettings={openSettings} />
       </div>
       <ModelManager />
-      <PermissionDialog />
       <McpSettings isOpen={mcpOpen} onClose={() => setMcpOpen(false)} />
       <AskUserDialog />
     </div>

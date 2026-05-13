@@ -29,7 +29,9 @@ export function Sidebar() {
             </h3>
             <div className="space-y-0.5">
               {project.sessions.map((session) => {
-                const isBusy = sessionStates[session.id]?.isStreaming
+                const state = sessionStates[session.id]
+                const isBusy = state?.isStreaming
+                const hasError = state?.error && !state.error.retrying
                 return (
                   <button
                     key={session.id}
@@ -41,7 +43,10 @@ export function Sidebar() {
                     }`}
                   >
                     {isBusy && (
-                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#4AF626] animate-pulse flex-shrink-0" />
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse flex-shrink-0" />
+                    )}
+                    {!isBusy && hasError && (
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#E61919] flex-shrink-0" />
                     )}
                     <span className="block truncate">
                       {session.projectName || '新会话'}
