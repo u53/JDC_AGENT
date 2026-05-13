@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+console.log('[PRELOAD] Script executing...')
+
 const api = {
   send: (channel: string, data: unknown) => {
     ipcRenderer.send(channel, data)
@@ -15,3 +17,4 @@ const api = {
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)
+console.log('[PRELOAD] electronAPI exposed successfully')

@@ -2,7 +2,7 @@
   "name": "@jdcagnet/electron",
   "version": "0.0.1",
   "private": true,
-  "type": "module",
+  "type": "commonjs",
   "main": "dist/main.js",
   "scripts": {
     "dev": "node build.mjs && electron dist/main.js",

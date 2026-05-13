@@ -6,19 +6,16 @@ import { copyFileSync, existsSync } from 'node:fs'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '../..')
 
-// Main process — ESM
+// Main process — CJS (required for preload to work correctly in Electron 33)
 await build({
   entryPoints: [path.join(__dirname, 'src/main.ts')],
   bundle: true,
   platform: 'node',
   outdir: path.join(__dirname, 'dist'),
   external: ['electron'],
-  format: 'esm',
+  format: 'cjs',
   alias: {
     '@jdcagnet/core': path.join(rootDir, 'packages/core/src/index.ts'),
-  },
-  banner: {
-    js: `import { createRequire as _cr } from 'module'; const require = _cr('file://${rootDir.replace(/\\/g, '/')}/package.json'); import { fileURLToPath } from 'url'; const __filename = fileURLToPath(import.meta.url); import { dirname } from 'path'; const __dirname = dirname(__filename);`,
   },
 })
 

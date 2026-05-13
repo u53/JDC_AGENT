@@ -33,7 +33,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   loadProjects: async () => {
     const projects = await ipc.session.list()
-    set({ projects })
+    set({ projects: projects || [] })
   },
 
   createSession: async (cwd: string) => {
@@ -58,9 +58,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   addProject: async () => {
-    const { path } = await ipc.dialog.openFolder()
-    if (path) {
-      await get().createSession(path)
+    const result = await ipc.dialog.openFolder()
+    if (result?.path) {
+      await get().createSession(result.path)
     }
   },
 }))
