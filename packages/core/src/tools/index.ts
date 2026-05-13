@@ -4,6 +4,7 @@ import { fileReadTool } from './file-read.js'
 import { fileWriteTool } from './file-write.js'
 import { fileEditTool } from './file-edit.js'
 import { globTool } from './glob.js'
+import { grepTool } from './grep.js'
 
 export function registerBuiltinTools(registry: ToolRegistry): void {
   registry.register(bashTool)
@@ -11,6 +12,7 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
   registry.register(fileWriteTool)
   registry.register(fileEditTool)
   registry.register(globTool)
+  registry.register(grepTool)
 }
 
-export { bashTool, fileReadTool, fileWriteTool, fileEditTool, globTool }
+export { bashTool, fileReadTool, fileWriteTool, fileEditTool, globTool, grepTool }
