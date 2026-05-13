@@ -26,15 +26,15 @@ export function ChatView() {
       <div className="flex items-center justify-between border-b border-[#333] px-4 py-2" style={{ WebkitAppRegion: 'drag' } as any}>
         <div className="w-[70px]" />
         <span className="text-[10px] uppercase tracking-[0.1em] text-[#666]">
-          SESSION {activeSessionId ? activeSessionId.slice(0, 8).toUpperCase() : ''}
+          SESSION // {activeSessionId ? activeSessionId.slice(0, 8).toUpperCase() : '---'}
         </span>
         <div style={{ WebkitAppRegion: 'no-drag' } as any}>
           <ModelSwitcher />
         </div>
       </div>
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="mx-auto max-w-[720px]">
-          {visibleMessages.map((msg, idx) => (
+        <div className="mx-auto max-w-[760px]">
+          {visibleMessages.map((msg) => (
             <MessageBubble
               key={msg.id}
               role={msg.role}
@@ -48,8 +48,8 @@ export function ChatView() {
           ))}
 
           {streamingText && (
-            <div className="mb-4 flex justify-start">
-              <div className="max-w-[80%] border border-[#333] bg-[#111] px-4 py-3 text-sm">
+            <div className="mb-4 border-l border-[#333] pl-4">
+              <div className="text-sm text-[#EAEAEA] whitespace-pre-wrap">
                 {streamingText}
                 <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-[#EAEAEA]" />
               </div>

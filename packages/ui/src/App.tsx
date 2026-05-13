@@ -16,12 +16,15 @@ export function App() {
   return (
     <div className="flex h-screen w-screen bg-[#0A0A0A] text-[#EAEAEA]">
       <Sidebar />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col border-l border-[#333]">
         {activeSessionId ? (
           <ChatView />
         ) : (
-          <div className="flex-1 flex items-center justify-center text-[#666] text-xs uppercase tracking-[0.1em]">
-            选择一个项目开始对话
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-[10px] uppercase tracking-[0.1em] text-[#666] mb-2">[ NO ACTIVE SESSION ]</div>
+              <div className="text-[10px] uppercase tracking-[0.1em] text-[#666]">选择一个项目开始对话</div>
+            </div>
           </div>
         )}
         <StatusBar />

@@ -77,7 +77,7 @@ export function PromptInput({ onSend, onAbort, isStreaming }: Props) {
   return (
     <div className="border-t border-[#333] px-6 py-4" onDrop={handleDrop} onDragOver={handleDragOver}>
       <ImagePreview images={images} onRemove={(i) => setImages(prev => prev.filter((_, idx) => idx !== i))} />
-      <div className="mx-auto max-w-[720px] flex items-end gap-3">
+      <div className="mx-auto max-w-[760px] flex items-end gap-3">
         <textarea
           ref={textareaRef}
           value={text}
@@ -85,22 +85,22 @@ export function PromptInput({ onSend, onAbort, isStreaming }: Props) {
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           rows={1}
-          placeholder="输入消息..."
+          placeholder="> ENTER COMMAND..."
           className="flex-1 resize-none bg-transparent border border-[#333] px-4 py-3 text-sm text-[#EAEAEA] placeholder-[#666] focus:border-[#EAEAEA] focus:outline-none transition-colors"
         />
         {isStreaming ? (
           <button
             onClick={onAbort}
-            className="border border-[#E61919] text-[#E61919] px-4 py-2 text-xs uppercase tracking-[0.05em] hover:bg-[#E61919] hover:text-[#EAEAEA] transition-colors"
+            className="border border-[#E61919] text-[#E61919] px-4 py-2 text-[10px] uppercase tracking-[0.05em] hover:bg-[#E61919] hover:text-[#EAEAEA] transition-colors"
           >
-            停止
+            [ABORT]
           </button>
         ) : (
           <button
             onClick={() => { if (text.trim() || images.length > 0) { onSend(text.trim(), images.length > 0 ? images : undefined); setText(''); setImages([]) } }}
-            className="border border-[#EAEAEA] text-[#EAEAEA] px-4 py-2 text-xs uppercase tracking-[0.05em] hover:bg-[#EAEAEA] hover:text-[#0A0A0A] transition-colors"
+            className="border border-[#EAEAEA] text-[#EAEAEA] px-4 py-2 text-[10px] uppercase tracking-[0.05em] hover:bg-[#EAEAEA] hover:text-[#0A0A0A] transition-colors"
           >
-            发送
+            [SEND]
           </button>
         )}
       </div>
