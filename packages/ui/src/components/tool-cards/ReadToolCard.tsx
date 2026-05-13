@@ -12,7 +12,7 @@ export function ReadToolCard({ event, input, result }: ToolCardRouterProps) {
   const lineCount = content ? content.split('\n').length : 0
   const isError = event?.result?.isError || result?.is_error
 
-  const detail = filePath + (lineCount > 0 ? ` (${lineCount} lines)` : '')
+  const detail = isError ? filePath : filePath + (lineCount > 0 ? ` (${lineCount} lines)` : '')
 
   return (
     <ToolCardShell
