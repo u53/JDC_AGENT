@@ -8,6 +8,10 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
     sessionManager.respondToPermission(id, allowed)
   })
 
+  ipcMain.on('ask_user:response', (_event, { id, answer }) => {
+    sessionManager.respondToAskUser(id, answer)
+  })
+
   ipcMain.handle(IPC_CHANNELS.SESSION_CREATE, async (_event, { projectName, cwd }) => {
     const sessionId = sessionManager.createSession(projectName, cwd)
     return { sessionId }

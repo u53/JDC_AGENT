@@ -3,7 +3,7 @@ import path from 'node:path'
 import {
   Session, type SessionEvents, AnthropicProvider, OpenAIChatProvider, OpenAIResponsesProvider,
   ConversationHistory, loadAppConfig, getConfigDir, type ModelConfig, type SessionConfig, type StreamChunk,
-  type PermissionCallback,
+  type PermissionCallback, createAskUserTool, type AskUserCallback,
 } from '@jdcagnet/core'
 import type { ToolExecutionEvent } from '@jdcagnet/core'
 import type { BrowserWindow } from 'electron'
@@ -25,6 +25,7 @@ export class SessionManager {
   private window: BrowserWindow | null = null
   private readyPromise: Promise<void>
   private pendingPermissions = new Map<string, { resolve: (allowed: boolean) => void }>()
+  private pendingAskUser = new Map<string, { resolve: (answer: string) => void }>()
 
   constructor() {
     const dbPath = path.join(getConfigDir(), 'history.db')
@@ -94,6 +95,14 @@ export class SessionManager {
       })
     }
     const session = new Session(sessionConfig, provider, this.history, permissionCallback)
+    const onAskUser: AskUserCallback = async (question, options, multiSelect) => {
+      return new Promise<string>((resolve) => {
+        const id = uuid()
+        this.pendingAskUser.set(id, { resolve })
+        this.window?.webContents.send('ask_user:request', { id, sessionId, question, options, multiSelect })
+      })
+    }
+    session.registerTool(createAskUserTool(onAskUser))
     session.loadHistory()
     this.sessions.set(sessionId, session)
   }
@@ -136,6 +145,14 @@ export class SessionManager {
     if (pending) {
       pending.resolve(allowed)
       this.pendingPermissions.delete(id)
+    }
+  }
+
+  respondToAskUser(id: string, answer: string): void {
+    const pending = this.pendingAskUser.get(id)
+    if (pending) {
+      pending.resolve(answer)
+      this.pendingAskUser.delete(id)
     }
   }
 

@@ -49,6 +49,10 @@ export class Session {
     this.toolRunner = new ToolRunner(this.toolRegistry, config.cwd, new PermissionChecker(), onPermissionRequest)
   }
 
+  registerTool(handler: import('./tool-registry.js').ToolHandler): void {
+    this.toolRegistry.register(handler)
+  }
+
   getMessages(): Message[] {
     return [...this.messages]
   }
