@@ -1,4 +1,5 @@
 import type { ToolExecutionEvent } from '@jdcagnet/core'
+import { AgentToolCard } from './AgentToolCard'
 import { BashToolCard } from './BashToolCard'
 import { EditToolCard } from './EditToolCard'
 import { GenericToolCard } from './GenericToolCard'
@@ -18,6 +19,7 @@ const TOOL_CARD_REGISTRY: Record<string, React.ComponentType<ToolCardRouterProps
   Edit: EditToolCard,
   Write: WriteToolCard,
   Read: ReadToolCard,
+  Agent: AgentToolCard,
 }
 
 export function ToolCardRouter(props: ToolCardRouterProps) {
