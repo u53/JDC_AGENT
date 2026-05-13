@@ -30,6 +30,13 @@ export class OpenAIChatProvider implements ModelProvider {
     const response = await this.client.chat.completions.create(params, { signal })
 
     const choice = response.choices[0]
+    if (!choice) {
+      return {
+        content: [],
+        usage: { inputTokens: 0, outputTokens: 0 },
+      }
+    }
+
     const content: ContentBlock[] = []
 
     if (choice.message.content) {
@@ -39,11 +46,17 @@ export class OpenAIChatProvider implements ModelProvider {
     if (choice.message.tool_calls) {
       for (const tc of choice.message.tool_calls) {
         if (tc.type === 'function') {
+          let parsedArgs: Record<string, unknown> = {}
+          try {
+            parsedArgs = JSON.parse(tc.function.arguments || '{}')
+          } catch {
+            // Malformed JSON from API — fall back to empty object
+          }
           content.push({
             type: 'tool_use',
             id: tc.id,
             name: tc.function.name,
-            input: JSON.parse(tc.function.arguments || '{}'),
+            input: parsedArgs,
           })
         }
       }
@@ -69,11 +82,14 @@ export class OpenAIChatProvider implements ModelProvider {
       max_tokens: config.maxTokens,
       messages: this.formatMessages(messages, config.systemPrompt),
       stream: true,
+      stream_options: { include_usage: true },
       ...(tools.length > 0 ? { tools: this.formatTools(tools) } : {}),
       ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
     }
 
     const stream = await this.client.chat.completions.create(params, { signal })
+
+    let toolCallsStarted = 0
 
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta
@@ -86,6 +102,11 @@ export class OpenAIChatProvider implements ModelProvider {
       if (delta?.tool_calls) {
         for (const tc of delta.tool_calls) {
           if (tc.function?.name) {
+            // Close previous tool call before starting a new one
+            if (toolCallsStarted > 0) {
+              yield { type: 'tool_use_end' }
+            }
+            toolCallsStarted++
             yield {
               type: 'tool_use_start',
               toolUse: { id: tc.id || '', name: tc.function.name, input: '' },
@@ -101,13 +122,27 @@ export class OpenAIChatProvider implements ModelProvider {
       }
 
       if (finishReason === 'tool_calls') {
-        yield { type: 'tool_use_end' }
+        // Close the last open tool call
+        if (toolCallsStarted > 0) {
+          yield { type: 'tool_use_end' }
+        }
       } else if (finishReason === 'stop') {
         yield {
           type: 'message_end',
           usage: {
             inputTokens: chunk.usage?.prompt_tokens ?? 0,
             outputTokens: chunk.usage?.completion_tokens ?? 0,
+          },
+        }
+      }
+
+      // Final chunk with usage (stream_options: include_usage)
+      if (!chunk.choices.length && chunk.usage) {
+        yield {
+          type: 'message_end',
+          usage: {
+            inputTokens: chunk.usage.prompt_tokens ?? 0,
+            outputTokens: chunk.usage.completion_tokens ?? 0,
           },
         }
       }
@@ -152,12 +187,25 @@ export class OpenAIChatProvider implements ModelProvider {
             })
           }
         }
+        // If there are also text blocks alongside tool_result, emit them as a separate user message
+        if (textBlocks.length > 0) {
+          const text = textBlocks
+            .filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text')
+            .map(b => b.text)
+            .join('\n')
+          if (text) {
+            formatted.push({ role: 'user', content: text })
+          }
+        }
       } else if (msg.role === 'assistant') {
         const assistantMsg: OpenAI.ChatCompletionAssistantMessageParam = {
           role: 'assistant',
         }
-        if (textBlocks.length > 0 && textBlocks[0].type === 'text') {
-          assistantMsg.content = textBlocks[0].text
+        if (textBlocks.length > 0) {
+          assistantMsg.content = textBlocks
+            .filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text')
+            .map(b => b.text)
+            .join('\n')
         }
         if (toolUseBlocks.length > 0) {
           assistantMsg.tool_calls = toolUseBlocks
