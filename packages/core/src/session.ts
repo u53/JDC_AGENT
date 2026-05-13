@@ -23,6 +23,7 @@ import { createReadMcpResourceTool } from './tools/read-mcp-resource.js'
 import { loadHookConfig, HookEngine } from './hooks/index.js'
 import { SkillLoader } from './skills/loader.js'
 import { createSkillTool } from './tools/skill.js'
+import { createAgentTool } from './tools/agent.js'
 
 export interface SessionEvents {
   onStreamChunk: (chunk: StreamChunk) => void
@@ -84,6 +85,17 @@ export class Session {
     // Asynchronously load skills and register SkillTool
     this.skillLoader = new SkillLoader()
     this.skillsReady = this.initSkills()
+
+    // Register AgentTool for sub-agent dispatch
+    this.toolRegistry.register(createAgentTool({
+      provider: this.provider,
+      toolRegistry: this.toolRegistry,
+      modelConfig: this.config.modelConfig,
+      cwd: this.config.cwd,
+      onToolEvent: undefined,
+      onPermissionRequest,
+      isSubAgent: false,
+    }))
   }
 
   private async initHooks(onPermissionRequest?: PermissionCallback): Promise<void> {
