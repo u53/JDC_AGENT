@@ -6,11 +6,9 @@ import { copyFileSync, existsSync } from 'node:fs'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '../..')
 
+// Main process — ESM
 await build({
-  entryPoints: [
-    path.join(__dirname, 'src/main.ts'),
-    path.join(__dirname, 'src/preload.ts'),
-  ],
+  entryPoints: [path.join(__dirname, 'src/main.ts')],
   bundle: true,
   platform: 'node',
   outdir: path.join(__dirname, 'dist'),
@@ -22,6 +20,16 @@ await build({
   banner: {
     js: `import { createRequire as _cr } from 'module'; const require = _cr('file://${rootDir.replace(/\\/g, '/')}/package.json'); import { fileURLToPath } from 'url'; const __filename = fileURLToPath(import.meta.url); import { dirname } from 'path'; const __dirname = dirname(__filename);`,
   },
+})
+
+// Preload — must be CJS for Electron sandbox
+await build({
+  entryPoints: [path.join(__dirname, 'src/preload.ts')],
+  bundle: true,
+  platform: 'node',
+  outdir: path.join(__dirname, 'dist'),
+  external: ['electron'],
+  format: 'cjs',
 })
 
 // Copy sql-wasm.wasm to dist
