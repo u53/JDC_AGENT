@@ -11,7 +11,8 @@ export function Sidebar() {
 
   return (
     <aside className="w-[260px] border-r border-[#333] bg-[#0A0A0A] overflow-y-auto flex flex-col">
-      <div className="pt-10 px-4 pb-4">
+      <div className="h-[38px] flex-shrink-0" style={{ WebkitAppRegion: 'drag' } as any} />
+      <div className="px-4 pb-4">
         <button
           onClick={addProject}
           className="w-full border border-[#EAEAEA] text-[#EAEAEA] uppercase text-[10px] tracking-[0.1em] py-2 hover:bg-[#EAEAEA] hover:text-[#0A0A0A] transition-colors"

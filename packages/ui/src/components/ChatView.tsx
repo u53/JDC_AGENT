@@ -16,18 +16,31 @@ export function ChatView() {
     if (el) el.scrollTop = el.scrollHeight
   }, [messages, streamingText, toolEvents])
 
+  const visibleMessages = messages.filter(msg => {
+    if (msg.role === 'user' && Array.isArray(msg.content) && msg.content.every((b: any) => b.type === 'tool_result')) return false
+    return true
+  })
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-[#333] px-4 py-2">
-        <span className="text-[10px] uppercase tracking-[0.1em] text-[#EAEAEA]">
-          &lt; SESSION {activeSessionId ? activeSessionId.slice(0, 8).toUpperCase() : ''} &gt;
+      <div className="flex items-center justify-between border-b border-[#333] px-4 py-2" style={{ WebkitAppRegion: 'drag' } as any}>
+        <div className="w-[70px]" />
+        <span className="text-[10px] uppercase tracking-[0.1em] text-[#666]">
+          SESSION {activeSessionId ? activeSessionId.slice(0, 8).toUpperCase() : ''}
         </span>
-        <ModelSwitcher />
+        <div style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <ModelSwitcher />
+        </div>
       </div>
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
         <div className="mx-auto max-w-[720px]">
-          {messages.map((msg) => (
-            <MessageBubble key={msg.id} role={msg.role} content={msg.content} />
+          {visibleMessages.map((msg, idx) => (
+            <MessageBubble
+              key={msg.id}
+              role={msg.role}
+              content={msg.content}
+              nextMessage={messages[messages.indexOf(msg) + 1]}
+            />
           ))}
 
           {toolEvents.map((event, i) => (

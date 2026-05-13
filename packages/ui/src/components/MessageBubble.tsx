@@ -1,61 +1,87 @@
 import { MarkdownRenderer } from './MarkdownRenderer'
-import type { ContentBlock } from '@jdcagnet/core'
+import { HistoryToolCard } from './HistoryToolCard'
+import type { ContentBlock, Message } from '@jdcagnet/core'
 
 interface Props {
   role: 'user' | 'assistant'
   content: ContentBlock[]
+  nextMessage?: Message
 }
 
-export function MessageBubble({ role, content }: Props) {
+export function MessageBubble({ role, content, nextMessage }: Props) {
   const isUser = role === 'user'
 
+  const findToolResult = (toolUseId: string) => {
+    if (!nextMessage || nextMessage.role !== 'user') return undefined
+    const block = nextMessage.content.find(
+      (b: any) => b.type === 'tool_result' && b.tool_use_id === toolUseId
+    ) as any
+    if (!block) return undefined
+    return { content: block.content, is_error: block.is_error }
+  }
+
+  // Separate text/image blocks from tool_use blocks
+  const textBlocks = content.filter(b => b.type === 'text' || b.type === 'image')
+  const toolUseBlocks = content.filter(b => b.type === 'tool_use')
+
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
-      <div
-        className={`max-w-[80%] px-4 py-3 text-sm ${
-          isUser
-            ? 'border border-[#EAEAEA] text-[#EAEAEA]'
-            : 'border border-[#333] bg-[#111] text-[#EAEAEA]'
-        }`}
-      >
-        {content.map((block, i) => {
-          if (block.type === 'text') {
-            if (isUser) {
+    <div className={`${isUser ? '' : ''} mb-4`}>
+      {textBlocks.length > 0 && (
+        <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+          <div
+            className={`max-w-[80%] px-4 py-3 text-sm ${
+              isUser
+                ? 'border border-[#EAEAEA] text-[#EAEAEA]'
+                : 'border border-[#333] bg-[#111] text-[#EAEAEA]'
+            }`}
+          >
+            {textBlocks.map((block, i) => {
+              if (block.type === 'text') {
+                if (isUser) {
+                  return (
+                    <p key={i} className="whitespace-pre-wrap">
+                      {block.text}
+                    </p>
+                  )
+                }
+                return (
+                  <div key={i} className="prose prose-sm prose-invert max-w-none">
+                    <MarkdownRenderer content={block.text} />
+                  </div>
+                )
+              }
+              if (block.type === 'image') {
+                return (
+                  <img
+                    key={i}
+                    src={`data:${block.source.media_type};base64,${block.source.data}`}
+                    className="max-w-sm max-h-64 border border-[#333] my-2"
+                    alt="Attached image"
+                  />
+                )
+              }
+              return null
+            })}
+          </div>
+        </div>
+      )}
+      {toolUseBlocks.length > 0 && (
+        <div className="mt-1">
+          {toolUseBlocks.map((block, i) => {
+            if (block.type === 'tool_use') {
               return (
-                <p key={i} className="whitespace-pre-wrap">
-                  {block.text}
-                </p>
+                <HistoryToolCard
+                  key={i}
+                  name={block.name}
+                  input={block.input}
+                  result={findToolResult(block.id)}
+                />
               )
             }
-            return (
-              <div key={i} className="prose prose-sm prose-invert max-w-none">
-                <MarkdownRenderer content={block.text} />
-              </div>
-            )
-          }
-          if (block.type === 'image') {
-            return (
-              <img
-                key={i}
-                src={`data:${block.source.media_type};base64,${block.source.data}`}
-                className="max-w-sm max-h-64 border border-[#333] my-2"
-                alt="Attached image"
-              />
-            )
-          }
-          if (block.type === 'tool_use') {
-            return (
-              <span
-                key={i}
-                className="inline-block border border-[#333] px-2 py-0.5 text-[10px] uppercase tracking-[0.05em] text-[#666] mr-1 mb-1"
-              >
-                {block.name}
-              </span>
-            )
-          }
-          return null
-        })}
-      </div>
+            return null
+          })}
+        </div>
+      )}
     </div>
   )
 }
