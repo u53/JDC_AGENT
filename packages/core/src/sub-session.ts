@@ -22,6 +22,8 @@ export interface SubSessionOptions {
   onToolEvent?: (event: ToolExecutionEvent) => void
   onPermissionRequest?: PermissionCallback
   permissionMode?: 'standard' | 'relaxed' | 'strict'
+  onAgentProgress?: (event: { toolName: string; toolStatus: 'start' | 'complete' | 'error'; toolInput?: Record<string, unknown>; toolResult?: { content: string; isError?: boolean }; toolCount: number }) => void
+  onAgentText?: (text: string) => void
 }
 
 export interface SubSessionResult {
@@ -41,6 +43,8 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
     signal,
     onToolEvent,
     onPermissionRequest,
+    onAgentProgress,
+    onAgentText,
   } = opts
 
   const permChecker = new PermissionChecker(opts.permissionMode || 'relaxed')
@@ -53,6 +57,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
     { id: uuid(), role: 'user', content: [{ type: 'text', text: prompt }], timestamp: Date.now() },
   ]
   const toolsUsed: string[] = []
+  let totalToolCount = 0
   let turns = 0
 
   while (turns < maxTurns) {
@@ -82,7 +87,10 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
 
     // Build assistant message
     const contentBlocks: ContentBlock[] = []
-    if (textContent) contentBlocks.push({ type: 'text', text: textContent })
+    if (textContent) {
+      contentBlocks.push({ type: 'text', text: textContent })
+      onAgentText?.(textContent)
+    }
     for (const tu of toolUses) {
       let parsedInput: Record<string, unknown> = {}
       try { parsedInput = JSON.parse(tu.input) } catch { /* empty */ }
@@ -103,8 +111,21 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
       let parsedInput: Record<string, unknown> = {}
       try { parsedInput = JSON.parse(tu.input) } catch { /* empty */ }
       toolsUsed.push(tu.name)
+      totalToolCount++
+
+      onAgentProgress?.({ toolName: tu.name, toolStatus: 'start', toolInput: parsedInput, toolCount: totalToolCount })
+
       const noopEvent = (event: ToolExecutionEvent) => { onToolEvent?.(event) }
       const result = await toolRunner.execute(tu.name, tu.id, parsedInput, noopEvent, signal)
+
+      onAgentProgress?.({
+        toolName: tu.name,
+        toolStatus: result.isError ? 'error' : 'complete',
+        toolInput: parsedInput,
+        toolResult: { content: result.content, isError: result.isError },
+        toolCount: totalToolCount,
+      })
+
       toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: result.content, is_error: result.isError })
     }
     messages.push({ id: uuid(), role: 'user', content: toolResults, timestamp: Date.now() })
