@@ -25,6 +25,8 @@ export function ChatView() {
     if (!isStreaming) setResponseExpanded(false)
   }, [isStreaming])
 
+  const [thinkingEnabled, setThinkingEnabled] = useState(true)
+
   const visibleMessages = messages.filter(msg => {
     if (msg.role === 'user' && Array.isArray(msg.content) && msg.content.every((b: any) => b.type === 'tool_result')) return false
     return true
@@ -35,6 +37,11 @@ export function ChatView() {
       sendMessage('/compact')
     } else if (command === '/clear') {
       // TODO: implement clear
+    } else if (command === '/thinking') {
+      setThinkingEnabled(prev => !prev)
+      // TODO: propagate to session config
+    } else if (command === '/mcp') {
+      // Open MCP panel — handled by parent via event
     } else if (command === '/help') {
       sendMessage('Show me available commands and how to use this tool.')
     } else if (command === '/status') {

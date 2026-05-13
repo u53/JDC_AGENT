@@ -19,6 +19,7 @@ export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, perm
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashFilter, setSlashFilter] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const isComposingRef = useRef(false)
 
   const addImageFile = useCallback((file: File) => {
     const validTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
@@ -74,6 +75,9 @@ export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, perm
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Ignore Enter during IME composition (Chinese/Japanese input)
+    if (isComposingRef.current) return
+
     if (showSlashMenu && ['ArrowDown', 'ArrowUp', 'Tab', 'Enter'].includes(e.key)) return
     if (e.key === 'Escape' && showSlashMenu) { setShowSlashMenu(false); return }
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -113,6 +117,8 @@ export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, perm
               value={text}
               onChange={(e) => { handleTextChange(e.target.value); handleInput() }}
               onKeyDown={handleKeyDown}
+              onCompositionStart={() => { isComposingRef.current = true }}
+              onCompositionEnd={() => { isComposingRef.current = false }}
               onPaste={handlePaste}
               rows={1}
               placeholder="> ENTER COMMAND... (/ for menu)"
