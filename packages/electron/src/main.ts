@@ -4,6 +4,10 @@ import { SessionManager } from './session-manager.js'
 import { registerIpcHandlers } from './ipc-handlers.js'
 import { registerMcpIpcHandlers } from './mcp-ipc.js'
 
+process.on('uncaughtException', (err) => {
+  console.error('[JDCAGNET] Uncaught exception:', err.message)
+})
+
 const sessionManager = new SessionManager()
 
 app.whenReady().then(async () => {
@@ -11,10 +15,14 @@ app.whenReady().then(async () => {
   registerIpcHandlers(sessionManager)
   registerMcpIpcHandlers(sessionManager)
 
-  await sessionManager.initMcp(process.env.HOME || '/')
-
   const win = createMainWindow()
   sessionManager.setWindow(win)
+
+  win.webContents.on('did-finish-load', () => {
+    sessionManager.initMcp(process.env.HOME || '/').catch((err) => {
+      console.error('[JDCAGNET] MCP init error:', err.message)
+    })
+  })
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
