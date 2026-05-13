@@ -23,7 +23,7 @@ export function App() {
       <Sidebar />
       <div className="flex-1 flex flex-col border-l border-[#333]">
         {activeSessionId ? (
-          <ChatView />
+          <ChatView onOpenMcp={() => setMcpOpen(true)} />
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
