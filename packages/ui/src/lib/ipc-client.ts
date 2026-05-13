@@ -19,6 +19,7 @@ declare global {
       mcpToggle: (serverName: string, enabled: boolean) => Promise<void>
       mcpSaveConfig: (servers: any, scope: string, cwd?: string) => Promise<void>
       onMcpStateChanged: (callback: (states: McpServerState[]) => void) => void
+      agentAbort?: (sessionId: string, agentToolUseId: string) => Promise<void>
     }
   }
 }
@@ -84,5 +85,16 @@ export const ipc = {
   dialog: {
     openFolder: () =>
       invoke('dialog:open-folder') as Promise<{ path: string | null }>,
+  },
+
+  agent: {
+    abort: (sessionId: string, agentToolUseId: string) =>
+      invoke('agent:abort', { sessionId, agentToolUseId }),
+    onProgress: (cb: (data: { sessionId: string; agentToolUseId: string; toolName: string; toolStatus: string; toolInput?: Record<string, unknown>; toolResult?: { content: string; isError?: boolean }; toolCount: number }) => void) =>
+      on('agent:progress', (_e, data) => cb(data as any)),
+    onText: (cb: (data: { sessionId: string; agentToolUseId: string; text: string }) => void) =>
+      on('agent:text', (_e, data) => cb(data as any)),
+    onComplete: (cb: (data: { sessionId: string; agentToolUseId: string; content: string; turns: number; toolsUsed: string[] }) => void) =>
+      on('agent:complete', (_e, data) => cb(data as any)),
   },
 }
