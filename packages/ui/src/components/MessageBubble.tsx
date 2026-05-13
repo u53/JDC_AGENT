@@ -1,5 +1,5 @@
 import { MarkdownRenderer } from './MarkdownRenderer'
-import { HistoryToolCard } from './HistoryToolCard'
+import { ToolCardRouter } from './tool-cards'
 import type { ContentBlock, Message } from '@jdcagnet/core'
 
 interface Props {
@@ -64,7 +64,7 @@ export function MessageBubble({ role, content, nextMessage }: Props) {
           {toolUseBlocks.map((block, i) => {
             if (block.type === 'tool_use') {
               return (
-                <HistoryToolCard
+                <ToolCardRouter
                   key={i}
                   name={block.name}
                   input={block.input}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useSession } from '../hooks/useSession'
 import { MessageBubble } from './MessageBubble'
-import { ToolCard } from './ToolCard'
+import { ToolCardRouter } from './tool-cards'
 import { PromptInput } from './PromptInput'
 import { useSessionStore } from '../stores/session-store'
 import { useModelStore } from '../stores/model-store'
@@ -136,7 +136,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
             <MessageBubble key={msg.id} role={msg.role} content={msg.content} nextMessage={messages[messages.indexOf(msg) + 1]} />
           ))}
           {toolEvents.map((event, i) => (
-            <ToolCard key={`${event.toolUseId}-${i}`} event={event} />
+            <ToolCardRouter key={`${event.toolUseId}-${i}`} event={event} />
           ))}
           {isThinking && (
             <div className="mb-3 border border-[#333]">
