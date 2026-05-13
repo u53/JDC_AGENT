@@ -79,6 +79,12 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     }
   }, [activeSessionId])
 
+  const setActiveAgent = useAgentStore((s) => s.setActiveAgent)
+
+  useEffect(() => {
+    setActiveAgent(null)
+  }, [activeSessionId])
+
   useEffect(() => {
     if (activeSessionId && (window as any).electronAPI?.listSkills) {
       (window as any).electronAPI.listSkills(activeSessionId).then(setSkills).catch(() => {})
