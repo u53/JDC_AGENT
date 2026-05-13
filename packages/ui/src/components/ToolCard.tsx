@@ -4,34 +4,39 @@ interface Props {
   event: ToolExecutionEvent
 }
 
-const statusIcons: Record<string, string> = {
-  start: '⏳',
-  progress: '⚙️',
-  complete: '✅',
-  error: '❌',
+const statusColors: Record<string, string> = {
+  start: 'bg-[#E1F3FE] text-[#1A6FA3]',
+  progress: 'bg-[#E1F3FE] text-[#1A6FA3]',
+  complete: 'bg-[#EDF3EC] text-[#2D6A2D]',
+  error: 'bg-[#FDEBEC] text-[#9F2F2D]',
+}
+
+const statusLabels: Record<string, string> = {
+  start: 'running',
+  progress: 'running',
+  complete: 'done',
+  error: 'error',
 }
 
 export function ToolCard({ event }: Props) {
-  const icon = statusIcons[event.type] || '⚙️'
-  const isError = event.type === 'error'
+  const colorClass = statusColors[event.type] || statusColors.progress
+  const label = statusLabels[event.type] || event.type
 
   return (
-    <div className="mb-2 rounded-md border border-gray-200 bg-gray-50 p-2">
+    <div className="mb-3 rounded-[8px] border border-[#EAEAEA] bg-[#F9F9F8] p-4">
       <div className="flex items-center gap-2 text-sm">
-        <span>{icon}</span>
-        <span className="font-mono text-gray-600">{event.toolName}</span>
+        <span className="font-mono text-sm text-[#2F3437]">{event.toolName}</span>
+        <span className={`rounded-[4px] px-1.5 py-0.5 text-xs font-medium ${colorClass}`}>
+          {label}
+        </span>
       </div>
       {event.message && (
-        <pre className="mt-1 max-h-48 overflow-auto text-xs text-gray-500 whitespace-pre-wrap">
+        <pre className="mt-2 max-h-48 overflow-auto rounded-[6px] bg-[#F7F6F3] p-3 text-xs font-mono text-[#787774] whitespace-pre-wrap">
           {event.message}
         </pre>
       )}
       {event.result && (
-        <pre
-          className={`mt-1 max-h-48 overflow-auto text-xs whitespace-pre-wrap ${
-            isError ? 'text-red-400' : 'text-gray-500'
-          }`}
-        >
+        <pre className="mt-2 max-h-48 overflow-auto rounded-[6px] bg-[#F7F6F3] p-3 text-xs font-mono whitespace-pre-wrap text-[#787774]">
           {event.result.content}
         </pre>
       )}

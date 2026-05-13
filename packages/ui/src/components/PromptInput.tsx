@@ -30,8 +30,8 @@ export function PromptInput({ onSend, onAbort, isStreaming }: Props) {
   }
 
   return (
-    <div className="border-t border-gray-200 p-3">
-      <div className="flex items-end gap-2">
+    <div className="border-t border-[#EAEAEA] px-6 py-4">
+      <div className="mx-auto max-w-[720px] flex items-end gap-3">
         <textarea
           ref={textareaRef}
           value={text}
@@ -39,19 +39,19 @@ export function PromptInput({ onSend, onAbort, isStreaming }: Props) {
           onKeyDown={handleKeyDown}
           rows={1}
           placeholder="输入消息..."
-          className="flex-1 resize-none rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+          className="flex-1 resize-none rounded-[8px] border border-[#EAEAEA] bg-white px-4 py-3 text-sm text-[#2F3437] placeholder-[#787774] focus:border-[#111111] focus:outline-none transition-colors"
         />
         {isStreaming ? (
           <button
             onClick={onAbort}
-            className="rounded-md bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-500"
+            className="rounded-[6px] bg-[#FDEBEC] px-4 py-2.5 text-sm text-[#9F2F2D] hover:opacity-80 transition-opacity"
           >
             停止
           </button>
         ) : (
           <button
             onClick={() => { if (text.trim()) { onSend(text.trim()); setText('') } }}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-500"
+            className="rounded-[6px] bg-[#111111] px-4 py-2.5 text-sm text-white hover:opacity-90 transition-opacity"
           >
             发送
           </button>

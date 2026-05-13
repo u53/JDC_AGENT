@@ -15,23 +15,25 @@ export function ChatView() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4">
-        {messages.map((msg) => (
-          <MessageBubble key={msg.id} role={msg.role} content={msg.content} />
-        ))}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
+        <div className="mx-auto max-w-[720px]">
+          {messages.map((msg) => (
+            <MessageBubble key={msg.id} role={msg.role} content={msg.content} />
+          ))}
 
-        {toolEvents.map((event, i) => (
-          <ToolCard key={`${event.toolUseId}-${i}`} event={event} />
-        ))}
+          {toolEvents.map((event, i) => (
+            <ToolCard key={`${event.toolUseId}-${i}`} event={event} />
+          ))}
 
-        {streamingText && (
-          <div className="mb-3 flex justify-start">
-            <div className="max-w-[80%] rounded-lg bg-gray-100 px-4 py-2 text-sm text-gray-900">
-              {streamingText}
-              <span className="ml-0.5 inline-block h-4 w-1 animate-pulse bg-gray-400" />
+          {streamingText && (
+            <div className="mb-4 flex justify-start">
+              <div className="max-w-[80%] rounded-[8px] bg-[#F7F6F3] border border-[#EAEAEA] px-4 py-3 text-sm text-[#2F3437]">
+                {streamingText}
+                <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-[#787774]" />
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <PromptInput onSend={sendMessage} onAbort={abort} isStreaming={isStreaming} />

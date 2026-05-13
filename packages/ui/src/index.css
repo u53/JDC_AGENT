@@ -1,1 +1,17 @@
 @import "tailwindcss";
+
+:root {
+  --color-canvas: #FFFFFF;
+  --color-surface: #F7F6F3;
+  --color-border: #EAEAEA;
+  --color-text: #2F3437;
+  --color-text-muted: #787774;
+  --color-accent: #111111;
+}
+
+body {
+  font-family: 'SF Pro Display', 'Geist Sans', 'Helvetica Neue', sans-serif;
+  color: var(--color-text);
+  background: var(--color-canvas);
+  line-height: 1.6;
+}

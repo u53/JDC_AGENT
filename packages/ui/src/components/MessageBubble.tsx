@@ -10,10 +10,12 @@ export function MessageBubble({ role, content }: Props) {
   const isUser = role === 'user'
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
       <div
-        className={`max-w-[80%] rounded-lg px-4 py-2 ${
-          isUser ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'
+        className={`max-w-[80%] rounded-[8px] px-4 py-3 ${
+          isUser
+            ? 'bg-[#111111] text-white'
+            : 'bg-[#F7F6F3] text-[#2F3437] border border-[#EAEAEA]'
         }`}
       >
         {content.map((block, i) => {
@@ -28,7 +30,7 @@ export function MessageBubble({ role, content }: Props) {
             return (
               <span
                 key={i}
-                className="inline-block rounded bg-gray-200 px-2 py-0.5 text-xs text-gray-600 mr-1 mb-1"
+                className="inline-block rounded-[4px] bg-[#F7F6F3] border border-[#EAEAEA] px-2 py-0.5 text-xs font-mono text-[#787774] mr-1 mb-1"
               >
                 {block.name}
               </span>

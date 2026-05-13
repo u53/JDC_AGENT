@@ -30,15 +30,15 @@ export function SettingsPanel() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="w-[420px] rounded-lg bg-white p-6 shadow-xl">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">设置</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20">
+      <div className="w-[480px] rounded-[12px] border border-[#EAEAEA] bg-white p-8 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+        <h2 className="mb-6 text-base font-medium text-[#2F3437]">设置</h2>
 
-        <label className="mb-1 block text-sm text-gray-600">模型提供商</label>
+        <label className="mb-1.5 block text-xs text-[#787774] uppercase tracking-wide font-medium">模型提供商</label>
         <select
           value={provider}
           onChange={(e) => setProvider(e.target.value)}
-          className="mb-4 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none"
+          className="mb-5 w-full rounded-[6px] border border-[#EAEAEA] bg-[#F7F6F3] px-3 py-2 text-sm text-[#2F3437] outline-none"
         >
           <option value="anthropic">Anthropic</option>
           <option value="openai">OpenAI</option>
@@ -46,20 +46,20 @@ export function SettingsPanel() {
           <option value="custom">Custom</option>
         </select>
 
-        <label className="mb-1 block text-sm text-gray-600">API Key</label>
+        <label className="mb-1.5 block text-xs text-[#787774] uppercase tracking-wide font-medium">API Key</label>
         <input
           type="password"
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
           placeholder="sk-ant-..."
-          className="mb-4 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-400"
+          className="mb-5 w-full rounded-[6px] border border-[#EAEAEA] bg-[#F7F6F3] px-3 py-2 text-sm text-[#2F3437] outline-none placeholder:text-[#787774]"
         />
 
-        <label className="mb-1 block text-sm text-gray-600">默认模型</label>
+        <label className="mb-1.5 block text-xs text-[#787774] uppercase tracking-wide font-medium">默认模型</label>
         <select
           value={model}
           onChange={(e) => setModel(e.target.value)}
-          className="mb-4 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none"
+          className="mb-5 w-full rounded-[6px] border border-[#EAEAEA] bg-[#F7F6F3] px-3 py-2 text-sm text-[#2F3437] outline-none"
         >
           <option value="claude-opus-4-20250514">Claude Opus 4</option>
           <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
@@ -70,29 +70,25 @@ export function SettingsPanel() {
           <option value="qwen-max">Qwen Max</option>
         </select>
 
-        {provider === 'custom' && (
-          <>
-            <label className="mb-1 block text-sm text-gray-600">自定义 Endpoint</label>
-            <input
-              type="text"
-              value={endpoint}
-              onChange={(e) => setEndpoint(e.target.value)}
-              placeholder="https://..."
-              className="mb-4 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-400"
-            />
-          </>
-        )}
+        <label className="mb-1.5 block text-xs text-[#787774] uppercase tracking-wide font-medium">自定义 Base URL</label>
+        <input
+          type="text"
+          value={endpoint}
+          onChange={(e) => setEndpoint(e.target.value)}
+          placeholder="https://api.example.com/v1"
+          className="mb-6 w-full rounded-[6px] border border-[#EAEAEA] bg-[#F7F6F3] px-3 py-2 text-sm text-[#2F3437] outline-none placeholder:text-[#787774]"
+        />
 
-        <div className="mt-2 flex justify-end gap-3">
+        <div className="flex justify-end gap-3">
           <button
             onClick={close}
-            className="rounded px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+            className="rounded-[6px] border border-[#EAEAEA] px-4 py-2 text-sm text-[#787774] hover:text-[#2F3437] transition-colors"
           >
             取消
           </button>
           <button
             onClick={handleSave}
-            className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-500 transition-colors"
+            className="rounded-[6px] bg-[#111111] px-4 py-2 text-sm text-white hover:opacity-90 transition-opacity"
           >
             保存
           </button>
