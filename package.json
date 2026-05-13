@@ -10,9 +10,17 @@
     "test": "pnpm --filter @jdcagnet/core test"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
     "electron-builder": "^25.1.0",
-    "typescript": "^5.7.0",
     "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
     "vitest": "^3.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "better-sqlite3",
+      "esbuild"
+    ]
   }
 }

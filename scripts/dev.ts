@@ -36,9 +36,9 @@ async function main() {
   await sleep(3000);
 
   console.log("[dev] Building electron main process...");
-  const build = spawn("node", ["packages/electron/build.mjs"], {
+  const build = spawn("node", ["build.mjs"], {
     stdio: "inherit",
-    cwd: process.cwd(),
+    cwd: new URL("../packages/electron", import.meta.url).pathname,
   });
   processes.push(build);
 
@@ -50,11 +50,13 @@ async function main() {
   });
 
   console.log("[dev] Starting Electron...");
+  const electronPath = new URL("../packages/electron", import.meta.url).pathname;
   const electron = spawn(
-    "electron",
-    ["packages/electron/dist/main.js"],
+    "npx",
+    ["electron", "."],
     {
       stdio: "inherit",
+      cwd: electronPath,
       env: { ...process.env, NODE_ENV: "development" },
     }
   );

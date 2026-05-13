@@ -11,10 +11,16 @@ export class SessionManager {
   private sessions = new Map<string, Session>()
   private history: ConversationHistory
   private window: BrowserWindow | null = null
+  private readyPromise: Promise<void>
 
   constructor() {
     const dbPath = path.join(getConfigDir(), 'history.db')
     this.history = new ConversationHistory(dbPath)
+    this.readyPromise = this.history.ensureReady()
+  }
+
+  async ensureReady(): Promise<void> {
+    await this.readyPromise
   }
 
   setWindow(window: BrowserWindow): void {

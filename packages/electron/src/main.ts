@@ -5,7 +5,8 @@ import { registerIpcHandlers } from './ipc-handlers.js'
 
 const sessionManager = new SessionManager()
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await sessionManager.ensureReady()
   registerIpcHandlers(sessionManager)
 
   const win = createMainWindow()
