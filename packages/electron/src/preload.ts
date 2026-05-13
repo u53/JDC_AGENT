@@ -14,6 +14,13 @@ const api = {
     ipcRenderer.on(channel, listener)
     return () => { ipcRenderer.removeListener(channel, listener) }
   },
+  mcpListServers: () => ipcRenderer.invoke('mcp:list-servers'),
+  mcpReconnect: (serverName: string) => ipcRenderer.invoke('mcp:reconnect', { serverName }),
+  mcpToggle: (serverName: string, enabled: boolean) => ipcRenderer.invoke('mcp:toggle', { serverName, enabled }),
+  mcpSaveConfig: (servers: any, scope: string, cwd?: string) => ipcRenderer.invoke('mcp:save-config', { servers, scope, cwd }),
+  onMcpStateChanged: (callback: (states: any[]) => void) => {
+    ipcRenderer.on('mcp:state-changed', (_event, states) => callback(states))
+  },
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

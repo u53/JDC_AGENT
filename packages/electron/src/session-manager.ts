@@ -4,6 +4,7 @@ import {
   Session, type SessionEvents, AnthropicProvider, OpenAIChatProvider, OpenAIResponsesProvider,
   ConversationHistory, loadAppConfig, getConfigDir, type ModelConfig, type SessionConfig, type StreamChunk,
   type PermissionCallback, createAskUserTool, type AskUserCallback,
+  McpManager, loadMcpConfig, saveMcpConfig, type McpServerConfig, type McpServerState,
 } from '@jdcagnet/core'
 import type { ToolExecutionEvent } from '@jdcagnet/core'
 import type { BrowserWindow } from 'electron'
@@ -22,6 +23,7 @@ function getActiveModelConfig() {
 export class SessionManager {
   private sessions = new Map<string, Session>()
   private history: ConversationHistory
+  private mcpManager: McpManager
   private window: BrowserWindow | null = null
   private readyPromise: Promise<void>
   private pendingPermissions = new Map<string, { resolve: (allowed: boolean) => void }>()
@@ -31,6 +33,9 @@ export class SessionManager {
     const dbPath = path.join(getConfigDir(), 'history.db')
     this.history = new ConversationHistory(dbPath)
     this.readyPromise = this.history.ensureReady()
+    this.mcpManager = new McpManager(() => {
+      this.window?.webContents.send('mcp:state-changed', this.mcpManager.getServerStates())
+    })
   }
 
   async ensureReady(): Promise<void> {
@@ -94,7 +99,7 @@ export class SessionManager {
         this.window?.webContents.send('permission:request', { id, sessionId, toolName: request.toolName, input: request.input })
       })
     }
-    const session = new Session(sessionConfig, provider, this.history, permissionCallback)
+    const session = new Session(sessionConfig, provider, this.history, permissionCallback, this.mcpManager)
     const onAskUser: AskUserCallback = async (question, options, multiSelect) => {
       return new Promise<string>((resolve) => {
         const id = uuid()
@@ -176,6 +181,32 @@ export class SessionManager {
   }
 
   close(): void {
+    this.mcpManager.close()
     this.history.close()
+  }
+
+  async initMcp(cwd: string): Promise<void> {
+    const configs = loadMcpConfig(cwd)
+    await this.mcpManager.loadConfig(configs)
+  }
+
+  getMcpServerStates(): McpServerState[] {
+    return this.mcpManager.getServerStates()
+  }
+
+  async reconnectMcpServer(name: string): Promise<void> {
+    await this.mcpManager.reconnectServer(name)
+  }
+
+  async toggleMcpServer(name: string, enabled: boolean): Promise<void> {
+    if (enabled) {
+      await this.mcpManager.reconnectServer(name)
+    } else {
+      await this.mcpManager.disconnectServer(name)
+    }
+  }
+
+  saveMcpServers(servers: Record<string, McpServerConfig>, scope: 'global' | 'project', cwd?: string): void {
+    saveMcpConfig(servers, scope, cwd)
   }
 }

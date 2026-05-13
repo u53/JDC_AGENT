@@ -12,4 +12,8 @@ export const IPC_CHANNELS = {
   CONFIG_GET: 'config:get',
   CONFIG_SET: 'config:set',
   DIALOG_OPEN_FOLDER: 'dialog:open-folder',
+  MCP_LIST_SERVERS: 'mcp:list-servers',
+  MCP_RECONNECT: 'mcp:reconnect',
+  MCP_TOGGLE: 'mcp:toggle',
+  MCP_SAVE_CONFIG: 'mcp:save-config',
 } as const
