@@ -21,6 +21,8 @@ import { createMcpToolHandler } from './mcp/mcp-tool-handler.js'
 import { createListMcpResourcesTool } from './tools/list-mcp-resources.js'
 import { createReadMcpResourceTool } from './tools/read-mcp-resource.js'
 import { loadHookConfig, HookEngine } from './hooks/index.js'
+import { SkillLoader } from './skills/loader.js'
+import { createSkillTool } from './tools/skill.js'
 
 export interface SessionEvents {
   onStreamChunk: (chunk: StreamChunk) => void
@@ -42,6 +44,8 @@ export class Session {
   private mcpManager?: McpManager
   private hookEngine?: HookEngine
   private hooksReady: Promise<void>
+  private skillLoader: SkillLoader
+  private skillsReady: Promise<void>
 
   constructor(config: SessionConfig, provider: ModelProvider, history: ConversationHistory, onPermissionRequest?: PermissionCallback, mcpManager?: McpManager) {
     this.id = config.id
@@ -76,6 +80,10 @@ export class Session {
 
     // Asynchronously load hooks and rebuild ToolRunner
     this.hooksReady = this.initHooks(onPermissionRequest)
+
+    // Asynchronously load skills and register SkillTool
+    this.skillLoader = new SkillLoader()
+    this.skillsReady = this.initSkills()
   }
 
   private async initHooks(onPermissionRequest?: PermissionCallback): Promise<void> {
@@ -99,6 +107,23 @@ export class Session {
     await this.hooksReady
   }
 
+  private async initSkills(): Promise<void> {
+    try {
+      await this.skillLoader.loadAll(this.config.cwd)
+      this.toolRegistry.register(createSkillTool(this.skillLoader))
+    } catch {
+      // Skills are optional — if loading fails, continue without them
+    }
+  }
+
+  async ensureSkillsReady(): Promise<void> {
+    await this.skillsReady
+  }
+
+  getSkillLoader(): SkillLoader {
+    return this.skillLoader
+  }
+
   registerTool(handler: import('./tool-registry.js').ToolHandler): void {
     this.toolRegistry.register(handler)
   }
@@ -113,6 +138,7 @@ export class Session {
 
   async sendMessage(text: string, events: SessionEvents, extraContent?: import('./types.js').ContentBlock[]): Promise<void> {
     await this.ensureHooksReady()
+    await this.ensureSkillsReady()
 
     // Assemble system prompt with current tool list
     const toolDefs = this.toolRegistry.getDefinitions()
