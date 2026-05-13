@@ -5,13 +5,16 @@ import { StatusBar } from './components/StatusBar'
 import { ModelManager } from './components/ModelManager'
 import { PermissionDialog } from './components/PermissionDialog'
 import { McpSettings } from './components/McpSettings'
+import { SettingsPanel } from './components/SettingsPanel'
 import { useSessionStore } from './stores/session-store'
 import { useModelStore } from './stores/model-store'
+import { useSettingsStore } from './stores/settings-store'
 
 export function App() {
   const { activeSessionId } = useSessionStore()
   const loadModels = useModelStore((s) => s.loadFromConfig)
   const [mcpOpen, setMcpOpen] = useState(false)
+  const openSettings = useSettingsStore((s) => s.open)
 
   useEffect(() => { loadModels() }, [loadModels])
 
@@ -29,11 +32,12 @@ export function App() {
             </div>
           </div>
         )}
-        <StatusBar onOpenMcp={() => setMcpOpen(true)} />
+        <StatusBar onOpenMcp={() => setMcpOpen(true)} onOpenSettings={openSettings} />
       </div>
       <ModelManager />
       <PermissionDialog />
       <McpSettings isOpen={mcpOpen} onClose={() => setMcpOpen(false)} />
+      <SettingsPanel />
     </div>
   )
 }
