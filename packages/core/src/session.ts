@@ -8,6 +8,8 @@ import { ConversationHistory } from './history.js'
 import { assembleSystemPrompt } from './context.js'
 import { PermissionChecker } from './permissions.js'
 import { TaskStore } from './task-store.js'
+import { estimateTokens } from './token-estimation.js'
+import { compactMessages } from './compact.js'
 import { createTaskCreateTool } from './tools/task-create.js'
 import { createTaskGetTool } from './tools/task-get.js'
 import { createTaskListTool } from './tools/task-list.js'
@@ -86,8 +88,22 @@ export class Session {
     await this.runLoop(events)
   }
 
+  private shouldCompact(): boolean {
+    const compressAt = this.config.modelConfig.maxTokens * 0.8
+    return estimateTokens(this.messages) > compressAt
+  }
+
+  private async compact(events: SessionEvents): Promise<void> {
+    events.onStreamChunk({ type: 'text_delta', text: '\n[Compressing context...]\n' })
+    this.messages = await compactMessages(this.messages, this.provider, this.config.modelConfig, events.onStreamChunk)
+  }
+
   private async runLoop(events: SessionEvents): Promise<void> {
     this.abortController = new AbortController()
+
+    if (this.shouldCompact()) {
+      await this.compact(events)
+    }
 
     while (true) {
       const assistantContent: any[] = []
