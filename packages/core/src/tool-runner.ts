@@ -1,4 +1,5 @@
 import type { ToolContext, ToolRegistry, ToolResult } from './tool-registry.js'
+import { PermissionChecker } from './permissions.js'
 
 export interface ToolExecutionEvent {
   type: 'start' | 'progress' | 'complete' | 'error'
@@ -8,11 +9,25 @@ export interface ToolExecutionEvent {
   result?: ToolResult
 }
 
+export type PermissionCallback = (request: { toolName: string; input: Record<string, unknown> }) => Promise<boolean>
+
 export class ToolRunner {
+  private registry: ToolRegistry
+  private cwd: string
+  private permissionChecker: PermissionChecker
+  private onPermissionRequest?: PermissionCallback
+
   constructor(
-    private registry: ToolRegistry,
-    private cwd: string
-  ) {}
+    registry: ToolRegistry,
+    cwd: string,
+    permissionChecker?: PermissionChecker,
+    onPermissionRequest?: PermissionCallback
+  ) {
+    this.registry = registry
+    this.cwd = cwd
+    this.permissionChecker = permissionChecker ?? new PermissionChecker()
+    this.onPermissionRequest = onPermissionRequest
+  }
 
   async execute(
     toolName: string,
@@ -26,6 +41,27 @@ export class ToolRunner {
       const result: ToolResult = { content: `Unknown tool: ${toolName}`, isError: true }
       onEvent({ type: 'error', toolName, toolUseId, result })
       return result
+    }
+
+    // Permission check
+    const decision = this.permissionChecker.check(toolName, input)
+    if (decision === 'deny') {
+      const result: ToolResult = { content: `Permission denied: ${toolName}`, isError: true }
+      onEvent({ type: 'error', toolName, toolUseId, result })
+      return result
+    }
+    if (decision === 'ask') {
+      if (!this.onPermissionRequest) {
+        const result: ToolResult = { content: `Permission required but no callback provided: ${toolName}`, isError: true }
+        onEvent({ type: 'error', toolName, toolUseId, result })
+        return result
+      }
+      const allowed = await this.onPermissionRequest({ toolName, input })
+      if (!allowed) {
+        const result: ToolResult = { content: `Permission denied by user: ${toolName}`, isError: true }
+        onEvent({ type: 'error', toolName, toolUseId, result })
+        return result
+      }
     }
 
     onEvent({ type: 'start', toolName, toolUseId })

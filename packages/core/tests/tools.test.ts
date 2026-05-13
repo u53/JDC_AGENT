@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { ToolRegistry } from '../src/tool-registry.js'
 import { ToolRunner } from '../src/tool-runner.js'
+import { PermissionChecker } from '../src/permissions.js'
 import { registerBuiltinTools } from '../src/tools/index.js'
 import { writeFile, mkdir, rm } from 'node:fs/promises'
 import path from 'node:path'
@@ -13,7 +14,7 @@ describe('Built-in Tools', () => {
     await mkdir(tmpDir, { recursive: true })
     const registry = new ToolRegistry()
     registerBuiltinTools(registry)
-    return new ToolRunner(registry, tmpDir)
+    return new ToolRunner(registry, tmpDir, new PermissionChecker('relaxed'))
   }
 
   it('bash: should execute a command', async () => {

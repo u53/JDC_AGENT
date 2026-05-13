@@ -2,10 +2,11 @@ import { v4 as uuid } from 'uuid'
 import type { Message, SessionConfig, StreamChunk } from './types.js'
 import type { ModelProvider } from './model-provider.js'
 import { ToolRegistry } from './tool-registry.js'
-import { ToolRunner, type ToolExecutionEvent } from './tool-runner.js'
+import { ToolRunner, type ToolExecutionEvent, type PermissionCallback } from './tool-runner.js'
 import { registerBuiltinTools } from './tools/index.js'
 import { ConversationHistory } from './history.js'
 import { assembleSystemPrompt } from './context.js'
+import { PermissionChecker } from './permissions.js'
 
 export interface SessionEvents {
   onStreamChunk: (chunk: StreamChunk) => void
@@ -24,14 +25,14 @@ export class Session {
   private history: ConversationHistory
   private abortController: AbortController | null = null
 
-  constructor(config: SessionConfig, provider: ModelProvider, history: ConversationHistory) {
+  constructor(config: SessionConfig, provider: ModelProvider, history: ConversationHistory, onPermissionRequest?: PermissionCallback) {
     this.id = config.id
     this.config = config
     this.provider = provider
     this.history = history
     this.toolRegistry = new ToolRegistry()
     registerBuiltinTools(this.toolRegistry)
-    this.toolRunner = new ToolRunner(this.toolRegistry, config.cwd)
+    this.toolRunner = new ToolRunner(this.toolRegistry, config.cwd, new PermissionChecker(), onPermissionRequest)
   }
 
   getMessages(): Message[] {
