@@ -33,7 +33,7 @@ async function main() {
   });
 
   // Wait for Vite to start
-  await sleep(3000);
+  await sleep(5000);
 
   console.log("[dev] Building electron main process...");
   const build = spawn("node", ["build.mjs"], {

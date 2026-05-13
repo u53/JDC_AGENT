@@ -5,7 +5,7 @@ export function SettingsPanel() {
   const { isOpen, config, close, load, save } = useSettingsStore()
   const [provider, setProvider] = useState('anthropic')
   const [apiKey, setApiKey] = useState('')
-  const [model, setModel] = useState('claude-sonnet-4-6')
+  const [model, setModel] = useState('claude-sonnet-4-20250514')
   const [endpoint, setEndpoint] = useState('')
 
   useEffect(() => {
@@ -18,7 +18,7 @@ export function SettingsPanel() {
     if (config) {
       setProvider(config.provider || 'anthropic')
       setApiKey(config.apiKey || '')
-      setModel(config.model || 'claude-sonnet-4-6')
+      setModel(config.model || 'claude-sonnet-4-20250514')
       setEndpoint(config.endpoint || '')
     }
   }, [config])
@@ -30,15 +30,15 @@ export function SettingsPanel() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-[420px] rounded-lg bg-zinc-800 p-6 shadow-xl">
-        <h2 className="mb-4 text-lg font-semibold text-zinc-100">设置</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+      <div className="w-[420px] rounded-lg bg-white p-6 shadow-xl">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">设置</h2>
 
-        <label className="mb-1 block text-sm text-zinc-300">模型提供商</label>
+        <label className="mb-1 block text-sm text-gray-600">模型提供商</label>
         <select
           value={provider}
           onChange={(e) => setProvider(e.target.value)}
-          className="mb-4 w-full rounded bg-zinc-700 px-3 py-2 text-sm text-zinc-100 outline-none"
+          className="mb-4 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none"
         >
           <option value="anthropic">Anthropic</option>
           <option value="openai">OpenAI</option>
@@ -46,32 +46,39 @@ export function SettingsPanel() {
           <option value="custom">Custom</option>
         </select>
 
-        <label className="mb-1 block text-sm text-zinc-300">Anthropic API Key</label>
+        <label className="mb-1 block text-sm text-gray-600">API Key</label>
         <input
           type="password"
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
           placeholder="sk-ant-..."
-          className="mb-4 w-full rounded bg-zinc-700 px-3 py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
+          className="mb-4 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-400"
         />
 
-        <label className="mb-1 block text-sm text-zinc-300">默认模型</label>
-        <input
-          type="text"
+        <label className="mb-1 block text-sm text-gray-600">默认模型</label>
+        <select
           value={model}
           onChange={(e) => setModel(e.target.value)}
-          className="mb-4 w-full rounded bg-zinc-700 px-3 py-2 text-sm text-zinc-100 outline-none"
-        />
+          className="mb-4 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none"
+        >
+          <option value="claude-opus-4-20250514">Claude Opus 4</option>
+          <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
+          <option value="claude-haiku-4-5-20251001">Claude Haiku 3.5</option>
+          <option value="gpt-4o">GPT-4o</option>
+          <option value="gpt-4o-mini">GPT-4o Mini</option>
+          <option value="deepseek-chat">DeepSeek V3</option>
+          <option value="qwen-max">Qwen Max</option>
+        </select>
 
         {provider === 'custom' && (
           <>
-            <label className="mb-1 block text-sm text-zinc-300">自定义 Endpoint</label>
+            <label className="mb-1 block text-sm text-gray-600">自定义 Endpoint</label>
             <input
               type="text"
               value={endpoint}
               onChange={(e) => setEndpoint(e.target.value)}
               placeholder="https://..."
-              className="mb-4 w-full rounded bg-zinc-700 px-3 py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
+              className="mb-4 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-400"
             />
           </>
         )}
@@ -79,7 +86,7 @@ export function SettingsPanel() {
         <div className="mt-2 flex justify-end gap-3">
           <button
             onClick={close}
-            className="rounded px-4 py-2 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+            className="rounded px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
           >
             取消
           </button>

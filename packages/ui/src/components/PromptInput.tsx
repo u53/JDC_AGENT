@@ -30,7 +30,7 @@ export function PromptInput({ onSend, onAbort, isStreaming }: Props) {
   }
 
   return (
-    <div className="border-t border-zinc-700 p-3">
+    <div className="border-t border-gray-200 p-3">
       <div className="flex items-end gap-2">
         <textarea
           ref={textareaRef}
@@ -39,7 +39,7 @@ export function PromptInput({ onSend, onAbort, isStreaming }: Props) {
           onKeyDown={handleKeyDown}
           rows={1}
           placeholder="输入消息..."
-          className="flex-1 resize-none rounded-md border border-zinc-600 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+          className="flex-1 resize-none rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none"
         />
         {isStreaming ? (
           <button
