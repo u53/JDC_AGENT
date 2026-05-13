@@ -1,0 +1,21 @@
+appId: com.jdcagnet.app
+productName: JDCAGNET
+directories:
+  output: out
+  buildResources: resources
+files:
+  - packages/electron/dist/**/*
+  - packages/ui/dist/**/*
+  - node_modules/**/*
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+    - zip
+win:
+  target:
+    - nsis
+linux:
+  target:
+    - AppImage
+    - deb
