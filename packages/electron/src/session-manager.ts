@@ -150,6 +150,15 @@ export class SessionManager {
       onError: (error) => {
         this.window?.webContents.send('query:error', { sessionId, error: error.message })
       },
+      onRetrying: (attempt: number, error: Error, delayMs: number, category: string) => {
+        this.window?.webContents.send('query:retrying', {
+          sessionId,
+          attempt,
+          error: error.message || String(error),
+          delayMs,
+          category,
+        })
+      },
       onAgentProgress: (agentToolUseId: string, event: any) => {
         this.window?.webContents.send('agent:progress', { sessionId, agentToolUseId, ...event })
       },

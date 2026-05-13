@@ -9,6 +9,7 @@ export const IPC_CHANNELS = {
   QUERY_TOOL_EVENT: 'query:tool-event',
   QUERY_COMPLETE: 'query:complete',
   QUERY_ERROR: 'query:error',
+  QUERY_RETRYING: 'query:retrying',
   CONFIG_GET: 'config:get',
   CONFIG_SET: 'config:set',
   DIALOG_OPEN_FOLDER: 'dialog:open-folder',
