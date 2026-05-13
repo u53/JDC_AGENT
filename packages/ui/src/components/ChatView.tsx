@@ -7,18 +7,23 @@ import { useSessionStore } from '../stores/session-store'
 import { useModelStore } from '../stores/model-store'
 
 export function ChatView() {
-  const { messages, streamingText, isStreaming, toolEvents, sendMessage, abort } = useSession()
+  const { messages, streamingText, thinkingText, isStreaming, isThinking, toolEvents, sendMessage, abort } = useSession()
   const { activeSessionId } = useSessionStore()
   const { getActiveModel } = useModelStore()
   const scrollRef = useRef<HTMLDivElement>(null)
   const [permissionMode, setPermissionMode] = useState('standard')
+  const [responseExpanded, setResponseExpanded] = useState(false)
 
   const activeModel = getActiveModel()
 
   useEffect(() => {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [messages, streamingText, toolEvents])
+  }, [messages, toolEvents, isThinking, isStreaming])
+
+  useEffect(() => {
+    if (!isStreaming) setResponseExpanded(false)
+  }, [isStreaming])
 
   const visibleMessages = messages.filter(msg => {
     if (msg.role === 'user' && Array.isArray(msg.content) && msg.content.every((b: any) => b.type === 'tool_result')) return false
@@ -38,6 +43,8 @@ export function ChatView() {
       sendMessage(command)
     }
   }
+
+  const streamingCharCount = streamingText.length
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -61,11 +68,48 @@ export function ChatView() {
             <ToolCard key={`${event.toolUseId}-${i}`} event={event} />
           ))}
 
-          {streamingText && (
-            <div className="mb-4 border-l border-[#333] pl-4">
-              <div className="text-sm text-[#EAEAEA] whitespace-pre-wrap">
-                {streamingText}
-                <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-[#EAEAEA]" />
+          {/* Thinking indicator */}
+          {isThinking && (
+            <div className="mb-3 border border-[#333]">
+              <div className="flex items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-[0.1em]">
+                <span className="inline-block h-2 w-2 rounded-full bg-purple-400 animate-pulse" />
+                <span className="text-purple-400">THINKING...</span>
+                <span className="text-[#666]">{thinkingText.length} chars</span>
+              </div>
+            </div>
+          )}
+
+          {/* Streaming response — collapsed by default */}
+          {isStreaming && streamingText && (
+            <div className="mb-3 border border-[#333]">
+              <div
+                className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-[#111] transition-colors"
+                onClick={() => setResponseExpanded(!responseExpanded)}
+              >
+                <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.1em]">
+                  <span className="inline-block h-2 w-2 rounded-full bg-[#4AF626] animate-pulse" />
+                  <span className="text-[#4AF626]">RESPONDING...</span>
+                  <span className="text-[#666]">{streamingCharCount} chars</span>
+                </div>
+                <span className="text-[10px] text-[#666]">{responseExpanded ? '▼' : '▶'}</span>
+              </div>
+              {responseExpanded && (
+                <div className="border-t border-[#333] px-4 py-3 max-h-[400px] overflow-y-auto">
+                  <div className="text-sm text-[#EAEAEA] whitespace-pre-wrap">
+                    {streamingText}
+                    <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-[#EAEAEA]" />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Waiting indicator when streaming but no text yet */}
+          {isStreaming && !streamingText && !isThinking && toolEvents.length === 0 && (
+            <div className="mb-3 border border-[#333]">
+              <div className="flex items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-[0.1em]">
+                <span className="inline-block h-2 w-2 rounded-full bg-[#EAEAEA] animate-pulse" />
+                <span className="text-[#EAEAEA]">PROCESSING...</span>
               </div>
             </div>
           )}

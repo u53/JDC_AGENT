@@ -46,7 +46,7 @@ export class AnthropicProvider implements ModelProvider {
     config: ModelConfig,
     signal?: AbortSignal
   ): AsyncIterable<StreamChunk> {
-    const stream = this.client.messages.stream({
+    const params: any = {
       model: config.model,
       max_tokens: config.maxTokens,
       system: config.systemPrompt,
@@ -56,7 +56,17 @@ export class AnthropicProvider implements ModelProvider {
         description: t.description,
         input_schema: t.inputSchema as Anthropic.Tool['input_schema'],
       })),
-    }, { signal })
+    }
+
+    if (config.thinking) {
+      params.thinking = {
+        type: 'enabled',
+        budget_tokens: config.thinkingBudget || Math.min(config.maxTokens * 0.8, 10000),
+      }
+      delete params.temperature
+    }
+
+    const stream = this.client.messages.stream(params, { signal })
 
     for await (const event of stream) {
       if (event.type === 'content_block_delta') {
@@ -64,10 +74,14 @@ export class AnthropicProvider implements ModelProvider {
           yield { type: 'text_delta', text: event.delta.text }
         } else if (event.delta.type === 'input_json_delta') {
           yield { type: 'tool_use_delta', toolUse: { id: '', name: '', input: event.delta.partial_json } }
+        } else if ((event.delta as any).type === 'thinking_delta') {
+          yield { type: 'thinking_delta', text: (event.delta as any).thinking }
         }
       } else if (event.type === 'content_block_start') {
         if (event.content_block.type === 'tool_use') {
           yield { type: 'tool_use_start', toolUse: { id: event.content_block.id, name: event.content_block.name, input: '' } }
+        } else if ((event.content_block as any).type === 'thinking') {
+          yield { type: 'thinking_delta', text: '' }
         }
       } else if (event.type === 'content_block_stop') {
         yield { type: 'tool_use_end' }

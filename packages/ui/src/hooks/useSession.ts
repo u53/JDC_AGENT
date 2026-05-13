@@ -7,13 +7,21 @@ export function useSession() {
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const messages = useSessionStore((s) => s.messages)
   const [streamingText, setStreamingText] = useState('')
+  const [thinkingText, setThinkingText] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
+  const [isThinking, setIsThinking] = useState(false)
   const [toolEvents, setToolEvents] = useState<ToolExecutionEvent[]>([])
 
   useEffect(() => {
     const unsubStream = ipc.query.onStream(({ sessionId, chunk }) => {
       if (sessionId !== activeSessionId) return
-      if (chunk.text) setStreamingText((prev) => prev + chunk.text)
+      if (chunk.type === 'thinking_delta' && chunk.text) {
+        setIsThinking(true)
+        setThinkingText((prev) => prev + chunk.text)
+      } else if (chunk.type === 'text_delta' && chunk.text) {
+        setIsThinking(false)
+        setStreamingText((prev) => prev + chunk.text)
+      }
     })
 
     const unsubTool = ipc.query.onToolEvent(({ sessionId, event }) => {
@@ -24,7 +32,9 @@ export function useSession() {
     const unsubComplete = ipc.query.onComplete(({ sessionId, message }) => {
       if (sessionId !== activeSessionId) return
       setStreamingText('')
+      setThinkingText('')
       setIsStreaming(false)
+      setIsThinking(false)
       setToolEvents([])
       useSessionStore.setState((s) => ({ messages: [...s.messages, message] }))
     })
@@ -32,7 +42,9 @@ export function useSession() {
     const unsubError = ipc.query.onError(({ sessionId }) => {
       if (sessionId !== activeSessionId) return
       setStreamingText('')
+      setThinkingText('')
       setIsStreaming(false)
+      setIsThinking(false)
       setToolEvents([])
     })
 
@@ -74,5 +86,5 @@ export function useSession() {
     ipc.query.abort(activeSessionId)
   }, [activeSessionId])
 
-  return { messages, streamingText, isStreaming, toolEvents, sendMessage, abort }
+  return { messages, streamingText, thinkingText, isStreaming, isThinking, toolEvents, sendMessage, abort }
 }
