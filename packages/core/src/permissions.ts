@@ -46,6 +46,7 @@ export class PermissionChecker {
   }
 
   check(toolName: string, input: Record<string, unknown>): PermissionDecision {
+    console.log('[PERMISSION] check:', toolName, 'mode:', this.mode)
     // Read-only tools are always allowed
     if (READ_ONLY_TOOLS.includes(toolName)) {
       return 'allow'
@@ -97,6 +98,7 @@ export class PermissionChecker {
   }
 
   setMode(mode: PermissionMode): void {
+    console.log('[PERMISSION] Mode set to:', mode)
     this.mode = mode
   }
 }

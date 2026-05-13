@@ -28,7 +28,7 @@ export class SessionManager {
   private readyPromise: Promise<void>
   private pendingPermissions = new Map<string, { resolve: (allowed: boolean) => void }>()
   private pendingAskUser = new Map<string, { resolve: (answer: string) => void }>()
-
+  private permissionModes = new Map<string, string>()
   constructor() {
     const dbPath = path.join(getConfigDir(), 'history.db')
     this.history = new ConversationHistory(dbPath)
@@ -119,9 +119,17 @@ export class SessionManager {
     }
     const session = this.sessions.get(sessionId)!
 
+    // Apply stored permission mode (in case it was set before session was activated)
+    const storedMode = this.permissionModes.get(sessionId)
+    if (storedMode) {
+      session.setPermissionMode(storedMode as any)
+    }
+
     // Dynamic model switching: check if active model changed since session was created
     const currentActive = getActiveModelConfig()
+    console.log('[MODEL CHECK] session model:', session.config.modelConfig.model, '| config active:', currentActive?.model.modelId)
     if (currentActive && session.config.modelConfig.model !== currentActive.model.modelId) {
+      console.log('[MODEL SWITCH] Switching to:', currentActive.model.modelId, 'protocol:', currentActive.group.protocol)
       const provider = this.createProvider(currentActive.group)
       session.updateProvider(provider, {
         model: currentActive.model.modelId,
@@ -229,6 +237,7 @@ export class SessionManager {
   }
 
   setPermissionMode(sessionId: string, mode: string): void {
+    this.permissionModes.set(sessionId, mode)
     const session = this.sessions.get(sessionId)
     if (session) {
       session.setPermissionMode(mode as any)
