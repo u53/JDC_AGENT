@@ -67,10 +67,6 @@ export class PermissionChecker {
         return WRITE_TOOLS.includes(toolName) || !READ_ONLY_TOOLS.includes(toolName) ? 'ask' : 'allow'
 
       case 'relaxed':
-        // In relaxed mode, only dangerous bash commands need confirmation
-        if (toolName === 'bash' && this.isDangerousCommand(input)) {
-          return 'ask'
-        }
         return 'allow'
 
       case 'standard':
