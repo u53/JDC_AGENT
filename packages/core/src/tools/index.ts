@@ -10,6 +10,7 @@ import { treeTool } from './tree.js'
 import { notebookEditTool } from './notebook-edit.js'
 import { webFetchTool } from './web-fetch.js'
 import { webSearchTool } from './web-search.js'
+import { lspTool } from './lsp.js'
 
 export function registerBuiltinTools(registry: ToolRegistry): void {
   registry.register(bashTool)
@@ -23,6 +24,7 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
   registry.register(notebookEditTool)
   registry.register(webFetchTool)
   registry.register(webSearchTool)
+  registry.register(lspTool)
 }
 
-export { bashTool, fileReadTool, fileWriteTool, fileEditTool, globTool, grepTool, lsTool, treeTool, notebookEditTool, webFetchTool, webSearchTool }
+export { bashTool, fileReadTool, fileWriteTool, fileEditTool, globTool, grepTool, lsTool, treeTool, notebookEditTool, webFetchTool, webSearchTool, lspTool }
