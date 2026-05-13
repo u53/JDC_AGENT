@@ -93,6 +93,7 @@ export class ToolRunner {
     const context: ToolContext = {
       cwd: this.cwd,
       signal,
+      toolUseId,
       onProgress: (message) => {
         onEvent({ type: 'progress', toolName, toolUseId, message })
       },

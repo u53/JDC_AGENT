@@ -9,6 +9,7 @@ export interface ToolContext {
   cwd: string
   signal?: AbortSignal
   onProgress?: (message: string) => void
+  toolUseId?: string
 }
 
 export interface ToolResult {

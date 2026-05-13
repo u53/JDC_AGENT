@@ -13,6 +13,10 @@ export interface AgentToolDeps {
   onToolEvent?: (event: ToolExecutionEvent) => void
   onPermissionRequest?: PermissionCallback
   isSubAgent?: boolean
+  onAgentProgress?: (agentToolUseId: string, event: { toolName: string; toolStatus: 'start' | 'complete' | 'error'; toolInput?: Record<string, unknown>; toolResult?: { content: string; isError?: boolean }; toolCount: number }) => void
+  onAgentText?: (agentToolUseId: string, text: string) => void
+  onAgentComplete?: (agentToolUseId: string, result: { content: string; turns: number; toolsUsed: string[] }) => void
+  agentAbortControllers?: Map<string, AbortController>
 }
 
 export function createAgentTool(deps: AgentToolDeps): ToolHandler {
@@ -39,6 +43,16 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
 
       const prompt = input.prompt as string
       const maxTurns = (input.maxTurns as number) || 150
+      const toolUseId = context.toolUseId || 'unknown'
+
+      const agentAbort = new AbortController()
+      deps.agentAbortControllers?.set(toolUseId, agentAbort)
+
+      const onParentAbort = () => agentAbort.abort()
+      context.signal?.addEventListener('abort', onParentAbort)
+      if (context.signal?.aborted) {
+        agentAbort.abort()
+      }
 
       try {
         const result = await runSubSession({
@@ -48,16 +62,23 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
           modelConfig: deps.modelConfig,
           cwd: deps.cwd,
           maxTurns,
-          signal: context.signal,
+          signal: agentAbort.signal,
           onToolEvent: deps.onToolEvent,
           onPermissionRequest: deps.onPermissionRequest,
+          onAgentProgress: (event) => deps.onAgentProgress?.(toolUseId, event),
+          onAgentText: (text) => deps.onAgentText?.(toolUseId, text),
         })
+
+        deps.onAgentComplete?.(toolUseId, result)
         return { content: result.content }
       } catch (error) {
         return {
           content: `Sub-agent error: ${error instanceof Error ? error.message : String(error)}`,
           isError: true,
         }
+      } finally {
+        deps.agentAbortControllers?.delete(toolUseId)
+        context.signal?.removeEventListener('abort', onParentAbort)
       }
     },
   }
