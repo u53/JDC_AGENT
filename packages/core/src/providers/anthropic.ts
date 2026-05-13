@@ -46,11 +46,12 @@ export class AnthropicProvider implements ModelProvider {
     config: ModelConfig,
     signal?: AbortSignal
   ): AsyncIterable<StreamChunk> {
+    const formattedMessages = this.formatMessages(messages)
     const params: any = {
       model: config.model,
       max_tokens: config.maxTokens,
       system: config.systemPrompt,
-      messages: this.formatMessages(messages),
+      messages: formattedMessages,
       tools: tools.map(t => ({
         name: t.name,
         description: t.description,
