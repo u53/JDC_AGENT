@@ -35,57 +35,56 @@ export function ModelManager() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20">
-      <div className="w-[560px] max-h-[80vh] flex flex-col rounded-[12px] border border-[#EAEAEA] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-        <div className="flex items-center justify-between px-8 pt-8 pb-4">
-          <h2 className="text-base font-medium text-[#2F3437]">模型管理</h2>
-          <button onClick={close} className="text-[#787774] hover:text-[#2F3437] text-lg">&times;</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
+      <div className="w-[560px] max-h-[80vh] flex flex-col border border-[#333] bg-[#0A0A0A]">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4">
+          <h2 className="text-sm uppercase tracking-[0.1em] font-bold text-[#EAEAEA]">[ MODEL MANAGEMENT ]</h2>
+          <button onClick={close} className="text-[#666] hover:text-[#EAEAEA] text-lg">&times;</button>
         </div>
-        <div className="flex-1 overflow-y-auto px-8 pb-8">
+        <div className="flex-1 overflow-y-auto px-6 pb-6">
           <button
             onClick={() => setShowNewGroup(true)}
-            className="mb-4 rounded-[6px] bg-[#111111] px-3 py-2 text-sm text-white hover:opacity-90 transition-opacity"
+            className="mb-4 border border-[#EAEAEA] text-[#EAEAEA] px-3 py-2 text-[10px] uppercase tracking-[0.1em] hover:bg-[#EAEAEA] hover:text-[#0A0A0A] transition-colors"
           >
             新建分组
           </button>
-
           {showNewGroup && (
-            <div className="mb-4 rounded-[8px] border border-[#EAEAEA] p-4">
-              <label className="mb-1.5 block text-xs text-[#787774] uppercase tracking-wide font-medium">分组名称</label>
+            <div className="mb-4 border border-[#333] p-4">
+              <label className="mb-1.5 block text-[10px] text-[#666] uppercase tracking-[0.1em]">分组名称</label>
               <input
                 value={newGroupName}
                 onChange={(e) => setNewGroupName(e.target.value)}
                 placeholder="我的 Claude 代理"
-                className="mb-3 w-full rounded-[6px] border border-[#EAEAEA] bg-[#F7F6F3] px-3 py-2 text-sm outline-none"
+                className="mb-3 w-full bg-transparent border border-[#333] px-3 py-2 text-sm text-[#EAEAEA] outline-none focus:border-[#EAEAEA]"
               />
-              <label className="mb-1.5 block text-xs text-[#787774] uppercase tracking-wide font-medium">API 协议</label>
+              <label className="mb-1.5 block text-[10px] text-[#666] uppercase tracking-[0.1em]">API 协议</label>
               <select
                 value={newGroupProtocol}
                 onChange={(e) => setNewGroupProtocol(e.target.value as ApiProtocol)}
-                className="mb-3 w-full rounded-[6px] border border-[#EAEAEA] bg-[#F7F6F3] px-3 py-2 text-sm outline-none"
+                className="mb-3 w-full bg-[#0A0A0A] border border-[#333] px-3 py-2 text-sm text-[#EAEAEA] outline-none focus:border-[#EAEAEA]"
               >
                 <option value="anthropic">Anthropic (/v1/messages)</option>
                 <option value="openai">OpenAI (/v1/chat/completions)</option>
                 <option value="openai-responses">OpenAI Responses (/v1/responses)</option>
               </select>
-              <label className="mb-1.5 block text-xs text-[#787774] uppercase tracking-wide font-medium">Base URL</label>
+              <label className="mb-1.5 block text-[10px] text-[#666] uppercase tracking-[0.1em]">Base URL</label>
               <input
                 value={newGroupUrl}
                 onChange={(e) => setNewGroupUrl(e.target.value)}
                 placeholder="https://api.anthropic.com"
-                className="mb-3 w-full rounded-[6px] border border-[#EAEAEA] bg-[#F7F6F3] px-3 py-2 text-sm outline-none"
+                className="mb-3 w-full bg-transparent border border-[#333] px-3 py-2 text-sm text-[#EAEAEA] outline-none focus:border-[#EAEAEA]"
               />
-              <label className="mb-1.5 block text-xs text-[#787774] uppercase tracking-wide font-medium">API Key</label>
+              <label className="mb-1.5 block text-[10px] text-[#666] uppercase tracking-[0.1em]">API Key</label>
               <input
                 type="password"
                 value={newGroupKey}
                 onChange={(e) => setNewGroupKey(e.target.value)}
                 placeholder="sk-..."
-                className="mb-3 w-full rounded-[6px] border border-[#EAEAEA] bg-[#F7F6F3] px-3 py-2 text-sm outline-none"
+                className="mb-3 w-full bg-transparent border border-[#333] px-3 py-2 text-sm text-[#EAEAEA] outline-none focus:border-[#EAEAEA]"
               />
               <div className="flex gap-2">
-                <button onClick={handleAddGroup} className="rounded-[6px] bg-[#111111] px-3 py-1.5 text-sm text-white hover:opacity-90">确定</button>
-                <button onClick={() => setShowNewGroup(false)} className="rounded-[6px] border border-[#EAEAEA] px-3 py-1.5 text-sm text-[#787774] hover:text-[#2F3437]">取消</button>
+                <button onClick={handleAddGroup} className="border border-[#EAEAEA] text-[#EAEAEA] px-3 py-1.5 text-[10px] uppercase tracking-[0.05em] hover:bg-[#EAEAEA] hover:text-[#0A0A0A]">确定</button>
+                <button onClick={() => setShowNewGroup(false)} className="border border-[#333] text-[#666] px-3 py-1.5 text-[10px] uppercase tracking-[0.05em] hover:text-[#EAEAEA]">取消</button>
               </div>
             </div>
           )}
@@ -104,7 +103,7 @@ export function ModelManager() {
           ))}
 
           {groups.length === 0 && !showNewGroup && (
-            <div className="text-center text-sm text-[#787774] py-8">暂无分组，点击上方按钮创建</div>
+            <div className="text-center text-xs text-[#666] uppercase tracking-[0.1em] py-8">暂无分组，点击上方按钮创建</div>
           )}
         </div>
       </div>
@@ -145,88 +144,86 @@ function GroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddModel, 
     setMCompress('90')
     setShowAddModel(false)
   }
-
   return (
-    <div className="mb-3 rounded-[8px] border border-[#EAEAEA]">
+    <div className="mb-3 border border-[#333]">
       <div className="flex items-center justify-between px-4 py-3 cursor-pointer" onClick={onToggle}>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-[#787774]">{expanded ? '▼' : '▶'}</span>
-          <span className="text-sm font-medium text-[#2F3437]">{group.name}</span>
-          <span className="text-[10px] text-[#787774] border border-[#EAEAEA] rounded px-1.5 py-0.5">{group.protocol}</span>
-          <span className="text-xs text-[#787774] font-mono truncate max-w-[160px]">{group.baseUrl}</span>
+          <span className="text-xs text-[#666]">{expanded ? '▼' : '▶'}</span>
+          <span className="text-xs uppercase tracking-[0.05em] text-[#EAEAEA]">{group.name}</span>
+          <span className="text-[10px] text-[#666] border border-[#333] px-1.5 py-0.5">{group.protocol}</span>
+          <span className="text-[10px] text-[#666] truncate max-w-[160px]">{group.baseUrl}</span>
         </div>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete() }}
-          className="text-xs text-[#787774] hover:text-red-500"
+          className="text-[10px] text-[#666] uppercase tracking-[0.05em] hover:text-[#E61919]"
         >
           删除
         </button>
       </div>
       {expanded && (
-        <div className="border-t border-[#EAEAEA] px-4 py-3">
-          <label className="mb-1.5 block text-xs text-[#787774] uppercase tracking-wide font-medium">Base URL</label>
+        <div className="border-t border-[#333] px-4 py-3">
+          <label className="mb-1.5 block text-[10px] text-[#666] uppercase tracking-[0.1em]">Base URL</label>
           <input
             value={editUrl}
             onChange={(e) => setEditUrl(e.target.value)}
             onBlur={() => onUpdate({ baseUrl: editUrl })}
-            className="mb-3 w-full rounded-[6px] border border-[#EAEAEA] bg-[#F7F6F3] px-3 py-2 text-sm outline-none"
+            className="mb-3 w-full bg-transparent border border-[#333] px-3 py-2 text-sm text-[#EAEAEA] outline-none focus:border-[#EAEAEA]"
           />
-          <label className="mb-1.5 block text-xs text-[#787774] uppercase tracking-wide font-medium">API Key</label>
+          <label className="mb-1.5 block text-[10px] text-[#666] uppercase tracking-[0.1em]">API Key</label>
           <input
             type="password"
             value={editKey}
             onChange={(e) => setEditKey(e.target.value)}
             onBlur={() => onUpdate({ apiKey: editKey })}
-            className="mb-4 w-full rounded-[6px] border border-[#EAEAEA] bg-[#F7F6F3] px-3 py-2 text-sm outline-none"
+            className="mb-4 w-full bg-transparent border border-[#333] px-3 py-2 text-sm text-[#EAEAEA] outline-none focus:border-[#EAEAEA]"
           />
-
           <div className="mb-3">
-            <label className="mb-1.5 block text-xs text-[#787774] uppercase tracking-wide font-medium">模型列表</label>
+            <label className="mb-1.5 block text-[10px] text-[#666] uppercase tracking-[0.1em]">模型列表</label>
             {group.models.map((model) => (
-              <div key={model.id} className="flex items-center justify-between rounded-[6px] border border-[#EAEAEA] px-3 py-2 mb-2">
+              <div key={model.id} className="flex items-center justify-between border border-[#333] px-3 py-2 mb-2">
                 <div>
-                  <div className="text-sm text-[#2F3437]">{model.name}</div>
-                  <div className="text-xs font-mono text-[#787774]">{model.modelId}</div>
-                  <div className="text-xs text-[#787774]">
+                  <div className="text-xs text-[#EAEAEA]">{model.name}</div>
+                  <div className="text-[10px] text-[#666]">{model.modelId}</div>
+                  <div className="text-[10px] text-[#666]">
                     上下文: {formatContextWindow(model.contextWindow)} | 压缩: {Math.round(model.compressAt * 100)}%
                   </div>
                 </div>
-                <button onClick={() => onRemoveModel(model.id)} className="text-xs text-[#787774] hover:text-red-500">删除</button>
+                <button onClick={() => onRemoveModel(model.id)} className="text-[10px] text-[#666] uppercase hover:text-[#E61919]">删除</button>
               </div>
             ))}
           </div>
 
           {showAddModel ? (
-            <div className="rounded-[6px] border border-[#EAEAEA] p-3">
+            <div className="border border-[#333] p-3">
               <div className="grid grid-cols-2 gap-2 mb-2">
                 <div>
-                  <label className="mb-1 block text-xs text-[#787774]">显示名称</label>
+                  <label className="mb-1 block text-[10px] text-[#666] uppercase tracking-[0.1em]">显示名称</label>
                   <input value={mName} onChange={(e) => setMName(e.target.value)} placeholder="Claude Opus 4"
-                    className="w-full rounded-[6px] border border-[#EAEAEA] bg-[#F7F6F3] px-2 py-1.5 text-sm outline-none" />
+                    className="w-full bg-transparent border border-[#333] px-2 py-1.5 text-sm text-[#EAEAEA] outline-none focus:border-[#EAEAEA]" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-[#787774]">模型 ID</label>
+                  <label className="mb-1 block text-[10px] text-[#666] uppercase tracking-[0.1em]">模型 ID</label>
                   <input value={mId} onChange={(e) => setMId(e.target.value)} placeholder="claude-opus-4-20250514"
-                    className="w-full rounded-[6px] border border-[#EAEAEA] bg-[#F7F6F3] px-2 py-1.5 text-sm font-mono outline-none" />
+                    className="w-full bg-transparent border border-[#333] px-2 py-1.5 text-sm text-[#EAEAEA] outline-none focus:border-[#EAEAEA]" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-[#787774]">上下文窗口</label>
+                  <label className="mb-1 block text-[10px] text-[#666] uppercase tracking-[0.1em]">上下文窗口</label>
                   <input value={mCtx} onChange={(e) => setMCtx(e.target.value)} placeholder="200000"
-                    className="w-full rounded-[6px] border border-[#EAEAEA] bg-[#F7F6F3] px-2 py-1.5 text-sm outline-none" type="number" />
+                    className="w-full bg-transparent border border-[#333] px-2 py-1.5 text-sm text-[#EAEAEA] outline-none focus:border-[#EAEAEA]" type="number" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-[#787774]">压缩阈值 (%)</label>
+                  <label className="mb-1 block text-[10px] text-[#666] uppercase tracking-[0.1em]">压缩阈值 (%)</label>
                   <input value={mCompress} onChange={(e) => setMCompress(e.target.value)} placeholder="90"
-                    className="w-full rounded-[6px] border border-[#EAEAEA] bg-[#F7F6F3] px-2 py-1.5 text-sm outline-none" type="number" />
+                    className="w-full bg-transparent border border-[#333] px-2 py-1.5 text-sm text-[#EAEAEA] outline-none focus:border-[#EAEAEA]" type="number" />
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={handleAddModel} className="rounded-[6px] bg-[#111111] px-3 py-1.5 text-sm text-white hover:opacity-90">添加</button>
-                <button onClick={() => setShowAddModel(false)} className="rounded-[6px] border border-[#EAEAEA] px-3 py-1.5 text-sm text-[#787774]">取消</button>
+                <button onClick={handleAddModel} className="border border-[#EAEAEA] text-[#EAEAEA] px-3 py-1.5 text-[10px] uppercase tracking-[0.05em] hover:bg-[#EAEAEA] hover:text-[#0A0A0A]">添加</button>
+                <button onClick={() => setShowAddModel(false)} className="border border-[#333] text-[#666] px-3 py-1.5 text-[10px] uppercase tracking-[0.05em] hover:text-[#EAEAEA]">取消</button>
               </div>
             </div>
           ) : (
-            <button onClick={() => setShowAddModel(true)} className="text-sm text-[#787774] hover:text-[#2F3437]">+ 添加模型</button>
+            <button onClick={() => setShowAddModel(true)} className="text-[10px] text-[#666] uppercase tracking-[0.1em] hover:text-[#EAEAEA]">+ 添加模型</button>
           )}
         </div>
       )}

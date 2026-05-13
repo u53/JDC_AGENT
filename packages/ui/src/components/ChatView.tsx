@@ -18,9 +18,9 @@ export function ChatView() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-[#EAEAEA] px-6 py-3">
-        <span className="text-sm font-medium text-[#2F3437]">
-          {activeSessionId ? activeSessionId.slice(0, 8) : ''}
+      <div className="flex items-center justify-between border-b border-[#333] px-4 py-2">
+        <span className="text-[10px] uppercase tracking-[0.1em] text-[#EAEAEA]">
+          &lt; SESSION {activeSessionId ? activeSessionId.slice(0, 8).toUpperCase() : ''} &gt;
         </span>
         <ModelSwitcher />
       </div>
@@ -36,9 +36,9 @@ export function ChatView() {
 
           {streamingText && (
             <div className="mb-4 flex justify-start">
-              <div className="max-w-[80%] rounded-[8px] bg-[#F7F6F3] border border-[#EAEAEA] px-4 py-3 text-sm text-[#2F3437]">
+              <div className="max-w-[80%] border border-[#333] bg-[#111] px-4 py-3 text-sm">
                 {streamingText}
-                <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-[#787774]" />
+                <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-[#EAEAEA]" />
               </div>
             </div>
           )}

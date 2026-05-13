@@ -10,11 +10,11 @@ export function Sidebar() {
   }, [loadProjects])
 
   return (
-    <aside className="w-[260px] border-r border-[#EAEAEA] bg-[#F7F6F3] overflow-y-auto flex flex-col">
+    <aside className="w-[260px] border-r border-[#333] bg-[#0A0A0A] overflow-y-auto flex flex-col">
       <div className="pt-10 px-4 pb-4">
         <button
           onClick={addProject}
-          className="w-full rounded-[6px] bg-[#111111] px-3 py-2 text-sm text-white hover:opacity-90 transition-opacity"
+          className="w-full border border-[#EAEAEA] text-[#EAEAEA] uppercase text-[10px] tracking-[0.1em] py-2 hover:bg-[#EAEAEA] hover:text-[#0A0A0A] transition-colors"
         >
           添加项目
         </button>
@@ -23,26 +23,31 @@ export function Sidebar() {
       <div className="flex-1 px-4 pb-4 space-y-5">
         {projects.map((project) => (
           <div key={project.cwd}>
-            <h3 className="text-xs font-medium text-[#787774] uppercase tracking-wide mb-1.5">
-              {project.name}
+            <h3 className="text-[10px] uppercase tracking-[0.1em] text-[#666] mb-1.5">
+              [ {project.name} ]
             </h3>
             <div className="space-y-0.5">
               {project.sessions.map((session) => (
                 <button
                   key={session.id}
                   onClick={() => switchSession(session.id)}
-                  className={`w-full text-left rounded-[6px] px-2.5 py-1.5 text-sm truncate transition-colors ${
+                  className={`w-full text-left px-2.5 py-1.5 text-xs truncate transition-colors ${
                     activeSessionId === session.id
-                      ? 'bg-white border border-[#EAEAEA] text-[#2F3437]'
-                      : 'text-[#2F3437] hover:bg-white/60'
+                      ? 'border-l-2 border-[#E61919] pl-2 text-[#EAEAEA]'
+                      : 'text-[#EAEAEA] hover:bg-[#111]'
                   }`}
                 >
-                  {session.projectName || '新会话'}
+                  <span className="flex items-center gap-2">
+                    {activeSessionId === session.id && (
+                      <span className="inline-block w-1.5 h-1.5 bg-[#4AF626]" />
+                    )}
+                    {session.projectName || '新会话'}
+                  </span>
                 </button>
               ))}
               <button
                 onClick={() => createSession(project.cwd)}
-                className="w-full text-left rounded px-2.5 py-1.5 text-xs text-[#787774] hover:text-[#2F3437] transition-colors"
+                className="w-full text-left px-2.5 py-1.5 text-[10px] text-[#666] uppercase tracking-[0.1em] hover:text-[#EAEAEA] transition-colors"
               >
                 + 新会话
               </button>

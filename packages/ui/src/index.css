@@ -1,17 +1,37 @@
 @import "tailwindcss";
 
 :root {
-  --color-canvas: #FFFFFF;
-  --color-surface: #F7F6F3;
-  --color-border: #EAEAEA;
-  --color-text: #2F3437;
-  --color-text-muted: #787774;
-  --color-accent: #111111;
+  --bg: #0A0A0A;
+  --fg: #EAEAEA;
+  --border: #333333;
+  --accent: #E61919;
+  --green: #4AF626;
 }
 
 body {
-  font-family: 'SF Pro Display', 'Geist Sans', 'Helvetica Neue', sans-serif;
-  color: var(--color-text);
-  background: var(--color-canvas);
-  line-height: 1.6;
+  font-family: 'JetBrains Mono', 'SF Mono', 'IBM Plex Mono', monospace;
+  color: var(--fg);
+  background: var(--bg);
+  position: relative;
+}
+
+/* CRT scanlines */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.15) 2px,
+    rgba(0,0,0,0.15) 4px
+  );
+  z-index: 9999;
+}
+
+::selection {
+  background: #E61919;
+  color: #EAEAEA;
 }

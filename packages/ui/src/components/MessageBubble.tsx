@@ -12,16 +12,16 @@ export function MessageBubble({ role, content }: Props) {
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
       <div
-        className={`max-w-[80%] rounded-[8px] px-4 py-3 ${
+        className={`max-w-[80%] px-4 py-3 text-sm ${
           isUser
-            ? 'bg-[#111111] text-white'
-            : 'bg-[#F7F6F3] text-[#2F3437] border border-[#EAEAEA]'
+            ? 'border border-[#EAEAEA] text-[#EAEAEA]'
+            : 'border border-[#333] bg-[#111] text-[#EAEAEA]'
         }`}
       >
         {content.map((block, i) => {
           if (block.type === 'text') {
             return (
-              <div key={i} className="prose prose-sm max-w-none">
+              <div key={i} className="prose prose-sm prose-invert max-w-none">
                 <ReactMarkdown>{block.text}</ReactMarkdown>
               </div>
             )
@@ -30,7 +30,7 @@ export function MessageBubble({ role, content }: Props) {
             return (
               <span
                 key={i}
-                className="inline-block rounded-[4px] bg-[#F7F6F3] border border-[#EAEAEA] px-2 py-0.5 text-xs font-mono text-[#787774] mr-1 mb-1"
+                className="inline-block border border-[#333] px-2 py-0.5 text-[10px] uppercase tracking-[0.05em] text-[#666] mr-1 mb-1"
               >
                 {block.name}
               </span>
