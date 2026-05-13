@@ -85,13 +85,15 @@ export class Session {
 
   async sendMessage(text: string, events: SessionEvents, extraContent?: import('./types.js').ContentBlock[]): Promise<void> {
     // Assemble system prompt with current tool list
-    const toolNames = this.toolRegistry.getDefinitions().map(d => d.name)
+    const toolDefs = this.toolRegistry.getDefinitions()
+    const toolNames = toolDefs.map(d => d.name)
     const mcpServers = this.mcpManager?.getServerStates()
       .filter(s => s.status === 'connected')
-      .map(s => ({ name: s.name, toolCount: s.tools.length }))
+      .map(s => ({ name: s.name, toolCount: s.tools.length, tools: s.tools.map(t => t.name) }))
 
     this.config.modelConfig.systemPrompt = await assembleSystemPrompt({
       cwd: this.config.cwd,
+      toolDefs,
       toolNames,
       mcpServers,
     })

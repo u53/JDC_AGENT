@@ -5,14 +5,17 @@ import { promisify } from 'node:util'
 import path from 'node:path'
 import os from 'node:os'
 import { getBasePrompt } from './base-prompt.js'
+import type { ToolDefinition } from './types.js'
 
 const execFileAsync = promisify(execFile)
 const CONFIG_DIR = path.join(os.homedir(), '.jdcagnet')
 
 export interface ContextOptions {
   cwd: string
+  toolDefs: ToolDefinition[]
   toolNames: string[]
-  mcpServers?: { name: string; toolCount: number }[]
+  mcpServers?: { name: string; toolCount: number; tools?: string[] }[]
+  permissionMode?: string
 }
 
 export async function loadProjectMd(cwd: string): Promise<string | null> {
@@ -46,15 +49,21 @@ export async function loadProjectRules(cwd: string): Promise<string[]> {
   } catch { return [] }
 }
 
-async function getGitInfo(cwd: string): Promise<{ branch?: string; status?: string }> {
+async function getGitInfo(cwd: string): Promise<{ branch?: string; status?: string; user?: string }> {
   try {
     const { stdout: branch } = await execFileAsync('git', ['branch', '--show-current'], { cwd })
     const { stdout: status } = await execFileAsync('git', ['status', '--short'], { cwd })
     const { stdout: log } = await execFileAsync('git', ['log', '--oneline', '-5'], { cwd })
+    let user: string | undefined
+    try {
+      const { stdout: u } = await execFileAsync('git', ['config', 'user.name'], { cwd })
+      user = u.trim()
+    } catch {}
     const statusText = status.trim() || '(clean)'
     return {
       branch: branch.trim(),
       status: `Branch: ${branch.trim()}\nStatus:\n${statusText}\nRecent commits:\n${log.trim()}`,
+      user,
     }
   } catch {
     return {}
@@ -68,8 +77,16 @@ export async function assembleSystemPrompt(opts: ContextOptions): Promise<string
     cwd: opts.cwd,
     shell: process.env.SHELL || 'bash',
     gitBranch: git.branch,
+    gitUser: git.user,
+    hostname: os.hostname(),
+    arch: os.arch(),
   }
-  const parts: string[] = [getBasePrompt(opts.toolNames, env)]
+  const parts: string[] = [getBasePrompt({
+    toolDefs: opts.toolDefs,
+    environment: env,
+    mcpServers: opts.mcpServers,
+    permissionMode: opts.permissionMode,
+  })]
 
   const globalMd = await loadGlobalMd()
   if (globalMd) parts.push(`# Global Instructions\n${globalMd}`)
@@ -81,11 +98,6 @@ export async function assembleSystemPrompt(opts: ContextOptions): Promise<string
   if (rules.length > 0) parts.push(`# Project Rules\n${rules.join('\n\n')}`)
 
   if (git.status) parts.push(`# Git Status\n${git.status}`)
-
-  if (opts.mcpServers && opts.mcpServers.length > 0) {
-    const mcpInfo = opts.mcpServers.map(s => `- ${s.name}: ${s.toolCount} tools`).join('\n')
-    parts.push(`# MCP Servers\n${mcpInfo}`)
-  }
 
   const date = new Date().toISOString().split('T')[0]
   parts.push(`# Current Date\n${date}`)
