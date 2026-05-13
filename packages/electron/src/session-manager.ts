@@ -150,6 +150,15 @@ export class SessionManager {
       onError: (error) => {
         this.window?.webContents.send('query:error', { sessionId, error: error.message })
       },
+      onAgentProgress: (agentToolUseId: string, event: any) => {
+        this.window?.webContents.send('agent:progress', { sessionId, agentToolUseId, ...event })
+      },
+      onAgentText: (agentToolUseId: string, text: string) => {
+        this.window?.webContents.send('agent:text', { sessionId, agentToolUseId, text })
+      },
+      onAgentComplete: (agentToolUseId: string, result: any) => {
+        this.window?.webContents.send('agent:complete', { sessionId, agentToolUseId, ...result })
+      },
     }
 
     // Convert images to ImageContent blocks
@@ -174,6 +183,10 @@ export class SessionManager {
 
   abortSession(sessionId: string): void {
     this.sessions.get(sessionId)?.abort()
+  }
+
+  abortAgent(sessionId: string, agentToolUseId: string): void {
+    this.sessions.get(sessionId)?.abortAgent(agentToolUseId)
   }
 
   respondToPermission(id: string, allowed: boolean): void {

@@ -42,6 +42,11 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
     return { success: true }
   })
 
+  ipcMain.handle(IPC_CHANNELS.AGENT_ABORT, async (_event, { sessionId, agentToolUseId }) => {
+    sessionManager.abortAgent(sessionId, agentToolUseId)
+    return { success: true }
+  })
+
   ipcMain.handle(IPC_CHANNELS.CONFIG_GET, async () => {
     return loadAppConfig()
   })

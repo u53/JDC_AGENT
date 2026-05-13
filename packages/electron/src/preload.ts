@@ -26,6 +26,8 @@ const api = {
   compactSession: (sessionId: string) => ipcRenderer.invoke('session:compact', { sessionId }),
   clearSession: (sessionId: string) => ipcRenderer.invoke('session:clear', { sessionId }),
   setThinking: (sessionId: string, enabled: boolean, budget?: number) => ipcRenderer.invoke('session:set-thinking', { sessionId, enabled, budget }),
+  agentAbort: (sessionId: string, agentToolUseId: string) =>
+    ipcRenderer.invoke('agent:abort', { sessionId, agentToolUseId }),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

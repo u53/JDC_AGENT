@@ -21,4 +21,8 @@ export const IPC_CHANNELS = {
   SESSION_COMPACT: 'session:compact',
   SESSION_CLEAR: 'session:clear',
   SESSION_SET_THINKING: 'session:set-thinking',
+  AGENT_PROGRESS: 'agent:progress',
+  AGENT_TEXT: 'agent:text',
+  AGENT_COMPLETE: 'agent:complete',
+  AGENT_ABORT: 'agent:abort',
 } as const
