@@ -12,6 +12,13 @@ const statusColors: Record<string, string> = {
   error: 'text-[#E61919]',
 }
 
+const agentStatusColors: Record<string, string> = {
+  start: 'text-purple-400',
+  progress: 'text-purple-400',
+  complete: 'text-purple-300',
+  error: 'text-[#E61919]',
+}
+
 const statusLabels: Record<string, string> = {
   start: 'RUNNING',
   progress: 'RUNNING',
@@ -22,12 +29,18 @@ const statusLabels: Record<string, string> = {
 export function ToolCard({ event }: Props) {
   const isComplete = event.type === 'complete' || event.type === 'error'
   const [expanded, setExpanded] = useState(!isComplete)
-  const colorClass = statusColors[event.type] || statusColors.progress
-  const label = statusLabels[event.type] || event.type
+  const isAgent = event.toolName === 'Agent'
+  const colors = isAgent ? agentStatusColors : statusColors
+  const colorClass = colors[event.type] || colors.progress
+  const label = isAgent
+    ? (event.type === 'start' || event.type === 'progress' ? 'DISPATCHED' : statusLabels[event.type])
+    : (statusLabels[event.type] || event.type)
   const hasContent = !!(event.message || event.result)
+  const borderClass = isAgent ? 'border-purple-800/50' : 'border-[#333]'
+  const prefix = isAgent ? 'AGENT' : '>>>'
 
   return (
-    <div className="mb-3 border border-[#333]">
+    <div className={`mb-3 border ${borderClass}`}>
       <div
         className={`flex items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-[0.1em] ${hasContent && isComplete ? 'cursor-pointer hover:bg-[#111]' : ''}`}
         onClick={() => { if (hasContent && isComplete) setExpanded(!expanded) }}
@@ -35,7 +48,10 @@ export function ToolCard({ event }: Props) {
         {hasContent && isComplete && (
           <span className="text-[#666]">{expanded ? '▼' : '▶'}</span>
         )}
-        <span className="text-[#EAEAEA]">&gt;&gt;&gt; {event.toolName}</span>
+        {isAgent && !isComplete && (
+          <span className="inline-block h-2 w-2 rounded-full bg-purple-400 animate-pulse" />
+        )}
+        <span className={isAgent ? 'text-purple-300' : 'text-[#EAEAEA]'}>{prefix} {event.toolName}</span>
         <span className={colorClass}>[{label}]</span>
       </div>
       {(expanded || !isComplete) && hasContent && (
