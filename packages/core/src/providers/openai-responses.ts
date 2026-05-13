@@ -173,6 +173,7 @@ export class OpenAIResponsesProvider implements ModelProvider {
       if (msg.role === 'system') continue
 
       const textBlocks = msg.content.filter(b => b.type === 'text')
+      const toolUseBlocks = msg.content.filter(b => b.type === 'tool_use')
       const toolResultBlocks = msg.content.filter(b => b.type === 'tool_result')
       const imageBlocks = msg.content.filter(b => b.type === 'image')
 
@@ -187,6 +188,7 @@ export class OpenAIResponsesProvider implements ModelProvider {
         continue
       }
 
+      // Tool results (function_call_output)
       if (toolResultBlocks.length > 0) {
         for (const block of toolResultBlocks) {
           if (block.type === 'tool_result') {
@@ -199,17 +201,38 @@ export class OpenAIResponsesProvider implements ModelProvider {
         }
       }
 
-      if (textBlocks.length > 0) {
+      // Assistant messages: emit text + function_call items
+      if (msg.role === 'assistant') {
+        if (textBlocks.length > 0) {
+          const text = textBlocks
+            .filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text')
+            .map(b => b.text)
+            .join('\n')
+          if (text) {
+            input.push({ role: 'assistant', content: text })
+          }
+        }
+        for (const block of toolUseBlocks) {
+          if (block.type === 'tool_use') {
+            input.push({
+              type: 'function_call',
+              call_id: block.id,
+              name: block.name,
+              arguments: JSON.stringify(block.input),
+            } as any)
+          }
+        }
+        continue
+      }
+
+      // User text messages
+      if (textBlocks.length > 0 && toolResultBlocks.length === 0) {
         const text = textBlocks
           .filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text')
           .map(b => b.text)
           .join('\n')
         if (text) {
-          if (msg.role === 'assistant') {
-            input.push({ role: 'assistant', content: text })
-          } else {
-            input.push({ role: 'user', content: text })
-          }
+          input.push({ role: 'user', content: text })
         }
       }
     }
