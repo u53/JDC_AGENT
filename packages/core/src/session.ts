@@ -24,12 +24,14 @@ import { loadHookConfig, HookEngine } from './hooks/index.js'
 import { SkillLoader } from './skills/loader.js'
 import { createSkillTool } from './tools/skill.js'
 import { createAgentTool } from './tools/agent.js'
+import { classifyError, getMaxRetries, getRetryDelay } from './retry.js'
 
 export interface SessionEvents {
   onStreamChunk: (chunk: StreamChunk) => void
   onToolEvent: (event: ToolExecutionEvent) => void
   onMessageComplete: (message: Message) => void
   onError: (error: Error) => void
+  onRetrying?: (attempt: number, error: Error, delayMs: number, category: string) => void
   onAgentProgress?: (agentToolUseId: string, event: { toolName: string; toolStatus: 'start' | 'complete' | 'error'; toolInput?: Record<string, unknown>; toolResult?: { content: string; isError?: boolean }; toolCount: number }) => void
   onAgentText?: (agentToolUseId: string, text: string) => void
   onAgentComplete?: (agentToolUseId: string, result: { content: string; turns: number; toolsUsed: string[] }) => void
@@ -246,42 +248,74 @@ export class Session {
       const assistantContent: any[] = []
       let hasToolUse = false
 
-      try {
-        for await (const chunk of this.provider.stream(
-          this.messages,
-          this.toolRegistry.getDefinitions(),
-          this.config.modelConfig,
-          this.abortController.signal
-        )) {
-          events.onStreamChunk(chunk)
+      let streamSuccess = false
+      let retryCount = 0
 
-        if (chunk.type === 'text_delta' && chunk.text) {
-          const last = assistantContent[assistantContent.length - 1]
-          if (last?.type === 'text') {
-            last.text += chunk.text
-          } else {
-            assistantContent.push({ type: 'text', text: chunk.text })
+      while (!streamSuccess) {
+        if (this.abortController?.signal.aborted) break
+
+        try {
+          const stream = this.provider.stream(
+            this.messages,
+            this.toolRegistry.getDefinitions(),
+            this.config.modelConfig,
+            this.abortController!.signal
+          )
+          for await (const chunk of stream) {
+            events.onStreamChunk(chunk)
+
+            if (chunk.type === 'text_delta' && chunk.text) {
+              const last = assistantContent[assistantContent.length - 1]
+              if (last?.type === 'text') {
+                last.text += chunk.text
+              } else {
+                assistantContent.push({ type: 'text', text: chunk.text })
+              }
+            } else if (chunk.type === 'tool_use_start' && chunk.toolUse) {
+              hasToolUse = true
+              assistantContent.push({ type: 'tool_use', id: chunk.toolUse.id, name: chunk.toolUse.name, input: {} })
+            } else if (chunk.type === 'tool_use_delta' && chunk.toolUse) {
+              const last = assistantContent[assistantContent.length - 1]
+              if (last?.type === 'tool_use') {
+                last._rawInput = (last._rawInput || '') + chunk.toolUse.input
+              }
+            } else if (chunk.type === 'tool_use_end') {
+              const last = assistantContent[assistantContent.length - 1]
+              if (last?.type === 'tool_use' && last._rawInput) {
+                try { last.input = JSON.parse(last._rawInput) } catch { last.input = {} }
+                delete last._rawInput
+              }
+            }
           }
-        } else if (chunk.type === 'tool_use_start' && chunk.toolUse) {
-          hasToolUse = true
-          assistantContent.push({ type: 'tool_use', id: chunk.toolUse.id, name: chunk.toolUse.name, input: {} })
-        } else if (chunk.type === 'tool_use_delta' && chunk.toolUse) {
-          const last = assistantContent[assistantContent.length - 1]
-          if (last?.type === 'tool_use') {
-            last._rawInput = (last._rawInput || '') + chunk.toolUse.input
+          streamSuccess = true
+        } catch (streamErr: any) {
+          if (this.abortController?.signal.aborted) break
+
+          const category = classifyError(streamErr)
+
+          if (category === 'prompt_too_long') {
+            await this.compactNow(events)
+            streamSuccess = true // will re-enter outer while loop with compacted messages
+            break
           }
-        } else if (chunk.type === 'tool_use_end') {
-          const last = assistantContent[assistantContent.length - 1]
-          if (last?.type === 'tool_use' && last._rawInput) {
-            try { last.input = JSON.parse(last._rawInput) } catch { last.input = {} }
-            delete last._rawInput
+
+          const maxForCategory = getMaxRetries(category)
+          if (category === 'non_retryable' || retryCount >= maxForCategory) {
+            console.error('[STREAM ERROR]', streamErr.message)
+            events.onError(streamErr)
+            return
           }
+
+          const delay = getRetryDelay(retryCount, category, streamErr)
+          events.onRetrying?.(retryCount + 1, streamErr, delay, category)
+          retryCount++
+
+          await new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(resolve, delay)
+            const onAbort = () => { clearTimeout(timer); reject(new Error('Aborted')) }
+            this.abortController?.signal.addEventListener('abort', onAbort, { once: true })
+          }).catch(() => { /* aborted during wait */ })
         }
-      }
-      } catch (streamErr: any) {
-        console.error('[STREAM ERROR]', streamErr.message, streamErr.stack)
-        events.onError(streamErr)
-        break
       }
 
       const assistantMessage: Message = {
