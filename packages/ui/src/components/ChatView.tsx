@@ -17,9 +17,13 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   const { getActiveModel, groups, activeModelId, setActiveModel } = useModelStore()
   const openSettings = useSettingsStore((s) => s.open)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const [permissionMode, setPermissionMode] = useState('standard')
+  const [permissionMode, setPermissionMode] = useState(() => {
+    return localStorage.getItem('jdcagnet-permission-mode') || 'standard'
+  })
   const [responseExpanded, setResponseExpanded] = useState(false)
-  const [thinkingEnabled, setThinkingEnabled] = useState(true)
+  const [thinkingEnabled, setThinkingEnabled] = useState(() => {
+    return localStorage.getItem('jdcagnet-thinking') !== 'false'
+  })
   const [toast, setToast] = useState<string | null>(null)
   const [skills, setSkills] = useState<{ name: string; description: string }[]>([])
 
@@ -27,9 +31,9 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
 
   const allModels = groups.flatMap(g => g.models.map(m => ({ id: m.id, name: m.name, groupName: g.name })))
 
-  // Sync permission mode to backend when it changes
   const handlePermissionChange = useCallback((mode: string) => {
     setPermissionMode(mode)
+    localStorage.setItem('jdcagnet-permission-mode', mode)
     if (activeSessionId && (window as any).electronAPI?.setPermissionMode) {
       (window as any).electronAPI.setPermissionMode(activeSessionId, mode)
     }
@@ -79,6 +83,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
       case '/thinking':
         setThinkingEnabled(prev => {
           const next = !prev
+          localStorage.setItem('jdcagnet-thinking', String(next))
           if (activeSessionId && api?.setThinking) {
             api.setThinking(activeSessionId, next)
           }

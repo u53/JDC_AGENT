@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useSessionStore } from '../stores/session-store'
 
 export function Sidebar() {
-  const { projects, activeSessionId, loadProjects, createSession, switchSession, addProject } =
+  const { projects, activeSessionId, sessionStates, loadProjects, createSession, switchSession, addProject } =
     useSessionStore()
 
   useEffect(() => {
@@ -28,21 +28,27 @@ export function Sidebar() {
               [ {project.name} ]
             </h3>
             <div className="space-y-0.5">
-              {project.sessions.map((session) => (
-                <button
-                  key={session.id}
-                  onClick={() => switchSession(session.id)}
-                  className={`w-full text-left px-2.5 py-1.5 text-xs truncate transition-colors ${
-                    activeSessionId === session.id
-                      ? 'border-l-2 border-[#4AF626] pl-2 text-[#EAEAEA] bg-[#111]'
-                      : 'text-[#EAEAEA] hover:bg-[#111]'
-                  }`}
-                >
-                  <span className="block truncate">
-                    {session.projectName || '新会话'}
-                  </span>
-                </button>
-              ))}
+              {project.sessions.map((session) => {
+                const isBusy = sessionStates[session.id]?.isStreaming
+                return (
+                  <button
+                    key={session.id}
+                    onClick={() => switchSession(session.id)}
+                    className={`w-full text-left px-2.5 py-1.5 text-xs truncate transition-colors flex items-center gap-1.5 ${
+                      activeSessionId === session.id
+                        ? 'border-l-2 border-[#4AF626] pl-2 text-[#EAEAEA] bg-[#111]'
+                        : 'text-[#EAEAEA] hover:bg-[#111]'
+                    }`}
+                  >
+                    {isBusy && (
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#4AF626] animate-pulse flex-shrink-0" />
+                    )}
+                    <span className="block truncate">
+                      {session.projectName || '新会话'}
+                    </span>
+                  </button>
+                )
+              })}
               <button
                 onClick={() => createSession(project.cwd)}
                 className="w-full text-left px-2.5 py-1.5 text-[10px] text-[#666] uppercase tracking-[0.1em] hover:text-[#EAEAEA] transition-colors"
