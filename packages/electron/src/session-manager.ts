@@ -7,6 +7,17 @@ import {
 import type { ToolExecutionEvent } from '@jdcagnet/core'
 import type { BrowserWindow } from 'electron'
 
+function getActiveModelConfig() {
+  const config = loadAppConfig()
+  const data = config.modelGroups
+  if (!data?.activeModelId || !data?.groups) return null
+  for (const group of data.groups) {
+    const model = group.models?.find((m: any) => m.id === data.activeModelId)
+    if (model) return { model, group }
+  }
+  return null
+}
+
 export class SessionManager {
   private sessions = new Map<string, Session>()
   private history: ConversationHistory
@@ -28,20 +39,8 @@ export class SessionManager {
   }
 
   createSession(projectName: string, cwd: string): string {
-    const config = loadAppConfig()
     const sessionId = uuid()
-    const modelConfig: ModelConfig = {
-      model: config.defaultModel,
-      maxTokens: 8192,
-    }
-    const sessionConfig: SessionConfig = { id: sessionId, projectName, cwd, modelConfig }
-
     this.history.createSession(sessionId, projectName, cwd)
-
-    const provider = new AnthropicProvider(config.anthropicApiKey || '')
-    const session = new Session(sessionConfig, provider, this.history)
-    this.sessions.set(sessionId, session)
-
     return sessionId
   }
 
@@ -58,25 +57,32 @@ export class SessionManager {
   }
 
   async activateSession(sessionId: string): Promise<void> {
-    let session = this.sessions.get(sessionId)
-    if (!session) {
-      const meta = this.history.listSessions().find(s => s.id === sessionId)
-      if (!meta) throw new Error(`Session ${sessionId} not found`)
-      const config = loadAppConfig()
-      const modelConfig: ModelConfig = { model: config.defaultModel, maxTokens: 8192 }
-      const sessionConfig: SessionConfig = {
-        id: sessionId, projectName: meta.projectName, cwd: meta.cwd, modelConfig,
-      }
-      const provider = new AnthropicProvider(config.anthropicApiKey || '')
-      session = new Session(sessionConfig, provider, this.history)
-      session.loadHistory()
-      this.sessions.set(sessionId, session)
+    if (this.sessions.has(sessionId)) return
+    const meta = this.history.listSessions().find(s => s.id === sessionId)
+    if (!meta) throw new Error(`Session ${sessionId} not found`)
+
+    const active = getActiveModelConfig()
+    if (!active) throw new Error('No active model selected. Please configure a model in settings.')
+
+    const modelConfig: ModelConfig = {
+      model: active.model.modelId,
+      maxTokens: active.model.contextWindow || 8192,
     }
+    const sessionConfig: SessionConfig = {
+      id: sessionId, projectName: meta.projectName, cwd: meta.cwd, modelConfig,
+    }
+    const provider = new AnthropicProvider(active.group.apiKey, active.group.baseUrl || undefined)
+    const session = new Session(sessionConfig, provider, this.history)
+    session.loadHistory()
+    this.sessions.set(sessionId, session)
   }
 
   async sendMessage(sessionId: string, text: string): Promise<void> {
-    const session = this.sessions.get(sessionId)
-    if (!session) throw new Error(`Session ${sessionId} not active`)
+    // Ensure session is activated with latest model config
+    if (!this.sessions.has(sessionId)) {
+      await this.activateSession(sessionId)
+    }
+    const session = this.sessions.get(sessionId)!
 
     const events: SessionEvents = {
       onStreamChunk: (chunk: StreamChunk) => {
