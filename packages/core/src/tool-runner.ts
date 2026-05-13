@@ -1,5 +1,6 @@
 import type { ToolContext, ToolRegistry, ToolResult } from './tool-registry.js'
 import { PermissionChecker } from './permissions.js'
+import type { HookEngine } from './hooks/engine.js'
 
 export interface ToolExecutionEvent {
   type: 'start' | 'progress' | 'complete' | 'error'
@@ -16,17 +17,23 @@ export class ToolRunner {
   private cwd: string
   private permissionChecker: PermissionChecker
   private onPermissionRequest?: PermissionCallback
+  private hookEngine?: HookEngine
+  private sessionId?: string
 
   constructor(
     registry: ToolRegistry,
     cwd: string,
     permissionChecker?: PermissionChecker,
-    onPermissionRequest?: PermissionCallback
+    onPermissionRequest?: PermissionCallback,
+    hookEngine?: HookEngine,
+    sessionId?: string
   ) {
     this.registry = registry
     this.cwd = cwd
     this.permissionChecker = permissionChecker ?? new PermissionChecker()
     this.onPermissionRequest = onPermissionRequest
+    this.hookEngine = hookEngine
+    this.sessionId = sessionId
   }
 
   async execute(
@@ -66,6 +73,22 @@ export class ToolRunner {
 
     onEvent({ type: 'start', toolName, toolUseId })
 
+    // PreToolUse hooks
+    if (this.hookEngine) {
+      const hookOutput = await this.hookEngine.runPreToolUse({
+        session_id: this.sessionId || '',
+        cwd: this.cwd,
+        tool_name: toolName,
+        tool_input: input,
+      })
+      if (hookOutput.decision === 'block') {
+        const reason = hookOutput.reason || hookOutput.message || 'no reason given'
+        const result: ToolResult = { content: `Blocked by hook: ${reason}`, isError: true }
+        onEvent({ type: 'error', toolName, toolUseId, result })
+        return result
+      }
+    }
+
     const context: ToolContext = {
       cwd: this.cwd,
       signal,
@@ -76,6 +99,18 @@ export class ToolRunner {
 
     try {
       const result = await handler.execute(input, context)
+
+      // PostToolUse hooks
+      if (this.hookEngine) {
+        await this.hookEngine.runPostToolUse({
+          session_id: this.sessionId || '',
+          cwd: this.cwd,
+          tool_name: toolName,
+          tool_input: input,
+          tool_result: typeof result.content === 'string' ? result.content : JSON.stringify(result.content),
+        })
+      }
+
       onEvent({ type: 'complete', toolName, toolUseId, result })
       return result
     } catch (error) {

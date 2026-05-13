@@ -20,6 +20,7 @@ import { McpManager } from './mcp/manager.js'
 import { createMcpToolHandler } from './mcp/mcp-tool-handler.js'
 import { createListMcpResourcesTool } from './tools/list-mcp-resources.js'
 import { createReadMcpResourceTool } from './tools/read-mcp-resource.js'
+import { loadHookConfig, HookEngine } from './hooks/index.js'
 
 export interface SessionEvents {
   onStreamChunk: (chunk: StreamChunk) => void
@@ -39,6 +40,8 @@ export class Session {
   private taskStore = new TaskStore()
   private abortController: AbortController | null = null
   private mcpManager?: McpManager
+  private hookEngine?: HookEngine
+  private hooksReady: Promise<void>
 
   constructor(config: SessionConfig, provider: ModelProvider, history: ConversationHistory, onPermissionRequest?: PermissionCallback, mcpManager?: McpManager) {
     this.id = config.id
@@ -68,7 +71,32 @@ export class Session {
       this.toolRegistry.register(createListMcpResourcesTool(mcpManager))
       this.toolRegistry.register(createReadMcpResourceTool(mcpManager))
     }
+    // Initialize ToolRunner without hooks first (will be updated once hooks load)
     this.toolRunner = new ToolRunner(this.toolRegistry, config.cwd, new PermissionChecker(), onPermissionRequest)
+
+    // Asynchronously load hooks and rebuild ToolRunner
+    this.hooksReady = this.initHooks(onPermissionRequest)
+  }
+
+  private async initHooks(onPermissionRequest?: PermissionCallback): Promise<void> {
+    try {
+      const hookConfig = await loadHookConfig(this.config.cwd)
+      this.hookEngine = new HookEngine(hookConfig)
+      this.toolRunner = new ToolRunner(
+        this.toolRegistry,
+        this.config.cwd,
+        new PermissionChecker(),
+        onPermissionRequest,
+        this.hookEngine,
+        this.id
+      )
+    } catch {
+      // Hooks are optional — if loading fails, continue without them
+    }
+  }
+
+  async ensureHooksReady(): Promise<void> {
+    await this.hooksReady
   }
 
   registerTool(handler: import('./tool-registry.js').ToolHandler): void {
@@ -84,6 +112,8 @@ export class Session {
   }
 
   async sendMessage(text: string, events: SessionEvents, extraContent?: import('./types.js').ContentBlock[]): Promise<void> {
+    await this.ensureHooksReady()
+
     // Assemble system prompt with current tool list
     const toolDefs = this.toolRegistry.getDefinitions()
     const toolNames = toolDefs.map(d => d.name)
