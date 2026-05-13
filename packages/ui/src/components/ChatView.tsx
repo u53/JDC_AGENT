@@ -43,6 +43,10 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     if (activeSessionId && (window as any).electronAPI?.listSkills) {
       (window as any).electronAPI.listSkills(activeSessionId).then(setSkills).catch(() => {})
     }
+    // Sync permission mode to backend on session activation
+    if (activeSessionId && (window as any).electronAPI?.setPermissionMode) {
+      (window as any).electronAPI.setPermissionMode(activeSessionId, permissionMode)
+    }
   }, [activeSessionId])
 
   useEffect(() => {

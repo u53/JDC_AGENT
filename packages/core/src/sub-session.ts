@@ -21,6 +21,7 @@ export interface SubSessionOptions {
   signal?: AbortSignal
   onToolEvent?: (event: ToolExecutionEvent) => void
   onPermissionRequest?: PermissionCallback
+  permissionMode?: 'standard' | 'relaxed' | 'strict'
 }
 
 export interface SubSessionResult {
@@ -36,13 +37,14 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
     toolRegistry,
     modelConfig,
     cwd,
-    maxTurns = 10,
+    maxTurns = 25,
     signal,
     onToolEvent,
     onPermissionRequest,
   } = opts
 
-  const toolRunner = new ToolRunner(toolRegistry, cwd, new PermissionChecker(), onPermissionRequest)
+  const permChecker = new PermissionChecker(opts.permissionMode || 'relaxed')
+  const toolRunner = new ToolRunner(toolRegistry, cwd, permChecker, onPermissionRequest)
 
   // Filter out Agent tool to prevent recursion
   const toolDefs = toolRegistry.getDefinitions().filter(t => t.name !== 'Agent')
