@@ -27,7 +27,7 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
         type: 'object',
         properties: {
           prompt: { type: 'string', description: 'The task description for the sub-agent' },
-          maxTurns: { type: 'number', description: 'Maximum conversation turns (default: 10)' },
+          maxTurns: { type: 'number', description: 'Maximum conversation turns (default: 150)' },
         },
         required: ['prompt'],
       },
@@ -38,7 +38,7 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
       }
 
       const prompt = input.prompt as string
-      const maxTurns = (input.maxTurns as number) || 10
+      const maxTurns = (input.maxTurns as number) || 150
 
       try {
         const result = await runSubSession({
