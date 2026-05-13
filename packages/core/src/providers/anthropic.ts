@@ -93,7 +93,7 @@ export class AnthropicProvider implements ModelProvider {
   }
 
   private formatMessages(messages: Message[]): Anthropic.MessageParam[] {
-    return messages
+    const raw = messages
       .filter(m => m.role !== 'system')
       .map(m => ({
         role: m.role as 'user' | 'assistant',
@@ -105,6 +105,26 @@ export class AnthropicProvider implements ModelProvider {
           return block
         }),
       }))
+
+    // Anthropic requires strict user/assistant alternation — merge consecutive same-role messages
+    const merged: Anthropic.MessageParam[] = []
+    for (const msg of raw) {
+      const last = merged[merged.length - 1]
+      if (last && last.role === msg.role) {
+        const lastContent = Array.isArray(last.content) ? last.content : [{ type: 'text' as const, text: last.content }]
+        const msgContent = Array.isArray(msg.content) ? msg.content : [{ type: 'text' as const, text: msg.content }]
+        last.content = [...lastContent, ...msgContent] as any
+      } else {
+        merged.push(msg)
+      }
+    }
+
+    // Ensure first message is user role
+    if (merged.length > 0 && merged[0].role !== 'user') {
+      merged.unshift({ role: 'user', content: [{ type: 'text', text: '.' }] })
+    }
+
+    return merged
   }
 
   private mapContentBlock(block: Anthropic.ContentBlock): ContentBlock {

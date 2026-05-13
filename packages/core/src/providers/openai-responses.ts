@@ -246,6 +246,21 @@ export class OpenAIResponsesProvider implements ModelProvider {
       }
     }
 
-    return input
+    // Merge consecutive same-role messages (user/assistant text only)
+    const merged: ResponsesInput[] = []
+    for (const item of input) {
+      const last = merged[merged.length - 1]
+      if (last && 'role' in item && 'role' in last && item.role === last.role && item.role !== 'system') {
+        const lastContent = typeof last.content === 'string' ? last.content : ''
+        const itemContent = typeof item.content === 'string' ? item.content : ''
+        if (lastContent && itemContent) {
+          last.content = lastContent + '\n' + itemContent
+          continue
+        }
+      }
+      merged.push(item)
+    }
+
+    return merged
   }
 }

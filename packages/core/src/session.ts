@@ -228,7 +228,10 @@ export class Session {
 
   private shouldCompact(): boolean {
     const compressAt = this.config.modelConfig.maxTokens * 0.8
-    return estimateTokens(this.messages) > compressAt
+    const tokenEstimate = estimateTokens(this.messages)
+    if (tokenEstimate > compressAt) return true
+    if (this.messages.length > 80) return true
+    return false
   }
 
   private async compact(events: SessionEvents): Promise<void> {
@@ -250,6 +253,7 @@ export class Session {
 
       let streamSuccess = false
       let retryCount = 0
+      let compactedOnError = false
 
       while (!streamSuccess) {
         if (this.abortController?.signal.aborted) break
@@ -301,6 +305,13 @@ export class Session {
 
           const maxForCategory = getMaxRetries(category)
           if (category === 'non_retryable' || retryCount >= maxForCategory) {
+            if (!compactedOnError && (category === 'gateway' || category === 'overloaded') && this.messages.length > 20) {
+              console.log('[RUNLOOP] Gateway error after retries, attempting compact')
+              await this.compact(events)
+              retryCount = 0
+              compactedOnError = true
+              continue
+            }
             console.error('[STREAM ERROR]', streamErr.message)
             events.onError(streamErr)
             return

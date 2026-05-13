@@ -242,6 +242,19 @@ export class OpenAIChatProvider implements ModelProvider {
       }
     }
 
-    return formatted
+    // Merge consecutive user messages (OpenAI doesn't strictly require alternation but it's cleaner)
+    const merged: OpenAI.ChatCompletionMessageParam[] = []
+    for (const msg of formatted) {
+      const last = merged[merged.length - 1]
+      if (last && last.role === 'user' && msg.role === 'user') {
+        const lastText = typeof last.content === 'string' ? last.content : ''
+        const msgText = typeof msg.content === 'string' ? msg.content : ''
+        last.content = lastText + '\n' + msgText
+      } else {
+        merged.push(msg)
+      }
+    }
+
+    return merged
   }
 }
