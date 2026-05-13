@@ -3,6 +3,7 @@ import path from 'node:path'
 import {
   Session, type SessionEvents, AnthropicProvider, OpenAIChatProvider, OpenAIResponsesProvider,
   ConversationHistory, loadAppConfig, getConfigDir, type ModelConfig, type SessionConfig, type StreamChunk,
+  type PermissionCallback,
 } from '@jdcagnet/core'
 import type { ToolExecutionEvent } from '@jdcagnet/core'
 import type { BrowserWindow } from 'electron'
@@ -23,6 +24,7 @@ export class SessionManager {
   private history: ConversationHistory
   private window: BrowserWindow | null = null
   private readyPromise: Promise<void>
+  private pendingPermissions = new Map<string, { resolve: (allowed: boolean) => void }>()
 
   constructor() {
     const dbPath = path.join(getConfigDir(), 'history.db')
@@ -84,7 +86,14 @@ export class SessionManager {
       id: sessionId, projectName: meta.projectName, cwd: meta.cwd, modelConfig,
     }
     const provider = this.createProvider(active.group)
-    const session = new Session(sessionConfig, provider, this.history)
+    const permissionCallback: PermissionCallback = (request) => {
+      return new Promise<boolean>((resolve) => {
+        const id = uuid()
+        this.pendingPermissions.set(id, { resolve })
+        this.window?.webContents.send('permission:request', { id, sessionId, toolName: request.toolName, input: request.input })
+      })
+    }
+    const session = new Session(sessionConfig, provider, this.history, permissionCallback)
     session.loadHistory()
     this.sessions.set(sessionId, session)
   }
@@ -120,6 +129,14 @@ export class SessionManager {
 
   abortSession(sessionId: string): void {
     this.sessions.get(sessionId)?.abort()
+  }
+
+  respondToPermission(id: string, allowed: boolean): void {
+    const pending = this.pendingPermissions.get(id)
+    if (pending) {
+      pending.resolve(allowed)
+      this.pendingPermissions.delete(id)
+    }
   }
 
   deleteSession(sessionId: string): void {

@@ -4,6 +4,10 @@ import type { SessionManager } from './session-manager.js'
 import { loadAppConfig, saveAppConfig } from '@jdcagnet/core'
 
 export function registerIpcHandlers(sessionManager: SessionManager): void {
+  ipcMain.on('permission:response', (_event, { id, allowed }) => {
+    sessionManager.respondToPermission(id, allowed)
+  })
+
   ipcMain.handle(IPC_CHANNELS.SESSION_CREATE, async (_event, { projectName, cwd }) => {
     const sessionId = sessionManager.createSession(projectName, cwd)
     return { sessionId }
