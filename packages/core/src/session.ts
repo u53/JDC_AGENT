@@ -230,13 +230,14 @@ export class Session {
       const assistantContent: any[] = []
       let hasToolUse = false
 
-      for await (const chunk of this.provider.stream(
-        this.messages,
-        this.toolRegistry.getDefinitions(),
-        this.config.modelConfig,
-        this.abortController.signal
-      )) {
-        events.onStreamChunk(chunk)
+      try {
+        for await (const chunk of this.provider.stream(
+          this.messages,
+          this.toolRegistry.getDefinitions(),
+          this.config.modelConfig,
+          this.abortController.signal
+        )) {
+          events.onStreamChunk(chunk)
 
         if (chunk.type === 'text_delta' && chunk.text) {
           const last = assistantContent[assistantContent.length - 1]
@@ -260,6 +261,11 @@ export class Session {
             delete last._rawInput
           }
         }
+      }
+      } catch (streamErr: any) {
+        console.error('[STREAM ERROR]', streamErr.message, streamErr.stack)
+        events.onError(streamErr)
+        break
       }
 
       const assistantMessage: Message = {

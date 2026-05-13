@@ -7,9 +7,10 @@ export class OpenAIChatProvider implements ModelProvider {
   private client: OpenAI
 
   constructor(apiKey: string, baseURL?: string) {
+    const url = baseURL && !baseURL.endsWith('/v1') && !baseURL.endsWith('/v1/') ? `${baseURL}/v1` : baseURL
     this.client = new OpenAI({
       apiKey,
-      ...(baseURL ? { baseURL } : {}),
+      ...(url ? { baseURL: url } : {}),
     })
   }
 
@@ -21,7 +22,7 @@ export class OpenAIChatProvider implements ModelProvider {
   ) {
     const params: OpenAI.ChatCompletionCreateParamsNonStreaming = {
       model: config.model,
-      max_tokens: config.maxTokens,
+      max_tokens: config.maxTokens > 32768 ? 16384 : config.maxTokens,
       messages: this.formatMessages(messages, config.systemPrompt),
       ...(tools.length > 0 ? { tools: this.formatTools(tools) } : {}),
       ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
@@ -79,7 +80,7 @@ export class OpenAIChatProvider implements ModelProvider {
   ): AsyncIterable<StreamChunk> {
     const params: OpenAI.ChatCompletionCreateParamsStreaming = {
       model: config.model,
-      max_tokens: config.maxTokens,
+      max_tokens: config.maxTokens > 32768 ? 16384 : config.maxTokens,
       messages: this.formatMessages(messages, config.systemPrompt),
       stream: true,
       stream_options: { include_usage: true },

@@ -163,8 +163,11 @@ export class SessionManager {
     }))
 
     try {
+      console.log('[SEND] Calling session.sendMessage, text:', text.slice(0, 50))
       await session.sendMessage(text, events, extraContent)
+      console.log('[SEND] session.sendMessage completed')
     } catch (err: any) {
+      console.error('[SEND] Error:', err.message, err.stack)
       this.window?.webContents.send('query:error', { sessionId, error: err.message })
     }
   }
