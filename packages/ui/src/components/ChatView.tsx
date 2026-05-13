@@ -28,7 +28,7 @@ function groupToolEvents(events: ToolExecutionEvent[]): GroupedToolEvent[] {
   }
 
   for (const event of events) {
-    if (event.toolName === 'Read' && event.type === 'complete') {
+    if (event.toolName === 'file_read' && event.type === 'complete') {
       readBuffer.push(event)
     } else {
       flushReads()

@@ -17,10 +17,10 @@ export interface ToolCardRouterProps {
 }
 
 const TOOL_CARD_REGISTRY: Record<string, React.ComponentType<ToolCardRouterProps>> = {
-  Bash: BashToolCard,
-  Edit: EditToolCard,
-  Write: WriteToolCard,
-  Read: ReadToolCard,
+  bash: BashToolCard,
+  file_edit: EditToolCard,
+  file_write: WriteToolCard,
+  file_read: ReadToolCard,
   Agent: AgentToolCard,
   Skill: SkillToolCard,
 }
