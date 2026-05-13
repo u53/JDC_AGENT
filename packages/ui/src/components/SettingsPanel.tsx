@@ -56,11 +56,15 @@ export function SettingsPanel() {
         />
 
         <label className="mb-1.5 block text-xs text-[#787774] uppercase tracking-wide font-medium">默认模型</label>
-        <select
+        <input
+          type="text"
+          list="model-suggestions"
           value={model}
           onChange={(e) => setModel(e.target.value)}
-          className="mb-5 w-full rounded-[6px] border border-[#EAEAEA] bg-[#F7F6F3] px-3 py-2 text-sm text-[#2F3437] outline-none"
-        >
+          placeholder="输入模型 ID 或从建议中选择"
+          className="mb-5 w-full rounded-[6px] border border-[#EAEAEA] bg-[#F7F6F3] px-3 py-2 text-sm text-[#2F3437] outline-none placeholder:text-[#787774]"
+        />
+        <datalist id="model-suggestions">
           <option value="claude-opus-4-20250514">Claude Opus 4</option>
           <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
           <option value="claude-haiku-4-5-20251001">Claude Haiku 3.5</option>
@@ -68,7 +72,7 @@ export function SettingsPanel() {
           <option value="gpt-4o-mini">GPT-4o Mini</option>
           <option value="deepseek-chat">DeepSeek V3</option>
           <option value="qwen-max">Qwen Max</option>
-        </select>
+        </datalist>
 
         <label className="mb-1.5 block text-xs text-[#787774] uppercase tracking-wide font-medium">自定义 Base URL</label>
         <input
