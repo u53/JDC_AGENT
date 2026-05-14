@@ -75,6 +75,7 @@ export class OpenAIChatProvider implements ModelProvider {
       usage: {
         inputTokens: response.usage?.prompt_tokens ?? 0,
         outputTokens: response.usage?.completion_tokens ?? 0,
+        cacheReadInputTokens: (response.usage as any)?.prompt_tokens_details?.cached_tokens ?? 0,
       },
     }
   }
@@ -140,6 +141,7 @@ export class OpenAIChatProvider implements ModelProvider {
           usage: {
             inputTokens: chunk.usage?.prompt_tokens ?? 0,
             outputTokens: chunk.usage?.completion_tokens ?? 0,
+            cacheReadInputTokens: (chunk.usage as any)?.prompt_tokens_details?.cached_tokens ?? 0,
           },
         }
       }
@@ -151,6 +153,7 @@ export class OpenAIChatProvider implements ModelProvider {
           usage: {
             inputTokens: chunk.usage.prompt_tokens ?? 0,
             outputTokens: chunk.usage.completion_tokens ?? 0,
+            cacheReadInputTokens: (chunk.usage as any)?.prompt_tokens_details?.cached_tokens ?? 0,
           },
         }
       }
