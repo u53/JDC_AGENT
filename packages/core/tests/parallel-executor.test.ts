@@ -119,4 +119,80 @@ describe('ParallelExecutor', () => {
     expect(results[2]).toEqual({ tool_use_id: 'c', content: 'r-C', is_error: false })
     expect(results[3]).toEqual({ tool_use_id: 'd', content: 'w-D', is_error: false })
   })
+
+  it('should abort remaining tools when one fails', async () => {
+    const registry = new ToolRegistry()
+    const executed: string[] = []
+
+    registry.register({
+      definition: { name: 'file_read', description: 'Read', inputSchema: { type: 'object', properties: {} } },
+      execute: async (input, context) => {
+        if (input.id === 'fail') {
+          executed.push('fail')
+          return { content: 'Error: not found', isError: true }
+        }
+        // Slow read — should be cancelled
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => { executed.push(`done-${input.id}`); resolve(undefined) }, 200)
+          context.signal?.addEventListener('abort', () => { clearTimeout(timer); reject(new Error('aborted')) })
+        })
+        return { content: `ok-${input.id}` }
+      },
+    })
+    registry.register({
+      definition: { name: 'file_write', description: 'Write', inputSchema: { type: 'object', properties: {} } },
+      execute: async (input) => {
+        executed.push(`write-${input.id}`)
+        return { content: `w-${input.id}` }
+      },
+    })
+
+    const executor = new ParallelExecutor(createRunner(registry))
+    const results = await executor.executeBatch(
+      [
+        { type: 'tool_use', id: 'r1', name: 'file_read', input: { id: 'fail' } },
+        { type: 'tool_use', id: 'r2', name: 'file_read', input: { id: 'slow' } },
+        { type: 'tool_use', id: 'w1', name: 'file_write', input: { id: 'X' } },
+      ],
+      () => {}
+    )
+
+    // The failing read should have aborted the slow read and the write
+    expect(results[0].is_error).toBe(true)
+    expect(results[0].content).toBe('Error: not found')
+    // Slow read was cancelled (either aborted or cancelled message)
+    expect(results[1].is_error).toBe(true)
+    // Write was never started
+    expect(results[2].is_error).toBe(true)
+    expect(results[2].content).toBe('Cancelled: sibling tool failed')
+    expect(executed).not.toContain('write-X')
+  })
+
+  it('should treat unknown tools as write (serial)', async () => {
+    const registry = new ToolRegistry()
+    const order: string[] = []
+
+    registry.register({
+      definition: { name: 'custom_tool', description: 'Custom', inputSchema: { type: 'object', properties: {} } },
+      execute: async (input) => {
+        order.push(`custom-${input.id}`)
+        await new Promise(r => setTimeout(r, 20))
+        return { content: `c-${input.id}` }
+      },
+    })
+
+    const executor = new ParallelExecutor(createRunner(registry))
+    const results = await executor.executeBatch(
+      [
+        { type: 'tool_use', id: 'x1', name: 'custom_tool', input: { id: '1' } },
+        { type: 'tool_use', id: 'x2', name: 'custom_tool', input: { id: '2' } },
+      ],
+      () => {}
+    )
+
+    // Unknown tools run serially (treated as write)
+    expect(order).toEqual(['custom-1', 'custom-2'])
+    expect(results[0].is_error).toBe(false)
+    expect(results[1].is_error).toBe(false)
+  })
 })
