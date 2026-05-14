@@ -3,6 +3,7 @@ import { bashTool } from './bash.js'
 import { fileReadTool } from './file-read.js'
 import { fileWriteTool } from './file-write.js'
 import { fileEditTool } from './file-edit.js'
+import { multiEditTool } from './multi-edit.js'
 import { globTool } from './glob.js'
 import { grepTool } from './grep.js'
 import { lsTool } from './ls.js'
@@ -17,6 +18,7 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
   registry.register(fileReadTool)
   registry.register(fileWriteTool)
   registry.register(fileEditTool)
+  registry.register(multiEditTool)
   registry.register(globTool)
   registry.register(grepTool)
   registry.register(lsTool)
@@ -27,4 +29,4 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
   registry.register(lspTool)
 }
 
-export { bashTool, fileReadTool, fileWriteTool, fileEditTool, globTool, grepTool, lsTool, treeTool, notebookEditTool, webFetchTool, webSearchTool, lspTool }
+export { bashTool, fileReadTool, fileWriteTool, fileEditTool, multiEditTool, globTool, grepTool, lsTool, treeTool, notebookEditTool, webFetchTool, webSearchTool, lspTool }

@@ -12,6 +12,7 @@ export const fileEditTool: ToolHandler = {
         file_path: { type: 'string', description: 'Path to the file' },
         old_string: { type: 'string', description: 'The exact string to replace' },
         new_string: { type: 'string', description: 'The replacement string' },
+        replace_all: { type: 'boolean', description: 'Replace all occurrences of old_string (default: false)' },
       },
       required: ['file_path', 'old_string', 'new_string'],
     },
@@ -20,6 +21,7 @@ export const fileEditTool: ToolHandler = {
     const filePathInput = input.file_path as string | undefined
     const oldStr = input.old_string as string | undefined
     const newStr = input.new_string as string | undefined
+    const replaceAll = input.replace_all as boolean || false
     if (!filePathInput || oldStr === undefined || newStr === undefined) {
       return { content: 'Error: file_path, old_string, and new_string are required', isError: true }
     }
@@ -33,6 +35,16 @@ export const fileEditTool: ToolHandler = {
 
       if (!content.includes(oldStr)) {
         return { content: `Error: old_string not found in file`, isError: true }
+      }
+
+      if (replaceAll) {
+        const occurrences = content.split(oldStr).length - 1
+        const updated = content.replaceAll(oldStr, newStr)
+        await writeFile(filePath, updated, 'utf-8')
+        if (context.fileTracker && context.toolUseId) {
+          await context.fileTracker.recordChange(filePath, content, updated, context.toolUseId, context.turnIndex || 0)
+        }
+        return { content: `Successfully replaced ${occurrences} occurrences in ${filePath}` }
       }
 
       const occurrences = content.split(oldStr).length - 1
