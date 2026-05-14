@@ -195,4 +195,68 @@ describe('ParallelExecutor', () => {
     expect(results[0].is_error).toBe(false)
     expect(results[1].is_error).toBe(false)
   })
+
+  it('should limit concurrency to 5', async () => {
+    const registry = new ToolRegistry()
+    let maxConcurrent = 0
+    let current = 0
+
+    registry.register({
+      definition: { name: 'file_read', description: 'Read', inputSchema: { type: 'object', properties: {} } },
+      execute: async () => {
+        current++
+        if (current > maxConcurrent) maxConcurrent = current
+        await new Promise(r => setTimeout(r, 50))
+        current--
+        return { content: 'ok' }
+      },
+    })
+
+    const executor = new ParallelExecutor(createRunner(registry))
+    // 10 reads — should never exceed 5 concurrent
+    const blocks = Array.from({ length: 10 }, (_, i) => ({
+      type: 'tool_use' as const,
+      id: `r${i}`,
+      name: 'file_read',
+      input: {},
+    }))
+
+    await executor.executeBatch(blocks, () => {})
+
+    expect(maxConcurrent).toBe(5)
+  })
+
+  it('should respect external abort signal', async () => {
+    const registry = new ToolRegistry()
+
+    registry.register({
+      definition: { name: 'file_read', description: 'Read', inputSchema: { type: 'object', properties: {} } },
+      execute: async (_input, context) => {
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(resolve, 500)
+          context.signal?.addEventListener('abort', () => { clearTimeout(timer); reject(new Error('aborted')) })
+        })
+        return { content: 'ok' }
+      },
+    })
+
+    const executor = new ParallelExecutor(createRunner(registry))
+    const externalAbort = new AbortController()
+
+    // Abort after 50ms
+    setTimeout(() => externalAbort.abort(), 50)
+
+    const results = await executor.executeBatch(
+      [
+        { type: 'tool_use', id: 'r1', name: 'file_read', input: {} },
+        { type: 'tool_use', id: 'r2', name: 'file_read', input: {} },
+      ],
+      () => {},
+      externalAbort.signal
+    )
+
+    // Both should be errors (aborted)
+    expect(results[0].is_error).toBe(true)
+    expect(results[1].is_error).toBe(true)
+  })
 })
