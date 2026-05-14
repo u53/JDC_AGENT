@@ -66,6 +66,20 @@ export async function loadMemoryIndex(cwd: string): Promise<string | null> {
   } catch { return null }
 }
 
+export async function loadActivePlan(cwd: string): Promise<{ fileName: string; content: string } | null> {
+  const planDir = path.join(cwd, '.jdcagnet', 'plans')
+  try {
+    const files = await readdir(planDir)
+    const mdFiles = files.filter(f => f.endsWith('.md')).sort()
+    for (let i = mdFiles.length - 1; i >= 0; i--) {
+      const content = await readFile(path.join(planDir, mdFiles[i]), 'utf-8')
+      if (content.trimStart().startsWith('<!-- COMPLETED -->')) continue
+      return { fileName: mdFiles[i], content }
+    }
+    return null
+  } catch { return null }
+}
+
 async function getGitInfo(cwd: string): Promise<{ branch?: string; status?: string; user?: string }> {
   try {
     const { stdout: branch } = await execFileAsync('git', ['branch', '--show-current'], { cwd })
@@ -129,6 +143,15 @@ export async function assembleSystemPrompt(opts: ContextOptions): Promise<Prompt
   const memoryIndex = await loadMemoryIndex(opts.cwd)
   const memDir = getMemoryDir(opts.cwd)
   segments.push({ content: getMemoryPrompt(memDir, memoryIndex), cacheable: true })
+
+  // Active plan
+  const activePlan = await loadActivePlan(opts.cwd)
+  if (activePlan) {
+    segments.push({
+      content: `<plan>\nPlan file: .jdcagnet/plans/${activePlan.fileName}\n\n${activePlan.content}\n\nIf this plan is relevant to the current work and not already complete, continue working on it.\n</plan>`,
+      cacheable: true,
+    })
+  }
 
   // Instructions (globalMd + projectMd + rules combined)
   const instructionParts: string[] = []
