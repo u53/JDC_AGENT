@@ -43,4 +43,80 @@ describe('ParallelExecutor', () => {
     expect(results[1]).toEqual({ tool_use_id: 'b', content: 'read-2', is_error: false })
     expect(results[2]).toEqual({ tool_use_id: 'c', content: 'read-3', is_error: false })
   })
+
+  it('should execute write tools serially in order', async () => {
+    const registry = new ToolRegistry()
+    const order: string[] = []
+
+    registry.register({
+      definition: { name: 'file_write', description: 'Write', inputSchema: { type: 'object', properties: {} } },
+      execute: async (input) => {
+        order.push(`start-${input.id}`)
+        await new Promise(r => setTimeout(r, 30))
+        order.push(`end-${input.id}`)
+        return { content: `wrote-${input.id}` }
+      },
+    })
+
+    const executor = new ParallelExecutor(createRunner(registry))
+    const results = await executor.executeBatch(
+      [
+        { type: 'tool_use', id: 'w1', name: 'file_write', input: { id: '1' } },
+        { type: 'tool_use', id: 'w2', name: 'file_write', input: { id: '2' } },
+        { type: 'tool_use', id: 'w3', name: 'file_write', input: { id: '3' } },
+      ],
+      () => {}
+    )
+
+    // Serial: each starts only after previous ends
+    expect(order).toEqual(['start-1', 'end-1', 'start-2', 'end-2', 'start-3', 'end-3'])
+    expect(results[0].content).toBe('wrote-1')
+    expect(results[1].content).toBe('wrote-2')
+    expect(results[2].content).toBe('wrote-3')
+  })
+
+  it('should execute reads before writes and preserve original order in results', async () => {
+    const registry = new ToolRegistry()
+    const execOrder: string[] = []
+
+    registry.register({
+      definition: { name: 'file_read', description: 'Read', inputSchema: { type: 'object', properties: {} } },
+      execute: async (input) => {
+        execOrder.push(`read-${input.id}`)
+        await new Promise(r => setTimeout(r, 20))
+        return { content: `r-${input.id}` }
+      },
+    })
+    registry.register({
+      definition: { name: 'file_write', description: 'Write', inputSchema: { type: 'object', properties: {} } },
+      execute: async (input) => {
+        execOrder.push(`write-${input.id}`)
+        return { content: `w-${input.id}` }
+      },
+    })
+
+    const executor = new ParallelExecutor(createRunner(registry))
+    // Mixed order: write, read, read, write
+    const results = await executor.executeBatch(
+      [
+        { type: 'tool_use', id: 'a', name: 'file_write', input: { id: 'A' } },
+        { type: 'tool_use', id: 'b', name: 'file_read', input: { id: 'B' } },
+        { type: 'tool_use', id: 'c', name: 'file_read', input: { id: 'C' } },
+        { type: 'tool_use', id: 'd', name: 'file_write', input: { id: 'D' } },
+      ],
+      () => {}
+    )
+
+    // Reads execute first (parallel), then writes (serial)
+    expect(execOrder[0]).toBe('read-B')
+    expect(execOrder[1]).toBe('read-C')
+    expect(execOrder[2]).toBe('write-A')
+    expect(execOrder[3]).toBe('write-D')
+
+    // Results maintain original block order
+    expect(results[0]).toEqual({ tool_use_id: 'a', content: 'w-A', is_error: false })
+    expect(results[1]).toEqual({ tool_use_id: 'b', content: 'r-B', is_error: false })
+    expect(results[2]).toEqual({ tool_use_id: 'c', content: 'r-C', is_error: false })
+    expect(results[3]).toEqual({ tool_use_id: 'd', content: 'w-D', is_error: false })
+  })
 })
