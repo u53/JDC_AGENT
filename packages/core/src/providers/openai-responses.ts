@@ -45,7 +45,11 @@ type ResponsesOutputItem = ResponsesMessageItem | ResponsesFunctionCallItem
 
 interface ResponsesResult {
   output: ResponsesOutputItem[]
-  usage?: { input_tokens?: number; output_tokens?: number }
+  usage?: {
+    input_tokens?: number
+    output_tokens?: number
+    input_tokens_details?: { cached_tokens?: number }
+  }
 }
 
 export class OpenAIResponsesProvider implements ModelProvider {
@@ -116,6 +120,7 @@ export class OpenAIResponsesProvider implements ModelProvider {
       usage: {
         inputTokens: response.usage?.input_tokens ?? 0,
         outputTokens: response.usage?.output_tokens ?? 0,
+        cacheReadInputTokens: response.usage?.input_tokens_details?.cached_tokens ?? 0,
       },
     }
   }
@@ -156,11 +161,13 @@ export class OpenAIResponsesProvider implements ModelProvider {
       } else if (event.type === 'response.output_item.done' && event.item?.type === 'function_call') {
         yield { type: 'tool_use_end' }
       } else if (event.type === 'response.completed') {
+        const usage = event.response?.usage
         yield {
           type: 'message_end',
           usage: {
-            inputTokens: event.response?.usage?.input_tokens ?? 0,
-            outputTokens: event.response?.usage?.output_tokens ?? 0,
+            inputTokens: usage?.input_tokens ?? 0,
+            outputTokens: usage?.output_tokens ?? 0,
+            cacheReadInputTokens: usage?.input_tokens_details?.cached_tokens ?? 0,
           },
         }
       }
