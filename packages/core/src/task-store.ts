@@ -1,46 +1,56 @@
+import type { ConversationHistory } from './history.js'
+
 export interface Task {
   id: string
   subject: string
   description: string
   status: 'pending' | 'in_progress' | 'completed'
   createdAt: number
+  updatedAt: number
 }
 
 export class TaskStore {
-  private tasks = new Map<string, Task>()
-  private nextId = 1
+  private history: ConversationHistory
+  private sessionId: string
+  private nextId: number
+
+  constructor(history: ConversationHistory, sessionId: string) {
+    this.history = history
+    this.sessionId = sessionId
+    const existing = history.getTasks(sessionId)
+    this.nextId = existing.length > 0
+      ? Math.max(...existing.map(t => parseInt(t.id, 10) || 0)) + 1
+      : 1
+  }
 
   create(subject: string, description: string): Task {
     const id = String(this.nextId++)
-    const task: Task = {
-      id,
-      subject,
-      description,
-      status: 'pending',
-      createdAt: Date.now(),
-    }
-    this.tasks.set(id, task)
-    return task
+    this.history.createTask(this.sessionId, id, subject, description)
+    return { id, subject, description, status: 'pending', createdAt: Date.now(), updatedAt: Date.now() }
   }
 
   get(id: string): Task | undefined {
-    return this.tasks.get(id)
+    const tasks = this.history.getTasks(this.sessionId)
+    const t = tasks.find(t => t.id === id)
+    if (!t) return undefined
+    return { ...t, status: t.status as Task['status'] }
   }
 
   list(): Task[] {
-    return Array.from(this.tasks.values())
+    return this.history.getTasks(this.sessionId).map(t => ({ ...t, status: t.status as Task['status'] }))
   }
 
   update(id: string, updates: Partial<Pick<Task, 'status' | 'subject' | 'description'>>): Task | undefined {
-    const task = this.tasks.get(id)
+    const task = this.get(id)
     if (!task) return undefined
-    if (updates.status !== undefined) task.status = updates.status
-    if (updates.subject !== undefined) task.subject = updates.subject
-    if (updates.description !== undefined) task.description = updates.description
-    return task
+    this.history.updateTask(id, updates)
+    return { ...task, ...updates, updatedAt: Date.now() }
   }
 
   delete(id: string): boolean {
-    return this.tasks.delete(id)
+    const task = this.get(id)
+    if (!task) return false
+    this.history.deleteTask(id)
+    return true
   }
 }

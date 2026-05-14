@@ -72,6 +72,21 @@ export class ConversationHistory {
     this.db!.run(`CREATE INDEX IF NOT EXISTS idx_snapshots_session ON file_snapshots(session_id, timestamp)`)
     this.db!.run(`CREATE INDEX IF NOT EXISTS idx_snapshots_file ON file_snapshots(session_id, file_path)`)
 
+    // Tasks table
+    this.db!.run(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        description TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES sessions(id)
+      )
+    `)
+    this.db!.run(`CREATE INDEX IF NOT EXISTS idx_tasks_session ON tasks(session_id, status)`)
+
     this.save()
   }
 
@@ -258,6 +273,58 @@ export class ConversationHistory {
   deleteFileSnapshotsAfterTurn(sessionId: string, turnIndex: number): void {
     this.db!.run('DELETE FROM file_snapshots WHERE session_id = ? AND turn_index > ?', [sessionId, turnIndex])
     this.save()
+  }
+
+  createTask(sessionId: string, id: string, subject: string, description: string): void {
+    const now = Date.now()
+    this.db!.run(
+      'INSERT INTO tasks (id, session_id, subject, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, sessionId, subject, description, 'pending', now, now]
+    )
+    this.save()
+  }
+
+  updateTask(id: string, updates: { status?: string; subject?: string; description?: string }): void {
+    const parts: string[] = ['updated_at = ?']
+    const values: any[] = [Date.now()]
+    if (updates.status) { parts.push('status = ?'); values.push(updates.status) }
+    if (updates.subject) { parts.push('subject = ?'); values.push(updates.subject) }
+    if (updates.description) { parts.push('description = ?'); values.push(updates.description) }
+    values.push(id)
+    this.db!.run(`UPDATE tasks SET ${parts.join(', ')} WHERE id = ?`, values)
+    this.save()
+  }
+
+  deleteTask(id: string): void {
+    this.db!.run('DELETE FROM tasks WHERE id = ?', [id])
+    this.save()
+  }
+
+  getTasks(sessionId: string): Array<{ id: string; subject: string; description: string; status: string; createdAt: number; updatedAt: number }> {
+    const stmt = this.db!.prepare('SELECT * FROM tasks WHERE session_id = ? ORDER BY created_at ASC')
+    stmt.bind([sessionId])
+    const results: any[] = []
+    while (stmt.step()) {
+      const row = stmt.getAsObject()
+      results.push({
+        id: row.id, subject: row.subject, description: row.description || '',
+        status: row.status, createdAt: row.created_at, updatedAt: row.updated_at,
+      })
+    }
+    stmt.free()
+    return results
+  }
+
+  getActiveTasks(sessionId: string): Array<{ id: string; subject: string; description: string; status: string }> {
+    const stmt = this.db!.prepare("SELECT * FROM tasks WHERE session_id = ? AND status IN ('pending', 'in_progress') ORDER BY created_at ASC")
+    stmt.bind([sessionId])
+    const results: any[] = []
+    while (stmt.step()) {
+      const row = stmt.getAsObject()
+      results.push({ id: row.id, subject: row.subject, description: row.description || '', status: row.status })
+    }
+    stmt.free()
+    return results
   }
 
   close(): void {

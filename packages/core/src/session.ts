@@ -58,7 +58,7 @@ export class Session {
   private parallelExecutor: ParallelExecutor
   private toolRegistry: ToolRegistry
   private history: ConversationHistory
-  private taskStore = new TaskStore()
+  private taskStore!: TaskStore
   private abortController: AbortController | null = null
   private mcpManager?: McpManager
   private hookEngine?: HookEngine
@@ -89,6 +89,7 @@ export class Session {
     this.history = history
     this.usageTracker = new UsageTracker(config.modelConfig.contextWindow || 200000)
     this.fileTracker = new FileTracker(history, config.id)
+    this.taskStore = new TaskStore(history, config.id)
     this.backgroundTasks = new BackgroundTaskManager(path.join(getConfigDir(), 'tasks'))
     this.onPlanReview = onPlanReview
     this.toolRegistry = new ToolRegistry()
@@ -298,6 +299,16 @@ export class Session {
       language: appConfig.language,
       customInstructions: appConfig.customInstructions,
     })
+
+    // Inject active tasks into context
+    const activeTasks = this.history.getActiveTasks(this.id)
+    if (activeTasks.length > 0 && Array.isArray(this.config.modelConfig.systemPrompt)) {
+      const taskLines = activeTasks.map(t => `- [${t.status}] #${t.id}: ${t.subject}`).join('\n')
+      this.config.modelConfig.systemPrompt.push({
+        content: `<tasks>\nCurrent tasks for this session:\n${taskLines}\n</tasks>`,
+        cacheable: false,
+      })
+    }
 
     const content: import('./types.js').ContentBlock[] = [{ type: 'text', text }]
     if (extraContent && extraContent.length > 0) {

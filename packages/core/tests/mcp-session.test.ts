@@ -19,6 +19,8 @@ describe('Session with MCP', () => {
       getMessages: () => [],
       addMessage: vi.fn(),
       createSession: vi.fn(),
+      getTasks: () => [],
+      getActiveTasks: () => [],
     } as any
 
     const session = new Session(
@@ -41,6 +43,8 @@ describe('Session with MCP', () => {
       getMessages: () => [],
       addMessage: vi.fn(),
       createSession: vi.fn(),
+      getTasks: () => [],
+      getActiveTasks: () => [],
     } as any
 
     const session = new Session(
