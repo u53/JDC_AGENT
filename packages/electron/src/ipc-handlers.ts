@@ -94,6 +94,16 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
     return { success: true }
   })
 
+  ipcMain.handle(IPC_CHANNELS.SESSION_SET_PLAN_MODE, async (_event, { sessionId, mode }) => {
+    console.log('[IPC] session:set-plan-mode called', sessionId, mode)
+    sessionManager.setPlanMode(sessionId, mode)
+    return { success: true }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SESSION_GET_PLAN_MODE, async (_event, { sessionId }) => {
+    return { mode: sessionManager.getPlanMode(sessionId) }
+  })
+
   ipcMain.handle(IPC_CHANNELS.FILE_GET_CHANGES, async (_event, { sessionId }) => {
     return sessionManager.getFileChanges(sessionId)
   })

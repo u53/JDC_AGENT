@@ -28,6 +28,7 @@ export function getBasePrompt(opts: PromptOptions): string {
     getActionsSection(),
     getToolUsageSection(toolNames),
     getToolDescriptionsSection(toolDefs),
+    getAgentDispatchSection(),
     getCodingSection(),
     getGitSection(),
     getPlanModeSection(),
@@ -177,6 +178,28 @@ function getToolDescriptionsSection(toolDefs: ToolDefinition[]): string {
   }).join('\n\n')
 
   return `# Tool Descriptions\n\n${descriptions}`
+}
+
+function getAgentDispatchSection(): string {
+  return `# Agent Dispatch
+
+You have access to specialized sub-agents via the Agent tool. Each agent type has a restricted tool set and focused system prompt. Use agents to delegate work that benefits from isolation.
+
+**When to dispatch an agent:**
+- **explore**: When you need to search across multiple files or the search might take several steps. Preserves your main context from search noise. Use for "where is X", "find all references to Y", "what files handle Z".
+- **plan**: When asked to design or plan a complex implementation. The plan agent writes to .jdcagnet/plans/.
+- **refactor**: When restructuring code across multiple files without changing behavior.
+- **security-auditor**: When asked to audit code for vulnerabilities or security issues.
+- **frontend-designer**: When converting design requirements into component architecture.
+- **general**: For complex multi-step tasks that need full tool access but should run independently.
+
+**When NOT to dispatch an agent (just do it yourself):**
+- Single grep/read that takes one step
+- Simple file edits you can do directly
+- Tasks that need conversation context the agent won't have
+- When the user is watching and expects immediate inline results
+
+**Rule of thumb:** If the task would take you 3+ tool calls and doesn't need conversation history, dispatch an agent. If it's 1-2 calls, just do it directly.`
 }
 
 function getCodingSection(): string {

@@ -20,7 +20,9 @@ export function isPlanModeToolAllowed(
     if (!cwd) return false
     const resolved = path.resolve(cwd, filePath)
     const planDir = path.resolve(cwd, '.jdcagnet', 'plans')
-    return resolved.startsWith(planDir + path.sep) || resolved === planDir
+    const allowed = resolved.startsWith(planDir + path.sep) || resolved.startsWith(planDir + '/')
+    console.log('[PLAN MODE] file_write check:', { filePath, resolved, planDir, allowed })
+    return allowed
   }
 
   if (toolName === 'Agent') {

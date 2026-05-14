@@ -264,6 +264,11 @@ export class Session {
     return this.planMode
   }
 
+  setPlanMode(mode: 'normal' | 'planning'): void {
+    this.planMode = mode
+    this.toolRunner.planMode = mode
+  }
+
   loadHistory(): void {
     this.messages = this.history.getMessages(this.id)
     const usageData = this.history.getUsage(this.id)

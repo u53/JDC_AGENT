@@ -30,6 +30,10 @@ const api = {
     ipcRenderer.invoke('agent:abort', { sessionId, agentToolUseId }),
   planRespond: (id: string, approved: boolean, feedback?: string) =>
     ipcRenderer.send('plan:respond', { id, approved, feedback }),
+  setPlanMode: (sessionId: string, mode: string) =>
+    ipcRenderer.invoke('session:set-plan-mode', { sessionId, mode }),
+  getPlanMode: (sessionId: string) =>
+    ipcRenderer.invoke('session:get-plan-mode', { sessionId }),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

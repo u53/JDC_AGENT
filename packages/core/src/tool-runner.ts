@@ -2,6 +2,7 @@ import type { ToolContext, ToolRegistry, ToolResult } from './tool-registry.js'
 import { PermissionChecker } from './permissions.js'
 import type { HookEngine } from './hooks/engine.js'
 import type { FileTracker } from './file-tracker.js'
+import { isPlanModeToolAllowed } from './tools/enter-plan-mode.js'
 
 export interface ToolExecutionEvent {
   type: 'start' | 'progress' | 'complete' | 'error'
@@ -81,7 +82,6 @@ export class ToolRunner {
 
     // Plan mode restriction check
     if (this.planMode === 'planning' && toolName !== 'enter_plan_mode') {
-      const { isPlanModeToolAllowed } = await import('./tools/enter-plan-mode.js')
       if (!isPlanModeToolAllowed(toolName, input, this.planModeCwd || this.cwd)) {
         const result: ToolResult = {
           content: `Cannot use ${toolName} in plan mode. Only read operations and writing plan files are allowed.`,

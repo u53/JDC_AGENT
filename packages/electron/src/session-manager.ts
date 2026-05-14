@@ -366,6 +366,18 @@ export class SessionManager {
     }
   }
 
+  setPlanMode(sessionId: string, mode: 'normal' | 'planning'): void {
+    const session = this.sessions.get(sessionId)
+    if (session) {
+      session.setPlanMode(mode)
+    }
+  }
+
+  getPlanMode(sessionId: string): string {
+    const session = this.sessions.get(sessionId)
+    return session?.getPlanMode() || 'normal'
+  }
+
   saveMcpServers(servers: Record<string, McpServerConfig>, scope: 'global' | 'project', cwd?: string): void {
     saveMcpConfig(servers, scope, cwd)
   }

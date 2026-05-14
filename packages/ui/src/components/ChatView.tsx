@@ -69,6 +69,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   })
   const [toast, setToast] = useState<string | null>(null)
   const [skills, setSkills] = useState<{ name: string; description: string }[]>([])
+  const [planMode, setPlanModeState] = useState(false)
 
   const activeModel = getActiveModel()
 
@@ -97,6 +98,24 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
       (window as any).electronAPI.setPermissionMode(activeSessionId, permissionMode)
     }
   }, [activeSessionId])
+
+  // Shift+Tab toggles plan mode
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.shiftKey && e.key === 'Tab') {
+        e.preventDefault()
+        const api = (window as any).electronAPI
+        if (activeSessionId && api?.setPlanMode) {
+          const next = !planMode
+          api.setPlanMode(activeSessionId, next ? 'planning' : 'normal')
+          setPlanModeState(next)
+          showToast(next ? '规划模式: 开启' : '规划模式: 关闭')
+        }
+      }
+    }
+    window.addEventListener('keydown', handler, true)
+    return () => window.removeEventListener('keydown', handler, true)
+  }, [activeSessionId, planMode])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -197,9 +216,16 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         })
         break
       }
-      case '/plan':
-        sendMessage('Please enter plan mode and design an implementation approach for the task we\'ve been discussing. Analyze the relevant code first, then write a plan file.')
+      case '/plan': {
+        const api2 = (window as any).electronAPI
+        if (activeSessionId && api2?.setPlanMode) {
+          const next = !planMode
+          api2.setPlanMode(activeSessionId, next ? 'planning' : 'normal')
+          setPlanModeState(next)
+          showToast(next ? '规划模式: 开启' : '规划模式: 关闭')
+        }
         break
+      }
       case '/help':
         showToast('/compact /thinking /model /mcp /permission /commit /status /stats')
         break
@@ -298,6 +324,13 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         </div>
       )}
       <FileChangesPanel />
+      {planMode && (
+        <div className="border-t border-purple-600/30 px-4 py-1.5 flex items-center gap-2">
+          <span className="inline-block h-2 w-2 rounded-full bg-purple-400" />
+          <span className="text-[10px] uppercase tracking-[0.1em] text-purple-400">PLAN MODE</span>
+          <span className="text-[10px] text-[#666]">只读 + 规划 | Shift+Tab 退出</span>
+        </div>
+      )}
       <PromptInput
         onSend={sendMessage}
         onAbort={abort}

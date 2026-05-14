@@ -1,4 +1,4 @@
-import { BrowserWindow, session } from 'electron'
+import { BrowserWindow, session, nativeImage } from 'electron'
 import path from 'node:path'
 import { existsSync } from 'node:fs'
 
@@ -12,11 +12,14 @@ export function createMainWindow(): BrowserWindow {
   // Register preload via session API (more reliable with ESM main process)
   session.defaultSession.setPreloads([preloadPath])
 
+  const iconPath = path.join(__dirname, '../../assets/icon.png')
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 800,
     minHeight: 600,
+    icon: existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : undefined,
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 12, y: 12 },
     webPreferences: {
