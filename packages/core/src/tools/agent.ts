@@ -24,13 +24,22 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
     definition: {
       name: 'Agent',
       description:
-        'Dispatch a sub-agent to handle a complex task independently. ' +
-        'The sub-agent has access to the same tools but runs with its own conversation context. ' +
-        'Use for tasks that require multiple steps but are independent from the main conversation.',
+        'Dispatch a sub-agent to handle a task independently. Available types:\n' +
+        '- explore: Fast read-only search for locating code (no modifications)\n' +
+        '- plan: Analyze code and write implementation plans\n' +
+        '- refactor: Improve code structure without changing behavior (no bash)\n' +
+        '- security-auditor: Analyze code for vulnerabilities\n' +
+        '- frontend-designer: Convert designs into components\n' +
+        '- general: Full tool access for complex multi-step tasks (default)',
       inputSchema: {
         type: 'object',
         properties: {
           prompt: { type: 'string', description: 'The task description for the sub-agent' },
+          type: {
+            type: 'string',
+            enum: ['explore', 'plan', 'refactor', 'security-auditor', 'frontend-designer', 'general'],
+            description: 'The type of specialized agent to use (default: general)',
+          },
           maxTurns: { type: 'number', description: 'Maximum conversation turns (default: 150)' },
         },
         required: ['prompt'],
@@ -43,6 +52,7 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
 
       const prompt = input.prompt as string
       const maxTurns = (input.maxTurns as number) || 150
+      const agentType = (input.type as string) || 'general'
       const toolUseId = context.toolUseId || 'unknown'
 
       const agentAbort = new AbortController()
@@ -62,6 +72,7 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
           modelConfig: deps.modelConfig,
           cwd: deps.cwd,
           maxTurns,
+          agentType,
           signal: agentAbort.signal,
           onToolEvent: deps.onToolEvent,
           onPermissionRequest: deps.onPermissionRequest,

@@ -5,6 +5,7 @@ import type { ToolRegistry } from './tool-registry.js'
 import { ToolRunner } from './tool-runner.js'
 import { PermissionChecker } from './permissions.js'
 import type { ToolExecutionEvent, PermissionCallback } from './tool-runner.js'
+import { getAgentType, filterToolsForAgent, isWriteAllowedForPlanAgent, isBashAllowedForAuditor } from './agent-types.js'
 
 const SUB_AGENT_SYSTEM = `You are a sub-agent executing a specific task. Focus on completing the task efficiently.
 You have access to the same tools as the main session.
@@ -18,6 +19,7 @@ export interface SubSessionOptions {
   modelConfig: ModelConfig
   cwd: string
   maxTurns?: number
+  agentType?: string
   signal?: AbortSignal
   onToolEvent?: (event: ToolExecutionEvent) => void
   onPermissionRequest?: PermissionCallback
@@ -47,11 +49,16 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
     onAgentText,
   } = opts
 
+  const agentDef = opts.agentType ? getAgentType(opts.agentType) : undefined
+  const effectiveMaxTurns = maxTurns || agentDef?.maxTurns || 150
+  const systemPrompt = agentDef?.systemPrompt || SUB_AGENT_SYSTEM
+
   const permChecker = new PermissionChecker(opts.permissionMode || 'relaxed')
   const toolRunner = new ToolRunner(toolRegistry, cwd, permChecker, onPermissionRequest)
 
   // Filter out Agent tool to prevent recursion
-  const toolDefs = toolRegistry.getDefinitions().filter(t => t.name !== 'Agent')
+  const allDefs = toolRegistry.getDefinitions().filter(t => t.name !== 'Agent')
+  const toolDefs = opts.agentType ? filterToolsForAgent(opts.agentType, toolRegistry.getDefinitions()) : allDefs
 
   const messages: Message[] = [
     { id: uuid(), role: 'user', content: [{ type: 'text', text: prompt }], timestamp: Date.now() },
@@ -60,7 +67,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
   let totalToolCount = 0
   let turns = 0
 
-  while (turns < maxTurns) {
+  while (turns < effectiveMaxTurns) {
     if (signal?.aborted) break
     turns++
 
@@ -68,7 +75,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
     const toolUses: { id: string; name: string; input: string }[] = []
     let currentToolUse: { id: string; name: string; input: string } | null = null
 
-    const config: ModelConfig = { ...modelConfig, systemPrompt: SUB_AGENT_SYSTEM }
+    const config: ModelConfig = { ...modelConfig, systemPrompt: systemPrompt }
     const stream = provider.stream(messages, toolDefs, config, signal)
 
     for await (const chunk of stream) {
@@ -114,6 +121,27 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
       totalToolCount++
 
       onAgentProgress?.({ toolName: tu.name, toolStatus: 'start', toolInput: parsedInput, toolCount: totalToolCount })
+
+      // Agent-type-specific restrictions
+      if (opts.agentType === 'plan' && tu.name === 'file_write') {
+        const writePath = (parsedInput.file_path || parsedInput.path || '') as string
+        if (!isWriteAllowedForPlanAgent(writePath, cwd)) {
+          const restrictResult = { content: 'Plan agent can only write to .jdcagnet/plans/ directory', isError: true }
+          onAgentProgress?.({ toolName: tu.name, toolStatus: 'error', toolInput: parsedInput, toolResult: restrictResult, toolCount: totalToolCount })
+          toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: restrictResult.content, is_error: true })
+          continue
+        }
+      }
+
+      if (opts.agentType === 'security-auditor' && tu.name === 'bash') {
+        const cmd = (parsedInput.command || '') as string
+        if (!isBashAllowedForAuditor(cmd)) {
+          const restrictResult = { content: 'Security auditor bash is restricted to read-only commands', isError: true }
+          onAgentProgress?.({ toolName: tu.name, toolStatus: 'error', toolInput: parsedInput, toolResult: restrictResult, toolCount: totalToolCount })
+          toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: restrictResult.content, is_error: true })
+          continue
+        }
+      }
 
       const noopEvent = (event: ToolExecutionEvent) => { onToolEvent?.(event) }
       const result = await toolRunner.execute(tu.name, tu.id, parsedInput, noopEvent, signal)
