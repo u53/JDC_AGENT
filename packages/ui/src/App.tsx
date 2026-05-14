@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { ChatView } from './components/ChatView'
 import { UsageHUD } from './components/UsageHUD'
@@ -8,14 +8,93 @@ import { AskUserDialog } from './components/AskUserDialog'
 import { useSessionStore } from './stores/session-store'
 import { useModelStore } from './stores/model-store'
 import { useSettingsStore } from './stores/settings-store'
+import { useHotkeys } from './hooks/useHotkeys'
 
 export function App() {
-  const { activeSessionId } = useSessionStore()
+  const { activeSessionId, projects } = useSessionStore()
+  const createSession = useSessionStore((s) => s.createSession)
+  const deleteSession = useSessionStore((s) => s.deleteSession)
+  const switchSession = useSessionStore((s) => s.switchSession)
   const loadModels = useModelStore((s) => s.loadFromConfig)
   const [mcpOpen, setMcpOpen] = useState(false)
+  const settingsIsOpen = useSettingsStore((s) => s.isOpen)
   const openSettings = useSettingsStore((s) => s.open)
+  const closeSettings = useSettingsStore((s) => s.close)
 
   useEffect(() => { loadModels() }, [loadModels])
+
+  // Flatten all sessions across project groups for index-based switching
+  const allSessions = useMemo(
+    () => projects.flatMap((p) => p.sessions),
+    [projects]
+  )
+
+  const hotkeyMap = useMemo(() => {
+    const map: Record<string, () => void> = {
+      // Escape — abort current generation
+      'escape': () => {
+        if (activeSessionId) {
+          window.electronAPI?.invoke('query:abort', { sessionId: activeSessionId })
+        }
+      },
+      // Cmd/Ctrl+N — new session via folder dialog
+      'mod+n': async () => {
+        const path = await window.electronAPI?.invoke('dialog:open-folder')
+        if (path && typeof path === 'string') {
+          createSession(path)
+        }
+      },
+      // Cmd/Ctrl+W — delete current session
+      'mod+w': () => {
+        if (activeSessionId) {
+          deleteSession(activeSessionId)
+        }
+      },
+      // Cmd/Ctrl+K — clear current session
+      'mod+k': () => {
+        if (activeSessionId) {
+          window.electronAPI?.invoke('session:clear', { sessionId: activeSessionId })
+        }
+      },
+      // Cmd/Ctrl+, — toggle settings panel
+      'mod+,': () => {
+        if (settingsIsOpen) {
+          closeSettings()
+        } else {
+          openSettings()
+        }
+      },
+      // / — focus input and insert slash (only when not already in an input)
+      '/': () => {
+        const active = document.activeElement
+        if (active && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT')) return
+        const textarea = document.querySelector('textarea') as HTMLTextAreaElement | null
+        if (textarea) {
+          textarea.focus()
+          // Set value to '/' to trigger slash menu
+          const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+            window.HTMLTextAreaElement.prototype, 'value'
+          )?.set
+          nativeInputValueSetter?.call(textarea, '/')
+          textarea.dispatchEvent(new Event('input', { bubbles: true }))
+        }
+      },
+    }
+
+    // Cmd/Ctrl+1~9 — switch to Nth session
+    for (let i = 1; i <= 9; i++) {
+      map[`mod+${i}`] = () => {
+        const session = allSessions[i - 1]
+        if (session) {
+          switchSession(session.id)
+        }
+      }
+    }
+
+    return map
+  }, [activeSessionId, allSessions, createSession, deleteSession, switchSession, settingsIsOpen, openSettings, closeSettings])
+
+  useHotkeys(hotkeyMap)
 
   return (
     <div className="flex h-screen w-screen bg-[#0A0A0A] text-[#EAEAEA]">
