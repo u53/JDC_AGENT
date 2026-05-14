@@ -310,16 +310,23 @@ export class SessionManager {
     if (!session) return
 
     const events: SessionEvents = {
-      onStreamChunk: () => {},
+      onStreamChunk: (chunk: StreamChunk) => {
+        this.window?.webContents.send('query:stream', { sessionId, chunk })
+      },
       onToolEvent: () => {},
       onMessageComplete: () => {},
       onError: (error) => {
         this.window?.webContents.send('query:error', { sessionId, error: error.message })
       },
     }
-    await session.compactNow(events)
-    const messages = session.getMessages()
-    this.window?.webContents.send('session:messages-updated', { sessionId, messages })
+    try {
+      await session.compactNow(events)
+      const messages = session.getMessages()
+      this.window?.webContents.send('session:messages-updated', { sessionId, messages })
+    } catch (err: any) {
+      this.window?.webContents.send('query:error', { sessionId, error: err.message })
+    }
+    this.window?.webContents.send('query:finished', { sessionId })
   }
 
   clearSession(sessionId: string): void {

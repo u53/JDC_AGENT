@@ -67,7 +67,6 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     return localStorage.getItem('jdcagnet-thinking') !== 'false'
   })
   const [toast, setToast] = useState<string | null>(null)
-  const [isCompacting, setIsCompacting] = useState(false)
   const [skills, setSkills] = useState<{ name: string; description: string }[]>([])
 
   const activeModel = getActiveModel()
@@ -122,14 +121,8 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     switch (command) {
       case '/compact':
         if (activeSessionId && api?.compactSession) {
-          setIsCompacting(true)
-          api.compactSession(activeSessionId).then(() => {
-            setIsCompacting(false)
-            showToast('Context compressed')
-          }).catch(() => {
-            setIsCompacting(false)
-            showToast('Compression failed')
-          })
+          useSessionStore.getState().markStreaming(activeSessionId, true)
+          api.compactSession(activeSessionId)
         }
         break
       case '/clear':
@@ -300,15 +293,6 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         </div>
       )}
       <FileChangesPanel />
-      {isCompacting && (
-        <div className="border-t border-[#333] px-4 py-2 flex items-center justify-between">
-          <span className="text-[10px] uppercase tracking-[0.1em] text-yellow-400 animate-pulse">Compressing context...</span>
-          <button
-            onClick={() => { if (activeSessionId) { (window as any).electronAPI?.invoke('query:abort', { sessionId: activeSessionId }); setIsCompacting(false) } }}
-            className="text-[10px] uppercase tracking-[0.05em] text-[#E61919] hover:text-red-400 transition-colors"
-          >[ABORT]</button>
-        </div>
-      )}
       <PromptInput
         onSend={sendMessage}
         onAbort={abort}
