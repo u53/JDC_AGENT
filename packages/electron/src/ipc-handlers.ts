@@ -24,7 +24,8 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
   ipcMain.handle(IPC_CHANNELS.SESSION_SWITCH, async (_event, { sessionId }) => {
     await sessionManager.activateSession(sessionId)
     const messages = sessionManager.getMessages(sessionId)
-    return { messages }
+    const usage = sessionManager.getUsage(sessionId)
+    return { messages, usage }
   })
 
   ipcMain.handle(IPC_CHANNELS.SESSION_DELETE, async (_event, { sessionId }) => {
@@ -87,5 +88,23 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
     console.log('[IPC] session:set-thinking called', sessionId, enabled)
     sessionManager.setThinking(sessionId, enabled, budget)
     return { success: true }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.FILE_GET_CHANGES, async (_event, { sessionId }) => {
+    return sessionManager.getFileChanges(sessionId)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.FILE_GET_HISTORY, async (_event, { sessionId, filePath }) => {
+    return sessionManager.getFileHistory(sessionId, filePath)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.FILE_REWIND, async (_event, { sessionId, snapshotId }) => {
+    console.log('[IPC] file:rewind called', sessionId, snapshotId)
+    return sessionManager.rewindFile(sessionId, snapshotId)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.FILE_REWIND_TURN, async (_event, { sessionId, turnIndex }) => {
+    console.log('[IPC] file:rewind-turn called', sessionId, turnIndex)
+    return sessionManager.rewindToTurn(sessionId, turnIndex)
   })
 }

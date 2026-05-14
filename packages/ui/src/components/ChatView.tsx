@@ -3,6 +3,7 @@ import { useSession } from '../hooks/useSession'
 import { MessageBubble } from './MessageBubble'
 import { ToolCardRouter } from './tool-cards'
 import { ErrorCard } from './ErrorCard'
+import { FileChangesPanel } from './FileChangesPanel'
 import { PermissionDialog } from './PermissionDialog'
 import { PromptInput } from './PromptInput'
 import { AgentDetailPanel } from './AgentDetailPanel'
@@ -159,8 +160,22 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
       case '/status':
         showToast(`Session: ${activeSessionId?.slice(0, 8)} | Msgs: ${messages.length} | Model: ${activeModel?.model.name || '-'} | Thinking: ${thinkingEnabled ? 'ON' : 'OFF'}`)
         break
+      case '/commit':
+        if (activeSessionId && api?.invoke) {
+          api.invoke('file:get-changes', { sessionId: activeSessionId }).then((files: any[]) => {
+            if (!files || files.length === 0) {
+              showToast('No files changed in this session')
+            } else {
+              const paths = files.map((f: any) => f.filePath)
+              const msg = `git add ${paths.join(' ')}`
+              navigator.clipboard?.writeText(msg)
+              showToast(`${files.length} files copied to clipboard`)
+            }
+          })
+        }
+        break
       case '/help':
-        showToast('/compact /clear /thinking /model /mcp /permission /status')
+        showToast('/compact /clear /thinking /model /mcp /permission /commit /status')
         break
       default:
         sendMessage(command)
@@ -255,6 +270,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
           {toast}
         </div>
       )}
+      <FileChangesPanel />
       <PromptInput
         onSend={sendMessage}
         onAbort={abort}

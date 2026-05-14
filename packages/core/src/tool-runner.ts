@@ -1,6 +1,7 @@
 import type { ToolContext, ToolRegistry, ToolResult } from './tool-registry.js'
 import { PermissionChecker } from './permissions.js'
 import type { HookEngine } from './hooks/engine.js'
+import type { FileTracker } from './file-tracker.js'
 
 export interface ToolExecutionEvent {
   type: 'start' | 'progress' | 'complete' | 'error'
@@ -20,6 +21,8 @@ export class ToolRunner {
   private onPermissionRequest?: PermissionCallback
   private hookEngine?: HookEngine
   private sessionId?: string
+  fileTracker?: FileTracker
+  turnIndex = 0
 
   constructor(
     registry: ToolRegistry,
@@ -94,6 +97,8 @@ export class ToolRunner {
       cwd: this.cwd,
       signal,
       toolUseId,
+      fileTracker: this.fileTracker,
+      turnIndex: this.turnIndex,
       onProgress: (message) => {
         onEvent({ type: 'progress', toolName, toolUseId, message })
       },

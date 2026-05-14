@@ -53,6 +53,11 @@ export function useSession() {
       }
     }) || (() => {})
 
+    const unsubUsage = window.electronAPI?.on('query:usage', (_e: unknown, data: unknown) => {
+      const { sessionId, usage } = data as { sessionId: string; usage: any }
+      store.updateUsage(sessionId, usage)
+    }) || (() => {})
+
     return () => {
       unsubStream()
       unsubTool()
@@ -61,6 +66,7 @@ export function useSession() {
       unsubError()
       unsubRetrying()
       unsubMessagesUpdated()
+      unsubUsage()
     }
   }, [])
 
@@ -102,6 +108,7 @@ export function useSession() {
     isThinking: currentState.isThinking,
     toolEvents: currentState.toolEvents,
     error: currentState.error,
+    usage: currentState.usage,
     sendMessage,
     abort,
     retry: useCallback(() => {

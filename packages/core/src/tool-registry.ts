@@ -10,6 +10,8 @@ export interface ToolContext {
   signal?: AbortSignal
   onProgress?: (message: string) => void
   toolUseId?: string
+  fileTracker?: import('./file-tracker.js').FileTracker
+  turnIndex?: number
 }
 
 export interface ToolResult {

@@ -25,6 +25,8 @@ import { SkillLoader } from './skills/loader.js'
 import { createSkillTool } from './tools/skill.js'
 import { createAgentTool } from './tools/agent.js'
 import { classifyError, getMaxRetries, getRetryDelay } from './retry.js'
+import { UsageTracker, type UsageSnapshot } from './usage-tracker.js'
+import { FileTracker } from './file-tracker.js'
 
 export interface SessionEvents {
   onStreamChunk: (chunk: StreamChunk) => void
@@ -32,6 +34,7 @@ export interface SessionEvents {
   onMessageComplete: (message: Message) => void
   onError: (error: Error) => void
   onRetrying?: (attempt: number, error: Error, delayMs: number, category: string) => void
+  onUsage?: (snapshot: UsageSnapshot) => void
   onAgentProgress?: (agentToolUseId: string, event: { toolName: string; toolStatus: 'start' | 'complete' | 'error'; toolInput?: Record<string, unknown>; toolResult?: { content: string; isError?: boolean }; toolCount: number }) => void
   onAgentText?: (agentToolUseId: string, text: string) => void
   onAgentComplete?: (agentToolUseId: string, result: { content: string; turns: number; toolsUsed: string[] }) => void
@@ -55,12 +58,17 @@ export class Session {
   private permissionChecker: PermissionChecker
   private agentAbortControllers = new Map<string, AbortController>()
   private currentEvents?: SessionEvents
+  private usageTracker: UsageTracker
+  private fileTracker: FileTracker
+  private turnIndex = 0
 
   constructor(config: SessionConfig, provider: ModelProvider, history: ConversationHistory, onPermissionRequest?: PermissionCallback, mcpManager?: McpManager) {
     this.id = config.id
     this.config = config
     this.provider = provider
     this.history = history
+    this.usageTracker = new UsageTracker(config.modelConfig.contextWindow || 200000)
+    this.fileTracker = new FileTracker(history, config.id)
     this.toolRegistry = new ToolRegistry()
     registerBuiltinTools(this.toolRegistry)
     this.toolRegistry.register(createTaskCreateTool(this.taskStore))
@@ -87,6 +95,7 @@ export class Session {
     // Initialize ToolRunner without hooks first (will be updated once hooks load)
     this.permissionChecker = new PermissionChecker()
     this.toolRunner = new ToolRunner(this.toolRegistry, config.cwd, this.permissionChecker, onPermissionRequest)
+    this.toolRunner.fileTracker = this.fileTracker
 
     // Asynchronously load hooks and rebuild ToolRunner
     this.hooksReady = this.initHooks(onPermissionRequest)
@@ -129,6 +138,7 @@ export class Session {
         this.hookEngine,
         this.id
       )
+      this.toolRunner.fileTracker = this.fileTracker
     } catch {
       // Hooks are optional — if loading fails, continue without them
     }
@@ -162,6 +172,9 @@ export class Session {
   updateProvider(provider: ModelProvider, modelConfig: ModelConfig): void {
     this.provider = provider
     this.config.modelConfig = { ...this.config.modelConfig, ...modelConfig }
+    if (modelConfig.contextWindow) {
+      this.usageTracker.setContextWindow(modelConfig.contextWindow)
+    }
   }
 
   setThinking(enabled: boolean, budget?: number): void {
@@ -186,8 +199,21 @@ export class Session {
     return [...this.messages]
   }
 
+  getUsageSnapshot(): UsageSnapshot | null {
+    const snapshot = this.usageTracker.getSnapshot()
+    return snapshot.turnCount > 0 ? snapshot : null
+  }
+
+  getFileTracker(): FileTracker {
+    return this.fileTracker
+  }
+
   loadHistory(): void {
     this.messages = this.history.getMessages(this.id)
+    const usageData = this.history.getUsage(this.id)
+    if (usageData) {
+      this.usageTracker.restore(usageData)
+    }
   }
 
   async sendMessage(text: string, events: SessionEvents, extraContent?: import('./types.js').ContentBlock[]): Promise<void> {
@@ -232,6 +258,23 @@ export class Session {
     return tokenEstimate > compressAt
   }
 
+  private microCompact(): void {
+    const snapshot = this.usageTracker.getSnapshot()
+    if (snapshot.contextUsedPercent < 60) return
+
+    const cutoff = this.messages.length - 10
+    for (let i = 0; i < cutoff; i++) {
+      const msg = this.messages[i]
+      for (let j = 0; j < msg.content.length; j++) {
+        const block = msg.content[j]
+        if (block.type === 'tool_result' && !block.is_error && block.content.length > 500) {
+          const removed = block.content.length - 200
+          msg.content[j] = { ...block, content: block.content.slice(0, 200) + `\n[...truncated, ${removed} chars]` }
+        }
+      }
+    }
+  }
+
   private async compact(events: SessionEvents): Promise<void> {
     events.onStreamChunk({ type: 'text_delta', text: '\n[Compressing context...]\n' })
     this.messages = await compactMessages(this.messages, this.provider, this.config.modelConfig, events.onStreamChunk)
@@ -241,11 +284,15 @@ export class Session {
     this.abortController = new AbortController()
     this.currentEvents = events
 
+    this.microCompact()
+
     if (this.shouldCompact()) {
       await this.compact(events)
     }
 
     while (true) {
+      this.turnIndex++
+      this.toolRunner.turnIndex = this.turnIndex
       const assistantContent: any[] = []
       let hasToolUse = false
 
@@ -287,6 +334,10 @@ export class Session {
                 try { last.input = JSON.parse(last._rawInput) } catch { last.input = {} }
                 delete last._rawInput
               }
+            } else if (chunk.type === 'message_end' && chunk.usage) {
+              this.usageTracker.addTurn(chunk.usage)
+              this.history.saveUsage(this.id, this.usageTracker.serialize())
+              events.onUsage?.(this.usageTracker.getSnapshot())
             }
           }
           streamSuccess = true

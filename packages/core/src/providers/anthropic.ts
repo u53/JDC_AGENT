@@ -69,8 +69,23 @@ export class AnthropicProvider implements ModelProvider {
 
     const stream = this.client.messages.stream(params, { signal })
 
+    let usage = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }
+
     for await (const event of stream) {
-      if (event.type === 'content_block_delta') {
+      if (event.type === 'message_start') {
+        const msg = (event as any).message
+        if (msg?.usage) {
+          usage.inputTokens = msg.usage.input_tokens || 0
+          usage.outputTokens = msg.usage.output_tokens || 0
+          usage.cacheCreationInputTokens = msg.usage.cache_creation_input_tokens || 0
+          usage.cacheReadInputTokens = msg.usage.cache_read_input_tokens || 0
+        }
+      } else if (event.type === 'message_delta') {
+        const delta = (event as any).usage
+        if (delta) {
+          usage.outputTokens = delta.output_tokens || usage.outputTokens
+        }
+      } else if (event.type === 'content_block_delta') {
         if (event.delta.type === 'text_delta') {
           yield { type: 'text_delta', text: event.delta.text }
         } else if (event.delta.type === 'input_json_delta') {
@@ -87,7 +102,7 @@ export class AnthropicProvider implements ModelProvider {
       } else if (event.type === 'content_block_stop') {
         yield { type: 'tool_use_end' }
       } else if (event.type === 'message_stop') {
-        yield { type: 'message_end', usage: { inputTokens: 0, outputTokens: 0 } }
+        yield { type: 'message_end', usage }
       }
     }
   }

@@ -26,4 +26,8 @@ export const IPC_CHANNELS = {
   AGENT_TEXT: 'agent:text',
   AGENT_COMPLETE: 'agent:complete',
   AGENT_ABORT: 'agent:abort',
+  FILE_GET_CHANGES: 'file:get-changes',
+  FILE_GET_HISTORY: 'file:get-history',
+  FILE_REWIND: 'file:rewind',
+  FILE_REWIND_TURN: 'file:rewind-turn',
 } as const

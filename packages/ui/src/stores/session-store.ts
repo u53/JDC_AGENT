@@ -22,6 +22,7 @@ export interface SessionStreamState {
   toolEvents: ToolExecutionEvent[]
   error?: { message: string; category: string; retrying: boolean; retryAttempt?: number; retryIn?: number }
   finished?: boolean
+  usage?: { inputTokens: number; outputTokens: number; cacheCreationTokens: number; cacheReadTokens: number; totalTokens: number; cacheHitRate: number; contextUsedPercent: number; turnCount: number }
 }
 
 const EMPTY_STREAM_STATE: SessionStreamState = {
@@ -53,6 +54,7 @@ interface SessionState {
   clearSessionStreamState: (sessionId: string) => void
   finishSession: (sessionId: string) => void
   dismissFinished: (sessionId: string) => void
+  updateUsage: (sessionId: string, usage: SessionStreamState['usage']) => void
 }
 
 export const useSessionStore = create<SessionState>((set, get) => ({
@@ -76,8 +78,16 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   switchSession: async (sessionId: string) => {
     set({ isLoading: true })
-    const { messages } = await ipc.session.switch(sessionId)
-    set({ activeSessionId: sessionId, messages, isLoading: false })
+    const { messages, usage } = await ipc.session.switch(sessionId)
+    set((s) => ({
+      activeSessionId: sessionId,
+      messages,
+      isLoading: false,
+      sessionStates: {
+        ...s.sessionStates,
+        ...(usage ? { [sessionId]: { ...(s.sessionStates[sessionId] || EMPTY_STREAM_STATE), usage } } : {}),
+      },
+    }))
   },
 
   deleteSession: async (sessionId: string) => {
@@ -167,21 +177,27 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   }),
 
   clearSessionStreamState: (sessionId: string) => {
-    set((s) => ({
-      sessionStates: {
-        ...s.sessionStates,
-        [sessionId]: { ...EMPTY_STREAM_STATE },
-      },
-    }))
+    set((s) => {
+      const current = s.sessionStates[sessionId]
+      return {
+        sessionStates: {
+          ...s.sessionStates,
+          [sessionId]: { ...EMPTY_STREAM_STATE, usage: current?.usage },
+        },
+      }
+    })
   },
 
   finishSession: (sessionId: string) => {
-    set((s) => ({
-      sessionStates: {
-        ...s.sessionStates,
-        [sessionId]: { ...EMPTY_STREAM_STATE, finished: true },
-      },
-    }))
+    set((s) => {
+      const current = s.sessionStates[sessionId] || EMPTY_STREAM_STATE
+      return {
+        sessionStates: {
+          ...s.sessionStates,
+          [sessionId]: { ...EMPTY_STREAM_STATE, finished: true, usage: current.usage },
+        },
+      }
+    })
   },
 
   dismissFinished: (sessionId: string) => {
@@ -192,6 +208,18 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         sessionStates: {
           ...s.sessionStates,
           [sessionId]: { ...current, finished: false },
+        },
+      }
+    })
+  },
+
+  updateUsage: (sessionId: string, usage: SessionStreamState['usage']) => {
+    set((s) => {
+      const current = s.sessionStates[sessionId] || EMPTY_STREAM_STATE
+      return {
+        sessionStates: {
+          ...s.sessionStates,
+          [sessionId]: { ...current, usage },
         },
       }
     })

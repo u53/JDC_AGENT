@@ -42,6 +42,11 @@ export const fileEditTool: ToolHandler = {
 
       const updated = content.replace(oldStr, newStr)
       await writeFile(filePath, updated, 'utf-8')
+
+      if (context.fileTracker && context.toolUseId) {
+        await context.fileTracker.recordChange(filePath, content, updated, context.toolUseId, context.turnIndex || 0)
+      }
+
       return { content: `Successfully edited ${filePath}` }
     } catch (err: any) {
       return { content: `Error editing file: ${err.message}`, isError: true }

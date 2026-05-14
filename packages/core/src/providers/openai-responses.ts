@@ -128,13 +128,8 @@ export class OpenAIResponsesProvider implements ModelProvider {
     }
 
     const stream = await (this.client as any).responses.create(params, { signal })
-    console.log('[OPENAI-RESP] stream type:', typeof stream, 'constructor:', stream?.constructor?.name)
-    console.log('[OPENAI-RESP] params:', JSON.stringify({ model: params.model, stream: params.stream, max_output_tokens: params.max_output_tokens, tools_count: (params.tools as any[])?.length }))
 
-    let eventCount = 0
     for await (const event of stream) {
-      eventCount++
-      console.log('[OPENAI-RESP] event:', event.type, JSON.stringify(event).slice(0, 200))
       if (event.type === 'response.output_text.delta') {
         yield { type: 'text_delta', text: event.delta }
       } else if (event.type === 'response.output_item.added' && event.item?.type === 'function_call') {
@@ -159,7 +154,6 @@ export class OpenAIResponsesProvider implements ModelProvider {
         }
       }
     }
-    console.log('[OPENAI-RESP] stream ended, total events:', eventCount)
   }
 
   private formatTools(tools: ToolDefinition[]): ResponsesTool[] {

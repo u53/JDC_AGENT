@@ -47,6 +47,31 @@ export class ConversationHistory {
       )
     `)
     this.db!.run(`CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, timestamp)`)
+
+    // Migration: add usage_data column
+    try {
+      this.db!.run(`ALTER TABLE sessions ADD COLUMN usage_data TEXT`)
+    } catch {
+      // Column already exists
+    }
+
+    // File snapshots table
+    this.db!.run(`
+      CREATE TABLE IF NOT EXISTS file_snapshots (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        content_before TEXT,
+        content_after TEXT NOT NULL,
+        tool_use_id TEXT NOT NULL,
+        turn_index INTEGER NOT NULL,
+        timestamp INTEGER NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES sessions(id)
+      )
+    `)
+    this.db!.run(`CREATE INDEX IF NOT EXISTS idx_snapshots_session ON file_snapshots(session_id, timestamp)`)
+    this.db!.run(`CREATE INDEX IF NOT EXISTS idx_snapshots_file ON file_snapshots(session_id, file_path)`)
+
     this.save()
   }
 
@@ -119,6 +144,107 @@ export class ConversationHistory {
   deleteSession(sessionId: string): void {
     this.db!.run('DELETE FROM messages WHERE session_id = ?', [sessionId])
     this.db!.run('DELETE FROM sessions WHERE id = ?', [sessionId])
+    this.save()
+  }
+
+  saveUsage(sessionId: string, usageData: string): void {
+    this.db!.run('UPDATE sessions SET usage_data = ? WHERE id = ?', [usageData, sessionId])
+    this.save()
+  }
+
+  getUsage(sessionId: string): string | null {
+    const stmt = this.db!.prepare('SELECT usage_data FROM sessions WHERE id = ?')
+    stmt.bind([sessionId])
+    let result: string | null = null
+    if (stmt.step()) {
+      const row = stmt.getAsObject()
+      result = (row.usage_data as string) || null
+    }
+    stmt.free()
+    return result
+  }
+
+  addFileSnapshot(snapshot: { id: string; sessionId: string; filePath: string; contentBefore: string | null; contentAfter: string; toolUseId: string; turnIndex: number; timestamp: number }): void {
+    this.db!.run(
+      'INSERT INTO file_snapshots (id, session_id, file_path, content_before, content_after, tool_use_id, turn_index, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [snapshot.id, snapshot.sessionId, snapshot.filePath, snapshot.contentBefore, snapshot.contentAfter, snapshot.toolUseId, snapshot.turnIndex, snapshot.timestamp]
+    )
+    this.save()
+  }
+
+  getFileSnapshots(sessionId: string): Array<{ id: string; filePath: string; contentBefore: string | null; contentAfter: string; toolUseId: string; turnIndex: number; timestamp: number }> {
+    const stmt = this.db!.prepare('SELECT * FROM file_snapshots WHERE session_id = ? ORDER BY timestamp ASC')
+    stmt.bind([sessionId])
+    const results: any[] = []
+    while (stmt.step()) {
+      const row = stmt.getAsObject()
+      results.push({
+        id: row.id, filePath: row.file_path, contentBefore: row.content_before,
+        contentAfter: row.content_after, toolUseId: row.tool_use_id,
+        turnIndex: row.turn_index, timestamp: row.timestamp,
+      })
+    }
+    stmt.free()
+    return results
+  }
+
+  getFileHistory(sessionId: string, filePath: string): Array<{ id: string; contentBefore: string | null; contentAfter: string; toolUseId: string; turnIndex: number; timestamp: number }> {
+    const stmt = this.db!.prepare('SELECT * FROM file_snapshots WHERE session_id = ? AND file_path = ? ORDER BY timestamp ASC')
+    stmt.bind([sessionId, filePath])
+    const results: any[] = []
+    while (stmt.step()) {
+      const row = stmt.getAsObject()
+      results.push({
+        id: row.id, contentBefore: row.content_before, contentAfter: row.content_after,
+        toolUseId: row.tool_use_id, turnIndex: row.turn_index, timestamp: row.timestamp,
+      })
+    }
+    stmt.free()
+    return results
+  }
+
+  getChangedFiles(sessionId: string): Array<{ filePath: string; changeType: string; snapshotCount: number; lastModified: number }> {
+    const stmt = this.db!.prepare(`
+      SELECT file_path, COUNT(*) as cnt, MAX(timestamp) as last_ts, MIN(content_before) as first_before
+      FROM file_snapshots WHERE session_id = ? GROUP BY file_path ORDER BY last_ts DESC
+    `)
+    stmt.bind([sessionId])
+    const results: any[] = []
+    while (stmt.step()) {
+      const row = stmt.getAsObject()
+      results.push({
+        filePath: row.file_path,
+        changeType: row.first_before === null ? 'created' : 'modified',
+        snapshotCount: row.cnt,
+        lastModified: row.last_ts,
+      })
+    }
+    stmt.free()
+    return results
+  }
+
+  getTurnSnapshots(sessionId: string, turnIndex: number): Array<{ id: string; filePath: string; contentBefore: string | null; contentAfter: string; toolUseId: string; timestamp: number }> {
+    const stmt = this.db!.prepare('SELECT * FROM file_snapshots WHERE session_id = ? AND turn_index = ? ORDER BY timestamp ASC')
+    stmt.bind([sessionId, turnIndex])
+    const results: any[] = []
+    while (stmt.step()) {
+      const row = stmt.getAsObject()
+      results.push({
+        id: row.id, filePath: row.file_path, contentBefore: row.content_before,
+        contentAfter: row.content_after, toolUseId: row.tool_use_id, timestamp: row.timestamp,
+      })
+    }
+    stmt.free()
+    return results
+  }
+
+  deleteFileSnapshot(snapshotId: string): void {
+    this.db!.run('DELETE FROM file_snapshots WHERE id = ?', [snapshotId])
+    this.save()
+  }
+
+  deleteFileSnapshotsAfterTurn(sessionId: string, turnIndex: number): void {
+    this.db!.run('DELETE FROM file_snapshots WHERE session_id = ? AND turn_index > ?', [sessionId, turnIndex])
     this.save()
   }
 

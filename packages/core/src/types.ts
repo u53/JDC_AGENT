@@ -49,7 +49,12 @@ export interface StreamChunk {
   type: 'text_delta' | 'thinking_delta' | 'tool_use_start' | 'tool_use_delta' | 'tool_use_end' | 'message_end'
   text?: string
   toolUse?: { id: string; name: string; input: string }
-  usage?: { inputTokens: number; outputTokens: number }
+  usage?: {
+    inputTokens: number
+    outputTokens: number
+    cacheCreationInputTokens?: number
+    cacheReadInputTokens?: number
+  }
 }
 
 export interface ModelConfig {
@@ -59,6 +64,7 @@ export interface ModelConfig {
   systemPrompt?: string
   thinking?: boolean
   thinkingBudget?: number
+  contextWindow?: number
 }
 
 export interface SessionConfig {

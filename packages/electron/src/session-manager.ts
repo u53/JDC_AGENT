@@ -87,6 +87,7 @@ export class SessionManager {
     const modelConfig: ModelConfig = {
       model: active.model.modelId,
       maxTokens: active.model.contextWindow || 8192,
+      contextWindow: active.model.contextWindow || 200000,
     }
     const sessionConfig: SessionConfig = {
       id: sessionId, projectName: meta.projectName, cwd: meta.cwd, modelConfig,
@@ -134,6 +135,7 @@ export class SessionManager {
       session.updateProvider(provider, {
         model: currentActive.model.modelId,
         maxTokens: currentActive.model.contextWindow || 8192,
+        contextWindow: currentActive.model.contextWindow || 200000,
       })
     }
 
@@ -167,6 +169,9 @@ export class SessionManager {
       },
       onAgentComplete: (agentToolUseId: string, result: any) => {
         this.window?.webContents.send('agent:complete', { sessionId, agentToolUseId, ...result })
+      },
+      onUsage: (usage) => {
+        this.window?.webContents.send('query:usage', { sessionId, usage })
       },
     }
 
@@ -222,6 +227,36 @@ export class SessionManager {
 
   getMessages(sessionId: string) {
     return this.history.getMessages(sessionId)
+  }
+
+  getUsage(sessionId: string) {
+    const session = this.sessions.get(sessionId)
+    if (!session) return null
+    return session.getUsageSnapshot()
+  }
+
+  getFileChanges(sessionId: string) {
+    const session = this.sessions.get(sessionId)
+    if (!session) return []
+    return session.getFileTracker().getChangedFiles()
+  }
+
+  getFileHistory(sessionId: string, filePath: string) {
+    const session = this.sessions.get(sessionId)
+    if (!session) return []
+    return session.getFileTracker().getFileHistory(filePath)
+  }
+
+  async rewindFile(sessionId: string, snapshotId: string) {
+    const session = this.sessions.get(sessionId)
+    if (!session) throw new Error('Session not found')
+    return session.getFileTracker().rewindFile(snapshotId)
+  }
+
+  async rewindToTurn(sessionId: string, turnIndex: number) {
+    const session = this.sessions.get(sessionId)
+    if (!session) throw new Error('Session not found')
+    return session.getFileTracker().rewindToTurn(turnIndex)
   }
 
   close(): void {

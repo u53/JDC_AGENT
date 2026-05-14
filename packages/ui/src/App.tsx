@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { ChatView } from './components/ChatView'
-import { StatusBar } from './components/StatusBar'
+import { UsageHUD } from './components/UsageHUD'
 import { ModelManager } from './components/ModelManager'
 import { McpSettings } from './components/McpSettings'
 import { AskUserDialog } from './components/AskUserDialog'
@@ -31,7 +31,7 @@ export function App() {
             </div>
           </div>
         )}
-        <StatusBar onOpenMcp={() => setMcpOpen(true)} onOpenSettings={openSettings} />
+        <UsageHUD onOpenMcp={() => setMcpOpen(true)} onOpenSettings={openSettings} />
       </div>
       <ModelManager />
       <McpSettings isOpen={mcpOpen} onClose={() => setMcpOpen(false)} />

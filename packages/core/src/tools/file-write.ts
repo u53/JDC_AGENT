@@ -1,4 +1,5 @@
-import { writeFile, mkdir } from 'node:fs/promises'
+import { writeFile, mkdir, readFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 
@@ -27,8 +28,18 @@ export const fileWriteTool: ToolHandler = {
       : path.resolve(context.cwd, filePathInput)
 
     try {
+      let contentBefore: string | null = null
+      if (context.fileTracker && existsSync(filePath)) {
+        contentBefore = await readFile(filePath, 'utf-8')
+      }
+
       await mkdir(path.dirname(filePath), { recursive: true })
       await writeFile(filePath, contentInput, 'utf-8')
+
+      if (context.fileTracker && context.toolUseId) {
+        await context.fileTracker.recordChange(filePath, contentBefore, contentInput, context.toolUseId, context.turnIndex || 0)
+      }
+
       return { content: `Successfully wrote to ${filePath}` }
     } catch (err: any) {
       return { content: `Error writing file: ${err.message}`, isError: true }
