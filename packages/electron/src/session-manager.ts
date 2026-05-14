@@ -28,6 +28,7 @@ export class SessionManager {
   private readyPromise: Promise<void>
   private pendingPermissions = new Map<string, { resolve: (allowed: boolean) => void }>()
   private pendingAskUser = new Map<string, { resolve: (answer: string) => void }>()
+  private pendingPlanReviews = new Map<string, { resolve: (result: { approved: boolean; feedback?: string }) => void }>()
   private permissionModes = new Map<string, string>()
   constructor() {
     const dbPath = path.join(getConfigDir(), 'history.db')
@@ -100,7 +101,14 @@ export class SessionManager {
         this.window?.webContents.send('permission:request', { id, sessionId, toolName: request.toolName, input: request.input })
       })
     }
-    const session = new Session(sessionConfig, provider, this.history, permissionCallback, this.mcpManager)
+    const onPlanReview = async (planFile: string, content: string) => {
+      return new Promise<{ approved: boolean; feedback?: string }>((resolve) => {
+        const id = uuid()
+        this.pendingPlanReviews.set(id, { resolve })
+        this.window?.webContents.send('plan:review', { id, sessionId, planFile, content })
+      })
+    }
+    const session = new Session(sessionConfig, provider, this.history, permissionCallback, this.mcpManager, onPlanReview)
     const onAskUser: AskUserCallback = async (question, options, multiSelect) => {
       return new Promise<string>((resolve) => {
         const id = uuid()
@@ -223,6 +231,14 @@ export class SessionManager {
     if (pending) {
       pending.resolve(answer)
       this.pendingAskUser.delete(id)
+    }
+  }
+
+  respondToPlanReview(id: string, approved: boolean, feedback?: string): void {
+    const pending = this.pendingPlanReviews.get(id)
+    if (pending) {
+      pending.resolve({ approved, feedback })
+      this.pendingPlanReviews.delete(id)
     }
   }
 

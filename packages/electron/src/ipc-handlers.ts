@@ -12,6 +12,10 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
     sessionManager.respondToAskUser(id, answer)
   })
 
+  ipcMain.on('plan:respond', (_event, { id, approved, feedback }) => {
+    sessionManager.respondToPlanReview(id, approved, feedback)
+  })
+
   ipcMain.handle(IPC_CHANNELS.SESSION_CREATE, async (_event, { projectName, cwd }) => {
     const sessionId = sessionManager.createSession(projectName, cwd)
     return { sessionId }
