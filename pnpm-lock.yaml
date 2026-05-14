@@ -47,6 +47,9 @@ importers:
       openai:
         specifier: ^6.37.0
         version: 6.37.0(zod@3.25.76)
+      picomatch:
+        specifier: ^4.0.4
+        version: 4.0.4
       sql.js:
         specifier: ^1.14.1
         version: 1.14.1
@@ -60,6 +63,9 @@ importers:
         specifier: ^3.24.0
         version: 3.25.76
     devDependencies:
+      '@types/picomatch':
+        specifier: ^4.0.3
+        version: 4.0.3
       '@types/sql.js':
         specifier: ^1.4.11
         version: 1.4.11
@@ -1370,6 +1376,9 @@ packages:
 
   '@types/node@25.7.0':
     resolution: {integrity: sha512-z+pdZyxE+RTQE9AcboAZCb4otwcrvgHD+GlBpPgn0emDVt0ohrTMhAwlr2Wd9nZ+nihhYFxO2pThz3C5qSu2Eg==}
+
+  '@types/picomatch@4.0.3':
+    resolution: {integrity: sha512-iG0T6+nYJ9FAPmx9SsUlnwcq1ZVRuCXcVEvWnntoPlrOpwtSTKNDC9uVAxTsC3PUvJ+99n4RpAcNgBbHX3JSnQ==}
 
   '@types/plist@3.0.5':
     resolution: {integrity: sha512-E6OCaRmAe4WDmWNsL/9RMqdkkzDCY1etutkflWk4c+AcjDU07Pcz1fQwTX0TQz+Pxqn9i4L1TU3UFpjnrcDgxA==}
@@ -5014,6 +5023,8 @@ snapshots:
   '@types/node@25.7.0':
     dependencies:
       undici-types: 7.21.0
+
+  '@types/picomatch@4.0.3': {}
 
   '@types/plist@3.0.5':
     dependencies:
