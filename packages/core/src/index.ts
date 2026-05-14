@@ -31,3 +31,6 @@ export { ParallelExecutor, type ToolUseBlock, type ToolBatchResult } from './par
 export { BackgroundTaskManager, type BackgroundTask } from './background-tasks.js'
 export { createTaskOutputTool } from './tools/task-output.js'
 export { monitorTool } from './tools/monitor.js'
+export { AGENT_TYPES, getAgentType, filterToolsForAgent, isWriteAllowedForPlanAgent, isBashAllowedForAuditor, type AgentTypeDefinition } from './agent-types.js'
+export { createEnterPlanModeTool, isPlanModeToolAllowed, PLAN_MODE_ALLOWED_TOOLS, type PlanModeCallback } from './tools/enter-plan-mode.js'
+export { createExitPlanModeTool, type PlanReviewCallback } from './tools/exit-plan-mode.js'
