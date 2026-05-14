@@ -42,7 +42,8 @@ export async function compactMessages(
   messages: Message[],
   provider: ModelProvider,
   config: ModelConfig,
-  onChunk?: (chunk: StreamChunk) => void
+  onChunk?: (chunk: StreamChunk) => void,
+  signal?: AbortSignal
 ): Promise<CompactResult> {
   if (messages.length <= KEEP_RECENT) {
     return { messages, originalCount: messages.length, keptCount: messages.length, rawOutput: '' }
@@ -59,7 +60,8 @@ export async function compactMessages(
   ]
 
   let summaryText = ''
-  for await (const chunk of provider.stream(compactMsgs, [], compactConfig)) {
+  for await (const chunk of provider.stream(compactMsgs, [], compactConfig, signal)) {
+    if (signal?.aborted) break
     if (chunk.type === 'text_delta' && chunk.text) {
       summaryText += chunk.text
       onChunk?.(chunk)

@@ -124,6 +124,18 @@ export class ConversationHistory {
     this.save()
   }
 
+  replaceMessages(sessionId: string, messages: Message[]): void {
+    this.db!.run('DELETE FROM messages WHERE session_id = ?', [sessionId])
+    for (const msg of messages) {
+      this.db!.run(
+        'INSERT INTO messages (id, session_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)',
+        [msg.id, sessionId, msg.role, JSON.stringify(msg.content), msg.timestamp]
+      )
+    }
+    this.db!.run('UPDATE sessions SET updated_at = ? WHERE id = ?', [Date.now(), sessionId])
+    this.save()
+  }
+
   getMessages(sessionId: string): Message[] {
     const stmt = this.db!.prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY timestamp ASC')
     stmt.bind([sessionId])

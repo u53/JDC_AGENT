@@ -194,7 +194,12 @@ export class Session {
 
   async compactNow(events: SessionEvents): Promise<void> {
     if (this.messages.length < 4) return
-    await this.compact(events)
+    this.abortController = new AbortController()
+    try {
+      await this.compact(events)
+    } finally {
+      this.abortController = null
+    }
   }
 
   registerTool(handler: import('./tool-registry.js').ToolHandler): void {
@@ -286,8 +291,10 @@ export class Session {
 
   private async compact(events: SessionEvents): Promise<void> {
     events.onStreamChunk({ type: 'text_delta', text: '\n[Compressing context...]\n' })
-    const result = await compactMessages(this.messages, this.provider, this.config.modelConfig, events.onStreamChunk)
+    const result = await compactMessages(this.messages, this.provider, this.config.modelConfig, events.onStreamChunk, this.abortController?.signal)
+    if (this.abortController?.signal.aborted) return
     this.messages = result.messages
+    this.history.replaceMessages(this.id, this.messages)
 
     // Extract and save memories
     let memoriesExtracted = 0
