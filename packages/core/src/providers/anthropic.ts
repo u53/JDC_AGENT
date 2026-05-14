@@ -1,6 +1,13 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { ModelProvider } from '../model-provider.js'
-import type { ContentBlock, Message, ModelConfig, StreamChunk, ToolDefinition } from '../types.js'
+import type { ContentBlock, Message, ModelConfig, PromptSegment, StreamChunk, ToolDefinition } from '../types.js'
+import { joinSegments } from '../context.js'
+
+function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): string | undefined {
+  if (!systemPrompt) return undefined
+  if (typeof systemPrompt === 'string') return systemPrompt
+  return joinSegments(systemPrompt)
+}
 
 export class AnthropicProvider implements ModelProvider {
   name = 'anthropic'
@@ -22,7 +29,7 @@ export class AnthropicProvider implements ModelProvider {
     const response = await this.client.messages.create({
       model: config.model,
       max_tokens: config.maxTokens,
-      system: config.systemPrompt,
+      system: resolveSystemPrompt(config.systemPrompt),
       messages: this.formatMessages(messages),
       tools: tools.map(t => ({
         name: t.name,
@@ -50,7 +57,7 @@ export class AnthropicProvider implements ModelProvider {
     const params: any = {
       model: config.model,
       max_tokens: config.maxTokens,
-      system: config.systemPrompt,
+      system: resolveSystemPrompt(config.systemPrompt),
       messages: formattedMessages,
       tools: tools.map(t => ({
         name: t.name,

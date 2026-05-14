@@ -5,7 +5,7 @@ import { promisify } from 'node:util'
 import path from 'node:path'
 import os from 'node:os'
 import { getBasePrompt } from './base-prompt.js'
-import type { ToolDefinition } from './types.js'
+import type { ToolDefinition, PromptSegment } from './types.js'
 
 const execFileAsync = promisify(execFile)
 const CONFIG_DIR = path.join(os.homedir(), '.jdcagnet')
@@ -17,6 +17,8 @@ export interface ContextOptions {
   mcpServers?: { name: string; toolCount: number; tools?: string[] }[]
   permissionMode?: string
   skills?: { name: string; description: string }[]
+  language?: string
+  customInstructions?: string
 }
 
 export async function loadProjectMd(cwd: string): Promise<string | null> {
@@ -85,7 +87,11 @@ async function getGitInfo(cwd: string): Promise<{ branch?: string; status?: stri
   }
 }
 
-export async function assembleSystemPrompt(opts: ContextOptions): Promise<string> {
+export function joinSegments(segments: PromptSegment[]): string {
+  return segments.map(s => s.content).join('\n\n---\n\n')
+}
+
+export async function assembleSystemPrompt(opts: ContextOptions): Promise<PromptSegment[]> {
   const git = await getGitInfo(opts.cwd)
   const env = {
     os: `${os.platform()} ${os.release()}`,
@@ -96,39 +102,67 @@ export async function assembleSystemPrompt(opts: ContextOptions): Promise<string
     hostname: os.hostname(),
     arch: os.arch(),
   }
-  const parts: string[] = [getBasePrompt({
-    toolDefs: opts.toolDefs,
-    environment: env,
-    mcpServers: opts.mcpServers,
-    permissionMode: opts.permissionMode,
-  })]
+
+  const segments: PromptSegment[] = []
+
+  // Base prompt
+  segments.push({
+    content: getBasePrompt({
+      toolDefs: opts.toolDefs,
+      environment: env,
+      mcpServers: opts.mcpServers,
+      permissionMode: opts.permissionMode,
+    }),
+    cacheable: true,
+  })
 
   // Skills listing
   if (opts.skills && opts.skills.length > 0) {
     const skillList = opts.skills.map(s => `- ${s.name}: ${s.description}`).join('\n')
-    parts.push(`# Available Skills\n\nThe following skills can be invoked using the Skill tool:\n\n${skillList}\n\nWhen the user's request matches a skill, invoke it using the Skill tool with the skill name. Skills are reusable instruction templates that guide you through specific workflows.`)
+    segments.push({
+      content: `# Available Skills\n\nThe following skills can be invoked using the Skill tool:\n\n${skillList}\n\nWhen the user's request matches a skill, invoke it using the Skill tool with the skill name. Skills are reusable instruction templates that guide you through specific workflows.`,
+      cacheable: true,
+    })
   }
 
   // Memory
   const memoryIndex = await loadMemoryIndex(opts.cwd)
   const memDir = getMemoryDir(opts.cwd)
-  parts.push(getMemoryPrompt(memDir, memoryIndex))
+  segments.push({ content: getMemoryPrompt(memDir, memoryIndex), cacheable: true })
 
+  // Instructions (globalMd + projectMd + rules combined)
+  const instructionParts: string[] = []
   const globalMd = await loadGlobalMd()
-  if (globalMd) parts.push(`# Global Instructions\n${globalMd}`)
-
+  if (globalMd) instructionParts.push(`# Global Instructions\n${globalMd}`)
   const projectMd = await loadProjectMd(opts.cwd)
-  if (projectMd) parts.push(`# Project Instructions\n${projectMd}`)
-
+  if (projectMd) instructionParts.push(`# Project Instructions\n${projectMd}`)
   const rules = await loadProjectRules(opts.cwd)
-  if (rules.length > 0) parts.push(`# Project Rules\n${rules.join('\n\n')}`)
+  if (rules.length > 0) instructionParts.push(`# Project Rules\n${rules.join('\n\n')}`)
+  if (instructionParts.length > 0) {
+    segments.push({ content: instructionParts.join('\n\n'), cacheable: true })
+  }
 
-  if (git.status) parts.push(`# Git Status\n${git.status}`)
+  // User preferences
+  if (opts.language || opts.customInstructions) {
+    const prefParts: string[] = ['# User Preferences']
+    if (opts.language) {
+      const labels: Record<string, string> = { 'zh-CN': '中文', 'en': 'English', 'ja': '日本語', 'ko': '한국어' }
+      prefParts.push(`Language: ${labels[opts.language] || opts.language}`)
+    }
+    if (opts.customInstructions) {
+      prefParts.push(`\nCustom Instructions:\n${opts.customInstructions}`)
+    }
+    segments.push({ content: prefParts.join('\n'), cacheable: true })
+  }
 
+  // Dynamic section (git status + date)
+  const dynamicParts: string[] = []
+  if (git.status) dynamicParts.push(`# Git Status\n${git.status}`)
   const date = new Date().toISOString().split('T')[0]
-  parts.push(`# Current Date\n${date}`)
+  dynamicParts.push(`# Current Date\n${date}`)
+  segments.push({ content: dynamicParts.join('\n\n'), cacheable: false })
 
-  return parts.join('\n\n---\n\n')
+  return segments
 }
 
 function getMemoryPrompt(memDir: string, memoryIndex: string | null): string {

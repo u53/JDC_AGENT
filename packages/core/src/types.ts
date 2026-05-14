@@ -57,11 +57,16 @@ export interface StreamChunk {
   }
 }
 
+export interface PromptSegment {
+  content: string
+  cacheable: boolean
+}
+
 export interface ModelConfig {
   model: string
   maxTokens: number
   temperature?: number
-  systemPrompt?: string
+  systemPrompt?: string | PromptSegment[]
   thinking?: boolean
   thinkingBudget?: number
   contextWindow?: number

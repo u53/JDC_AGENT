@@ -1,6 +1,13 @@
 import OpenAI from 'openai'
 import type { ModelProvider } from '../model-provider.js'
-import type { ContentBlock, Message, ModelConfig, StreamChunk, ToolDefinition } from '../types.js'
+import type { ContentBlock, Message, ModelConfig, PromptSegment, StreamChunk, ToolDefinition } from '../types.js'
+import { joinSegments } from '../context.js'
+
+function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): string | undefined {
+  if (!systemPrompt) return undefined
+  if (typeof systemPrompt === 'string') return systemPrompt
+  return joinSegments(systemPrompt)
+}
 
 export class OpenAIChatProvider implements ModelProvider {
   name = 'openai'
@@ -23,7 +30,7 @@ export class OpenAIChatProvider implements ModelProvider {
     const params: OpenAI.ChatCompletionCreateParamsNonStreaming = {
       model: config.model,
       max_tokens: config.maxTokens > 32768 ? 16384 : config.maxTokens,
-      messages: this.formatMessages(messages, config.systemPrompt),
+      messages: this.formatMessages(messages, resolveSystemPrompt(config.systemPrompt)),
       ...(tools.length > 0 ? { tools: this.formatTools(tools) } : {}),
       ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
     }
@@ -81,7 +88,7 @@ export class OpenAIChatProvider implements ModelProvider {
     const params: OpenAI.ChatCompletionCreateParamsStreaming = {
       model: config.model,
       max_tokens: config.maxTokens > 32768 ? 16384 : config.maxTokens,
-      messages: this.formatMessages(messages, config.systemPrompt),
+      messages: this.formatMessages(messages, resolveSystemPrompt(config.systemPrompt)),
       stream: true,
       stream_options: { include_usage: true },
       ...(tools.length > 0 ? { tools: this.formatTools(tools) } : {}),

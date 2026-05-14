@@ -1,6 +1,13 @@
 import OpenAI from 'openai'
 import type { ModelProvider } from '../model-provider.js'
-import type { ContentBlock, Message, ModelConfig, StreamChunk, ToolDefinition } from '../types.js'
+import type { ContentBlock, Message, ModelConfig, PromptSegment, StreamChunk, ToolDefinition } from '../types.js'
+import { joinSegments } from '../context.js'
+
+function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): string | undefined {
+  if (!systemPrompt) return undefined
+  if (typeof systemPrompt === 'string') return systemPrompt
+  return joinSegments(systemPrompt)
+}
 
 interface ResponsesInput {
   role?: string
@@ -62,7 +69,7 @@ export class OpenAIResponsesProvider implements ModelProvider {
     const maxOutput = config.maxTokens > 32768 ? 16384 : config.maxTokens
     const params: Record<string, unknown> = {
       model: config.model,
-      input: this.formatInput(messages, config.systemPrompt),
+      input: this.formatInput(messages, resolveSystemPrompt(config.systemPrompt)),
       ...(tools.length > 0 ? { tools: this.formatTools(tools) } : {}),
       ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
       ...(maxOutput ? { max_output_tokens: maxOutput } : {}),
@@ -120,7 +127,7 @@ export class OpenAIResponsesProvider implements ModelProvider {
     const maxOutput = config.maxTokens > 32768 ? 16384 : config.maxTokens
     const params: Record<string, unknown> = {
       model: config.model,
-      input: this.formatInput(messages, config.systemPrompt),
+      input: this.formatInput(messages, resolveSystemPrompt(config.systemPrompt)),
       stream: true,
       ...(tools.length > 0 ? { tools: this.formatTools(tools) } : {}),
       ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),

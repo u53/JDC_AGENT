@@ -6,6 +6,7 @@ import { ToolRunner, type ToolExecutionEvent, type PermissionCallback } from './
 import { registerBuiltinTools } from './tools/index.js'
 import { ConversationHistory } from './history.js'
 import { assembleSystemPrompt } from './context.js'
+import { loadAppConfig } from './config.js'
 import { PermissionChecker } from './permissions.js'
 import { TaskStore } from './task-store.js'
 import { estimateTokens } from './token-estimation.js'
@@ -231,12 +232,15 @@ export class Session {
       .filter(s => s.status === 'connected')
       .map(s => ({ name: s.name, toolCount: s.tools.length, tools: s.tools.map(t => t.name) }))
 
+    const appConfig = loadAppConfig()
     this.config.modelConfig.systemPrompt = await assembleSystemPrompt({
       cwd: this.config.cwd,
       toolDefs,
       toolNames,
       mcpServers,
       skills: this.skillLoader.getAll().map(s => ({ name: s.name, description: s.description })),
+      language: appConfig.language,
+      customInstructions: appConfig.customInstructions,
     })
 
     const content: import('./types.js').ContentBlock[] = [{ type: 'text', text }]
