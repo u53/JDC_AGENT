@@ -230,7 +230,7 @@ export class Session {
     const toolNames = toolDefs.map(d => d.name)
     const mcpServers = this.mcpManager?.getServerStates()
       .filter(s => s.status === 'connected')
-      .map(s => ({ name: s.name, toolCount: s.tools.length, tools: s.tools.map(t => t.name) }))
+      .map(s => ({ name: s.name, toolCount: s.tools.length, tools: s.tools.map(t => t.name), instructions: s.instructions }))
 
     const appConfig = loadAppConfig()
     this.config.modelConfig.systemPrompt = await assembleSystemPrompt({
@@ -404,10 +404,11 @@ export class Session {
         events.onToolEvent,
         this.abortController!.signal
       )
+      const reminder = this.getSystemReminder()
       const toolResults = batchResults.map(r => ({
         type: 'tool_result',
         tool_use_id: r.tool_use_id,
-        content: r.content,
+        content: r.content + (reminder || ''),
         is_error: r.is_error,
       }))
 
@@ -423,6 +424,22 @@ export class Session {
 
     this.abortController = null
     this.currentEvents = undefined
+  }
+
+  private getSystemReminder(): string | null {
+    const appConfig = loadAppConfig()
+    const parts: string[] = []
+    const date = new Date().toISOString().split('T')[0]
+    parts.push(`当前日期: ${date}`)
+    if (appConfig.language) {
+      const labels: Record<string, string> = { 'zh-CN': '中文', 'en': 'English', 'ja': '日本語', 'ko': '한국어' }
+      parts.push(`语言: ${labels[appConfig.language] || appConfig.language}`)
+    }
+    if (appConfig.customInstructions) {
+      parts.push(appConfig.customInstructions)
+    }
+    if (parts.length <= 1) return null  // only date, no user config — skip
+    return `\n\n<system-reminder>\n${parts.join('\n')}\n</system-reminder>`
   }
 
   abort(): void {

@@ -14,7 +14,7 @@ export interface ContextOptions {
   cwd: string
   toolDefs: ToolDefinition[]
   toolNames: string[]
-  mcpServers?: { name: string; toolCount: number; tools?: string[] }[]
+  mcpServers?: { name: string; toolCount: number; tools?: string[]; instructions?: string }[]
   permissionMode?: string
   skills?: { name: string; description: string }[]
   language?: string

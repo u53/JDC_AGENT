@@ -25,6 +25,7 @@ export interface McpServerState {
   status: McpConnectionStatus
   error?: string
   tools: McpToolInfo[]
+  instructions?: string  // from server's initialize response
 }
 
 export interface McpToolInfo {

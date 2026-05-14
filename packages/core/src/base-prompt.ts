@@ -13,7 +13,7 @@ export interface PromptEnvironment {
 export interface PromptOptions {
   toolDefs: ToolDefinition[]
   environment: PromptEnvironment
-  mcpServers?: { name: string; toolCount: number; tools?: string[] }[]
+  mcpServers?: { name: string; toolCount: number; tools?: string[]; instructions?: string }[]
   permissionMode?: string
 }
 
@@ -210,10 +210,11 @@ function getSafetySection(): string {
 - Do not make outbound network requests that transmit project code or secrets unless the user explicitly requests it.`
 }
 
-function getMcpSection(mcpServers: { name: string; toolCount: number; tools?: string[] }[]): string {
+function getMcpSection(mcpServers: { name: string; toolCount: number; tools?: string[]; instructions?: string }[]): string {
   const serverList = mcpServers.map(s => {
     const toolList = s.tools ? `\n  Tools: ${s.tools.join(', ')}` : ''
-    return `- ${s.name}: ${s.toolCount} tools${toolList}`
+    const instr = s.instructions ? `\n  Instructions: ${s.instructions}` : ''
+    return `- ${s.name}: ${s.toolCount} tools${toolList}${instr}`
   }).join('\n')
 
   return `# MCP Servers

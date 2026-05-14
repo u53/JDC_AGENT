@@ -11,6 +11,7 @@ interface ConnectedServer {
   tools: McpToolInfo[]
   status: McpConnectionStatus
   error?: string
+  instructions?: string
 }
 
 export class McpManager {
@@ -58,7 +59,11 @@ export class McpManager {
         inputSchema: t.inputSchema as Record<string, unknown>,
       }))
 
-      this.servers.set(name, { name, config, client, transport, tools, status: 'connected' })
+      // Extract instructions from server capabilities if available
+      const capabilities = client.getServerCapabilities?.() as Record<string, unknown> | undefined
+      const instructions = (capabilities as any)?.instructions as string | undefined
+
+      this.servers.set(name, { name, config, client, transport, tools, status: 'connected', instructions })
       this.onStateChange?.()
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err)
@@ -92,6 +97,7 @@ export class McpManager {
       status: s.status,
       error: s.error,
       tools: s.tools,
+      instructions: s.instructions,
     }))
   }
 
