@@ -8,7 +8,6 @@ export interface SlashCommand {
 
 const COMMANDS: SlashCommand[] = [
   { name: 'compact', description: '压缩当前对话上下文' },
-  { name: 'clear', description: '清空当前对话' },
   { name: 'thinking', description: '开关推理模式 (on/off/budget)' },
   { name: 'model', description: '切换模型' },
   { name: 'mcp', description: '显示 MCP 服务器状态' },
