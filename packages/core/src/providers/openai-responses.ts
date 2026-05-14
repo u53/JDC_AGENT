@@ -67,9 +67,11 @@ export class OpenAIResponsesProvider implements ModelProvider {
     signal?: AbortSignal
   ) {
     const maxOutput = config.maxTokens > 32768 ? 16384 : config.maxTokens
+    const systemPrompt = resolveSystemPrompt(config.systemPrompt)
     const params: Record<string, unknown> = {
       model: config.model,
-      input: this.formatInput(messages, resolveSystemPrompt(config.systemPrompt)),
+      instructions: systemPrompt,
+      input: this.formatInput(messages),
       ...(tools.length > 0 ? { tools: this.formatTools(tools) } : {}),
       ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
       ...(maxOutput ? { max_output_tokens: maxOutput } : {}),
@@ -125,9 +127,11 @@ export class OpenAIResponsesProvider implements ModelProvider {
     signal?: AbortSignal
   ): AsyncIterable<StreamChunk> {
     const maxOutput = config.maxTokens > 32768 ? 16384 : config.maxTokens
+    const systemPrompt = resolveSystemPrompt(config.systemPrompt)
     const params: Record<string, unknown> = {
       model: config.model,
-      input: this.formatInput(messages, resolveSystemPrompt(config.systemPrompt)),
+      instructions: systemPrompt,
+      input: this.formatInput(messages),
       stream: true,
       ...(tools.length > 0 ? { tools: this.formatTools(tools) } : {}),
       ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
@@ -172,12 +176,8 @@ export class OpenAIResponsesProvider implements ModelProvider {
     }))
   }
 
-  private formatInput(messages: Message[], systemPrompt?: string): ResponsesInput[] {
+  private formatInput(messages: Message[]): ResponsesInput[] {
     const input: ResponsesInput[] = []
-
-    if (systemPrompt) {
-      input.push({ role: 'system', content: systemPrompt })
-    }
 
     for (const msg of messages) {
       if (msg.role === 'system') continue
