@@ -30,6 +30,7 @@ export function getBasePrompt(opts: PromptOptions): string {
     getToolDescriptionsSection(toolDefs),
     getCodingSection(),
     getGitSection(),
+    getPlanModeSection(),
     getVerificationSection(),
     getCompactionSection(),
     getResponseStyleSection(),
@@ -227,6 +228,33 @@ user: force push to main
 assistant: Force pushing to main can overwrite others' work and is very hard to reverse. Are you sure you want to proceed?
 </example>
 </examples>`
+}
+
+function getPlanModeSection(): string {
+  return `# Plan Mode
+
+You have access to a plan mode for designing implementation approaches before writing code.
+
+**When to enter plan mode (call enter_plan_mode):**
+- Non-trivial tasks requiring 3+ file changes
+- Architectural decisions with multiple valid approaches
+- Tasks where the user's intent is unclear and you need to explore first
+- Multi-step implementations where getting alignment prevents wasted effort
+
+**When NOT to enter plan mode:**
+- Simple bug fixes or typo corrections
+- Single-file changes with clear requirements
+- Tasks where the user gave very specific instructions
+
+**In plan mode you can:**
+- Read and explore the codebase (file_read, grep, glob, ls, tree, lsp)
+- Dispatch explore agents for code search
+- Write your plan to .jdcagnet/plans/
+- Use task tools for planning
+
+**When your plan is ready:**
+- Call exit_plan_mode with the path to your plan file
+- The user will review and approve or reject with feedback`
 }
 
 function getVerificationSection(): string {
