@@ -40,6 +40,9 @@ interface SessionState {
   isLoading: boolean
   sessionStates: Record<string, SessionStreamState>
   tasks: Array<{ id: string; subject: string; description: string; status: string }>
+  messageQueue: string[]
+  enqueueMessage: (text: string) => void
+  dequeueMessage: () => string | undefined
   loadProjects: () => Promise<void>
   createSession: (cwd: string) => Promise<void>
   switchSession: (sessionId: string) => Promise<void>
@@ -66,6 +69,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   isLoading: false,
   sessionStates: {},
   tasks: [],
+  messageQueue: [],
+  enqueueMessage: (text: string) => {
+    set((s) => ({ messageQueue: [...s.messageQueue, text] }))
+  },
+  dequeueMessage: () => {
+    const queue = get().messageQueue
+    if (queue.length === 0) return undefined
+    const [first, ...rest] = queue
+    set({ messageQueue: rest })
+    return first
+  },
 
   loadProjects: async () => {
     const projects = await ipc.session.list()

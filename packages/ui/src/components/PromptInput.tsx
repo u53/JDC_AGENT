@@ -7,6 +7,7 @@ interface Props {
   onAbort: () => void
   isStreaming: boolean
   onSlashCommand?: (command: string) => void
+  onEnqueue?: (text: string) => void
   permissionMode?: string
   onPermissionChange?: (mode: string) => void
   modelName?: string
@@ -17,7 +18,7 @@ interface Props {
   skills?: { name: string; description: string }[]
 }
 
-export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, permissionMode = 'standard', onPermissionChange, modelName, modelId, models, onModelChange, onModelClick, skills }: Props) {
+export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, onEnqueue, permissionMode = 'standard', onPermissionChange, modelName, modelId, models, onModelChange, onModelClick, skills }: Props) {
   const [text, setText] = useState('')
   const [images, setImages] = useState<{ data: string; mediaType: string }[]>([])
   const [showSlashMenu, setShowSlashMenu] = useState(false)
@@ -94,10 +95,16 @@ export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, perm
         setShowSlashMenu(false)
         return
       }
-      if ((text.trim() || images.length > 0) && !isStreaming) {
-        onSend(text.trim(), images.length > 0 ? images : undefined)
-        setText('')
-        setImages([])
+      if (text.trim() || images.length > 0) {
+        if (isStreaming) {
+          if (onEnqueue) onEnqueue(text.trim())
+          setText('')
+          setImages([])
+        } else {
+          onSend(text.trim(), images.length > 0 ? images : undefined)
+          setText('')
+          setImages([])
+        }
         if (textareaRef.current) textareaRef.current.style.height = 'auto'
       }
     }
@@ -131,7 +138,11 @@ export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, perm
               className="flex-1 resize-none bg-transparent border border-[#333] px-4 py-3 text-sm text-[#EAEAEA] placeholder-[#666] focus:border-[#EAEAEA] focus:outline-none transition-colors"
             />
             {isStreaming ? (
-              <button onClick={onAbort} className="border border-[#E61919] text-[#E61919] px-4 py-2 text-[10px] uppercase tracking-[0.05em] hover:bg-[#E61919] hover:text-[#EAEAEA] transition-colors">[ABORT]</button>
+              text.trim() ? (
+                <button onClick={() => { if (onEnqueue) onEnqueue(text.trim()); setText(''); setImages([]) }} className="border border-[#4AF626] text-[#4AF626] px-4 py-2 text-[10px] uppercase tracking-[0.05em] hover:bg-[#4AF626] hover:text-[#0A0A0A] transition-colors">[QUEUE]</button>
+              ) : (
+                <button onClick={onAbort} className="border border-[#E61919] text-[#E61919] px-4 py-2 text-[10px] uppercase tracking-[0.05em] hover:bg-[#E61919] hover:text-[#EAEAEA] transition-colors">[STOP]</button>
+              )
             ) : (
               <button onClick={() => { if (text.trim() || images.length > 0) { onSend(text.trim(), images.length > 0 ? images : undefined); setText(''); setImages([]) } }} className="border border-[#EAEAEA] text-[#EAEAEA] px-4 py-2 text-[10px] uppercase tracking-[0.05em] hover:bg-[#EAEAEA] hover:text-[#0A0A0A] transition-colors">[SEND]</button>
             )}

@@ -5,6 +5,7 @@ import { ToolCardRouter } from './tool-cards'
 import { ErrorCard } from './ErrorCard'
 import { FileChangesPanel } from './FileChangesPanel'
 import { TaskPanel } from './TaskPanel'
+import { QueueIndicator } from './QueueIndicator'
 import { PermissionDialog } from './PermissionDialog'
 import { PlanReviewDialog } from './PlanReviewDialog'
 import { PromptInput } from './PromptInput'
@@ -56,6 +57,7 @@ interface ChatViewProps {
 export function ChatView({ onOpenMcp }: ChatViewProps) {
   const { messages, streamingText, thinkingText, isStreaming, isThinking, toolEvents, sendMessage, abort, error, retry, dismissError } = useSession()
   const { activeSessionId } = useSessionStore()
+  const enqueueMessage = useSessionStore((s) => s.enqueueMessage)
   const { getActiveModel, groups, activeModelId, setActiveModel } = useModelStore()
   const openSettings = useSettingsStore((s) => s.open)
   useAgentEvents()
@@ -331,6 +333,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         </div>
       )}
       <FileChangesPanel />
+      <QueueIndicator />
       <TaskPanel />
       {planMode && (
         <div className="border-t border-purple-600/30 px-4 py-1.5 flex items-center gap-2">
@@ -344,6 +347,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         onAbort={abort}
         isStreaming={isStreaming}
         onSlashCommand={handleSlashCommand}
+        onEnqueue={enqueueMessage}
         permissionMode={permissionMode}
         onPermissionChange={handlePermissionChange}
         modelName={activeModel?.model.name}

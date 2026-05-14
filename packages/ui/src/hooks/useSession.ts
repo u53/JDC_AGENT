@@ -43,6 +43,14 @@ export function useSession() {
       if (sessionId === current.activeSessionId) {
         current.loadTasks(sessionId)
       }
+      // Auto-send queued message
+      const next = useSessionStore.getState().dequeueMessage()
+      if (next && sessionId === useSessionStore.getState().activeSessionId) {
+        setTimeout(() => {
+          (window as any).electronAPI?.invoke('query:send', { sessionId, text: next })
+          useSessionStore.getState().markStreaming(sessionId, true)
+        }, 100)
+      }
     }) || (() => {})
 
     const unsubError = ipc.query.onError(({ sessionId, error }) => {
