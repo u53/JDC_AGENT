@@ -64,21 +64,6 @@ export function App() {
           openSettings()
         }
       },
-      // / — focus input and insert slash (only when not already in an input)
-      '/': () => {
-        const active = document.activeElement
-        if (active && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT')) return
-        const textarea = document.querySelector('textarea') as HTMLTextAreaElement | null
-        if (textarea) {
-          textarea.focus()
-          // Set value to '/' to trigger slash menu
-          const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-            window.HTMLTextAreaElement.prototype, 'value'
-          )?.set
-          nativeInputValueSetter?.call(textarea, '/')
-          textarea.dispatchEvent(new Event('input', { bubbles: true }))
-        }
-      },
     }
 
     // Cmd/Ctrl+1~9 — switch to Nth session
