@@ -3,11 +3,11 @@ import path from 'node:path'
 import {
   Session, type SessionEvents, AnthropicProvider, OpenAIChatProvider, OpenAIResponsesProvider,
   ConversationHistory, loadAppConfig, getConfigDir, type ModelConfig, type SessionConfig, type StreamChunk,
-  type PermissionCallback, createAskUserTool, type AskUserCallback,
+  type PermissionCallback, createAskUserTool, type AskUserCallback, createNotifyTool, type NotifyCallback,
   McpManager, loadMcpConfig, saveMcpConfig, type McpServerConfig, type McpServerState,
 } from '@jdcagnet/core'
 import type { ToolExecutionEvent } from '@jdcagnet/core'
-import type { BrowserWindow } from 'electron'
+import { Notification, type BrowserWindow } from 'electron'
 
 function getActiveModelConfig() {
   const config = loadAppConfig()
@@ -109,6 +109,12 @@ export class SessionManager {
       })
     }
     session.registerTool(createAskUserTool(onAskUser))
+    const onNotify: NotifyCallback = (message: string) => {
+      const notification = new Notification({ title: 'JDCAGNET', body: message })
+      notification.on('click', () => { this.window?.focus() })
+      notification.show()
+    }
+    session.registerTool(createNotifyTool(onNotify))
     session.loadHistory()
     this.sessions.set(sessionId, session)
   }
