@@ -22,6 +22,7 @@ export class ToolRunner {
   private hookEngine?: HookEngine
   private sessionId?: string
   fileTracker?: FileTracker
+  backgroundTasks?: import('./background-tasks.js').BackgroundTaskManager
   turnIndex = 0
 
   constructor(
@@ -100,6 +101,7 @@ export class ToolRunner {
       toolUseId,
       fileTracker: this.fileTracker,
       turnIndex: this.turnIndex,
+      backgroundTasks: this.backgroundTasks,
       onProgress: (message) => {
         onEvent({ type: 'progress', toolName, toolUseId, message })
       },

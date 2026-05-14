@@ -12,6 +12,7 @@ export interface ToolContext {
   toolUseId?: string
   fileTracker?: import('./file-tracker.js').FileTracker
   turnIndex?: number
+  backgroundTasks?: import('./background-tasks.js').BackgroundTaskManager
 }
 
 export interface ToolResult {

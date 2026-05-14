@@ -10,6 +10,7 @@ export const bashTool: ToolHandler = {
       properties: {
         command: { type: 'string', description: 'The command to execute' },
         timeout: { type: 'number', description: 'Timeout in milliseconds (default 120000)' },
+        run_in_background: { type: 'boolean', description: 'Run in background and return task_id immediately (default: false)' },
       },
       required: ['command'],
     },
@@ -18,6 +19,11 @@ export const bashTool: ToolHandler = {
     const command = input.command as string | undefined
     if (!command) {
       return { content: 'Error: command is required', isError: true }
+    }
+
+    if (input.run_in_background && context.backgroundTasks) {
+      const task = context.backgroundTasks.spawn(command, context.cwd)
+      return { content: `Background task started: ${task.id}\nCommand: ${command}\nUse task_output tool to check results.` }
     }
     const timeout = (input.timeout as number) || 120000
 

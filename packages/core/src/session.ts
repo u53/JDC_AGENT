@@ -1,4 +1,5 @@
 import { v4 as uuid } from 'uuid'
+import path from 'node:path'
 import type { Message, ModelConfig, SessionConfig, StreamChunk } from './types.js'
 import type { ModelProvider } from './model-provider.js'
 import { ToolRegistry } from './tool-registry.js'
@@ -6,7 +7,7 @@ import { ToolRunner, type ToolExecutionEvent, type PermissionCallback } from './
 import { registerBuiltinTools } from './tools/index.js'
 import { ConversationHistory } from './history.js'
 import { assembleSystemPrompt, getMemoryDir } from './context.js'
-import { loadAppConfig } from './config.js'
+import { loadAppConfig, getConfigDir } from './config.js'
 import { PermissionChecker } from './permissions.js'
 import { TaskStore } from './task-store.js'
 import { estimateTokens } from './token-estimation.js'
@@ -30,6 +31,9 @@ import { classifyError, getMaxRetries, getRetryDelay } from './retry.js'
 import { UsageTracker, type UsageSnapshot } from './usage-tracker.js'
 import { FileTracker } from './file-tracker.js'
 import { ParallelExecutor } from './parallel-executor.js'
+import { BackgroundTaskManager } from './background-tasks.js'
+import { createTaskOutputTool } from './tools/task-output.js'
+import { monitorTool } from './tools/monitor.js'
 
 export interface SessionEvents {
   onStreamChunk: (chunk: StreamChunk) => void
@@ -64,6 +68,7 @@ export class Session {
   private currentEvents?: SessionEvents
   private usageTracker: UsageTracker
   private fileTracker: FileTracker
+  private backgroundTasks: BackgroundTaskManager
   private turnIndex = 0
 
   constructor(config: SessionConfig, provider: ModelProvider, history: ConversationHistory, onPermissionRequest?: PermissionCallback, mcpManager?: McpManager) {
@@ -73,6 +78,7 @@ export class Session {
     this.history = history
     this.usageTracker = new UsageTracker(config.modelConfig.contextWindow || 200000)
     this.fileTracker = new FileTracker(history, config.id)
+    this.backgroundTasks = new BackgroundTaskManager(path.join(getConfigDir(), 'tasks'))
     this.toolRegistry = new ToolRegistry()
     registerBuiltinTools(this.toolRegistry)
     this.toolRegistry.register(createTaskCreateTool(this.taskStore))
@@ -81,6 +87,8 @@ export class Session {
     this.toolRegistry.register(createTaskUpdateTool(this.taskStore))
     this.toolRegistry.register(createTaskStopTool(this.taskStore))
     this.toolRegistry.register(createTodoWriteTool(this.taskStore))
+    this.toolRegistry.register(createTaskOutputTool(this.backgroundTasks))
+    this.toolRegistry.register(monitorTool)
     this.mcpManager = mcpManager
     if (mcpManager) {
       const mcpTools = mcpManager.getTools()
@@ -100,6 +108,7 @@ export class Session {
     this.permissionChecker = new PermissionChecker('standard', config.cwd)
     this.toolRunner = new ToolRunner(this.toolRegistry, config.cwd, this.permissionChecker, onPermissionRequest)
     this.toolRunner.fileTracker = this.fileTracker
+    this.toolRunner.backgroundTasks = this.backgroundTasks
     this.parallelExecutor = new ParallelExecutor(this.toolRunner)
 
     // Asynchronously load hooks and rebuild ToolRunner
@@ -144,6 +153,7 @@ export class Session {
         this.id
       )
       this.toolRunner.fileTracker = this.fileTracker
+      this.toolRunner.backgroundTasks = this.backgroundTasks
       this.parallelExecutor = new ParallelExecutor(this.toolRunner)
     } catch {
       // Hooks are optional — if loading fails, continue without them
