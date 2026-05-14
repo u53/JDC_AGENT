@@ -5,6 +5,7 @@ import { ToolCardRouter } from './tool-cards'
 import { ErrorCard } from './ErrorCard'
 import { FileChangesPanel } from './FileChangesPanel'
 import { PermissionDialog } from './PermissionDialog'
+import { PlanReviewDialog } from './PlanReviewDialog'
 import { PromptInput } from './PromptInput'
 import { AgentDetailPanel } from './AgentDetailPanel'
 import { StatsCard } from './StatsCard'
@@ -196,6 +197,9 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         })
         break
       }
+      case '/plan':
+        sendMessage('Please enter plan mode and design an implementation approach for the task we\'ve been discussing. Analyze the relevant code first, then write a plan file.')
+        break
       case '/help':
         showToast('/compact /thinking /model /mcp /permission /commit /status /stats')
         break
@@ -285,6 +289,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
             />
           )}
           <PermissionDialog sessionId={activeSessionId} />
+          <PlanReviewDialog sessionId={activeSessionId} />
         </div>
       </div>
       {toast && (

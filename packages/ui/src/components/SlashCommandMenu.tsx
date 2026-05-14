@@ -14,6 +14,7 @@ const COMMANDS: SlashCommand[] = [
   { name: 'status', description: '显示会话状态和 token 使用' },
   { name: 'permission', description: '切换权限模式' },
   { name: 'stats', description: '显示会话统计信息' },
+  { name: 'plan', description: '进入规划模式' },
   { name: 'help', description: '显示帮助信息' },
 ]
 
