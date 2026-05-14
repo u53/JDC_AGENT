@@ -118,7 +118,7 @@ export class OpenAIResponsesProvider implements ModelProvider {
     return {
       content,
       usage: {
-        inputTokens: response.usage?.input_tokens ?? 0,
+        inputTokens: (response.usage?.input_tokens ?? 0) - (response.usage?.input_tokens_details?.cached_tokens ?? 0),
         outputTokens: response.usage?.output_tokens ?? 0,
         cacheReadInputTokens: response.usage?.input_tokens_details?.cached_tokens ?? 0,
       },
@@ -162,12 +162,13 @@ export class OpenAIResponsesProvider implements ModelProvider {
         yield { type: 'tool_use_end' }
       } else if (event.type === 'response.completed') {
         const usage = event.response?.usage
+        const cachedTokens = usage?.input_tokens_details?.cached_tokens ?? 0
         yield {
           type: 'message_end',
           usage: {
-            inputTokens: usage?.input_tokens ?? 0,
+            inputTokens: (usage?.input_tokens ?? 0) - cachedTokens,
             outputTokens: usage?.output_tokens ?? 0,
-            cacheReadInputTokens: usage?.input_tokens_details?.cached_tokens ?? 0,
+            cacheReadInputTokens: cachedTokens,
           },
         }
       }
