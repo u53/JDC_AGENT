@@ -4,6 +4,7 @@ import { MessageBubble } from './MessageBubble'
 import { ToolCardRouter } from './tool-cards'
 import { ErrorCard } from './ErrorCard'
 import { FileChangesPanel } from './FileChangesPanel'
+import { TaskPanel } from './TaskPanel'
 import { PermissionDialog } from './PermissionDialog'
 import { PlanReviewDialog } from './PlanReviewDialog'
 import { PromptInput } from './PromptInput'
@@ -96,6 +97,12 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     // Sync permission mode to backend on session activation
     if (activeSessionId && (window as any).electronAPI?.setPermissionMode) {
       (window as any).electronAPI.setPermissionMode(activeSessionId, permissionMode)
+    }
+  }, [activeSessionId])
+
+  useEffect(() => {
+    if (activeSessionId) {
+      useSessionStore.getState().loadTasks(activeSessionId)
     }
   }, [activeSessionId])
 
@@ -324,6 +331,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         </div>
       )}
       <FileChangesPanel />
+      <TaskPanel />
       {planMode && (
         <div className="border-t border-purple-600/30 px-4 py-1.5 flex items-center gap-2">
           <span className="inline-block h-2 w-2 rounded-full bg-purple-400" />

@@ -39,6 +39,10 @@ export function useSession() {
     const unsubFinished = window.electronAPI?.on('query:finished', (_e: unknown, data: unknown) => {
       const { sessionId } = data as { sessionId: string }
       store.finishSession(sessionId)
+      const current = useSessionStore.getState()
+      if (sessionId === current.activeSessionId) {
+        current.loadTasks(sessionId)
+      }
     }) || (() => {})
 
     const unsubError = ipc.query.onError(({ sessionId, error }) => {
