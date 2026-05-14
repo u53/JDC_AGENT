@@ -24,3 +24,4 @@ export { runSubSession, type SubSessionOptions, type SubSessionResult } from './
 export { createAgentTool, type AgentToolDeps } from './tools/agent.js'
 export { UsageTracker, type UsageSnapshot, type TurnUsage } from './usage-tracker.js'
 export { FileTracker, type FileSnapshot, type FileChange } from './file-tracker.js'
+export { ParallelExecutor, type ToolUseBlock, type ToolBatchResult } from './parallel-executor.js'

@@ -27,6 +27,7 @@ import { createAgentTool } from './tools/agent.js'
 import { classifyError, getMaxRetries, getRetryDelay } from './retry.js'
 import { UsageTracker, type UsageSnapshot } from './usage-tracker.js'
 import { FileTracker } from './file-tracker.js'
+import { ParallelExecutor } from './parallel-executor.js'
 
 export interface SessionEvents {
   onStreamChunk: (chunk: StreamChunk) => void
@@ -46,6 +47,7 @@ export class Session {
   private messages: Message[] = []
   private provider: ModelProvider
   private toolRunner: ToolRunner
+  private parallelExecutor: ParallelExecutor
   private toolRegistry: ToolRegistry
   private history: ConversationHistory
   private taskStore = new TaskStore()
@@ -96,6 +98,7 @@ export class Session {
     this.permissionChecker = new PermissionChecker()
     this.toolRunner = new ToolRunner(this.toolRegistry, config.cwd, this.permissionChecker, onPermissionRequest)
     this.toolRunner.fileTracker = this.fileTracker
+    this.parallelExecutor = new ParallelExecutor(this.toolRunner)
 
     // Asynchronously load hooks and rebuild ToolRunner
     this.hooksReady = this.initHooks(onPermissionRequest)
@@ -139,6 +142,7 @@ export class Session {
         this.id
       )
       this.toolRunner.fileTracker = this.fileTracker
+      this.parallelExecutor = new ParallelExecutor(this.toolRunner)
     } catch {
       // Hooks are optional — if loading fails, continue without them
     }
@@ -390,15 +394,18 @@ export class Session {
 
       if (!hasToolUse) break
 
-      const toolResults: any[] = []
-      for (const block of assistantContent) {
-        if (block.type === 'tool_use') {
-          const result = await this.toolRunner.execute(
-            block.name, block.id, block.input, events.onToolEvent, this.abortController!.signal
-          )
-          toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result.content, is_error: result.isError })
-        }
-      }
+      const toolUseBlocks = assistantContent.filter((b: any) => b.type === 'tool_use')
+      const batchResults = await this.parallelExecutor.executeBatch(
+        toolUseBlocks,
+        events.onToolEvent,
+        this.abortController!.signal
+      )
+      const toolResults = batchResults.map(r => ({
+        type: 'tool_result',
+        tool_use_id: r.tool_use_id,
+        content: r.content,
+        is_error: r.is_error,
+      }))
 
       const toolMessage: Message = {
         id: uuid(),
