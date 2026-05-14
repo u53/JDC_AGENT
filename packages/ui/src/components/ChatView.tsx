@@ -7,6 +7,7 @@ import { FileChangesPanel } from './FileChangesPanel'
 import { PermissionDialog } from './PermissionDialog'
 import { PromptInput } from './PromptInput'
 import { AgentDetailPanel } from './AgentDetailPanel'
+import { StatsCard } from './StatsCard'
 import { useSessionStore } from '../stores/session-store'
 import { useModelStore } from '../stores/model-store'
 import { useSettingsStore } from '../stores/settings-store'
@@ -174,8 +175,29 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
           })
         }
         break
+      case '/stats': {
+        if (!activeSessionId) break
+        Promise.all([
+          api?.invoke('session:switch', { sessionId: activeSessionId }),
+          api?.invoke('file:get-changes', { sessionId: activeSessionId }),
+        ]).then(([switchData, filesData]: [any, any]) => {
+          const usage = switchData?.usage
+          if (usage) {
+            const statsMsg = {
+              id: 'stats-' + Date.now(),
+              role: 'assistant' as const,
+              content: [{ type: 'text', text: `__STATS__${JSON.stringify({ ...usage, filesChanged: filesData?.length || 0 })}` }],
+              timestamp: Date.now(),
+            }
+            useSessionStore.setState((s: any) => ({ messages: [...s.messages, statsMsg] }))
+          } else {
+            showToast('暂无统计数据')
+          }
+        })
+        break
+      }
       case '/help':
-        showToast('/compact /clear /thinking /model /mcp /permission /commit /status')
+        showToast('/compact /thinking /model /mcp /permission /commit /status /stats')
         break
       default:
         sendMessage(command)

@@ -17,6 +17,11 @@ export function useSession() {
         store.appendThinkingText(sessionId, chunk.text)
       } else if (chunk.type === 'text_delta' && chunk.text) {
         store.appendStreamText(sessionId, chunk.text)
+      } else if (chunk.type === 'compact_complete' && chunk.compactInfo) {
+        const { originalCount, keptCount, memoriesExtracted } = chunk.compactInfo
+        const memText = memoriesExtracted > 0 ? ` ${memoriesExtracted} memories saved.` : ''
+        const compactMsg = `\n\n[Context compressed: ${originalCount} messages → summary + ${keptCount} recent.${memText}]\n`
+        store.appendStreamText(sessionId, compactMsg)
       }
     })
 

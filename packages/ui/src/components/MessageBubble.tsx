@@ -1,4 +1,5 @@
 import { MarkdownRenderer } from './MarkdownRenderer'
+import { StatsCard } from './StatsCard'
 import { ToolCardRouter } from './tool-cards'
 import type { ContentBlock, Message } from '@jdcagnet/core'
 
@@ -32,6 +33,12 @@ export function MessageBubble({ role, content, nextMessage }: Props) {
           )}
           {textBlocks.map((block, i) => {
             if (block.type === 'text') {
+              if (block.text.startsWith('__STATS__')) {
+                try {
+                  const data = JSON.parse(block.text.slice(9))
+                  return <StatsCard key={i} data={data} />
+                } catch { /* fall through to normal render */ }
+              }
               if (isUser) {
                 return (
                   <p key={i} className="text-sm text-[#EAEAEA] whitespace-pre-wrap">

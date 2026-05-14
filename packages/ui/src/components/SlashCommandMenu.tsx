@@ -13,6 +13,7 @@ const COMMANDS: SlashCommand[] = [
   { name: 'mcp', description: '显示 MCP 服务器状态' },
   { name: 'status', description: '显示会话状态和 token 使用' },
   { name: 'permission', description: '切换权限模式' },
+  { name: 'stats', description: '显示会话统计信息' },
   { name: 'help', description: '显示帮助信息' },
 ]
 
