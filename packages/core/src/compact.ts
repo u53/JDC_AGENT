@@ -17,18 +17,38 @@ Your summary should include:
 7. Current Work
 8. Next Step
 
-Wrap your analysis in <analysis> tags, then provide the summary in <summary> tags.`
+Wrap your analysis in <analysis> tags, then provide the summary in <summary> tags.
+
+Additionally, extract any persistent memories worth saving for future sessions.
+Only extract:
+- User preferences and feedback about how to work (type: "feedback")
+- Project decisions and context not derivable from code (type: "project")
+
+Output in <memories> tags as JSON array:
+[{"name": "slug-name", "type": "feedback|project", "description": "one line summary", "content": "memory content"}]
+
+If nothing worth saving, output <memories>[]</memories>`
 
 const KEEP_RECENT = 6
+
+export interface CompactResult {
+  messages: Message[]
+  originalCount: number
+  keptCount: number
+  rawOutput: string
+}
 
 export async function compactMessages(
   messages: Message[],
   provider: ModelProvider,
   config: ModelConfig,
   onChunk?: (chunk: StreamChunk) => void
-): Promise<Message[]> {
-  if (messages.length <= KEEP_RECENT) return messages
+): Promise<CompactResult> {
+  if (messages.length <= KEEP_RECENT) {
+    return { messages, originalCount: messages.length, keptCount: messages.length, rawOutput: '' }
+  }
 
+  const originalCount = messages.length
   const toCompress = messages.slice(0, messages.length - KEEP_RECENT)
   const toKeep = messages.slice(messages.length - KEEP_RECENT)
 
@@ -55,7 +75,12 @@ export async function compactMessages(
     timestamp: Date.now(),
   }
 
-  return [summaryMessage, ...toKeep]
+  return {
+    messages: [summaryMessage, ...toKeep],
+    originalCount,
+    keptCount: KEEP_RECENT + 1,
+    rawOutput: summaryText,
+  }
 }
 
 function formatCompactSummary(raw: string): string {

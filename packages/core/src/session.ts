@@ -5,12 +5,13 @@ import { ToolRegistry } from './tool-registry.js'
 import { ToolRunner, type ToolExecutionEvent, type PermissionCallback } from './tool-runner.js'
 import { registerBuiltinTools } from './tools/index.js'
 import { ConversationHistory } from './history.js'
-import { assembleSystemPrompt } from './context.js'
+import { assembleSystemPrompt, getMemoryDir } from './context.js'
 import { loadAppConfig } from './config.js'
 import { PermissionChecker } from './permissions.js'
 import { TaskStore } from './task-store.js'
 import { estimateTokens } from './token-estimation.js'
 import { compactMessages } from './compact.js'
+import { parseMemories, saveMemories } from './memory-extractor.js'
 import { createTaskCreateTool } from './tools/task-create.js'
 import { createTaskGetTool } from './tools/task-get.js'
 import { createTaskListTool } from './tools/task-list.js'
@@ -285,7 +286,28 @@ export class Session {
 
   private async compact(events: SessionEvents): Promise<void> {
     events.onStreamChunk({ type: 'text_delta', text: '\n[Compressing context...]\n' })
-    this.messages = await compactMessages(this.messages, this.provider, this.config.modelConfig, events.onStreamChunk)
+    const result = await compactMessages(this.messages, this.provider, this.config.modelConfig, events.onStreamChunk)
+    this.messages = result.messages
+
+    // Extract and save memories
+    let memoriesExtracted = 0
+    if (result.rawOutput) {
+      const memories = parseMemories(result.rawOutput)
+      if (memories.length > 0) {
+        const memDir = getMemoryDir(this.config.cwd)
+        memoriesExtracted = await saveMemories(memories, memDir, this.id)
+      }
+    }
+
+    // Emit compact_complete
+    events.onStreamChunk({
+      type: 'compact_complete',
+      compactInfo: {
+        originalCount: result.originalCount,
+        keptCount: result.keptCount,
+        memoriesExtracted,
+      },
+    })
   }
 
   private async runLoop(events: SessionEvents): Promise<void> {

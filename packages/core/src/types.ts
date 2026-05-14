@@ -46,7 +46,7 @@ export interface ToolDefinition {
 }
 
 export interface StreamChunk {
-  type: 'text_delta' | 'thinking_delta' | 'tool_use_start' | 'tool_use_delta' | 'tool_use_end' | 'message_end'
+  type: 'text_delta' | 'thinking_delta' | 'tool_use_start' | 'tool_use_delta' | 'tool_use_end' | 'message_end' | 'compact_complete'
   text?: string
   toolUse?: { id: string; name: string; input: string }
   usage?: {
@@ -54,6 +54,11 @@ export interface StreamChunk {
     outputTokens: number
     cacheCreationInputTokens?: number
     cacheReadInputTokens?: number
+  }
+  compactInfo?: {
+    originalCount: number
+    keptCount: number
+    memoriesExtracted: number
   }
 }
 
