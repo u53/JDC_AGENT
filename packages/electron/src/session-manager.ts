@@ -308,10 +308,9 @@ export class SessionManager {
   async compactSession(sessionId: string): Promise<void> {
     const session = this.sessions.get(sessionId)
     if (!session) return
+
     const events: SessionEvents = {
-      onStreamChunk: (chunk: StreamChunk) => {
-        this.window?.webContents.send('query:stream', { sessionId, chunk })
-      },
+      onStreamChunk: () => {},
       onToolEvent: () => {},
       onMessageComplete: () => {},
       onError: (error) => {

@@ -121,8 +121,12 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     switch (command) {
       case '/compact':
         if (activeSessionId && api?.compactSession) {
-          showToast('正在压缩上下文...')
-          api.compactSession(activeSessionId)
+          showToast('Compressing context...')
+          api.compactSession(activeSessionId).then(() => {
+            showToast('Context compressed')
+          }).catch(() => {
+            showToast('Compression failed')
+          })
         }
         break
       case '/clear':
