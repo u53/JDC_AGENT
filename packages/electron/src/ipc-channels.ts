@@ -34,4 +34,5 @@ export const IPC_CHANNELS = {
   FILE_REWIND_TURN: 'file:rewind-turn',
   PLAN_REVIEW: 'plan:review',
   PLAN_RESPOND: 'plan:respond',
+  SESSION_GET_TASKS: 'session:get-tasks',
 } as const

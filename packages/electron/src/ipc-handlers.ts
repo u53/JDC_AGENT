@@ -121,4 +121,8 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
     console.log('[IPC] file:rewind-turn called', sessionId, turnIndex)
     return sessionManager.rewindToTurn(sessionId, turnIndex)
   })
+
+  ipcMain.handle(IPC_CHANNELS.SESSION_GET_TASKS, async (_event, { sessionId }) => {
+    return sessionManager.getTasks(sessionId)
+  })
 }

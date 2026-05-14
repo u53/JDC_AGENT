@@ -39,6 +39,7 @@ interface SessionState {
   messages: any[]
   isLoading: boolean
   sessionStates: Record<string, SessionStreamState>
+  tasks: Array<{ id: string; subject: string; description: string; status: string }>
   loadProjects: () => Promise<void>
   createSession: (cwd: string) => Promise<void>
   switchSession: (sessionId: string) => Promise<void>
@@ -55,6 +56,7 @@ interface SessionState {
   finishSession: (sessionId: string) => void
   dismissFinished: (sessionId: string) => void
   updateUsage: (sessionId: string, usage: SessionStreamState['usage']) => void
+  loadTasks: (sessionId: string) => Promise<void>
 }
 
 export const useSessionStore = create<SessionState>((set, get) => ({
@@ -63,6 +65,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   messages: [],
   isLoading: false,
   sessionStates: {},
+  tasks: [],
 
   loadProjects: async () => {
     const projects = await ipc.session.list()
@@ -223,5 +226,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         },
       }
     })
+  },
+
+  loadTasks: async (sessionId: string) => {
+    const tasks = await (window as any).electronAPI?.invoke('session:get-tasks', { sessionId })
+    if (tasks) set({ tasks })
   },
 }))

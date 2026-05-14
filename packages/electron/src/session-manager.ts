@@ -378,6 +378,10 @@ export class SessionManager {
     return session?.getPlanMode() || 'normal'
   }
 
+  getTasks(sessionId: string) {
+    return this.history.getTasks(sessionId)
+  }
+
   saveMcpServers(servers: Record<string, McpServerConfig>, scope: 'global' | 'project', cwd?: string): void {
     saveMcpConfig(servers, scope, cwd)
   }
