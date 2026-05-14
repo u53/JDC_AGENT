@@ -26,6 +26,8 @@ import { createReadMcpResourceTool } from './tools/read-mcp-resource.js'
 import { loadHookConfig, HookEngine } from './hooks/index.js'
 import { SkillLoader } from './skills/loader.js'
 import { createSkillTool } from './tools/skill.js'
+import { createEnterPlanModeTool, isPlanModeToolAllowed } from './tools/enter-plan-mode.js'
+import { createExitPlanModeTool } from './tools/exit-plan-mode.js'
 import { createAgentTool } from './tools/agent.js'
 import { classifyError, getMaxRetries, getRetryDelay } from './retry.js'
 import { UsageTracker, type UsageSnapshot } from './usage-tracker.js'
@@ -70,8 +72,17 @@ export class Session {
   private fileTracker: FileTracker
   private backgroundTasks: BackgroundTaskManager
   private turnIndex = 0
+  private planMode: 'normal' | 'planning' | 'awaiting_approval' = 'normal'
+  private onPlanReview?: (planFile: string, content: string) => Promise<{ approved: boolean; feedback?: string }>
 
-  constructor(config: SessionConfig, provider: ModelProvider, history: ConversationHistory, onPermissionRequest?: PermissionCallback, mcpManager?: McpManager) {
+  constructor(
+    config: SessionConfig,
+    provider: ModelProvider,
+    history: ConversationHistory,
+    onPermissionRequest?: PermissionCallback,
+    mcpManager?: McpManager,
+    onPlanReview?: (planFile: string, content: string) => Promise<{ approved: boolean; feedback?: string }>
+  ) {
     this.id = config.id
     this.config = config
     this.provider = provider
@@ -79,6 +90,7 @@ export class Session {
     this.usageTracker = new UsageTracker(config.modelConfig.contextWindow || 200000)
     this.fileTracker = new FileTracker(history, config.id)
     this.backgroundTasks = new BackgroundTaskManager(path.join(getConfigDir(), 'tasks'))
+    this.onPlanReview = onPlanReview
     this.toolRegistry = new ToolRegistry()
     registerBuiltinTools(this.toolRegistry)
     this.toolRegistry.register(createTaskCreateTool(this.taskStore))
@@ -89,6 +101,23 @@ export class Session {
     this.toolRegistry.register(createTodoWriteTool(this.taskStore))
     this.toolRegistry.register(createTaskOutputTool(this.backgroundTasks))
     this.toolRegistry.register(monitorTool)
+    this.toolRegistry.register(createEnterPlanModeTool(() => {
+      this.planMode = 'planning'
+      this.toolRunner.planMode = 'planning'
+    }))
+    this.toolRegistry.register(createExitPlanModeTool(async (planFile, content) => {
+      this.planMode = 'awaiting_approval'
+      this.toolRunner.planMode = 'awaiting_approval'
+      if (!this.onPlanReview) {
+        this.planMode = 'normal'
+        this.toolRunner.planMode = 'normal'
+        return { approved: true }
+      }
+      const result = await this.onPlanReview(planFile, content)
+      this.planMode = result.approved ? 'normal' : 'planning'
+      this.toolRunner.planMode = this.planMode
+      return result
+    }))
     this.mcpManager = mcpManager
     if (mcpManager) {
       const mcpTools = mcpManager.getTools()
@@ -109,6 +138,7 @@ export class Session {
     this.toolRunner = new ToolRunner(this.toolRegistry, config.cwd, this.permissionChecker, onPermissionRequest)
     this.toolRunner.fileTracker = this.fileTracker
     this.toolRunner.backgroundTasks = this.backgroundTasks
+    this.toolRunner.planModeCwd = this.config.cwd
     this.parallelExecutor = new ParallelExecutor(this.toolRunner)
 
     // Asynchronously load hooks and rebuild ToolRunner
@@ -154,6 +184,7 @@ export class Session {
       )
       this.toolRunner.fileTracker = this.fileTracker
       this.toolRunner.backgroundTasks = this.backgroundTasks
+      this.toolRunner.planModeCwd = this.config.cwd
       this.parallelExecutor = new ParallelExecutor(this.toolRunner)
     } catch {
       // Hooks are optional — if loading fails, continue without them
@@ -227,6 +258,10 @@ export class Session {
 
   getFileTracker(): FileTracker {
     return this.fileTracker
+  }
+
+  getPlanMode(): string {
+    return this.planMode
   }
 
   loadHistory(): void {

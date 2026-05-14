@@ -24,6 +24,8 @@ export class ToolRunner {
   fileTracker?: FileTracker
   backgroundTasks?: import('./background-tasks.js').BackgroundTaskManager
   turnIndex = 0
+  planMode: 'normal' | 'planning' | 'awaiting_approval' = 'normal'
+  planModeCwd?: string
 
   constructor(
     registry: ToolRegistry,
@@ -72,6 +74,19 @@ export class ToolRunner {
       if (!allowed) {
         this.permissionChecker.recordDenial(toolName, input)
         const result: ToolResult = { content: `Permission denied by user: ${toolName}`, isError: true }
+        onEvent({ type: 'error', toolName, toolUseId, result })
+        return result
+      }
+    }
+
+    // Plan mode restriction check
+    if (this.planMode === 'planning' && toolName !== 'enter_plan_mode') {
+      const { isPlanModeToolAllowed } = await import('./tools/enter-plan-mode.js')
+      if (!isPlanModeToolAllowed(toolName, input, this.planModeCwd || this.cwd)) {
+        const result: ToolResult = {
+          content: `Cannot use ${toolName} in plan mode. Only read operations and writing plan files are allowed.`,
+          isError: true,
+        }
         onEvent({ type: 'error', toolName, toolUseId, result })
         return result
       }
