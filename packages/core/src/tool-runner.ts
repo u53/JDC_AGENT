@@ -69,6 +69,7 @@ export class ToolRunner {
       }
       const allowed = await this.onPermissionRequest({ toolName, input })
       if (!allowed) {
+        this.permissionChecker.recordDenial(toolName, input)
         const result: ToolResult = { content: `Permission denied by user: ${toolName}`, isError: true }
         onEvent({ type: 'error', toolName, toolUseId, result })
         return result

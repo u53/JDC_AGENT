@@ -95,7 +95,7 @@ export class Session {
       this.toolRegistry.register(createReadMcpResourceTool(mcpManager))
     }
     // Initialize ToolRunner without hooks first (will be updated once hooks load)
-    this.permissionChecker = new PermissionChecker()
+    this.permissionChecker = new PermissionChecker('standard', config.cwd)
     this.toolRunner = new ToolRunner(this.toolRegistry, config.cwd, this.permissionChecker, onPermissionRequest)
     this.toolRunner.fileTracker = this.fileTracker
     this.parallelExecutor = new ParallelExecutor(this.toolRunner)
