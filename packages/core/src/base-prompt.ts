@@ -400,7 +400,9 @@ The following MCP (Model Context Protocol) servers are connected and provide add
 ${serverList}
 
 MCP tools are prefixed with \`mcp__<server_name>__<tool_name>\`. Use them like any other tool.
-You can also use \`list_mcp_resources\` to discover available resources and \`read_mcp_resource\` to read them.`
+You can also use \`list_mcp_resources\` to discover available resources and \`read_mcp_resource\` to read them.
+
+**Important:** If a server provides "Instructions" above, you MUST follow those instructions when using that server's tools. Server instructions may specify when to use the tools, required parameters, or behavioral constraints.`
 }
 
 function getConfigurationSection(env: PromptEnvironment): string {
@@ -434,6 +436,8 @@ Format:
 
 When the user asks to add an MCP server, write to the project-level file (\`${env.cwd}/.jdcagnet/mcp-servers.json\`) by default. Use global only if the user explicitly says "global" or the server is not project-specific.
 
+**After writing the config file:** Tell the user to open the MCP panel (\`/mcp\`) and reconnect the server. The server will not auto-connect from a file write alone — it requires a UI reconnect or app restart.
+
 ## Skills
 
 Skills are reusable instruction templates (markdown files with YAML frontmatter).
@@ -461,6 +465,8 @@ Skill instructions here. Use \${1}, \${2} for argument substitution.
 \`\`\`
 
 When the user asks to create a skill, write to the project-level directory (\`${env.cwd}/.jdcagnet/skills/\`) by default. Use global only if the user explicitly says "global" or the skill is not project-specific.
+
+**After writing the skill file:** The skill will be available in the next session. It will NOT appear in the current session's skill list — tell the user to start a new session to use it.
 
 ## Hooks
 
@@ -491,6 +497,8 @@ Format:
 
 Matcher patterns: \`"*"\` (all tools), \`"ToolName"\` (exact), \`"mcp__*"\` (prefix).
 Hook input is passed via stdin as JSON. Hook stdout is parsed as JSON: \`{"decision": "block", "reason": "..."}\` to block, or empty/allow to proceed.
+
+**After writing hooks:** Hooks take effect in the next session. Tell the user to start a new session for the hooks to activate.
 
 ## Project Instructions
 

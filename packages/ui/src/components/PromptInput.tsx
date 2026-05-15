@@ -10,6 +10,10 @@ interface Props {
   onEnqueue?: (text: string) => void
   permissionMode?: string
   onPermissionChange?: (mode: string) => void
+  thinkingEnabled?: boolean
+  onThinkingToggle?: () => void
+  planMode?: boolean
+  onPlanToggle?: () => void
   modelName?: string
   modelId?: string
   models?: { id: string; name: string; groupName: string }[]
@@ -18,7 +22,7 @@ interface Props {
   skills?: { name: string; description: string }[]
 }
 
-export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, onEnqueue, permissionMode = 'standard', onPermissionChange, modelName, modelId, models, onModelChange, onModelClick, skills }: Props) {
+export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, onEnqueue, permissionMode = 'standard', onPermissionChange, thinkingEnabled, onThinkingToggle, planMode, onPlanToggle, modelName, modelId, models, onModelChange, onModelClick, skills }: Props) {
   const [text, setText] = useState('')
   const [images, setImages] = useState<{ data: string; mediaType: string }[]>([])
   const [showSlashMenu, setShowSlashMenu] = useState(false)
@@ -77,8 +81,13 @@ export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, onEn
 
   const handleSlashSelect = (cmd: SlashCommand) => {
     setShowSlashMenu(false)
-    setText('')
-    onSlashCommand?.(`/${cmd.name}`)
+    if (cmd.section === 'skill') {
+      setText(`/${cmd.name} `)
+      textareaRef.current?.focus()
+    } else {
+      setText('')
+      onSlashCommand?.(`/${cmd.name}`)
+    }
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -160,6 +169,20 @@ export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, onEn
                 </div>
               )}
             </div>
+            <button
+              onClick={onThinkingToggle}
+              className={`flex items-center gap-1 transition-colors ${thinkingEnabled ? 'text-[#4AF626]' : 'text-[#666] hover:text-[#EAEAEA]'}`}
+            >
+              <span className={`inline-block h-1.5 w-1.5 rounded-full ${thinkingEnabled ? 'bg-[#4AF626]' : 'bg-[#666]'}`} />
+              推理
+            </button>
+            <button
+              onClick={onPlanToggle}
+              className={`flex items-center gap-1 transition-colors ${planMode ? 'text-purple-400' : 'text-[#666] hover:text-[#EAEAEA]'}`}
+            >
+              <span className={`inline-block h-1.5 w-1.5 rounded-full ${planMode ? 'bg-purple-400' : 'bg-[#666]'}`} />
+              规划
+            </button>
           </div>
           <div className="flex items-center gap-3">
             <div className="relative">

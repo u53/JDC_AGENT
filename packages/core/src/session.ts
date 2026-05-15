@@ -295,7 +295,7 @@ export class Session {
       toolDefs,
       toolNames,
       mcpServers,
-      skills: this.skillLoader.getAll().map(s => ({ name: s.name, description: s.description })),
+      skills: this.skillLoader.getAll().map(s => ({ name: s.name, description: s.description, argumentHint: s.argumentHint })),
       language: appConfig.language,
       customInstructions: appConfig.customInstructions,
     })

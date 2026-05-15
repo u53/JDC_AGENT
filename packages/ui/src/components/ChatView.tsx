@@ -8,6 +8,7 @@ import { TaskPanel } from './TaskPanel'
 import { QueueIndicator } from './QueueIndicator'
 import { PermissionDialog } from './PermissionDialog'
 import { PlanReviewDialog } from './PlanReviewDialog'
+import { HelpDialog } from './HelpDialog'
 import { PromptInput } from './PromptInput'
 import { AgentDetailPanel } from './AgentDetailPanel'
 import { StatsCard } from './StatsCard'
@@ -73,6 +74,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   const [toast, setToast] = useState<string | null>(null)
   const [skills, setSkills] = useState<{ name: string; description: string }[]>([])
   const [planMode, setPlanModeState] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
 
   const activeModel = getActiveModel()
 
@@ -140,6 +142,29 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     setTimeout(() => setToast(null), 2500)
   }, [])
 
+  const handleThinkingToggle = useCallback(() => {
+    const api = (window as any).electronAPI
+    setThinkingEnabled(prev => {
+      const next = !prev
+      localStorage.setItem('jdcagnet-thinking', String(next))
+      if (activeSessionId && api?.setThinking) {
+        api.setThinking(activeSessionId, next)
+      }
+      showToast(next ? '推理模式: 开启' : '推理模式: 关闭')
+      return next
+    })
+  }, [activeSessionId, showToast])
+
+  const handlePlanToggle = useCallback(() => {
+    const api = (window as any).electronAPI
+    if (activeSessionId && api?.setPlanMode) {
+      const next = !planMode
+      api.setPlanMode(activeSessionId, next ? 'planning' : 'normal')
+      setPlanModeState(next)
+      showToast(next ? '规划模式: 开启' : '规划模式: 关闭')
+    }
+  }, [activeSessionId, planMode, showToast])
+
   const visibleMessages = messages.filter(msg => {
     if (msg.role === 'user' && Array.isArray(msg.content) && msg.content.every((b: any) => b.type === 'tool_result')) return false
     return true
@@ -162,15 +187,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         }
         break
       case '/thinking':
-        setThinkingEnabled(prev => {
-          const next = !prev
-          localStorage.setItem('jdcagnet-thinking', String(next))
-          if (activeSessionId && api?.setThinking) {
-            api.setThinking(activeSessionId, next)
-          }
-          showToast(next ? '推理模式: 开启' : '推理模式: 关闭')
-          return next
-        })
+        handleThinkingToggle()
         break
       case '/model':
         openSettings()
@@ -225,18 +242,11 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         })
         break
       }
-      case '/plan': {
-        const api2 = (window as any).electronAPI
-        if (activeSessionId && api2?.setPlanMode) {
-          const next = !planMode
-          api2.setPlanMode(activeSessionId, next ? 'planning' : 'normal')
-          setPlanModeState(next)
-          showToast(next ? '规划模式: 开启' : '规划模式: 关闭')
-        }
+      case '/plan':
+        handlePlanToggle()
         break
-      }
       case '/help':
-        showToast('/compact /thinking /model /mcp /permission /commit /status /stats')
+        setShowHelp(true)
         break
       default:
         sendMessage(command)
@@ -350,6 +360,10 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         onEnqueue={enqueueMessage}
         permissionMode={permissionMode}
         onPermissionChange={handlePermissionChange}
+        thinkingEnabled={thinkingEnabled}
+        onThinkingToggle={handleThinkingToggle}
+        planMode={planMode}
+        onPlanToggle={handlePlanToggle}
         modelName={activeModel?.model.name}
         modelId={activeModelId ?? undefined}
         models={allModels}
@@ -357,6 +371,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         onModelClick={openSettings}
         skills={skills}
       />
+      <HelpDialog visible={showHelp} onClose={() => setShowHelp(false)} />
       </div>
 
       {/* Right: agent detail panel */}
