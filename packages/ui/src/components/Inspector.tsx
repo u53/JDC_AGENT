@@ -27,6 +27,13 @@ export function Inspector() {
   const [expanded, setExpanded] = useState(false)
   const [activeSection, setActiveSection] = useState<SectionId | null>(null)
   const [fileChanges, setFileChanges] = useState<FileChange[]>([])
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth)
+
+  useEffect(() => {
+    const handler = () => setWindowWidth(window.innerWidth)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
 
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const sessionStates = useSessionStore((s) => s.sessionStates)
@@ -59,8 +66,13 @@ export function Inspector() {
     }
   }, [isStreaming, loadFileChanges])
 
+  // Hide entirely on very narrow windows
+  if (windowWidth < 700) return null
+
   const toggleSection = (section: SectionId) => {
     if (!expanded) {
+      // Disable expand on narrow windows
+      if (windowWidth < 900) return
       setExpanded(true)
       setActiveSection(section)
     } else if (activeSection === section) {
@@ -89,6 +101,7 @@ export function Inspector() {
             key={id}
             onClick={() => toggleSection(id)}
             className="relative p-2 rounded-[6px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]"
+            aria-label={id}
           >
             <Icon size={18} />
             {badge != null && badge > 0 && (
@@ -110,6 +123,7 @@ export function Inspector() {
         <button
           onClick={() => { setExpanded(false); setActiveSection(null) }}
           className="p-1 rounded-[6px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]"
+          aria-label="Close inspector"
         >
           <IconX size={14} />
         </button>
@@ -126,6 +140,7 @@ export function Inspector() {
                 ? 'bg-[var(--accent-soft)] text-[var(--accent)]'
                 : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'
             }`}
+            aria-label={id}
           >
             <Icon size={16} />
             {badge != null && badge > 0 && (

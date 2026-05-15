@@ -18,12 +18,13 @@ function CodeBlock({ className, children }: { className?: string; children: stri
   }
 
   return (
-    <div className="relative my-3 border border-[#333] bg-[#050505]">
-      <div className="flex items-center justify-between px-3 py-1 border-b border-[#333] text-[10px] uppercase tracking-wider text-[#666]">
+    <div className="relative my-3 border border-[var(--border)] bg-[var(--surface-2)] rounded-[8px] overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-1 border-b border-[var(--border)] text-[10px] uppercase tracking-wider text-[var(--muted)]">
         <span>{language || 'code'}</span>
         <button
           onClick={handleCopy}
-          className="text-[#666] hover:text-[#4AF626] transition-colors cursor-pointer"
+          className="text-[var(--muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+          aria-label="Copy code"
         >
           {copied ? 'copied' : 'copy'}
         </button>
@@ -40,6 +41,7 @@ export function MarkdownRenderer({ content }: Props) {
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[rehypeHighlight]}
+      className="prose"
       components={{
         code(props: ComponentPropsWithoutRef<'code'>) {
           const { className, children, ...rest } = props
@@ -52,7 +54,8 @@ export function MarkdownRenderer({ content }: Props) {
 
           return (
             <code
-              className="bg-[#1a1a1a] text-[#4AF626] px-1.5 py-0.5 text-[0.85em] border border-[#333]"
+              className="bg-[var(--surface-2)] text-[var(--text)] px-1.5 py-0.5 text-[0.85em] border border-[var(--border)] rounded-[4px]"
+              style={{ fontFamily: 'var(--font-mono)' }}
               {...rest}
             >
               {children}
@@ -75,7 +78,7 @@ export function MarkdownRenderer({ content }: Props) {
             <a
               href={href}
               onClick={handleClick}
-              className="text-[#4AF626] underline underline-offset-2 hover:text-[#6fff4a] transition-colors"
+              className="text-[var(--accent)] underline underline-offset-2 hover:opacity-80 transition-colors"
             >
               {children}
             </a>
@@ -84,7 +87,7 @@ export function MarkdownRenderer({ content }: Props) {
         table({ children }) {
           return (
             <div className="overflow-x-auto my-3">
-              <table className="w-full border-collapse border border-[#333] text-xs">
+              <table className="w-full border-collapse border border-[var(--border)] text-xs">
                 {children}
               </table>
             </div>
@@ -92,31 +95,31 @@ export function MarkdownRenderer({ content }: Props) {
         },
         th({ children }) {
           return (
-            <th className="border border-[#333] bg-[#111] px-3 py-1.5 text-left text-[#4AF626] font-medium">
+            <th className="border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-left text-[var(--text)] font-medium">
               {children}
             </th>
           )
         },
         td({ children }) {
           return (
-            <td className="border border-[#333] px-3 py-1.5">{children}</td>
+            <td className="border border-[var(--border)] px-3 py-1.5">{children}</td>
           )
         },
         blockquote({ children }) {
           return (
-            <blockquote className="border-l-2 border-[#4AF626] pl-3 my-2 text-[#999]">
+            <blockquote className="border-l-2 border-[var(--border-strong)] pl-3 my-2 text-[var(--muted)]">
               {children}
             </blockquote>
           )
         },
         h1({ children }) {
-          return <h1 className="text-xl font-bold mt-4 mb-2 text-[#EAEAEA]">{children}</h1>
+          return <h1 className="text-xl font-bold mt-4 mb-2 text-[var(--text)]" style={{ fontFamily: 'var(--font-serif)' }}>{children}</h1>
         },
         h2({ children }) {
-          return <h2 className="text-lg font-bold mt-3 mb-2 text-[#EAEAEA]">{children}</h2>
+          return <h2 className="text-lg font-bold mt-3 mb-2 text-[var(--text)]" style={{ fontFamily: 'var(--font-serif)' }}>{children}</h2>
         },
         h3({ children }) {
-          return <h3 className="text-base font-bold mt-2 mb-1 text-[#EAEAEA]">{children}</h3>
+          return <h3 className="text-base font-bold mt-2 mb-1 text-[var(--text)]" style={{ fontFamily: 'var(--font-serif)' }}>{children}</h3>
         },
         ul({ children }) {
           return <ul className="list-disc list-inside my-2 space-y-1">{children}</ul>
@@ -125,7 +128,7 @@ export function MarkdownRenderer({ content }: Props) {
           return <ol className="list-decimal list-inside my-2 space-y-1">{children}</ol>
         },
         hr() {
-          return <hr className="border-[#333] my-4" />
+          return <hr className="border-[var(--border)] my-4" />
         },
       }}
     >
