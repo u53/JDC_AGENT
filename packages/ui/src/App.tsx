@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Topbar } from './components/Topbar'
 import { Sidebar } from './components/Sidebar'
 import { ChatView } from './components/ChatView'
 import { UsageHUD } from './components/UsageHUD'
-import { ModelManager } from './components/ModelManager'
-import { McpSettings } from './components/McpSettings'
+import { SettingsOverlay } from './components/SettingsOverlay'
 import { ProjectPage } from './components/ProjectPage'
 import { AskUserDialog } from './components/AskUserDialog'
 import { Inspector } from './components/Inspector'
@@ -19,7 +18,6 @@ export function App() {
   const deleteSession = useSessionStore((s) => s.deleteSession)
   const switchSession = useSessionStore((s) => s.switchSession)
   const loadModels = useModelStore((s) => s.loadFromConfig)
-  const [mcpOpen, setMcpOpen] = useState(false)
   const settingsIsOpen = useSettingsStore((s) => s.isOpen)
   const openSettings = useSettingsStore((s) => s.open)
   const closeSettings = useSettingsStore((s) => s.close)
@@ -91,16 +89,15 @@ export function App() {
         <Sidebar />
         <div className="flex-1 flex flex-col overflow-hidden border-l border-[var(--border)]">
           {activeSessionId ? (
-            <ChatView onOpenMcp={() => setMcpOpen(true)} />
+            <ChatView onOpenMcp={() => openSettings('mcp')} />
           ) : (
             <ProjectPage />
           )}
-          <UsageHUD onOpenMcp={() => setMcpOpen(true)} onOpenSettings={openSettings} />
+          <UsageHUD onOpenMcp={() => openSettings('mcp')} onOpenSettings={openSettings} />
         </div>
         <Inspector />
       </div>
-      <ModelManager />
-      <McpSettings isOpen={mcpOpen} onClose={() => setMcpOpen(false)} />
+      <SettingsOverlay />
       <AskUserDialog />
     </div>
   )

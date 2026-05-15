@@ -1,0 +1,376 @@
+import { useState, useEffect } from 'react'
+import { useSettingsStore, type SettingsTab } from '../stores/settings-store'
+import { useModelStore, type ApiProtocol, type ModelGroup } from '../stores/model-store'
+import { ThemeSegmented } from './ThemeSegmented'
+import { IconX } from './icons'
+import type { McpServerState } from '../lib/ipc-client'
+
+const TABS: { key: SettingsTab; label: string }[] = [
+  { key: 'appearance', label: '外观' },
+  { key: 'models', label: '模型' },
+  { key: 'mcp', label: 'MCP' },
+  { key: 'shortcuts', label: '快捷键' },
+  { key: 'advanced', label: '高级' },
+]
+
+export function SettingsOverlay() {
+  const isOpen = useSettingsStore((s) => s.isOpen)
+  const activeTab = useSettingsStore((s) => s.activeTab)
+  const close = useSettingsStore((s) => s.close)
+  const setActiveTab = useSettingsStore((s) => s.setActiveTab)
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+      <div
+        className="w-[680px] max-h-[80vh] flex border border-[var(--border)] rounded-[14px] bg-[var(--surface)] overflow-hidden"
+        style={{ boxShadow: 'var(--shadow-soft)' }}
+      >
+        {/* Left nav */}
+        <div className="w-[160px] bg-[var(--surface-2)] border-r border-[var(--border)] py-4 flex flex-col gap-1 px-2">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`w-full text-left px-3 py-2 rounded-[6px] text-[13px] transition-colors ${
+                activeTab === tab.key
+                  ? 'bg-[var(--accent-soft)] text-[var(--accent)]'
+                  : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-3)]'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Right content */}
+        <div className="flex-1 overflow-y-auto p-6 relative">
+          <button
+            onClick={close}
+            className="absolute top-4 right-4 text-[var(--muted)] hover:text-[var(--text)] transition-colors"
+          >
+            <IconX size={18} />
+          </button>
+
+          {activeTab === 'appearance' && <AppearanceTab />}
+          {activeTab === 'models' && <ModelsTab />}
+          {activeTab === 'mcp' && <McpTab />}
+          {activeTab === 'shortcuts' && <ShortcutsTab />}
+          {activeTab === 'advanced' && <AdvancedTab />}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ─── Appearance ─── */
+function AppearanceTab() {
+  return (
+    <div>
+      <h3 className="text-[13px] font-medium text-[var(--text)] mb-3">主题</h3>
+      <ThemeSegmented />
+    </div>
+  )
+}
+
+/* ─── Advanced ─── */
+function AdvancedTab() {
+  return <p className="text-[13px] text-[var(--muted)]">更多设置即将推出</p>
+}
+
+/* ─── Shortcuts ─── */
+const SHORTCUTS = [
+  { keys: '⌘ N', desc: '新建会话' },
+  { keys: '⌘ W', desc: '关闭会话' },
+  { keys: '⌘ K', desc: '清空对话' },
+  { keys: '⌘ ,', desc: '打开设置' },
+  { keys: 'Escape', desc: '停止生成' },
+  { keys: 'Shift+Tab', desc: '计划模式' },
+  { keys: '⌘ 1-9', desc: '切换会话' },
+]
+
+function ShortcutsTab() {
+  return (
+    <table className="w-full text-[13px]">
+      <thead>
+        <tr className="text-left text-[var(--muted)] border-b border-[var(--border)]">
+          <th className="pb-2 font-normal">快捷键</th>
+          <th className="pb-2 font-normal">描述</th>
+        </tr>
+      </thead>
+      <tbody>
+        {SHORTCUTS.map((s) => (
+          <tr key={s.keys} className="border-b border-[var(--border)]">
+            <td className="py-2 font-mono text-[12px] text-[var(--text)]">{s.keys}</td>
+            <td className="py-2 text-[var(--muted)]">{s.desc}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+/* ─── Models ─── */
+function formatContextWindow(n: number): string {
+  if (n >= 1000000) return `${(n / 1000000).toFixed(n % 1000000 === 0 ? 0 : 1)}M`
+  if (n >= 1000) return `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}K`
+  return String(n)
+}
+
+function ModelsTab() {
+  const { groups, addGroup, removeGroup, updateGroup, addModel, removeModel, loadFromConfig } = useModelStore()
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null)
+  const [showNewGroup, setShowNewGroup] = useState(false)
+  const [newGroupName, setNewGroupName] = useState('')
+  const [newGroupProtocol, setNewGroupProtocol] = useState<ApiProtocol>('anthropic')
+  const [newGroupUrl, setNewGroupUrl] = useState('')
+  const [newGroupKey, setNewGroupKey] = useState('')
+
+  useEffect(() => { loadFromConfig() }, [loadFromConfig])
+
+  const handleAddGroup = () => {
+    if (!newGroupName.trim()) return
+    addGroup(newGroupName.trim(), newGroupProtocol, newGroupUrl.trim(), newGroupKey.trim())
+    setNewGroupName('')
+    setNewGroupProtocol('anthropic')
+    setNewGroupUrl('')
+    setNewGroupKey('')
+    setShowNewGroup(false)
+  }
+
+  const inputCls = 'w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-[6px] px-3 py-2 text-[13px] text-[var(--text)] outline-none focus:border-[var(--border-strong)]'
+  const btnPrimary = 'bg-[var(--accent)] text-[var(--accent-ink)] rounded-[6px] px-3 py-1.5 text-[12px]'
+  const btnGhost = 'border border-[var(--border)] rounded-[6px] px-3 py-1.5 text-[12px] text-[var(--muted)] hover:text-[var(--text)]'
+
+  return (
+    <div>
+      <button onClick={() => setShowNewGroup(true)} className={btnPrimary + ' mb-4'}>
+        + 新建分组
+      </button>
+
+      {showNewGroup && (
+        <div className="mb-4 border border-[var(--border)] rounded-[6px] p-4 space-y-3">
+          <input value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} placeholder="分组名称" className={inputCls} />
+          <select value={newGroupProtocol} onChange={(e) => setNewGroupProtocol(e.target.value as ApiProtocol)} className={inputCls}>
+            <option value="anthropic">Anthropic (/v1/messages)</option>
+            <option value="openai">OpenAI (/v1/chat/completions)</option>
+            <option value="openai-responses">OpenAI Responses (/v1/responses)</option>
+          </select>
+          <input value={newGroupUrl} onChange={(e) => setNewGroupUrl(e.target.value)} placeholder="Base URL" className={inputCls} />
+          <input type="password" value={newGroupKey} onChange={(e) => setNewGroupKey(e.target.value)} placeholder="API Key" className={inputCls} />
+          <div className="flex gap-2">
+            <button onClick={handleAddGroup} className={btnPrimary}>确认</button>
+            <button onClick={() => setShowNewGroup(false)} className={btnGhost}>取消</button>
+          </div>
+        </div>
+      )}
+
+      {groups.map((group) => (
+        <ModelGroupCard
+          key={group.id}
+          group={group}
+          expanded={expandedGroupId === group.id}
+          onToggle={() => setExpandedGroupId(expandedGroupId === group.id ? null : group.id)}
+          onDelete={() => removeGroup(group.id)}
+          onUpdate={(updates) => updateGroup(group.id, updates)}
+          onAddModel={(model) => addModel(group.id, model)}
+          onRemoveModel={(modelId) => removeModel(group.id, modelId)}
+        />
+      ))}
+
+      {groups.length === 0 && !showNewGroup && (
+        <p className="text-[13px] text-[var(--muted)] text-center py-8">暂无分组，点击上方按钮创建</p>
+      )}
+    </div>
+  )
+}
+
+/* ─── Model Group Card ─── */
+interface ModelGroupCardProps {
+  group: ModelGroup
+  expanded: boolean
+  onToggle: () => void
+  onDelete: () => void
+  onUpdate: (updates: Partial<Omit<ModelGroup, 'id' | 'models'>>) => void
+  onAddModel: (model: { modelId: string; name: string; contextWindow: number; compressAt: number }) => void
+  onRemoveModel: (modelId: string) => void
+}
+
+function ModelGroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddModel, onRemoveModel }: ModelGroupCardProps) {
+  const [editUrl, setEditUrl] = useState(group.baseUrl)
+  const [editKey, setEditKey] = useState(group.apiKey)
+  const [showAddModel, setShowAddModel] = useState(false)
+  const [mName, setMName] = useState('')
+  const [mId, setMId] = useState('')
+  const [mCtx, setMCtx] = useState('200000')
+  const [mCompress, setMCompress] = useState('90')
+
+  const inputCls = 'w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-[6px] px-3 py-2 text-[13px] text-[var(--text)] outline-none focus:border-[var(--border-strong)]'
+  const btnPrimary = 'bg-[var(--accent)] text-[var(--accent-ink)] rounded-[6px] px-3 py-1.5 text-[12px]'
+  const btnGhost = 'border border-[var(--border)] rounded-[6px] px-3 py-1.5 text-[12px] text-[var(--muted)] hover:text-[var(--text)]'
+
+  const handleAddModel = () => {
+    if (!mName.trim() || !mId.trim()) return
+    onAddModel({
+      name: mName.trim(),
+      modelId: mId.trim(),
+      contextWindow: parseInt(mCtx) || 200000,
+      compressAt: (parseInt(mCompress) || 90) / 100,
+    })
+    setMName('')
+    setMId('')
+    setMCtx('200000')
+    setMCompress('90')
+    setShowAddModel(false)
+  }
+
+  return (
+    <div className="mb-3 border border-[var(--border)] rounded-[6px] overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-[var(--surface-2)] transition-colors" onClick={onToggle}>
+        <div className="flex items-center gap-2">
+          <span className="text-[12px] text-[var(--muted)]">{expanded ? '▼' : '▶'}</span>
+          <span className="text-[13px] text-[var(--text)] font-medium">{group.name}</span>
+          <span className="text-[11px] text-[var(--muted)] border border-[var(--border)] rounded px-1.5 py-0.5">{group.protocol}</span>
+        </div>
+        <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="text-[12px] text-[var(--muted)] hover:text-red-500 transition-colors">
+          删除
+        </button>
+      </div>
+      {expanded && (
+        <div className="border-t border-[var(--border)] px-4 py-4 space-y-3">
+          <input value={editUrl} onChange={(e) => setEditUrl(e.target.value)} onBlur={() => onUpdate({ baseUrl: editUrl })} placeholder="Base URL" className={inputCls} />
+          <input type="password" value={editKey} onChange={(e) => setEditKey(e.target.value)} onBlur={() => onUpdate({ apiKey: editKey })} placeholder="API Key" className={inputCls} />
+
+          <div className="space-y-2">
+            {group.models.map((model) => (
+              <div key={model.id} className="flex items-center justify-between border border-[var(--border)] rounded-[6px] px-3 py-2">
+                <div>
+                  <div className="text-[13px] text-[var(--text)]">{model.name}</div>
+                  <div className="text-[11px] text-[var(--muted)]">
+                    {model.modelId} &middot; {formatContextWindow(model.contextWindow)} &middot; {Math.round(model.compressAt * 100)}%
+                  </div>
+                </div>
+                <button onClick={() => onRemoveModel(model.id)} className="text-[12px] text-[var(--muted)] hover:text-red-500 transition-colors">删除</button>
+              </div>
+            ))}
+          </div>
+
+          {showAddModel ? (
+            <div className="border border-[var(--border)] rounded-[6px] p-3 space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <input value={mName} onChange={(e) => setMName(e.target.value)} placeholder="显示名称" className={inputCls} />
+                <input value={mId} onChange={(e) => setMId(e.target.value)} placeholder="Model ID" className={inputCls} />
+                <input value={mCtx} onChange={(e) => setMCtx(e.target.value)} placeholder="Context Window" type="number" className={inputCls} />
+                <input value={mCompress} onChange={(e) => setMCompress(e.target.value)} placeholder="Compress %" type="number" className={inputCls} />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleAddModel} className={btnPrimary}>添加</button>
+                <button onClick={() => setShowAddModel(false)} className={btnGhost}>取消</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setShowAddModel(true)} className={btnGhost}>+ 添加模型</button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ─── MCP ─── */
+function McpTab() {
+  const [servers, setServers] = useState<McpServerState[]>([])
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    window.electronAPI?.mcpListServers().then((states) => {
+      setServers(states ?? [])
+      setLoading(false)
+    })
+    window.electronAPI?.onMcpStateChanged((states) => {
+      setServers(states)
+    })
+  }, [])
+
+  const statusDot = (status: string) => {
+    switch (status) {
+      case 'connected': return <span className="text-green-500">●</span>
+      case 'connecting': return <span className="text-yellow-400 animate-pulse">●</span>
+      case 'failed': return <span className="text-red-500">●</span>
+      case 'disabled': return <span className="text-[var(--muted)]">○</span>
+      default: return <span className="text-[var(--muted)]">●</span>
+    }
+  }
+
+  const handleReconnect = async (name: string) => { await window.electronAPI?.mcpReconnect(name) }
+  const handleToggle = async (name: string, currentlyDisabled: boolean) => { await window.electronAPI?.mcpToggle(name, currentlyDisabled) }
+  const handleDelete = async (name: string) => {
+    const allServers: Record<string, any> = {}
+    for (const s of servers) {
+      if (s.name !== name) allServers[s.name] = s.config
+    }
+    await window.electronAPI?.mcpSaveConfig(allServers, 'global')
+    setServers((prev) => prev.filter((s) => s.name !== name))
+  }
+
+  if (loading) return <p className="text-[13px] text-[var(--muted)] animate-pulse">加载中...</p>
+  if (servers.length === 0) return <p className="text-[13px] text-[var(--muted)] text-center py-8">暂无 MCP 服务器配置</p>
+
+  return (
+    <div className="space-y-2">
+      {servers.map((server) => (
+        <div key={server.name} className="border border-[var(--border)] rounded-[6px] overflow-hidden">
+          <div
+            className="flex items-center justify-between px-3 py-2.5 cursor-pointer hover:bg-[var(--surface-2)] transition-colors"
+            onClick={() => setExpanded(expanded === server.name ? null : server.name)}
+          >
+            <div className="flex items-center gap-2">
+              {statusDot(server.status)}
+              <span className="text-[13px] text-[var(--text)]">{server.name}</span>
+              <span className="text-[11px] text-[var(--muted)] border border-[var(--border)] rounded px-1.5 py-0.5">{server.config.transport}</span>
+              {server.status === 'connected' && (
+                <span className="text-[11px] text-[var(--muted)]">{server.tools.length} tools</span>
+              )}
+            </div>
+            <span className="text-[11px] text-[var(--muted)]">{expanded === server.name ? '▼' : '▶'}</span>
+          </div>
+
+          {expanded === server.name && (
+            <div className="border-t border-[var(--border)] px-3 py-3 space-y-2">
+              <div className="text-[12px] text-[var(--muted)]">
+                {server.config.transport === 'stdio' && <span>CMD: {server.config.command} {server.config.args?.join(' ')}</span>}
+                {server.config.transport === 'sse' && <span>URL: {server.config.url}</span>}
+              </div>
+              {server.error && <div className="text-[12px] text-red-500 break-all">Error: {server.error}</div>}
+              {server.tools.length > 0 && (
+                <div className="max-h-[160px] overflow-y-auto space-y-0.5">
+                  {server.tools.map((tool) => (
+                    <div key={tool.name} className="text-[12px] text-[var(--text)] pl-2">
+                      <span className="text-green-500 mr-1">*</span>{tool.name}
+                      {tool.description && <span className="text-[var(--muted)] ml-1">- {tool.description}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2 pt-2 border-t border-[var(--border)]">
+                {server.status === 'failed' && (
+                  <button onClick={() => handleReconnect(server.name)} className="text-[12px] text-yellow-500 hover:text-yellow-400">重连</button>
+                )}
+                {server.status !== 'disabled' && server.status !== 'connecting' && (
+                  <button onClick={() => handleToggle(server.name, false)} className="text-[12px] text-[var(--muted)] hover:text-red-500">禁用</button>
+                )}
+                {server.status === 'disabled' && (
+                  <button onClick={() => handleToggle(server.name, true)} className="text-[12px] text-[var(--muted)] hover:text-green-500">启用</button>
+                )}
+                <button onClick={() => handleDelete(server.name)} className="text-[12px] text-[var(--muted)] hover:text-red-500">删除</button>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
