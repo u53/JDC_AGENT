@@ -27,8 +27,8 @@ export function AskUserDialog() {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-      <div className="w-[520px]">
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+      <div className="w-[520px] rounded-[14px]" style={{ boxShadow: 'var(--shadow-soft)' }}>
         <AskUserCard
           id={request.id}
           question={request.question}

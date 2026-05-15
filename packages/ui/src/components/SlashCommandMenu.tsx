@@ -83,11 +83,12 @@ export function SlashCommandMenu({ filter, visible, onSelect, onClose, skills = 
   return (
     <div
       ref={menuRef}
-      className="absolute bottom-full left-0 right-0 mb-1 border border-[#333] bg-[#0A0A0A] max-h-[360px] overflow-y-auto z-50"
+      className="absolute bottom-full left-0 right-0 mb-1 border border-[var(--border)] bg-[var(--surface)] max-h-[360px] overflow-y-auto z-50 rounded-[12px]"
+      style={{ boxShadow: 'var(--shadow-soft)' }}
     >
       {commandItems.length > 0 && (
         <>
-          <div className="px-4 pt-2.5 pb-1 text-[9px] uppercase tracking-[0.15em] text-[#666]">命令</div>
+          <div className="px-4 pt-2.5 pb-1 text-[9px] uppercase tracking-[0.15em] text-[var(--muted)]">命令</div>
           {commandItems.map((cmd) => {
             const idx = currentIdx++
             return (
@@ -95,14 +96,14 @@ export function SlashCommandMenu({ filter, visible, onSelect, onClose, skills = 
                 key={cmd.name}
                 ref={idx === selectedIndex ? selectedRef : undefined}
                 className={`flex items-center gap-3 px-4 py-2 cursor-pointer transition-colors ${
-                  idx === selectedIndex ? 'bg-[#1A1A1A]' : 'hover:bg-[#111]'
+                  idx === selectedIndex ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'
                 }`}
                 onClick={() => onSelect(cmd)}
                 onMouseEnter={() => setSelectedIndex(idx)}
               >
-                <span className="text-[13px] text-[#666] w-4 text-center">{cmd.icon}</span>
-                <span className="text-[12px] text-[#EAEAEA] font-medium">{cmd.name}</span>
-                <span className="text-[11px] text-[#666] truncate">{cmd.description}</span>
+                <span className="text-[13px] text-[var(--muted)] w-4 text-center">{cmd.icon}</span>
+                <span className="text-[12px] text-[var(--text)] font-medium">{cmd.name}</span>
+                <span className="text-[11px] text-[var(--muted)] truncate">{cmd.description}</span>
               </div>
             )
           })}
@@ -110,7 +111,7 @@ export function SlashCommandMenu({ filter, visible, onSelect, onClose, skills = 
       )}
       {skillItems.length > 0 && (
         <>
-          <div className="px-4 pt-3 pb-1 text-[9px] uppercase tracking-[0.15em] text-[#666] border-t border-[#222] mt-1">技能</div>
+          <div className="px-4 pt-3 pb-1 text-[9px] uppercase tracking-[0.15em] text-[var(--muted)] border-t border-[var(--border)] mt-1">技能</div>
           {skillItems.map((cmd) => {
             const idx = currentIdx++
             return (
@@ -118,15 +119,15 @@ export function SlashCommandMenu({ filter, visible, onSelect, onClose, skills = 
                 key={cmd.name}
                 ref={idx === selectedIndex ? selectedRef : undefined}
                 className={`flex items-center gap-3 px-4 py-2 cursor-pointer transition-colors ${
-                  idx === selectedIndex ? 'bg-[#1A1A1A]' : 'hover:bg-[#111]'
+                  idx === selectedIndex ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'
                 }`}
                 onClick={() => onSelect(cmd)}
                 onMouseEnter={() => setSelectedIndex(idx)}
               >
-                <span className="text-[13px] text-[#4AF626] w-4 text-center">{cmd.icon}</span>
-                <span className="text-[12px] text-[#EAEAEA] font-medium">{cmd.name}</span>
-                <span className="text-[11px] text-[#666] truncate flex-1">{cmd.description}</span>
-                <span className="text-[9px] text-[#666] uppercase tracking-[0.1em] shrink-0">个人</span>
+                <span className="text-[13px] text-[var(--good)] w-4 text-center">{cmd.icon}</span>
+                <span className="text-[12px] text-[var(--text)] font-medium">{cmd.name}</span>
+                <span className="text-[11px] text-[var(--muted)] truncate flex-1">{cmd.description}</span>
+                <span className="text-[9px] text-[var(--muted)] uppercase tracking-[0.1em] shrink-0">个人</span>
               </div>
             )
           })}

@@ -37,25 +37,25 @@ export function PlanReviewDialog({ sessionId }: Props) {
   }
 
   return (
-    <div className="mb-3 border border-purple-600/50 bg-purple-900/10">
+    <div className="mb-3 border border-[var(--border)] bg-[var(--surface-2)] border-l-4 border-l-[var(--plan)] rounded-[8px]">
       <div className="flex items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-[0.1em]">
-        <span className="inline-block h-2 w-2 rounded-full bg-purple-400 animate-pulse" />
-        <span className="text-purple-400">PLAN REVIEW</span>
-        <span className="text-[#666] truncate">{request.planFile.split('/').pop()}</span>
+        <span className="inline-block h-2 w-2 rounded-full bg-[var(--plan)] animate-pulse" />
+        <span className="text-[var(--plan)]">PLAN REVIEW</span>
+        <span className="text-[var(--muted)] truncate">{request.planFile.split('/').pop()}</span>
       </div>
-      <div className="border-t border-[#333] px-3 py-2 max-h-[300px] overflow-y-auto">
-        <pre className="text-xs text-[#EAEAEA] font-mono whitespace-pre-wrap break-all">
+      <div className="border-t border-[var(--border)] px-3 py-2 max-h-[300px] overflow-y-auto">
+        <pre className="text-xs text-[var(--text)] whitespace-pre-wrap break-all" style={{ fontFamily: 'var(--font-mono)' }}>
           {request.content}
         </pre>
       </div>
-      <div className="border-t border-[#333] px-3 py-2">
+      <div className="border-t border-[var(--border)] px-3 py-2">
         {showFeedback && (
           <input
             type="text"
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
             placeholder="Feedback (optional)..."
-            className="w-full mb-2 bg-[#111] border border-[#333] px-2 py-1 text-xs text-[#EAEAEA] outline-none focus:border-purple-500"
+            className="w-full mb-2 bg-[var(--surface-2)] border border-[var(--border)] px-2 py-1 text-xs text-[var(--text)] outline-none focus:border-[var(--plan)]"
             autoFocus
             onKeyDown={(e) => { if (e.key === 'Enter') respond(false) }}
           />
@@ -63,15 +63,15 @@ export function PlanReviewDialog({ sessionId }: Props) {
         <div className="flex items-center gap-3">
           <button
             onClick={() => respond(true)}
-            className="text-[10px] uppercase tracking-[0.05em] text-[#4AF626] hover:text-[#6FFF4A] transition-colors"
+            className="text-[12px] text-[var(--good)] hover:opacity-80 transition-colors"
           >
-            [APPROVE]
+            Approve
           </button>
           <button
             onClick={() => respond(false)}
-            className="text-[10px] uppercase tracking-[0.05em] text-[#E61919] hover:text-red-400 transition-colors"
+            className="text-[12px] text-[var(--bad)] hover:opacity-80 transition-colors"
           >
-            [REJECT]
+            Reject
           </button>
         </div>
       </div>

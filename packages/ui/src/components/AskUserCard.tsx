@@ -21,10 +21,10 @@ export function AskUserCard({
 
   if (responded) {
     return (
-      <div className="mb-3 border border-[#333] px-3 py-2">
+      <div className="mb-3 border border-[var(--border)] px-3 py-2 rounded-[8px]">
         <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.1em]">
-          <span className="text-[#666]">&gt;&gt;&gt; ASK_USER</span>
-          <span className="text-[#4AF626]">[ANSWERED]</span>
+          <span className="text-[var(--muted)]">&gt;&gt;&gt; ASK_USER</span>
+          <span className="text-[var(--good)]">[ANSWERED]</span>
         </div>
       </div>
     )
@@ -41,22 +41,22 @@ export function AskUserCard({
   }
 
   return (
-    <div className="mb-3 border border-[#4AF626]/60 bg-[#0A0A0A]">
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-[#333] text-[10px] uppercase tracking-[0.1em]">
-        <span className="inline-block h-2 w-2 rounded-full bg-[#4AF626] animate-pulse" />
-        <span className="text-[#4AF626]">WAITING FOR INPUT</span>
+    <div className="mb-3 border border-[var(--border)] bg-[var(--surface)] rounded-[8px]">
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-[var(--border)] text-[10px] uppercase tracking-[0.1em]">
+        <span className="inline-block h-2 w-2 rounded-full bg-[var(--good)] animate-pulse" />
+        <span className="text-[var(--good)]">WAITING FOR INPUT</span>
       </div>
       <div className="px-4 py-3">
-        <p className="text-sm text-[#EAEAEA] mb-4">{question}</p>
+        <p className="text-sm text-[var(--text)] mb-4">{question}</p>
         {options && (
           <div className="space-y-1.5 mb-4">
             {options.map((opt) => (
               <label
                 key={opt.label}
-                className={`flex items-start gap-2.5 px-3 py-2 cursor-pointer border transition-colors ${
+                className={`flex items-start gap-2.5 px-3 py-2 cursor-pointer border transition-colors rounded-[4px] ${
                   selected.has(opt.label)
-                    ? 'border-[#4AF626]/50 bg-[#4AF626]/5'
-                    : 'border-[#333] hover:border-[#666]'
+                    ? 'border-[var(--border)] bg-[var(--accent-soft)]'
+                    : 'border-[var(--border)] hover:bg-[var(--surface-2)]'
                 }`}
               >
                 <input
@@ -69,12 +69,12 @@ export function AskUserCard({
                     else next.add(opt.label)
                     setSelected(next)
                   }}
-                  className="mt-0.5 accent-[#4AF626]"
+                  className="mt-0.5 accent-[var(--good)]"
                 />
                 <div>
-                  <span className="text-sm text-[#EAEAEA]">{opt.label}</span>
+                  <span className="text-sm text-[var(--text)]">{opt.label}</span>
                   {opt.description && (
-                    <span className="text-xs text-[#666] ml-2">{opt.description}</span>
+                    <span className="text-xs text-[var(--muted)] ml-2">{opt.description}</span>
                   )}
                 </div>
               </label>
@@ -85,14 +85,14 @@ export function AskUserCard({
           value={textInput}
           onChange={(e) => setTextInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && submit()}
-          className="w-full bg-[#050505] border border-[#333] px-3 py-2 text-sm text-[#EAEAEA] mb-4 focus:border-[#4AF626] outline-none placeholder-[#666]"
+          className="w-full bg-[var(--surface-2)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] mb-4 focus:border-[var(--good)] outline-none placeholder-[var(--muted)]"
           placeholder={options ? '补充输入（可选）...' : '输入回答...'}
         />
         <button
           onClick={submit}
-          className="border border-[#4AF626] text-[#4AF626] px-5 py-2 text-[10px] uppercase tracking-[0.1em] hover:bg-[#4AF626] hover:text-[#0A0A0A] transition-colors"
+          className="border border-[var(--good)] text-[var(--good)] px-5 py-2 text-[10px] uppercase tracking-[0.1em] hover:opacity-80 transition-colors"
         >
-          [SUBMIT]
+          Submit
         </button>
       </div>
     </div>

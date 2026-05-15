@@ -35,34 +35,34 @@ export function ErrorCard({ message, category, retrying, retryAttempt, retryIn, 
   }, [retrying, retryIn])
 
   return (
-    <div className="mb-3 border border-[#E61919]/50 bg-[#E61919]/5">
+    <div className="mb-3 border border-[var(--border)] bg-[var(--surface-2)] border-l-4 border-l-[var(--bad)] rounded-[8px]">
       <div className="flex items-center justify-between px-3 py-2">
         <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.1em]">
-          <span className="inline-block h-2 w-2 rounded-full bg-[#E61919]" />
-          <span className="text-[#E61919]">{categoryLabels[category] || 'ERROR'}</span>
+          <span className="inline-block h-2 w-2 rounded-full bg-[var(--bad)]" />
+          <span className="text-[var(--bad)]">{categoryLabels[category] || 'ERROR'}</span>
           {retrying && retryAttempt && (
-            <span className="text-[#666]">Retry #{retryAttempt}{countdown > 0 ? ` in ${countdown}s` : '...'}</span>
+            <span className="text-[var(--muted)]">Retry #{retryAttempt}{countdown > 0 ? ` in ${countdown}s` : '...'}</span>
           )}
         </div>
         <div className="flex items-center gap-2">
           {!retrying && (
             <button
               onClick={onRetry}
-              className="text-[10px] uppercase tracking-[0.05em] text-[#4AF626] hover:text-[#6FFF4A] transition-colors"
+              className="text-[12px] text-[var(--good)] hover:opacity-80 transition-colors"
             >
-              [RETRY]
+              Retry
             </button>
           )}
           <button
             onClick={onDismiss}
-            className="text-[10px] uppercase tracking-[0.05em] text-[#666] hover:text-[#EAEAEA] transition-colors"
+            className="text-[12px] text-[var(--muted)] hover:text-[var(--text)] transition-colors"
           >
-            [X]
+            Dismiss
           </button>
         </div>
       </div>
-      <div className="border-t border-[#333] px-3 py-2">
-        <pre className="text-xs text-[#E61919] whitespace-pre-wrap">{message}</pre>
+      <div className="border-t border-[var(--border)] px-3 py-2">
+        <pre className="text-xs text-[var(--bad)] whitespace-pre-wrap">{message}</pre>
       </div>
     </div>
   )
