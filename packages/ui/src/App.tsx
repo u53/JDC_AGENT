@@ -82,7 +82,7 @@ export function App() {
   useHotkeys(hotkeyMap)
 
   return (
-    <div className="flex h-screen w-screen bg-[#0A0A0A] text-[#EAEAEA]">
+    <div className="flex h-screen w-screen bg-[var(--bg)] text-[var(--text)]">
       <Sidebar />
       <div className="flex-1 flex flex-col border-l border-[#333]">
         {activeSessionId ? (
