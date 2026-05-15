@@ -1,23 +1,20 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useSession } from '../hooks/useSession'
-import { MessageBubble } from './MessageBubble'
+import { SessionHeader } from './SessionHeader'
+import { ConversationTurn } from './ConversationTurn'
+import { Composer } from './Composer'
 import { ToolCardRouter } from './tool-cards'
 import { ErrorCard } from './ErrorCard'
-import { FileChangesPanel } from './FileChangesPanel'
-import { TaskPanel } from './TaskPanel'
-import { QueueIndicator } from './QueueIndicator'
 import { PermissionDialog } from './PermissionDialog'
 import { PlanReviewDialog } from './PlanReviewDialog'
 import { HelpDialog } from './HelpDialog'
-import { PromptInput } from './PromptInput'
 import { AgentDetailPanel } from './AgentDetailPanel'
-import { StatsCard } from './StatsCard'
 import { useSessionStore } from '../stores/session-store'
 import { useModelStore } from '../stores/model-store'
 import { useSettingsStore } from '../stores/settings-store'
 import { useAgentStore } from '../stores/agent-store'
 import { useAgentEvents } from '../hooks/useAgentEvents'
-import type { ToolExecutionEvent } from '@jdcagnet/core'
+import type { Message, ToolExecutionEvent } from '@jdcagnet/core'
 
 type GroupedToolEvent =
   | { type: 'single'; event: ToolExecutionEvent }
@@ -51,6 +48,30 @@ function groupToolEvents(events: ToolExecutionEvent[]): GroupedToolEvent[] {
   return result
 }
 
+interface Turn {
+  userMessage: Message
+  assistantMessage?: Message
+  nextAfterAssistant?: Message
+}
+
+function groupIntoTurns(messages: Message[]): Turn[] {
+  const turns: Turn[] = []
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i]
+    if (msg.role === 'user') {
+      const next = messages[i + 1]
+      const afterNext = messages[i + 2]
+      if (next?.role === 'assistant') {
+        turns.push({ userMessage: msg, assistantMessage: next, nextAfterAssistant: afterNext })
+        i++ // skip the assistant message
+      } else {
+        turns.push({ userMessage: msg })
+      }
+    }
+  }
+  return turns
+}
+
 interface ChatViewProps {
   onOpenMcp?: () => void
 }
@@ -58,7 +79,6 @@ interface ChatViewProps {
 export function ChatView({ onOpenMcp }: ChatViewProps) {
   const { messages, streamingText, thinkingText, isStreaming, isThinking, toolEvents, sendMessage, abort, error, retry, dismissError } = useSession()
   const { activeSessionId } = useSessionStore()
-  const enqueueMessage = useSessionStore((s) => s.enqueueMessage)
   const { getActiveModel, groups, activeModelId, setActiveModel } = useModelStore()
   const openSettings = useSettingsStore((s) => s.open)
   useAgentEvents()
@@ -67,7 +87,6 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   const [permissionMode, setPermissionMode] = useState(() => {
     return localStorage.getItem('jdcagnet-permission-mode') || 'standard'
   })
-  const [responseExpanded, setResponseExpanded] = useState(false)
   const [thinkingEnabled, setThinkingEnabled] = useState(() => {
     return localStorage.getItem('jdcagnet-thinking') !== 'false'
   })
@@ -132,10 +151,6 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [messages, toolEvents, isThinking, isStreaming])
-
-  useEffect(() => {
-    if (!isStreaming) setResponseExpanded(false)
-  }, [isStreaming])
 
   const showToast = useCallback((msg: string) => {
     setToast(msg)
@@ -253,125 +268,124 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     }
   }
 
-  const streamingCharCount = streamingText.length
+  const turns = groupIntoTurns(visibleMessages)
+  const lastTurn = turns[turns.length - 1]
+  const isLastTurnActive = isStreaming && lastTurn && !lastTurn.assistantMessage
 
   return (
     <div className="flex flex-1 overflow-hidden relative">
       {/* Left: main chat */}
       <div className={`flex flex-col overflow-hidden ${activeAgentId ? 'w-[60%]' : 'w-full'} transition-all`}>
-        <div className="flex items-center justify-center border-b border-[#333] px-4 py-2" style={{ WebkitAppRegion: 'drag' } as any}>
-          <span className="text-[10px] uppercase tracking-[0.1em] text-[#666]">
-            SESSION // {activeSessionId ? activeSessionId.slice(0, 8).toUpperCase() : '---'}
-          </span>
-        </div>
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
+        <SessionHeader permissionMode={permissionMode} thinkingEnabled={thinkingEnabled} planMode={planMode} />
+
+        {/* Conversation Timeline */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4">
           <div className="mx-auto max-w-[760px]">
-          {visibleMessages.map((msg) => (
-            <MessageBubble key={msg.id} role={msg.role} content={msg.content} nextMessage={messages[messages.indexOf(msg) + 1]} />
-          ))}
-          {groupToolEvents(toolEvents).map((group, i) => {
-            if (group.type === 'read-group') {
-              const files = group.events.map(e => {
-                const fp = (e.input?.file_path || e.input?.path || '') as string
-                return fp.split('/').pop() || fp
-              }).join(', ')
+            {turns.map((turn, idx) => {
+              const isActive = idx === turns.length - 1 && isStreaming
               return (
-                <div key={`read-group-${i}`} className="mb-3 border border-[#333]">
-                  <div className="flex items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-[0.1em]">
-                    <span className="inline-block h-2 w-2 rounded-full bg-[#4AF626]" />
-                    <span className="text-[#EAEAEA]">READ</span>
-                    <span className="text-[#666] truncate">{group.events.length} files: {files}</span>
-                    <span className="text-[#4AF626]">[DONE]</span>
-                  </div>
-                </div>
+                <ConversationTurn
+                  key={turn.userMessage.id}
+                  userContent={turn.userMessage.content}
+                  assistantContent={turn.assistantMessage?.content || []}
+                  nextMessage={turn.nextAfterAssistant}
+                  isActive={isActive}
+                  streamingText={isActive ? streamingText : undefined}
+                  thinkingText={isActive ? thinkingText : undefined}
+                  isThinking={isActive ? isThinking : undefined}
+                />
               )
-            }
-            return <ToolCardRouter key={`${group.event.toolUseId}-${i}`} event={group.event} />
-          })}
-          {isThinking && (
-            <div className="mb-3 border border-[#333]">
-              <div className="flex items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-[0.1em]">
-                <span className="inline-block h-2 w-2 rounded-full bg-purple-400 animate-pulse" />
-                <span className="text-purple-400">THINKING...</span>
-                <span className="text-[#666]">{thinkingText.length} chars</span>
+            })}
+
+            {/* Streaming tool events in active turn area */}
+            {isStreaming && toolEvents.length > 0 && (
+              <div className="py-2">
+                {groupToolEvents(toolEvents).map((group, i) => {
+                  if (group.type === 'read-group') {
+                    const files = group.events.map(e => {
+                      const fp = (e.input?.file_path || e.input?.path || '') as string
+                      return fp.split('/').pop() || fp
+                    }).join(', ')
+                    return (
+                      <div key={`read-group-${i}`} className="mb-3 border border-[var(--border)] rounded-[8px]">
+                        <div className="flex items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-[0.1em]">
+                          <span className="inline-block h-2 w-2 rounded-full bg-[var(--good)]" />
+                          <span className="text-[var(--text)]">READ</span>
+                          <span className="text-[var(--muted)] truncate">{group.events.length} files: {files}</span>
+                          <span className="text-[var(--good)]">[DONE]</span>
+                        </div>
+                      </div>
+                    )
+                  }
+                  return <ToolCardRouter key={`${group.event.toolUseId}-${i}`} event={group.event} />
+                })}
               </div>
-            </div>
-          )}
-          {isStreaming && streamingText && (
-            <div className="mb-3 border border-[#333]">
-              <div className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-[#111] transition-colors" onClick={() => setResponseExpanded(!responseExpanded)}>
-                <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.1em]">
-                  <span className="inline-block h-2 w-2 rounded-full bg-[#4AF626] animate-pulse" />
-                  <span className="text-[#4AF626]">RESPONDING...</span>
-                  <span className="text-[#666]">{streamingCharCount} chars</span>
+            )}
+
+            {/* Processing indicator when no content yet */}
+            {isStreaming && !streamingText && !isThinking && toolEvents.length === 0 && !isLastTurnActive && (
+              <div className="mb-3 border border-[var(--border)] rounded-[8px]">
+                <div className="flex items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-[0.1em]">
+                  <span className="inline-block h-2 w-2 rounded-full bg-[var(--text)] animate-pulse" />
+                  <span className="text-[var(--text)]">PROCESSING...</span>
                 </div>
-                <span className="text-[10px] text-[#666]">{responseExpanded ? '▼' : '▶'}</span>
               </div>
-              {responseExpanded && (
-                <div className="border-t border-[#333] px-4 py-3 max-h-[400px] overflow-y-auto">
-                  <div className="text-sm text-[#EAEAEA] whitespace-pre-wrap">{streamingText}<span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-[#EAEAEA]" /></div>
-                </div>
-              )}
-            </div>
-          )}
-          {isStreaming && !streamingText && !isThinking && toolEvents.length === 0 && (
-            <div className="mb-3 border border-[#333]">
-              <div className="flex items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-[0.1em]">
-                <span className="inline-block h-2 w-2 rounded-full bg-[#EAEAEA] animate-pulse" />
-                <span className="text-[#EAEAEA]">PROCESSING...</span>
-              </div>
-            </div>
-          )}
-          {error && (
-            <ErrorCard
-              message={error.message}
-              category={error.category}
-              retrying={error.retrying}
-              retryAttempt={error.retryAttempt}
-              retryIn={error.retryIn}
-              onRetry={retry}
-              onDismiss={dismissError}
-            />
-          )}
-          <PermissionDialog sessionId={activeSessionId} />
-          <PlanReviewDialog sessionId={activeSessionId} />
+            )}
+
+            {/* Error / Permission / Plan Review */}
+            {error && (
+              <ErrorCard
+                message={error.message}
+                category={error.category}
+                retrying={error.retrying}
+                retryAttempt={error.retryAttempt}
+                retryIn={error.retryIn}
+                onRetry={retry}
+                onDismiss={dismissError}
+              />
+            )}
+            <PermissionDialog sessionId={activeSessionId} />
+            <PlanReviewDialog sessionId={activeSessionId} />
+          </div>
         </div>
-      </div>
-      {toast && (
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 border border-[#333] bg-[#111] px-4 py-2 text-[11px] text-[#EAEAEA] z-50">
-          {toast}
-        </div>
-      )}
-      <FileChangesPanel />
-      <QueueIndicator />
-      <TaskPanel />
-      {planMode && (
-        <div className="border-t border-purple-600/30 px-4 py-1.5 flex items-center gap-2">
-          <span className="inline-block h-2 w-2 rounded-full bg-purple-400" />
-          <span className="text-[10px] uppercase tracking-[0.1em] text-purple-400">PLAN MODE</span>
-          <span className="text-[10px] text-[#666]">只读 + 规划 | Shift+Tab 退出</span>
-        </div>
-      )}
-      <PromptInput
-        onSend={sendMessage}
-        onAbort={abort}
-        isStreaming={isStreaming}
-        onSlashCommand={handleSlashCommand}
-        onEnqueue={enqueueMessage}
-        permissionMode={permissionMode}
-        onPermissionChange={handlePermissionChange}
-        thinkingEnabled={thinkingEnabled}
-        onThinkingToggle={handleThinkingToggle}
-        planMode={planMode}
-        onPlanToggle={handlePlanToggle}
-        modelName={activeModel?.model.name}
-        modelId={activeModelId ?? undefined}
-        models={allModels}
-        onModelChange={setActiveModel}
-        onModelClick={openSettings}
-        skills={skills}
-      />
-      <HelpDialog visible={showHelp} onClose={() => setShowHelp(false)} />
+
+        {/* Toast */}
+        {toast && (
+          <div className="absolute top-14 left-1/2 -translate-x-1/2 bg-[var(--surface)] border border-[var(--border)] rounded-[8px] px-4 py-2 text-[11px] text-[var(--text)] z-50 shadow-[var(--shadow-soft)]">
+            {toast}
+          </div>
+        )}
+
+        {/* Plan mode bar */}
+        {planMode && (
+          <div className="border-t border-[var(--plan)] px-4 py-1.5 flex items-center gap-2">
+            <span className="inline-block h-2 w-2 rounded-full bg-[var(--plan)]" />
+            <span className="text-[10px] uppercase tracking-[0.1em] text-[var(--plan)]">PLAN MODE</span>
+            <span className="text-[10px] text-[var(--muted)]">只读 + 规划 | Shift+Tab 退出</span>
+          </div>
+        )}
+
+        {/* Composer */}
+        <Composer
+          onSend={sendMessage}
+          onAbort={abort}
+          isStreaming={isStreaming}
+          onSlashCommand={handleSlashCommand}
+          permissionMode={permissionMode}
+          onPermissionChange={handlePermissionChange}
+          thinkingEnabled={thinkingEnabled}
+          onThinkingToggle={handleThinkingToggle}
+          planMode={planMode}
+          onPlanToggle={handlePlanToggle}
+          modelName={activeModel?.model.name}
+          modelId={activeModelId ?? undefined}
+          models={allModels}
+          onModelChange={setActiveModel}
+          onModelClick={openSettings}
+          skills={skills}
+        />
+
+        <HelpDialog visible={showHelp} onClose={() => setShowHelp(false)} />
       </div>
 
       {/* Right: agent detail panel */}
