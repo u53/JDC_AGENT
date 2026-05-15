@@ -1,11 +1,10 @@
 import { useState, type ReactNode } from 'react'
+import { IconChevronRight, IconChevronDown } from '../icons'
 
 interface Props {
   label: string
-  labelColor?: string
   detail: string
   status: 'running' | 'done' | 'error'
-  borderColor?: string
   defaultExpanded?: boolean
   collapsible?: boolean
   children?: ReactNode
@@ -13,17 +12,15 @@ interface Props {
 }
 
 const statusConfig = {
-  running: { text: 'RUNNING', color: 'text-[#EAEAEA]', dot: 'bg-[#4AF626] animate-pulse' },
-  done: { text: 'DONE', color: 'text-[#4AF626]', dot: 'bg-[#4AF626]' },
-  error: { text: 'ERROR', color: 'text-[#E61919]', dot: 'bg-[#E61919]' },
+  running: { dot: 'bg-[var(--warn)] animate-pulse' },
+  done: { dot: 'bg-[var(--muted)]' },
+  error: { dot: 'bg-[var(--bad)]' },
 }
 
 export function ToolCardShell({
   label,
-  labelColor = 'text-[#EAEAEA]',
   detail,
   status,
-  borderColor = 'border-[#333]',
   defaultExpanded = false,
   collapsible = true,
   children,
@@ -35,20 +32,19 @@ export function ToolCardShell({
   const canToggle = collapsible && hasContent && status !== 'running'
 
   return (
-    <div className={`mb-3 border ${borderColor}`}>
+    <div className={`mb-2 border rounded-[8px] bg-[var(--surface-2)] ${status === 'error' ? 'border-[var(--bad)]' : 'border-[var(--border)]'}`}>
       <div
-        className={`flex items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-[0.1em] ${canToggle ? 'cursor-pointer hover:bg-[#111]' : ''}`}
+        className={`flex items-center gap-2 px-3 py-2 min-h-[36px] ${canToggle ? 'cursor-pointer hover:bg-[var(--surface-3)]' : ''} transition-colors rounded-t-[8px]`}
         onClick={() => { if (canToggle) setExpanded(!expanded) }}
       >
-        <span className={`inline-block h-2 w-2 rounded-full ${cfg.dot}`} />
-        {canToggle && <span className="text-[#666]">{expanded ? '▼' : '▶'}</span>}
-        <span className={labelColor}>{label}</span>
-        <span className="text-[#666] truncate flex-1 text-left">{detail}</span>
-        <span className={cfg.color}>[{cfg.text}]</span>
-        {actions}
+        <span className={`inline-block h-[6px] w-[6px] rounded-full flex-shrink-0 ${cfg.dot}`} />
+        {canToggle && (expanded ? <IconChevronDown size={12} className="text-[var(--muted)]" /> : <IconChevronRight size={12} className="text-[var(--muted)]" />)}
+        <span className="text-[12px] font-medium text-[var(--text)]">{label}</span>
+        <span className="text-[12px] text-[var(--muted)] truncate flex-1 text-left" style={{ fontFamily: 'var(--font-mono)' }}>{detail}</span>
+        {actions && <div className="flex items-center gap-1 flex-shrink-0">{actions}</div>}
       </div>
-      {(expanded || status === 'running') && hasContent && (
-        <div className="border-t border-[#333] px-3 py-2">
+      {(expanded || (status === 'running' && hasContent)) && hasContent && (
+        <div className="border-t border-[var(--border)] px-3 py-2">
           {children}
         </div>
       )}

@@ -49,10 +49,8 @@ export function AgentToolCard({ event, input, result }: ToolCardRouterProps) {
     <div onClick={handleClick} className="cursor-pointer">
       <ToolCardShell
         label="AGENT"
-        labelColor="text-purple-300"
         detail={taskDescription}
         status={status}
-        borderColor="border-purple-800/50"
         defaultExpanded={status === 'running'}
         collapsible={status !== 'running'}
         actions={
