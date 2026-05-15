@@ -2,7 +2,6 @@ import { useEffect, useMemo } from 'react'
 import { Topbar } from './components/Topbar'
 import { Sidebar } from './components/Sidebar'
 import { ChatView } from './components/ChatView'
-import { UsageHUD } from './components/UsageHUD'
 import { SettingsOverlay } from './components/SettingsOverlay'
 import { ProjectPage } from './components/ProjectPage'
 import { AskUserDialog } from './components/AskUserDialog'
@@ -93,7 +92,6 @@ export function App() {
           ) : (
             <ProjectPage />
           )}
-          <UsageHUD onOpenMcp={() => openSettings('mcp')} onOpenSettings={openSettings} />
         </div>
         <Inspector />
       </div>
