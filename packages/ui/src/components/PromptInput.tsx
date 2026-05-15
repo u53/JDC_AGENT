@@ -147,11 +147,12 @@ export function PromptInput({ onSend, onAbort, isStreaming, onSlashCommand, onEn
               className="flex-1 resize-none bg-transparent border border-[#333] px-4 py-3 text-sm text-[#EAEAEA] placeholder-[#666] focus:border-[#EAEAEA] focus:outline-none transition-colors"
             />
             {isStreaming ? (
-              text.trim() ? (
-                <button onClick={() => { if (onEnqueue) onEnqueue(text.trim()); setText(''); setImages([]) }} className="border border-[#4AF626] text-[#4AF626] px-4 py-2 text-[10px] uppercase tracking-[0.05em] hover:bg-[#4AF626] hover:text-[#0A0A0A] transition-colors">[QUEUE]</button>
-              ) : (
+              <div className="flex items-center gap-2">
+                {text.trim() && (
+                  <button onClick={() => { if (onEnqueue) onEnqueue(text.trim()); setText(''); setImages([]) }} className="border border-[#4AF626] text-[#4AF626] px-4 py-2 text-[10px] uppercase tracking-[0.05em] hover:bg-[#4AF626] hover:text-[#0A0A0A] transition-colors">[QUEUE]</button>
+                )}
                 <button onClick={onAbort} className="border border-[#E61919] text-[#E61919] px-4 py-2 text-[10px] uppercase tracking-[0.05em] hover:bg-[#E61919] hover:text-[#EAEAEA] transition-colors">[STOP]</button>
-              )
+              </div>
             ) : (
               <button onClick={() => { if (text.trim() || images.length > 0) { onSend(text.trim(), images.length > 0 ? images : undefined); setText(''); setImages([]) } }} className="border border-[#EAEAEA] text-[#EAEAEA] px-4 py-2 text-[10px] uppercase tracking-[0.05em] hover:bg-[#EAEAEA] hover:text-[#0A0A0A] transition-colors">[SEND]</button>
             )}
