@@ -1,6 +1,7 @@
 import type { ToolCardRouterProps } from './ToolCardRouter'
 import { ToolCardShell } from './ToolCardShell'
 import { truncateText } from './shared'
+import { copyToClipboard } from '../../lib/clipboard'
 
 export function BashToolCard({ event, input, result }: ToolCardRouterProps) {
   const status = event
@@ -21,8 +22,8 @@ export function BashToolCard({ event, input, result }: ToolCardRouterProps) {
       defaultExpanded={status === 'running'}
       actions={status === 'done' ? (
         <div className="flex items-center gap-1">
-          <button onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(command) }} className="px-1.5 py-0.5 rounded-[4px] text-[11px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-3)] transition-colors">Copy cmd</button>
-          {output && <button onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(output) }} className="px-1.5 py-0.5 rounded-[4px] text-[11px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-3)] transition-colors">Copy output</button>}
+          <button onClick={(e) => { e.stopPropagation(); copyToClipboard(command) }} className="px-1.5 py-0.5 rounded-[4px] text-[11px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-3)] transition-colors">Copy cmd</button>
+          {output && <button onClick={(e) => { e.stopPropagation(); copyToClipboard(output) }} className="px-1.5 py-0.5 rounded-[4px] text-[11px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-3)] transition-colors">Copy output</button>}
         </div>
       ) : undefined}
     >

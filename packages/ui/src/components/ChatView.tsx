@@ -13,6 +13,7 @@ import { useModelStore } from '../stores/model-store'
 import { useSettingsStore } from '../stores/settings-store'
 import { useAgentStore } from '../stores/agent-store'
 import { useAgentEvents } from '../hooks/useAgentEvents'
+import { copyToClipboard } from '../lib/clipboard'
 import type { Message } from '@jdcagnet/core'
 
 interface Turn {
@@ -200,7 +201,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
             } else {
               const paths = files.map((f: any) => f.filePath)
               const msg = `git add ${paths.join(' ')}`
-              navigator.clipboard?.writeText(msg)
+              copyToClipboard(msg)
               showToast(`${files.length} files copied to clipboard`)
             }
           })

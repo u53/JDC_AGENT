@@ -2,6 +2,7 @@ import { useState, type ComponentPropsWithoutRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
+import { copyToClipboard } from '../lib/clipboard'
 
 interface Props {
   content: string
@@ -12,7 +13,7 @@ function CodeBlock({ className, children }: { className?: string; children: stri
   const language = className?.replace('language-', '') || ''
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(children)
+    copyToClipboard(children)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }

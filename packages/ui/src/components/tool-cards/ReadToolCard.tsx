@@ -1,6 +1,7 @@
 import type { ToolCardRouterProps } from './ToolCardRouter'
 import { ToolCardShell } from './ToolCardShell'
 import { IconCopy } from '../icons'
+import { copyToClipboard } from '../../lib/clipboard'
 
 export function ReadToolCard({ event, input, result }: ToolCardRouterProps) {
   const status = event
@@ -22,7 +23,7 @@ export function ReadToolCard({ event, input, result }: ToolCardRouterProps) {
       status={status}
       defaultExpanded={false}
       actions={status === 'done' ? (
-        <button onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(filePath) }} className="p-1 rounded-[4px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-3)] transition-colors" aria-label="Copy path">
+        <button onClick={(e) => { e.stopPropagation(); copyToClipboard(filePath) }} className="p-1 rounded-[4px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-3)] transition-colors" aria-label="Copy path">
           <IconCopy size={12} />
         </button>
       ) : undefined}

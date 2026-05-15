@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, clipboard } from 'electron'
 
 console.log('[PRELOAD] Script executing...')
 
@@ -34,6 +34,7 @@ const api = {
     ipcRenderer.invoke('session:set-plan-mode', { sessionId, mode }),
   getPlanMode: (sessionId: string) =>
     ipcRenderer.invoke('session:get-plan-mode', { sessionId }),
+  writeClipboard: (text: string) => clipboard.writeText(text),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

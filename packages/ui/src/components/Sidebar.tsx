@@ -86,7 +86,7 @@ export function Sidebar() {
                     onDoubleClick={() => handleDoubleClick(session.id, displayName)}
                     className={`w-full text-left px-2.5 py-1.5 text-[13px] truncate transition-colors flex items-center gap-1.5 rounded-[6px] ${
                       isActive
-                        ? 'border-l-2 border-[var(--accent)] pl-2 bg-[var(--surface-2)] text-[var(--text)]'
+                        ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium'
                         : 'text-[var(--text)] hover:bg-[var(--surface-3)]'
                     }`}
                   >
