@@ -27,10 +27,23 @@ function groupIntoTurns(messages: Message[]): Turn[] {
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i]
     if (msg.role === 'user') {
+      // Skip tool_result-only user messages (they're internal, not user-initiated)
+      if (Array.isArray(msg.content) && msg.content.every((b: any) => b.type === 'tool_result')) {
+        continue
+      }
       const next = messages[i + 1]
-      const afterNext = messages[i + 2]
       if (next?.role === 'assistant') {
-        turns.push({ userMessage: msg, assistantMessage: next, nextAfterAssistant: afterNext })
+        // Find the tool_result message after the assistant (could be i+2 or further)
+        let toolResultMsg: Message | undefined
+        for (let j = i + 2; j < messages.length; j++) {
+          const candidate = messages[j]
+          if (candidate.role === 'user' && Array.isArray(candidate.content) && candidate.content.every((b: any) => b.type === 'tool_result')) {
+            toolResultMsg = candidate
+            break
+          }
+          break
+        }
+        turns.push({ userMessage: msg, assistantMessage: next, nextAfterAssistant: toolResultMsg })
         i++ // skip the assistant message
       } else {
         turns.push({ userMessage: msg })
@@ -151,11 +164,6 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     }
   }, [activeSessionId, planMode, showToast])
 
-  const visibleMessages = messages.filter(msg => {
-    if (msg.role === 'user' && Array.isArray(msg.content) && msg.content.every((b: any) => b.type === 'tool_result')) return false
-    return true
-  })
-
   const handleSlashCommand = (command: string) => {
     const api = (window as any).electronAPI
     switch (command) {
@@ -239,7 +247,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     }
   }
 
-  const turns = groupIntoTurns(visibleMessages)
+  const turns = groupIntoTurns(messages)
   const lastTurn = turns[turns.length - 1]
   const isLastTurnActive = isStreaming && lastTurn && !lastTurn.assistantMessage
 
