@@ -5,7 +5,7 @@ export function createTaskListTool(store: TaskStore): ToolHandler {
   return {
     definition: {
       name: 'task_list',
-      description: 'List all tasks.',
+      description: 'List all tasks for this session with their current status.',
       inputSchema: {
         type: 'object',
         properties: {},

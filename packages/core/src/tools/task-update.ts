@@ -5,7 +5,7 @@ export function createTaskUpdateTool(store: TaskStore): ToolHandler {
   return {
     definition: {
       name: 'task_update',
-      description: 'Update a task status, subject, or description.',
+      description: 'Update a task\'s status, subject, or description. Set status to in_progress before starting work, completed when done.',
       inputSchema: {
         type: 'object',
         properties: {

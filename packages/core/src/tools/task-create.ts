@@ -5,7 +5,7 @@ export function createTaskCreateTool(store: TaskStore): ToolHandler {
   return {
     definition: {
       name: 'task_create',
-      description: 'Create a new task to track work.',
+      description: 'Create a new task to track work. The task appears in the user\'s task panel. Use todo_write for batch creation.',
       inputSchema: {
         type: 'object',
         properties: {

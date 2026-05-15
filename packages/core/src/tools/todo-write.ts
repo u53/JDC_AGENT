@@ -5,7 +5,7 @@ export function createTodoWriteTool(store: TaskStore): ToolHandler {
   return {
     definition: {
       name: 'todo_write',
-      description: 'Create multiple tasks at once.',
+      description: 'Create multiple tasks at once. Preferred over calling task_create repeatedly. Use at the start of multi-step work to plan visible progress.',
       inputSchema: {
         type: 'object',
         properties: {
