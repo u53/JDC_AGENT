@@ -119,7 +119,13 @@ function formatContextWindow(n: number): string {
 }
 
 function ModelsTab() {
-  const { groups, addGroup, removeGroup, updateGroup, addModel, removeModel, loadFromConfig } = useModelStore()
+  const groups = useModelStore((s) => s.groups)
+  const addGroup = useModelStore((s) => s.addGroup)
+  const removeGroup = useModelStore((s) => s.removeGroup)
+  const updateGroup = useModelStore((s) => s.updateGroup)
+  const addModel = useModelStore((s) => s.addModel)
+  const removeModel = useModelStore((s) => s.removeModel)
+  const loadFromConfig = useModelStore((s) => s.loadFromConfig)
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null)
   const [showNewGroup, setShowNewGroup] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')

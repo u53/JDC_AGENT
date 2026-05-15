@@ -14,8 +14,12 @@ const PERM_LABELS: Record<string, string> = {
 }
 
 export function SessionHeader({ permissionMode, thinkingEnabled, planMode }: Props) {
-  const { activeSessionId, projects, sessionStates, messageQueue } = useSessionStore()
-  const { activeModelId, groups } = useModelStore()
+  const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const projects = useSessionStore((s) => s.projects)
+  const sessionStates = useSessionStore((s) => s.sessionStates)
+  const messageQueue = useSessionStore((s) => s.messageQueue)
+  const activeModelId = useModelStore((s) => s.activeModelId)
+  const groups = useModelStore((s) => s.groups)
 
   const state = activeSessionId ? sessionStates[activeSessionId] : undefined
   const usage = state?.usage

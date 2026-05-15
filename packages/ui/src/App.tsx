@@ -12,7 +12,8 @@ import { useSettingsStore } from './stores/settings-store'
 import { useHotkeys } from './hooks/useHotkeys'
 
 export function App() {
-  const { activeSessionId, projects } = useSessionStore()
+  const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const projects = useSessionStore((s) => s.projects)
   const createSession = useSessionStore((s) => s.createSession)
   const deleteSession = useSessionStore((s) => s.deleteSession)
   const switchSession = useSessionStore((s) => s.switchSession)

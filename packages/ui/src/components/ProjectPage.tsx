@@ -51,10 +51,22 @@ function CardTitle({ children }: { children: React.ReactNode }) {
 // --- main component ---
 
 export function ProjectPage() {
-  const { projects, activeSessionId, sessionStates, tasks } = useSessionStore()
+  const projects = useSessionStore((s) => s.projects)
+  const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const sessionStates = useSessionStore((s) => s.sessionStates)
+  const tasks = useSessionStore((s) => s.tasks)
   const addProject = useSessionStore((s) => s.addProject)
   const switchSession = useSessionStore((s) => s.switchSession)
-  const activeModel = useModelStore((s) => s.getActiveModel())
+  const activeModelId = useModelStore((s) => s.activeModelId)
+  const modelGroups = useModelStore((s) => s.groups)
+  const activeModel = (() => {
+    if (!activeModelId) return null
+    for (const g of modelGroups) {
+      const m = g.models.find((m) => m.id === activeModelId)
+      if (m) return { model: m, group: g }
+    }
+    return null
+  })()
 
   const [mcpServers, setMcpServers] = useState<McpServerState[]>([])
 

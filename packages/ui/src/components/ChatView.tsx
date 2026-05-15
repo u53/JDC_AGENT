@@ -78,8 +78,11 @@ interface ChatViewProps {
 
 export function ChatView({ onOpenMcp }: ChatViewProps) {
   const { messages, streamingText, thinkingText, isStreaming, isThinking, toolEvents, sendMessage, abort, error, retry, dismissError } = useSession()
-  const { activeSessionId } = useSessionStore()
-  const { getActiveModel, groups, activeModelId, setActiveModel } = useModelStore()
+  const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const getActiveModel = useModelStore((s) => s.getActiveModel)
+  const groups = useModelStore((s) => s.groups)
+  const activeModelId = useModelStore((s) => s.activeModelId)
+  const setActiveModel = useModelStore((s) => s.setActiveModel)
   const openSettings = useSettingsStore((s) => s.open)
   useAgentEvents()
   const activeAgentId = useAgentStore((s) => s.activeAgentId)

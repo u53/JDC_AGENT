@@ -109,6 +109,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         ...(usage ? { [sessionId]: { ...(s.sessionStates[sessionId] || EMPTY_STREAM_STATE), usage } } : {}),
       },
     }))
+    await get().loadTasks(sessionId)
   },
 
   deleteSession: async (sessionId: string) => {

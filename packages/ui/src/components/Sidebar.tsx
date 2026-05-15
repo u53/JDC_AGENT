@@ -2,8 +2,13 @@ import { useEffect } from 'react'
 import { useSessionStore } from '../stores/session-store'
 
 export function Sidebar() {
-  const { projects, activeSessionId, sessionStates, loadProjects, createSession, switchSession, addProject } =
-    useSessionStore()
+  const projects = useSessionStore((s) => s.projects)
+  const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const sessionStates = useSessionStore((s) => s.sessionStates)
+  const loadProjects = useSessionStore((s) => s.loadProjects)
+  const createSession = useSessionStore((s) => s.createSession)
+  const switchSession = useSessionStore((s) => s.switchSession)
+  const addProject = useSessionStore((s) => s.addProject)
 
   useEffect(() => {
     loadProjects()
