@@ -7,6 +7,7 @@ import { ModelManager } from './components/ModelManager'
 import { McpSettings } from './components/McpSettings'
 import { ProjectPage } from './components/ProjectPage'
 import { AskUserDialog } from './components/AskUserDialog'
+import { Inspector } from './components/Inspector'
 import { useSessionStore } from './stores/session-store'
 import { useModelStore } from './stores/model-store'
 import { useSettingsStore } from './stores/settings-store'
@@ -86,7 +87,7 @@ export function App() {
   return (
     <div className="h-screen w-screen grid grid-rows-[48px_1fr] bg-[var(--bg)] text-[var(--text)]">
       <Topbar />
-      <div className="grid grid-cols-[240px_1fr] overflow-hidden">
+      <div className="grid grid-cols-[240px_1fr_auto] overflow-hidden">
         <Sidebar />
         <div className="flex-1 flex flex-col overflow-hidden border-l border-[var(--border)]">
           {activeSessionId ? (
@@ -96,6 +97,7 @@ export function App() {
           )}
           <UsageHUD onOpenMcp={() => setMcpOpen(true)} onOpenSettings={openSettings} />
         </div>
+        <Inspector />
       </div>
       <ModelManager />
       <McpSettings isOpen={mcpOpen} onClose={() => setMcpOpen(false)} />
