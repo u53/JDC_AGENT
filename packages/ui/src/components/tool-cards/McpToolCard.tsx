@@ -25,16 +25,16 @@ export function McpToolCard({ event, input, result, name }: ToolCardRouterProps)
       defaultExpanded={status === 'running'}
     >
       {inputEntries.length > 0 && (
-        <div className="text-xs text-[#666] mb-2">
+        <div className="text-[12px] text-[var(--muted)] mb-2" style={{ fontFamily: 'var(--font-mono)' }}>
           {inputEntries.map(([key, val]) => (
             <div key={key}>
-              <span className="text-[#EAEAEA]">{key}</span>: {typeof val === 'string' ? val.slice(0, 80) : JSON.stringify(val).slice(0, 80)}
+              <span className="text-[var(--text)]">{key}</span>: {typeof val === 'string' ? val.slice(0, 80) : JSON.stringify(val).slice(0, 80)}
             </div>
           ))}
         </div>
       )}
       {content && (
-        <pre className={`max-h-48 overflow-auto bg-[#050505] p-2 text-xs whitespace-pre-wrap ${isError ? 'text-[#E61919]' : 'text-[#EAEAEA]'}`}>
+        <pre className={`max-h-48 overflow-auto p-2 text-[12px] whitespace-pre-wrap ${isError ? 'text-[var(--bad)]' : 'text-[var(--text)]'}`} style={{ fontFamily: 'var(--font-mono)' }}>
           {content.slice(0, 500)}
           {content.length > 500 && '\n...'}
         </pre>

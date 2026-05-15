@@ -25,12 +25,12 @@ export function GenericToolCard({ event, name, input, result }: Props) {
       defaultExpanded={status === 'running'}
     >
       {toolInput && Object.keys(toolInput).length > 0 && (
-        <pre className="max-h-48 overflow-auto bg-[#050505] p-2 text-xs whitespace-pre-wrap text-[#EAEAEA] mb-2">
+        <pre className="max-h-48 overflow-auto p-2 text-[12px] whitespace-pre-wrap text-[var(--text)] mb-2" style={{ fontFamily: 'var(--font-mono)' }}>
           {JSON.stringify(toolInput, null, 2)}
         </pre>
       )}
       {content && (
-        <pre className={`max-h-48 overflow-auto bg-[#050505] p-2 text-xs whitespace-pre-wrap ${isError ? 'text-[#E61919]' : 'text-[#EAEAEA]'}`}>
+        <pre className={`max-h-48 overflow-auto p-2 text-[12px] whitespace-pre-wrap ${isError ? 'text-[var(--bad)]' : 'text-[var(--text)]'}`} style={{ fontFamily: 'var(--font-mono)' }}>
           {content}
         </pre>
       )}

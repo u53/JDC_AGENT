@@ -18,7 +18,7 @@ export function SkillToolCard({ event, input, result }: ToolCardRouterProps) {
       defaultExpanded={false}
     >
       {content && (
-        <pre className="max-h-48 overflow-auto bg-[#050505] p-2 text-xs whitespace-pre-wrap text-[#EAEAEA]">
+        <pre className="max-h-48 overflow-auto p-2 text-[12px] whitespace-pre-wrap text-[var(--text)]" style={{ fontFamily: 'var(--font-mono)' }}>
           {content.slice(0, 200)}
           {content.length > 200 && '...'}
         </pre>

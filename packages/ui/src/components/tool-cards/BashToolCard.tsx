@@ -19,12 +19,18 @@ export function BashToolCard({ event, input, result }: ToolCardRouterProps) {
       detail={`$ ${displayCommand}`}
       status={status}
       defaultExpanded={status === 'running'}
+      actions={status === 'done' ? (
+        <div className="flex items-center gap-1">
+          <button onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(command) }} className="px-1.5 py-0.5 rounded-[4px] text-[11px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-3)] transition-colors">Copy cmd</button>
+          {output && <button onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(output) }} className="px-1.5 py-0.5 rounded-[4px] text-[11px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-3)] transition-colors">Copy output</button>}
+        </div>
+      ) : undefined}
     >
       {status === 'running' && !output && (
-        <div className="text-[10px] text-[#666] uppercase tracking-[0.1em]">Running...</div>
+        <div className="text-[10px] text-[var(--muted)] uppercase tracking-[0.1em]">Running...</div>
       )}
       {output && (
-        <pre className={`max-h-[300px] overflow-auto bg-[#050505] p-2 text-xs whitespace-pre-wrap font-mono ${isError ? 'text-[#E61919]' : 'text-[#EAEAEA]'}`}>
+        <pre className={`max-h-[300px] overflow-auto p-2 text-[12px] whitespace-pre-wrap ${isError ? 'text-[var(--bad)]' : 'text-[var(--text)]'}`} style={{ fontFamily: 'var(--font-mono)' }}>
           {output}
         </pre>
       )}

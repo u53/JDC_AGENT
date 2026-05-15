@@ -29,12 +29,12 @@ export function EditToolCard({ event, input, result }: ToolCardRouterProps) {
       defaultExpanded={status === 'running'}
     >
       {isError && (
-        <pre className="max-h-48 overflow-auto bg-[#050505] p-2 text-xs whitespace-pre-wrap text-[#E61919]">
+        <pre className="max-h-48 overflow-auto p-2 text-[12px] whitespace-pre-wrap text-[var(--bad)]" style={{ fontFamily: 'var(--font-mono)' }}>
           {errorContent}
         </pre>
       )}
       {!isError && diffLines.length > 0 && (
-        <div className="max-h-[300px] overflow-auto bg-[#050505] p-2 text-xs font-mono">
+        <div className="max-h-[300px] overflow-auto p-2 text-[12px]" style={{ fontFamily: 'var(--font-mono)' }}>
           {diffLines.map((line, i) => (
             <div
               key={i}
@@ -43,7 +43,7 @@ export function EditToolCard({ event, input, result }: ToolCardRouterProps) {
                   ? 'bg-green-900/20 text-green-400'
                   : line.type === 'remove'
                   ? 'bg-red-900/20 text-red-400'
-                  : 'text-[#666]'
+                  : 'text-[var(--muted)]'
               }
             >
               <span className="select-none inline-block w-4">

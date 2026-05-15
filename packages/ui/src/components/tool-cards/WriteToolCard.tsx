@@ -26,12 +26,12 @@ export function WriteToolCard({ event, input, result }: ToolCardRouterProps) {
       defaultExpanded={status === 'running'}
     >
       {isError && (
-        <pre className="max-h-48 overflow-auto bg-[#050505] p-2 text-xs whitespace-pre-wrap text-[#E61919]">
+        <pre className="max-h-48 overflow-auto p-2 text-[12px] whitespace-pre-wrap text-[var(--bad)]" style={{ fontFamily: 'var(--font-mono)' }}>
           {errorContent}
         </pre>
       )}
       {!isError && lines.length > 0 && (
-        <div className="max-h-[300px] overflow-auto bg-[#050505] p-2 text-xs font-mono">
+        <div className="max-h-[300px] overflow-auto p-2 text-[12px]" style={{ fontFamily: 'var(--font-mono)' }}>
           {displayLines.map((line, i) => (
             <div key={i} className="bg-green-900/20 text-green-400">
               <span className="select-none inline-block w-4">+</span>
@@ -40,7 +40,7 @@ export function WriteToolCard({ event, input, result }: ToolCardRouterProps) {
           ))}
           {hasMore && !showAll && (
             <div
-              className="text-[#666] cursor-pointer hover:text-[#EAEAEA] mt-1"
+              className="text-[var(--muted)] cursor-pointer hover:text-[var(--text)] mt-1"
               onClick={(e) => { e.stopPropagation(); setShowAll(true) }}
             >
               ... {lines.length - 5} more lines

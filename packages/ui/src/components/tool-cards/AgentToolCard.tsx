@@ -59,20 +59,20 @@ export function AgentToolCard({ event, input, result }: ToolCardRouterProps) {
               className="text-[10px] uppercase tracking-[0.05em] text-red-500 hover:text-red-400 transition-colors ml-2"
               onClick={handleAbort}
             >
-              [ABORT]
+              Abort
             </button>
           ) : undefined
         }
       >
         {status === 'running' && recentTools.length > 0 && (
-          <div className="text-xs font-mono text-[#666] mb-2">
+          <div className="text-[12px] text-[var(--muted)] mb-2" style={{ fontFamily: 'var(--font-mono)' }}>
             {recentTools.map((te, i) => (
               <div key={i} className="flex items-center gap-1">
-                <span className="text-[#666]">{i === recentTools.length - 1 ? '└─' : '├─'}</span>
-                <span className={te.status === 'error' ? 'text-[#E61919]' : te.status === 'complete' ? 'text-[#4AF626]' : 'text-[#EAEAEA]'}>
+                <span className="text-[var(--muted)]">{i === recentTools.length - 1 ? '└─' : '├─'}</span>
+                <span className={te.status === 'error' ? 'text-[var(--bad)]' : te.status === 'complete' ? 'text-[var(--good)]' : 'text-[var(--text)]'}>
                   {te.toolName}
                 </span>
-                {te.status === 'start' && <span className="text-[#666] animate-pulse">...</span>}
+                {te.status === 'start' && <span className="text-[var(--muted)] animate-pulse">...</span>}
               </div>
             ))}
           </div>
@@ -84,10 +84,10 @@ export function AgentToolCard({ event, input, result }: ToolCardRouterProps) {
           </div>
         )}
         {status === 'running' && toolCount > 0 && (
-          <div className="text-[10px] text-[#666] mt-1">{toolCount} tools executed</div>
+          <div className="text-[10px] text-[var(--muted)] mt-1">{toolCount} tools executed</div>
         )}
         {status !== 'running' && resultContent && (
-          <pre className={`max-h-48 overflow-auto bg-[#050505] p-2 text-xs whitespace-pre-wrap ${isError ? 'text-[#E61919]' : 'text-[#EAEAEA]'}`}>
+          <pre className={`max-h-48 overflow-auto p-2 text-[12px] whitespace-pre-wrap ${isError ? 'text-[var(--bad)]' : 'text-[var(--text)]'}`} style={{ fontFamily: 'var(--font-mono)' }}>
             {truncateText(resultContent, 500)}
           </pre>
         )}
