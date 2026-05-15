@@ -27,6 +27,12 @@ export function useSession() {
 
     const unsubTool = ipc.query.onToolEvent(({ sessionId, event }) => {
       store.addToolEvent(sessionId, event)
+      if (event.type === 'complete' && event.toolName?.startsWith('task_')) {
+        const current = useSessionStore.getState()
+        if (sessionId === current.activeSessionId) {
+          current.loadTasks(sessionId)
+        }
+      }
     })
 
     const unsubComplete = ipc.query.onComplete(({ sessionId, message }) => {
