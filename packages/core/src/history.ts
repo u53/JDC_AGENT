@@ -72,6 +72,13 @@ export class ConversationHistory {
     this.db!.run(`CREATE INDEX IF NOT EXISTS idx_snapshots_session ON file_snapshots(session_id, timestamp)`)
     this.db!.run(`CREATE INDEX IF NOT EXISTS idx_snapshots_file ON file_snapshots(session_id, file_path)`)
 
+    // Migration: add accepted column to file_snapshots
+    try {
+      this.db!.run(`ALTER TABLE file_snapshots ADD COLUMN accepted INTEGER DEFAULT 0`)
+    } catch {
+      // Column already exists
+    }
+
     // Tasks table
     this.db!.run(`
       CREATE TABLE IF NOT EXISTS tasks (
@@ -233,7 +240,7 @@ export class ConversationHistory {
   getChangedFiles(sessionId: string): Array<{ filePath: string; changeType: string; snapshotCount: number; lastModified: number }> {
     const stmt = this.db!.prepare(`
       SELECT file_path, COUNT(*) as cnt, MAX(timestamp) as last_ts, MIN(content_before) as first_before
-      FROM file_snapshots WHERE session_id = ? GROUP BY file_path ORDER BY last_ts DESC
+      FROM file_snapshots WHERE session_id = ? AND (accepted IS NULL OR accepted = 0) GROUP BY file_path ORDER BY last_ts DESC
     `)
     stmt.bind([sessionId])
     const results: any[] = []
@@ -272,6 +279,16 @@ export class ConversationHistory {
 
   deleteFileSnapshotsAfterTurn(sessionId: string, turnIndex: number): void {
     this.db!.run('DELETE FROM file_snapshots WHERE session_id = ? AND turn_index > ?', [sessionId, turnIndex])
+    this.save()
+  }
+
+  acceptFile(sessionId: string, filePath: string): void {
+    this.db!.run('UPDATE file_snapshots SET accepted = 1 WHERE session_id = ? AND file_path = ?', [sessionId, filePath])
+    this.save()
+  }
+
+  acceptAllFiles(sessionId: string): void {
+    this.db!.run('UPDATE file_snapshots SET accepted = 1 WHERE session_id = ?', [sessionId])
     this.save()
   }
 

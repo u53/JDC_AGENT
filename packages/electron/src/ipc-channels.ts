@@ -32,6 +32,8 @@ export const IPC_CHANNELS = {
   FILE_GET_HISTORY: 'file:get-history',
   FILE_REWIND: 'file:rewind',
   FILE_REWIND_TURN: 'file:rewind-turn',
+  FILE_ACCEPT: 'file:accept',
+  FILE_ACCEPT_ALL: 'file:accept-all',
   PLAN_REVIEW: 'plan:review',
   PLAN_RESPOND: 'plan:respond',
   SESSION_GET_TASKS: 'session:get-tasks',

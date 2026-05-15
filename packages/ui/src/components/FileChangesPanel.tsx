@@ -32,7 +32,6 @@ export function FileChangesPanel() {
   const [expanded, setExpanded] = useState(false)
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [history, setHistory] = useState<FileSnapshot[]>([])
-  const [dismissed, setDismissed] = useState(false)
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
 
   const loadChanges = useCallback(async () => {
@@ -44,7 +43,6 @@ export function FileChangesPanel() {
   }, [activeSessionId])
 
   useEffect(() => {
-    setDismissed(false)
     loadChanges()
   }, [loadChanges])
 
@@ -75,7 +73,19 @@ export function FileChangesPanel() {
     setConfirmState(null)
   }
 
-  if (changes.length === 0 || dismissed) return null
+  const handleAcceptFile = async (filePath: string) => {
+    if (!activeSessionId) return
+    await window.electronAPI?.invoke('file:accept', { sessionId: activeSessionId, filePath })
+    await loadChanges()
+  }
+
+  const handleAcceptAll = async () => {
+    if (!activeSessionId) return
+    await window.electronAPI?.invoke('file:accept-all', { sessionId: activeSessionId })
+    await loadChanges()
+  }
+
+  if (changes.length === 0) return null
 
   return (
     <div className="border-t border-[#333]">
@@ -83,7 +93,7 @@ export function FileChangesPanel() {
         <div className="border-b border-yellow-600/50 bg-yellow-900/10 px-4 py-2">
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.1em] mb-2">
             <span className="inline-block h-2 w-2 rounded-full bg-yellow-400" />
-            <span className="text-yellow-400">CONFIRM REWIND</span>
+            <span className="text-yellow-400">CONFIRM REVERT</span>
           </div>
           <p className="text-xs text-[#EAEAEA] mb-2">{confirmState.message}</p>
           <div className="flex items-center gap-3">
@@ -111,18 +121,18 @@ export function FileChangesPanel() {
           <span className="text-[#4AF626]">FILES CHANGED: {changes.length}</span>
           <span className="text-[#666]">{expanded ? '▼' : '▶'}</span>
         </button>
-        <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.1em]">
+        <div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.1em]">
           <button
-            onClick={() => setConfirmState({ type: 'all', message: `撤销本次会话的所有文件修改？共 ${changes.length} 个文件将被恢复。` })}
+            onClick={() => setConfirmState({ type: 'all', message: `撤销所有文件修改？共 ${changes.length} 个文件将被恢复。` })}
             className="text-[#666] hover:text-[#E61919] transition-colors"
           >
-            [REWIND ALL]
+            [REVERT ALL]
           </button>
           <button
-            onClick={() => setDismissed(true)}
-            className="text-[#666] hover:text-[#EAEAEA] transition-colors"
+            onClick={handleAcceptAll}
+            className="text-[#666] hover:text-[#4AF626] transition-colors"
           >
-            [DISMISS]
+            [ACCEPT ALL]
           </button>
         </div>
       </div>
@@ -131,17 +141,28 @@ export function FileChangesPanel() {
         <div className="border-t border-[#222] max-h-[300px] overflow-y-auto">
           {changes.map((change) => (
             <div key={change.filePath} className="border-b border-[#222]">
-              <div
-                onClick={() => setSelectedFile(selectedFile === change.filePath ? null : change.filePath)}
-                className="flex items-center gap-2 px-4 py-1.5 text-xs hover:bg-[#111] transition-colors cursor-pointer"
-              >
+              <div className="flex items-center gap-2 px-4 py-1.5 text-xs hover:bg-[#111] transition-colors">
                 <span className={change.changeType === 'created' ? 'text-[#4AF626]' : 'text-yellow-400'}>
                   {change.changeType === 'created' ? '+' : '~'}
                 </span>
-                <span className="text-[#EAEAEA] truncate flex-1 text-left">
+                <span
+                  onClick={() => setSelectedFile(selectedFile === change.filePath ? null : change.filePath)}
+                  className="text-[#EAEAEA] truncate flex-1 text-left cursor-pointer"
+                >
                   {change.filePath.split('/').slice(-2).join('/')}
                 </span>
-                <span className="text-[#666] text-[10px]">{change.snapshotCount}x</span>
+                <button
+                  onClick={() => setConfirmState({ type: 'single', snapshotId: undefined, message: `撤销 ${change.filePath.split('/').pop()} 的所有修改？` })}
+                  className="text-[10px] text-[#666] hover:text-[#E61919] uppercase tracking-[0.1em]"
+                >
+                  [REVERT]
+                </button>
+                <button
+                  onClick={() => handleAcceptFile(change.filePath)}
+                  className="text-[10px] text-[#666] hover:text-[#4AF626] uppercase tracking-[0.1em]"
+                >
+                  [ACCEPT]
+                </button>
               </div>
 
               {selectedFile === change.filePath && history.length > 0 && (
@@ -159,7 +180,7 @@ export function FileChangesPanel() {
                           onClick={() => setConfirmState({ type: 'single', snapshotId: snap.id, message: '撤销这次修改？文件将恢复到修改前的状态。' })}
                           className="text-[#666] hover:text-[#E61919] uppercase tracking-[0.1em]"
                         >
-                          [REWIND]
+                          [REVERT]
                         </button>
                       </div>
                     )

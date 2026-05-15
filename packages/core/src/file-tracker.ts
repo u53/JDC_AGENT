@@ -105,4 +105,12 @@ export class FileTracker {
     this.history.deleteFileSnapshotsAfterTurn(this.sessionId, turnIndex)
     return restored
   }
+
+  acceptFile(filePath: string): void {
+    this.history.acceptFile(this.sessionId, filePath)
+  }
+
+  acceptAllFiles(): void {
+    this.history.acceptAllFiles(this.sessionId)
+  }
 }

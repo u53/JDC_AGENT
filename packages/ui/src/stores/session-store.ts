@@ -43,6 +43,7 @@ interface SessionState {
   messageQueue: string[]
   enqueueMessage: (text: string) => void
   dequeueMessage: () => string | undefined
+  removeFromQueue: (index: number) => void
   loadProjects: () => Promise<void>
   createSession: (cwd: string) => Promise<void>
   switchSession: (sessionId: string) => Promise<void>
@@ -79,6 +80,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const [first, ...rest] = queue
     set({ messageQueue: rest })
     return first
+  },
+  removeFromQueue: (index: number) => {
+    set((s) => ({ messageQueue: s.messageQueue.filter((_, i) => i !== index) }))
   },
 
   loadProjects: async () => {

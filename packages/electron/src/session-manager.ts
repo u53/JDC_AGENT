@@ -281,6 +281,16 @@ export class SessionManager {
     return session.getFileTracker().rewindToTurn(turnIndex)
   }
 
+  acceptFile(sessionId: string, filePath: string): void {
+    const session = this.sessions.get(sessionId)
+    if (session) session.getFileTracker().acceptFile(filePath)
+  }
+
+  acceptAllFiles(sessionId: string): void {
+    const session = this.sessions.get(sessionId)
+    if (session) session.getFileTracker().acceptAllFiles()
+  }
+
   close(): void {
     this.mcpManager.close()
     this.history.close()

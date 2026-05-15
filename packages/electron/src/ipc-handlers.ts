@@ -122,6 +122,16 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
     return sessionManager.rewindToTurn(sessionId, turnIndex)
   })
 
+  ipcMain.handle(IPC_CHANNELS.FILE_ACCEPT, async (_event, { sessionId, filePath }) => {
+    sessionManager.acceptFile(sessionId, filePath)
+    return { success: true }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.FILE_ACCEPT_ALL, async (_event, { sessionId }) => {
+    sessionManager.acceptAllFiles(sessionId)
+    return { success: true }
+  })
+
   ipcMain.handle(IPC_CHANNELS.SESSION_GET_TASKS, async (_event, { sessionId }) => {
     return sessionManager.getTasks(sessionId)
   })
