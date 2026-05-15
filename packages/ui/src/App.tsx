@@ -5,6 +5,7 @@ import { ChatView } from './components/ChatView'
 import { UsageHUD } from './components/UsageHUD'
 import { ModelManager } from './components/ModelManager'
 import { McpSettings } from './components/McpSettings'
+import { ProjectPage } from './components/ProjectPage'
 import { AskUserDialog } from './components/AskUserDialog'
 import { useSessionStore } from './stores/session-store'
 import { useModelStore } from './stores/model-store'
@@ -91,9 +92,7 @@ export function App() {
           {activeSessionId ? (
             <ChatView onOpenMcp={() => setMcpOpen(true)} />
           ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <p className="text-[14px] text-[var(--muted)]">选择项目或新建会话</p>
-            </div>
+            <ProjectPage />
           )}
           <UsageHUD onOpenMcp={() => setMcpOpen(true)} onOpenSettings={openSettings} />
         </div>
