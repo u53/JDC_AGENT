@@ -5,7 +5,14 @@ import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 export const fileReadTool: ToolHandler = {
   definition: {
     name: 'file_read',
-    description: 'Read a file from the filesystem.',
+    description: `Read a file from the filesystem. Results are returned with line numbers (1-based).
+
+Usage notes:
+- Use offset and limit for large files. By default reads the entire file.
+- Do NOT re-read a file you just edited — the edit was successful if no error was returned.
+- This tool can read text files of any type. For binary files, it returns an error.
+- When you need to understand code before modifying it, always read the relevant file first.
+- If you only need a specific section, use offset/limit to avoid loading unnecessary content.`,
     inputSchema: {
       type: 'object',
       properties: {

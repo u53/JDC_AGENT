@@ -5,7 +5,15 @@ import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 export const fileEditTool: ToolHandler = {
   definition: {
     name: 'file_edit',
-    description: 'Replace a specific string in a file with new content.',
+    description: `Performs exact string replacement in a file.
+
+Usage notes:
+- You MUST read the file with file_read before editing. Never edit a file you haven't read in this conversation.
+- The old_string must be UNIQUE in the file. If it appears multiple times, the edit will fail — provide more surrounding context to make it unique, or use replace_all: true.
+- Preserve exact indentation (tabs/spaces) from the file. Match what you saw in file_read output (after the line number prefix).
+- If your replacement exceeds 50 lines, split into multiple file_edit calls.
+- Use replace_all: true when renaming a variable or string across the entire file.
+- old_string and new_string must be different.`,
     inputSchema: {
       type: 'object',
       properties: {

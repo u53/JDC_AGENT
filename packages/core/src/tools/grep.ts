@@ -5,7 +5,13 @@ import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 export const grepTool: ToolHandler = {
   definition: {
     name: 'grep',
-    description: 'Search file contents using regex. Uses ripgrep (rg) if available, falls back to grep.',
+    description: `Search file contents using regex. Returns matching lines with file paths and line numbers.
+
+Usage notes:
+- Use this instead of bash grep/rg for code search.
+- Use the glob parameter to filter by file type (e.g. "*.ts", "*.py").
+- Results are truncated at 200 matches. Use a more specific pattern or path if you get too many results.
+- Use include_count: true to get match counts per file (useful for understanding scope before diving in).`,
     inputSchema: {
       type: 'object',
       properties: {

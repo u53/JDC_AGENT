@@ -4,7 +4,13 @@ import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 export const webSearchTool: ToolHandler = {
   definition: {
     name: 'web_search',
-    description: 'Search the web. Requires Brave Search API key in config.',
+    description: `Search the web for current information. Returns titles, URLs, and snippets.
+
+Usage notes:
+- Use for information beyond your training data: current events, recent documentation, API references.
+- When using search results in your response, include a "Sources:" section with relevant URLs.
+- Use specific, descriptive queries rather than single keywords.
+- The current year is important for finding recent docs — include it when searching for latest versions.`,
     inputSchema: {
       type: 'object',
       properties: {

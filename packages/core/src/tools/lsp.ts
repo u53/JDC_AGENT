@@ -15,7 +15,16 @@ const OPERATION_METHODS: Record<Operation, string> = {
 export const lspTool: ToolHandler = {
   definition: {
     name: 'lsp',
-    description: 'Interact with Language Server Protocol servers for code intelligence (go to definition, find references, hover, symbols).',
+    description: `Interact with Language Server Protocol servers for code intelligence.
+
+Supported operations:
+- goToDefinition: Find where a symbol is defined
+- findReferences: Find all references to a symbol
+- hover: Get type info and documentation for a symbol
+- documentSymbol: Get all symbols (functions, classes, variables) in a file
+- workspaceSymbol: Search for symbols across the entire workspace
+
+Use this for precise code navigation instead of grep when you need type-aware results. Requires line and character position (1-based).`,
     inputSchema: {
       type: 'object',
       properties: {

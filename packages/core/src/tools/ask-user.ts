@@ -11,7 +11,11 @@ export function createAskUserTool(onAskUser: AskUserCallback): ToolHandler {
     definition: {
       name: 'ask_user',
       description:
-        'Ask the user a question. Can provide options for single or multi-select.',
+        'Ask the user a question when you genuinely cannot proceed without their input. Can provide options for single or multi-select.\n\n' +
+        'Only use this when you cannot figure out the answer yourself using tools (file_read, grep, glob). ' +
+        'Prefer discovering answers through code exploration over asking. ' +
+        'Good uses: choosing between valid approaches, confirming destructive actions, getting preferences. ' +
+        'Bad uses: asking what a file contains (just read it), asking where something is defined (just grep for it).',
       inputSchema: {
         type: 'object',
         properties: {

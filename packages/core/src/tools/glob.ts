@@ -7,7 +7,13 @@ const MAX_RESULTS = 100
 export const globTool: ToolHandler = {
   definition: {
     name: 'glob',
-    description: 'Find files matching a glob pattern. Returns up to 100 file paths.',
+    description: `Find files matching a glob pattern. Returns up to 100 file paths.
+
+Usage notes:
+- Use this instead of bash find for locating files by name or extension.
+- Common patterns: "**/*.ts" (all TypeScript), "src/**/*.{js,jsx}" (JS in src), "**/test*" (test files).
+- Automatically ignores node_modules and .git directories.
+- If you get too many results, narrow the pattern or specify a subdirectory in the path parameter.`,
     inputSchema: {
       type: 'object',
       properties: {

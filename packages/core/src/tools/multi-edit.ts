@@ -10,7 +10,14 @@ interface EditOp {
 export const multiEditTool: ToolHandler = {
   definition: {
     name: 'multi_edit',
-    description: 'Apply multiple string replacements to a single file atomically. All edits succeed or none are applied.',
+    description: `Apply multiple string replacements to a single file atomically. All edits succeed or none are applied.
+
+Use this instead of multiple file_edit calls when:
+- You need to make several related changes to the same file
+- Later edits depend on earlier ones (edits are applied in order)
+- You want atomic behavior (all-or-nothing)
+
+Each edit's old_string must be unique in the file at the point it's applied.`,
     inputSchema: {
       type: 'object',
       properties: {

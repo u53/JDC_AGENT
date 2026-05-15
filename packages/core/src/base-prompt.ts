@@ -171,19 +171,6 @@ function getToolUsageSection(toolNames: string[]): string {
     'If some tool calls depend on previous results, run them sequentially — do NOT use placeholder values.',
   )
 
-  if (hasBash) {
-    items.push(
-      `When using bash:
-  - Use absolute paths. Do not rely on working directory state between calls.
-  - Quote file paths containing spaces with double quotes.
-  - For multiple independent commands, make separate parallel tool calls. For dependent commands, chain with &&.
-  - When running find, search from the project root, not /. Scanning the full filesystem exhausts resources.
-  - Avoid unnecessary sleep commands. If waiting for a condition, use a polling loop.
-  - Never use interactive flags (-i) as they require unsupported input.
-  - When constructing commands with user-provided values, use proper quoting to prevent injection.`,
-    )
-  }
-
   return `# Using Your Tools\n\n${items.map(i => `- ${i}`).join('\n')}`
 }
 
@@ -191,8 +178,7 @@ function getToolDescriptionsSection(toolDefs: ToolDefinition[]): string {
   if (toolDefs.length === 0) return ''
 
   const descriptions = toolDefs.map(t => {
-    const desc = t.description.length > 200 ? t.description.slice(0, 200) + '...' : t.description
-    return `## ${t.name}\n${desc}`
+    return `## ${t.name}\n${t.description}`
   }).join('\n\n')
 
   return `# Tool Descriptions\n\n${descriptions}`
@@ -297,6 +283,8 @@ function getGitSection(): string {
   EOF
   )"
   \`\`\`
+
+See the bash tool description for detailed commit and PR workflows.
 
 <examples title="git safety">
 <example>

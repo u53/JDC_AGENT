@@ -6,7 +6,14 @@ import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 export const fileWriteTool: ToolHandler = {
   definition: {
     name: 'file_write',
-    description: 'Write content to a file, creating it if it does not exist.',
+    description: `Write content to a file, creating it if it does not exist. Overwrites existing content.
+
+Usage notes:
+- If the file already exists, you MUST read it with file_read first to understand what you're replacing.
+- Prefer file_edit for modifying existing files — it only sends the diff and is easier to review.
+- Only use file_write for creating new files or complete rewrites.
+- If the content exceeds 150 lines, write the first 50 lines with this tool, then use file_edit to append the rest in chunks.
+- Do NOT re-read a file after writing — the write was successful if no error was returned.`,
     inputSchema: {
       type: 'object',
       properties: {
