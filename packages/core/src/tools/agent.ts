@@ -13,6 +13,7 @@ export interface AgentToolDeps {
   onToolEvent?: (event: ToolExecutionEvent) => void
   onPermissionRequest?: PermissionCallback
   isSubAgent?: boolean
+  resolveModel?: (modelId: string) => { provider: ModelProvider; modelConfig: ModelConfig } | null
   onAgentProgress?: (agentToolUseId: string, event: { toolName: string; toolStatus: 'start' | 'complete' | 'error'; toolInput?: Record<string, unknown>; toolResult?: { content: string; isError?: boolean }; toolCount: number }) => void
   onAgentText?: (agentToolUseId: string, text: string) => void
   onAgentComplete?: (agentToolUseId: string, result: { content: string; turns: number; toolsUsed: string[] }) => void
@@ -40,6 +41,7 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
             enum: ['explore', 'plan', 'refactor', 'security-auditor', 'frontend-designer', 'general'],
             description: 'The type of specialized agent to use (default: general)',
           },
+          modelId: { type: 'string', description: 'Model ID to use for this sub-agent (from configured models). Defaults to current session model.' },
           maxTurns: { type: 'number', description: 'Maximum conversation turns (default: 150)' },
         },
         required: ['prompt'],
@@ -53,7 +55,19 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
       const prompt = input.prompt as string
       const maxTurns = (input.maxTurns as number) || 150
       const agentType = (input.type as string) || 'general'
+      const requestedModelId = input.modelId as string | undefined
       const toolUseId = context.toolUseId || 'unknown'
+
+      let effectiveProvider = deps.provider
+      let effectiveModelConfig = deps.modelConfig
+
+      if (requestedModelId && deps.resolveModel) {
+        const resolved = deps.resolveModel(requestedModelId)
+        if (resolved) {
+          effectiveProvider = resolved.provider
+          effectiveModelConfig = resolved.modelConfig
+        }
+      }
 
       const agentAbort = new AbortController()
       deps.agentAbortControllers?.set(toolUseId, agentAbort)
@@ -67,9 +81,9 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
       try {
         const result = await runSubSession({
           prompt,
-          provider: deps.provider,
+          provider: effectiveProvider,
           toolRegistry: deps.toolRegistry,
-          modelConfig: deps.modelConfig,
+          modelConfig: effectiveModelConfig,
           cwd: deps.cwd,
           maxTurns,
           agentType,

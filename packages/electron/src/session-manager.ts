@@ -109,6 +109,24 @@ export class SessionManager {
       })
     }
     const session = new Session(sessionConfig, provider, this.history, permissionCallback, this.mcpManager, onPlanReview)
+    session.resolveModel = (modelId: string) => {
+      const config = loadAppConfig()
+      const data = config.modelGroups
+      if (!data?.groups) return null
+      for (const group of data.groups) {
+        const model = group.models?.find((m: any) => m.id === modelId || m.modelId === modelId)
+        if (model) {
+          const resolvedProvider = this.createProvider(group)
+          const resolvedConfig = {
+            model: model.modelId,
+            maxTokens: model.contextWindow || 8192,
+            contextWindow: model.contextWindow || 200000,
+          }
+          return { provider: resolvedProvider, modelConfig: resolvedConfig }
+        }
+      }
+      return null
+    }
     const onAskUser: AskUserCallback = async (question, options, multiSelect) => {
       return new Promise<string>((resolve) => {
         const id = uuid()
@@ -245,6 +263,10 @@ export class SessionManager {
   deleteSession(sessionId: string): void {
     this.sessions.delete(sessionId)
     this.history.deleteSession(sessionId)
+  }
+
+  renameSession(sessionId: string, title: string): void {
+    this.history.updateSessionTitle(sessionId, title)
   }
 
   getMessages(sessionId: string) {

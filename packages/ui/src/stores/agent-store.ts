@@ -10,6 +10,7 @@ export interface AgentToolEvent {
 export interface AgentState {
   agentToolUseId: string
   prompt: string
+  modelId?: string
   status: 'running' | 'done' | 'error'
   toolEvents: AgentToolEvent[]
   textOutput: string
@@ -21,7 +22,7 @@ export interface AgentState {
 interface AgentStoreState {
   agents: Record<string, AgentState>
   activeAgentId: string | null
-  addAgent: (id: string, prompt: string) => void
+  addAgent: (id: string, prompt: string, modelId?: string) => void
   updateAgentTool: (id: string, toolName: string, toolStatus: 'start' | 'complete' | 'error', toolInput?: Record<string, unknown>, toolResult?: { content: string; isError?: boolean }, toolCount?: number) => void
   appendAgentText: (id: string, text: string) => void
   completeAgent: (id: string, result: string) => void
@@ -34,10 +35,10 @@ export const useAgentStore = create<AgentStoreState>((set) => ({
   agents: {},
   activeAgentId: null,
 
-  addAgent: (id, prompt) => set((s) => ({
+  addAgent: (id, prompt, modelId) => set((s) => ({
     agents: {
       ...s.agents,
-      [id]: { agentToolUseId: id, prompt, status: 'running', toolEvents: [], textOutput: '', toolCount: 0, startTime: Date.now() },
+      [id]: { agentToolUseId: id, prompt, modelId, status: 'running', toolEvents: [], textOutput: '', toolCount: 0, startTime: Date.now() },
     },
   })),
 

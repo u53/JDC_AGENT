@@ -37,4 +37,5 @@ export const IPC_CHANNELS = {
   PLAN_REVIEW: 'plan:review',
   PLAN_RESPOND: 'plan:respond',
   SESSION_GET_TASKS: 'session:get-tasks',
+  SESSION_RENAME: 'session:rename',
 } as const

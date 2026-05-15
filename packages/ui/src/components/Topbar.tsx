@@ -16,7 +16,7 @@ export function Topbar() {
 
   return (
     <header
-      className="h-12 flex items-center justify-between px-5 border-b border-[var(--border)] bg-[var(--surface)]"
+      className="h-12 flex items-center justify-between pl-[78px] pr-5 border-b border-[var(--border)] bg-[var(--surface)]"
       style={{ WebkitAppRegion: 'drag' } as any}
     >
       <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as any}>

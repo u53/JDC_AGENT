@@ -74,6 +74,7 @@ export class Session {
   private turnIndex = 0
   private planMode: 'normal' | 'planning' | 'awaiting_approval' = 'normal'
   private onPlanReview?: (planFile: string, content: string) => Promise<{ approved: boolean; feedback?: string }>
+  resolveModel?: (modelId: string) => { provider: ModelProvider; modelConfig: ModelConfig } | null
 
   constructor(
     config: SessionConfig,
@@ -158,6 +159,7 @@ export class Session {
       onToolEvent: undefined,
       onPermissionRequest,
       isSubAgent: false,
+      resolveModel: (modelId: string) => this.resolveModel?.(modelId) ?? null,
       onAgentProgress: (agentToolUseId, event) => {
         this.currentEvents?.onAgentProgress?.(agentToolUseId, event)
       },
@@ -308,6 +310,26 @@ export class Session {
         content: `<tasks>\nCurrent tasks for this session:\n${taskLines}\n</tasks>`,
         cacheable: false,
       })
+    }
+
+    // Inject available models for sub-agent dispatch
+    const modelGroups = appConfig.modelGroups
+    if (modelGroups?.groups && Array.isArray(this.config.modelConfig.systemPrompt)) {
+      const modelLines: string[] = []
+      for (const group of modelGroups.groups) {
+        if (group.models?.length) {
+          for (const m of group.models) {
+            const active = m.id === modelGroups.activeModelId ? ' (current)' : ''
+            modelLines.push(`- ${m.name} [modelId: "${m.modelId}"]${active}`)
+          }
+        }
+      }
+      if (modelLines.length > 0) {
+        this.config.modelConfig.systemPrompt.push({
+          content: `<available-models>\nWhen dispatching sub-agents via the Agent tool, you can specify a modelId to use a different model. Available models:\n${modelLines.join('\n')}\nIf the user asks to use a specific model for a sub-agent, pass its modelId value.\n</available-models>`,
+          cacheable: false,
+        })
+      }
     }
 
     const content: import('./types.js').ContentBlock[] = [{ type: 'text', text }]
@@ -496,7 +518,7 @@ export class Session {
       )
       const reminder = this.getSystemReminder()
       const toolResults = batchResults.map(r => ({
-        type: 'tool_result',
+        type: 'tool_result' as const,
         tool_use_id: r.tool_use_id,
         content: r.content + (reminder || ''),
         is_error: r.is_error,

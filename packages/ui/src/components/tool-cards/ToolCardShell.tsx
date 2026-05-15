@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { IconChevronRight, IconChevronDown } from '../icons'
 
 interface Props {
@@ -13,7 +13,7 @@ interface Props {
 
 const statusConfig = {
   running: { dot: 'bg-[var(--warn)] animate-pulse' },
-  done: { dot: 'bg-[var(--muted)]' },
+  done: { dot: 'bg-[var(--good)]' },
   error: { dot: 'bg-[var(--bad)]' },
 }
 
@@ -27,6 +27,15 @@ export function ToolCardShell({
   actions,
 }: Props) {
   const [expanded, setExpanded] = useState(defaultExpanded)
+  const prevStatus = useRef(status)
+
+  useEffect(() => {
+    if (prevStatus.current === 'running' && status !== 'running') {
+      setExpanded(false)
+    }
+    prevStatus.current = status
+  }, [status])
+
   const cfg = statusConfig[status]
   const hasContent = !!children
   const canToggle = collapsible && hasContent && status !== 'running'

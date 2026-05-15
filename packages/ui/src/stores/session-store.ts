@@ -6,6 +6,7 @@ interface Session {
   id: string
   projectName: string
   cwd: string
+  title?: string | null
 }
 
 interface ProjectGroup {
@@ -48,6 +49,7 @@ interface SessionState {
   createSession: (cwd: string) => Promise<void>
   switchSession: (sessionId: string) => Promise<void>
   deleteSession: (sessionId: string) => Promise<void>
+  renameSession: (sessionId: string, title: string) => Promise<void>
   addProject: () => Promise<void>
   getSessionState: (sessionId: string) => SessionStreamState
   updateSessionState: (sessionId: string, update: Partial<SessionStreamState>) => void
@@ -120,6 +122,18 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     await get().loadProjects()
   },
 
+  renameSession: async (sessionId: string, title: string) => {
+    await ipc.session.rename(sessionId, title)
+    set((s) => ({
+      projects: s.projects.map((p) => ({
+        ...p,
+        sessions: p.sessions.map((sess) =>
+          sess.id === sessionId ? { ...sess, title } : sess
+        ),
+      })),
+    }))
+  },
+
   addProject: async () => {
     const result = await ipc.dialog.openFolder()
     if (result?.path) {
@@ -167,10 +181,23 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   addToolEvent: (sessionId: string, event: ToolExecutionEvent) => {
     set((s) => {
       const current = s.sessionStates[sessionId] || EMPTY_STREAM_STATE
+      const events = [...current.toolEvents]
+
+      if (event.type === 'start') {
+        events.push(event)
+      } else {
+        const idx = events.findIndex((e) => e.toolUseId === event.toolUseId && e.type === 'start')
+        if (idx !== -1) {
+          events[idx] = { ...events[idx], ...event }
+        } else {
+          events.push(event)
+        }
+      }
+
       return {
         sessionStates: {
           ...s.sessionStates,
-          [sessionId]: { ...current, toolEvents: [...current.toolEvents, event] },
+          [sessionId]: { ...current, toolEvents: events },
         },
       }
     })

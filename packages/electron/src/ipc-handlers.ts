@@ -37,6 +37,11 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
     return { success: true }
   })
 
+  ipcMain.handle(IPC_CHANNELS.SESSION_RENAME, async (_event, { sessionId, title }) => {
+    sessionManager.renameSession(sessionId, title)
+    return { success: true }
+  })
+
   ipcMain.handle(IPC_CHANNELS.QUERY_SEND, async (_event, { sessionId, text, images }) => {
     sessionManager.sendMessage(sessionId, text, images)
     return { success: true }

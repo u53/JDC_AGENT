@@ -24,13 +24,13 @@ export function AgentDetailPanel() {
   }
 
   return (
-    <div className="flex flex-col h-full border-l border-[#333] bg-[#0A0A0A]">
+    <div className="flex flex-col h-full border-l border-[var(--border)] bg-[var(--surface)]">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#333]">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
         <div className="flex items-center gap-2">
-          <span className="text-purple-400">&#9670;</span>
-          <span className="text-[10px] uppercase tracking-[0.1em] text-purple-300">AGENT</span>
-          <span className="text-[11px] text-[#EAEAEA] truncate max-w-[200px]">
+          <span className="text-[var(--accent)]">&#9670;</span>
+          <span className="text-[10px] uppercase tracking-[0.1em] text-[var(--accent)]">AGENT</span>
+          <span className="text-[11px] text-[var(--text)] truncate max-w-[200px]">
             {agent.prompt.slice(0, 40)}
           </span>
         </div>
@@ -38,14 +38,14 @@ export function AgentDetailPanel() {
           {agent.status === 'running' && (
             <button
               onClick={handleAbort}
-              className="text-[10px] uppercase tracking-[0.05em] text-red-500 hover:text-red-400 transition-colors"
+              className="text-[10px] uppercase tracking-[0.05em] text-[var(--bad)] hover:opacity-80 transition-opacity"
             >
               [ABORT]
             </button>
           )}
           <button
             onClick={handleClose}
-            className="text-[#666] hover:text-[#EAEAEA] text-xs transition-colors"
+            className="text-[var(--muted)] hover:text-[var(--text)] text-xs transition-colors"
           >
             [X]
           </button>
@@ -53,13 +53,19 @@ export function AgentDetailPanel() {
       </div>
 
       {/* Status bar */}
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-[#333] text-[10px] text-[#666]">
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-[var(--border)] text-[10px] text-[var(--muted)]">
         {agent.status === 'running' && (
-          <span className="inline-block h-2 w-2 rounded-full bg-purple-400 animate-pulse" />
+          <span className="inline-block h-2 w-2 rounded-full bg-[var(--accent)] animate-pulse" />
         )}
         <span>{agent.status === 'running' ? `Running ${elapsed}s` : agent.status.toUpperCase()}</span>
         <span>|</span>
         <span>{agent.toolCount} tools</span>
+        {agent.modelId && (
+          <>
+            <span>|</span>
+            <span>{agent.modelId}</span>
+          </>
+        )}
       </div>
 
       {/* Tool events list */}
@@ -73,7 +79,7 @@ export function AgentDetailPanel() {
           />
         ))}
         {agent.status === 'running' && agent.toolEvents.length === 0 && (
-          <div className="text-[10px] text-[#666] uppercase tracking-[0.1em]">
+          <div className="text-[10px] text-[var(--muted)] uppercase tracking-[0.1em]">
             Initializing...
           </div>
         )}
@@ -81,9 +87,9 @@ export function AgentDetailPanel() {
 
       {/* Text output */}
       {agent.textOutput && (
-        <div className="border-t border-[#333] px-4 py-3 max-h-[200px] overflow-y-auto">
-          <div className="text-[10px] uppercase tracking-[0.1em] text-[#666] mb-1">Output</div>
-          <pre className="text-xs text-[#EAEAEA] whitespace-pre-wrap">{agent.textOutput}</pre>
+        <div className="border-t border-[var(--border)] px-4 py-3 max-h-[200px] overflow-y-auto">
+          <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--muted)] mb-1">Output</div>
+          <pre className="text-xs text-[var(--text)] whitespace-pre-wrap">{agent.textOutput}</pre>
         </div>
       )}
     </div>

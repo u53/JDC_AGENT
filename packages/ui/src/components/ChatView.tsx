@@ -3,7 +3,6 @@ import { useSession } from '../hooks/useSession'
 import { SessionHeader } from './SessionHeader'
 import { ConversationTurn } from './ConversationTurn'
 import { Composer } from './Composer'
-import { ToolCardRouter } from './tool-cards'
 import { ErrorCard } from './ErrorCard'
 import { PermissionDialog } from './PermissionDialog'
 import { PlanReviewDialog } from './PlanReviewDialog'
@@ -14,39 +13,7 @@ import { useModelStore } from '../stores/model-store'
 import { useSettingsStore } from '../stores/settings-store'
 import { useAgentStore } from '../stores/agent-store'
 import { useAgentEvents } from '../hooks/useAgentEvents'
-import type { Message, ToolExecutionEvent } from '@jdcagnet/core'
-
-type GroupedToolEvent =
-  | { type: 'single'; event: ToolExecutionEvent }
-  | { type: 'read-group'; events: ToolExecutionEvent[] }
-
-function groupToolEvents(events: ToolExecutionEvent[]): GroupedToolEvent[] {
-  const result: GroupedToolEvent[] = []
-  let readBuffer: ToolExecutionEvent[] = []
-
-  const flushReads = () => {
-    if (readBuffer.length >= 2 && readBuffer.every(e => e.type === 'complete')) {
-      result.push({ type: 'read-group', events: [...readBuffer] })
-    } else {
-      for (const e of readBuffer) {
-        result.push({ type: 'single', event: e })
-      }
-    }
-    readBuffer = []
-  }
-
-  for (const event of events) {
-    if (event.toolName === 'file_read' && event.type === 'complete') {
-      readBuffer.push(event)
-    } else {
-      flushReads()
-      result.push({ type: 'single', event })
-    }
-  }
-  flushReads()
-
-  return result
-}
+import type { Message } from '@jdcagnet/core'
 
 interface Turn {
   userMessage: Message
@@ -296,34 +263,10 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
                   streamingText={isActive ? streamingText : undefined}
                   thinkingText={isActive ? thinkingText : undefined}
                   isThinking={isActive ? isThinking : undefined}
+                  toolEvents={isActive ? toolEvents : undefined}
                 />
               )
             })}
-
-            {/* Streaming tool events in active turn area */}
-            {isStreaming && toolEvents.length > 0 && (
-              <div className="py-2">
-                {groupToolEvents(toolEvents).map((group, i) => {
-                  if (group.type === 'read-group') {
-                    const files = group.events.map(e => {
-                      const fp = (e.input?.file_path || e.input?.path || '') as string
-                      return fp.split('/').pop() || fp
-                    }).join(', ')
-                    return (
-                      <div key={`read-group-${i}`} className="mb-3 border border-[var(--border)] rounded-[8px]">
-                        <div className="flex items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-[0.1em]">
-                          <span className="inline-block h-2 w-2 rounded-full bg-[var(--good)]" />
-                          <span className="text-[var(--text)]">READ</span>
-                          <span className="text-[var(--muted)] truncate">{group.events.length} files: {files}</span>
-                          <span className="text-[var(--good)]">[DONE]</span>
-                        </div>
-                      </div>
-                    )
-                  }
-                  return <ToolCardRouter key={`${group.event.toolUseId}-${i}`} event={group.event} />
-                })}
-              </div>
-            )}
 
             {/* Processing indicator when no content yet */}
             {isStreaming && !streamingText && !isThinking && toolEvents.length === 0 && !isLastTurnActive && (

@@ -23,9 +23,11 @@ export function AgentToolCard({ event, input, result }: ToolCardRouterProps) {
   const addAgent = useAgentStore((s) => s.addAgent)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
 
+  const modelId = (toolInput.modelId || '') as string
+
   useEffect(() => {
     if (toolUseId && status === 'running' && !agentState) {
-      addAgent(toolUseId, prompt)
+      addAgent(toolUseId, prompt, modelId || undefined)
     }
   }, [toolUseId, status])
 
@@ -49,7 +51,7 @@ export function AgentToolCard({ event, input, result }: ToolCardRouterProps) {
     <div onClick={handleClick} className="cursor-pointer">
       <ToolCardShell
         label="AGENT"
-        detail={taskDescription}
+        detail={modelId ? `${taskDescription} · ${modelId}` : taskDescription}
         status={status}
         defaultExpanded={status === 'running'}
         collapsible={status !== 'running'}

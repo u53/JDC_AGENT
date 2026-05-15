@@ -45,7 +45,7 @@ function send(channel: string, data: unknown): void {
 interface ProjectGroup {
   name: string
   cwd: string
-  sessions: { id: string; projectName: string; cwd: string }[]
+  sessions: { id: string; projectName: string; cwd: string; title?: string | null }[]
 }
 
 export const ipc = {
@@ -58,6 +58,8 @@ export const ipc = {
       invoke('session:switch', { sessionId }) as Promise<{ messages: Message[] }>,
     delete: (sessionId: string) =>
       invoke('session:delete', { sessionId }) as Promise<{ success: boolean }>,
+    rename: (sessionId: string, title: string) =>
+      invoke('session:rename', { sessionId, title }) as Promise<{ success: boolean }>,
   },
 
   query: {

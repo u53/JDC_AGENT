@@ -40,6 +40,14 @@ export function useSession() {
       if (sessionId === current.activeSessionId) {
         useSessionStore.setState((s) => ({ messages: [...s.messages, message] }))
       }
+      // Clear accumulated streaming state for this turn — content is now persisted in messages.
+      // Tool execution events will arrive fresh via onToolEvent after this point.
+      store.updateSessionState(sessionId, {
+        streamingText: '',
+        thinkingText: '',
+        isThinking: false,
+        toolEvents: [],
+      })
     })
 
     const unsubFinished = window.electronAPI?.on('query:finished', (_e: unknown, data: unknown) => {
