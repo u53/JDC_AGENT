@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Topbar } from './components/Topbar'
 import { Sidebar } from './components/Sidebar'
 import { ChatView } from './components/ChatView'
 import { UsageHUD } from './components/UsageHUD'
@@ -82,20 +83,20 @@ export function App() {
   useHotkeys(hotkeyMap)
 
   return (
-    <div className="flex h-screen w-screen bg-[var(--bg)] text-[var(--text)]">
-      <Sidebar />
-      <div className="flex-1 flex flex-col border-l border-[#333]">
-        {activeSessionId ? (
-          <ChatView onOpenMcp={() => setMcpOpen(true)} />
-        ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <div className="text-[10px] uppercase tracking-[0.1em] text-[#666] mb-2">[ NO ACTIVE SESSION ]</div>
-              <div className="text-[10px] uppercase tracking-[0.1em] text-[#666]">选择一个项目开始对话</div>
+    <div className="h-screen w-screen grid grid-rows-[48px_1fr] bg-[var(--bg)] text-[var(--text)]">
+      <Topbar />
+      <div className="grid grid-cols-[240px_1fr] overflow-hidden">
+        <Sidebar />
+        <div className="flex-1 flex flex-col overflow-hidden border-l border-[var(--border)]">
+          {activeSessionId ? (
+            <ChatView onOpenMcp={() => setMcpOpen(true)} />
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-[14px] text-[var(--muted)]">选择项目或新建会话</p>
             </div>
-          </div>
-        )}
-        <UsageHUD onOpenMcp={() => setMcpOpen(true)} onOpenSettings={openSettings} />
+          )}
+          <UsageHUD onOpenMcp={() => setMcpOpen(true)} onOpenSettings={openSettings} />
+        </div>
       </div>
       <ModelManager />
       <McpSettings isOpen={mcpOpen} onClose={() => setMcpOpen(false)} />
