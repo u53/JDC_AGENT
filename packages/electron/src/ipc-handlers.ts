@@ -168,6 +168,15 @@ export function registerIpcHandlers(sessionManager: SessionManager, services: De
   ipcMain.handle(IPC_CHANNELS.GIT_STATUS, async (_event, { cwd }) => {
     return gitService.getStatus(cwd)
   })
+  ipcMain.handle(IPC_CHANNELS.GIT_STASH, async (_event, { cwd }) => {
+    return gitService.stash(cwd)
+  })
+  ipcMain.handle(IPC_CHANNELS.GIT_STASH_POP, async (_event, { cwd }) => {
+    return gitService.stashPop(cwd)
+  })
+  ipcMain.handle(IPC_CHANNELS.GIT_HAS_STASH, async (_event, { cwd }) => {
+    return gitService.hasStash(cwd)
+  })
 
   // Apps
   ipcMain.handle(IPC_CHANNELS.APPS_DETECT, async () => {

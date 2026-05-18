@@ -42,6 +42,9 @@ const api = {
   gitBranchCreate: (cwd: string, branch: string, from?: string) => ipcRenderer.invoke('git:branch-create', { cwd, branch, from }),
   gitBranchDelete: (cwd: string, branch: string) => ipcRenderer.invoke('git:branch-delete', { cwd, branch }),
   gitStatus: (cwd: string) => ipcRenderer.invoke('git:status', { cwd }),
+  gitStash: (cwd: string) => ipcRenderer.invoke('git:stash', { cwd }),
+  gitStashPop: (cwd: string) => ipcRenderer.invoke('git:stash-pop', { cwd }),
+  gitHasStash: (cwd: string) => ipcRenderer.invoke('git:has-stash', { cwd }),
 
   // Apps
   appsDetect: () => ipcRenderer.invoke('apps:detect'),

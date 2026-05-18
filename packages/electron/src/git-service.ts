@@ -52,8 +52,31 @@ export class GitService {
   }
 
   async getStatus(cwd: string): Promise<{ dirty: boolean; changes: number }> {
-    const output = await this.git(['status', '--porcelain'], cwd)
+    const output = await this.git(['status', '--porcelain', '-uno'], cwd)
     const lines = output ? output.split('\n').filter(Boolean) : []
     return { dirty: lines.length > 0, changes: lines.length }
+  }
+
+  async stash(cwd: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      await this.git(['stash', 'push', '-m', 'jdcagnet-auto-stash'], cwd)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.stderr || err.message }
+    }
+  }
+
+  async stashPop(cwd: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      await this.git(['stash', 'pop'], cwd)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.stderr || err.message }
+    }
+  }
+
+  async hasStash(cwd: string): Promise<boolean> {
+    const output = await this.git(['stash', 'list'], cwd)
+    return output.includes('jdcagnet-auto-stash')
   }
 }

@@ -13,6 +13,8 @@ export function BranchSwitcher({ cwd }: Props) {
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [pendingBranch, setPendingBranch] = useState<string | null>(null)
+  const [hasStash, setHasStash] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   const load = async () => {
@@ -21,6 +23,8 @@ export function BranchSwitcher({ cwd }: Props) {
       setBranches(result.branches)
       setCurrent(result.current)
     }
+    const stashed = await window.electronAPI?.gitHasStash?.(cwd)
+    setHasStash(!!stashed)
   }
 
   useEffect(() => {
@@ -38,9 +42,11 @@ export function BranchSwitcher({ cwd }: Props) {
 
   const switchTo = async (branch: string) => {
     setError(null)
+    setPendingBranch(null)
     const status = await window.electronAPI?.gitStatus(cwd)
     if (status?.dirty) {
-      setError(`${status.changes} 个未提交更改，请先提交或 stash`)
+      setPendingBranch(branch)
+      setError(`${status.changes} 个未提交更改`)
       return
     }
     const result = await window.electronAPI?.gitBranchSwitch(cwd, branch)
@@ -49,6 +55,34 @@ export function BranchSwitcher({ cwd }: Props) {
       setOpen(false)
     } else {
       setError(result?.error || '切换失败')
+    }
+  }
+
+  const stashAndSwitch = async () => {
+    if (!pendingBranch) return
+    setError(null)
+    const stashResult = await window.electronAPI?.gitStash?.(cwd)
+    if (!stashResult?.success) {
+      setError(stashResult?.error || 'Stash 失败')
+      return
+    }
+    const result = await window.electronAPI?.gitBranchSwitch(cwd, pendingBranch)
+    if (result?.success) {
+      setCurrent(pendingBranch)
+      setPendingBranch(null)
+      setOpen(false)
+    } else {
+      setError(result?.error || '切换失败')
+      await window.electronAPI?.gitStashPop?.(cwd)
+    }
+  }
+
+  const popStash = async () => {
+    const result = await window.electronAPI?.gitStashPop?.(cwd)
+    if (result?.success) {
+      setHasStash(false)
+    } else {
+      setError(result?.error || '恢复失败')
     }
   }
 
@@ -85,6 +119,7 @@ export function BranchSwitcher({ cwd }: Props) {
       >
         <IconGitBranch size={14} />
         <span className="font-mono truncate max-w-[120px]">{current || '—'}</span>
+        {hasStash && <span className="h-[6px] w-[6px] rounded-full bg-[var(--warn)] flex-shrink-0" />}
       </button>
 
       {open && (
@@ -101,10 +136,38 @@ export function BranchSwitcher({ cwd }: Props) {
             />
           </div>
 
-          {/* Error */}
+          {/* Error / Stash prompt */}
           {error && (
-            <div className="px-3 py-1.5 text-[11px] text-[var(--bad)] bg-[var(--bad)]/10 border-b border-[var(--border)]">
-              {error}
+            <div className="px-3 py-1.5 border-b border-[var(--border)] bg-[var(--bad)]/10">
+              <div className="text-[11px] text-[var(--bad)]">{error}</div>
+              {pendingBranch && (
+                <div className="flex items-center gap-2 mt-1">
+                  <button
+                    onClick={stashAndSwitch}
+                    className="text-[11px] px-2 py-0.5 rounded bg-[var(--accent)] text-white hover:opacity-80"
+                  >
+                    Stash 并切换
+                  </button>
+                  <button
+                    onClick={() => { setPendingBranch(null); setError(null) }}
+                    className="text-[11px] px-2 py-0.5 rounded text-[var(--muted)] hover:text-[var(--text)]"
+                  >
+                    取消
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          {/* Stash restore prompt */}
+          {hasStash && !error && (
+            <div className="px-3 py-1.5 border-b border-[var(--border)] bg-[var(--warn)]/10 flex items-center justify-between">
+              <span className="text-[11px] text-[var(--warn)]">有暂存的更改</span>
+              <button
+                onClick={popStash}
+                className="text-[11px] px-2 py-0.5 rounded bg-[var(--warn)] text-white hover:opacity-80"
+              >
+                恢复
+              </button>
             </div>
           )}
           {/* Branch list */}

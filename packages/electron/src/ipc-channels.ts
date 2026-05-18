@@ -45,6 +45,9 @@ export const IPC_CHANNELS = {
   GIT_BRANCH_CREATE: 'git:branch-create',
   GIT_BRANCH_DELETE: 'git:branch-delete',
   GIT_STATUS: 'git:status',
+  GIT_STASH: 'git:stash',
+  GIT_STASH_POP: 'git:stash-pop',
+  GIT_HAS_STASH: 'git:has-stash',
 
   // App Launcher
   APPS_DETECT: 'apps:detect',
