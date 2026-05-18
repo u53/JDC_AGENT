@@ -82,6 +82,16 @@ const api = {
     ipcRenderer.on('updater:downloaded', listener)
     return () => ipcRenderer.removeListener('updater:downloaded', listener)
   },
+  onUpdaterNotAvailable: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('updater:not-available', listener)
+    return () => ipcRenderer.removeListener('updater:not-available', listener)
+  },
+  onUpdaterError: (callback: (data: { message: string }) => void) => {
+    const listener = (_event: unknown, payload: { message: string }) => callback(payload)
+    ipcRenderer.on('updater:error', listener)
+    return () => ipcRenderer.removeListener('updater:error', listener)
+  },
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

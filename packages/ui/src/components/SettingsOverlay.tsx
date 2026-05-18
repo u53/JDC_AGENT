@@ -76,7 +76,7 @@ function AppearanceTab() {
 
 /* ─── Advanced ─── */
 function AdvancedTab() {
-  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error'>('idle')
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error' | 'uptodate'>('idle')
   const [updateVersion, setUpdateVersion] = useState('')
   const [downloadPercent, setDownloadPercent] = useState(0)
   const [errorMsg, setErrorMsg] = useState('')
@@ -93,18 +93,28 @@ function AdvancedTab() {
     const unsub3 = window.electronAPI?.onUpdaterDownloaded?.(() => {
       setUpdateStatus('ready')
     })
-    return () => { unsub1?.(); unsub2?.(); unsub3?.() }
+    const unsub4 = window.electronAPI?.onUpdaterNotAvailable?.(() => {
+      setUpdateStatus('uptodate')
+    })
+    const unsub5 = window.electronAPI?.onUpdaterError?.((data: { message: string }) => {
+      setUpdateStatus('error')
+      setErrorMsg(data.message)
+    })
+    return () => { unsub1?.(); unsub2?.(); unsub3?.(); unsub4?.(); unsub5?.() }
   }, [])
 
   const checkUpdate = async () => {
     setUpdateStatus('checking')
     setErrorMsg('')
-    const result = await window.electronAPI?.updaterCheck()
-    if (result?.error) {
+    try {
+      const result = await window.electronAPI?.updaterCheck()
+      if (result?.error) {
+        setUpdateStatus('error')
+        setErrorMsg(result.error)
+      }
+    } catch {
       setUpdateStatus('error')
-      setErrorMsg(result.error)
-    } else if (!result?.version) {
-      setUpdateStatus('idle')
+      setErrorMsg('检查更新失败')
     }
   }
 
@@ -139,6 +149,9 @@ function AdvancedTab() {
                 >
                   检查更新
                 </button>
+              )}
+              {updateStatus === 'uptodate' && (
+                <span className="text-[12px] text-[var(--good)]">已是最新版本</span>
               )}
               {updateStatus === 'checking' && (
                 <span className="text-[12px] text-[var(--muted)]">检查中...</span>

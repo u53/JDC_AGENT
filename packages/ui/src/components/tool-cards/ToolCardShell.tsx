@@ -49,7 +49,7 @@ export function ToolCardShell({
         <span className={`inline-block h-[6px] w-[6px] rounded-full flex-shrink-0 ${cfg.dot}`} />
         {canToggle && (expanded ? <IconChevronDown size={12} className="text-[var(--muted)]" /> : <IconChevronRight size={12} className="text-[var(--muted)]" />)}
         <span className="text-[12px] font-medium text-[var(--text)]">{label}</span>
-        <span className="text-[12px] text-[var(--muted)] truncate flex-1 text-left" style={{ fontFamily: 'var(--font-mono)' }}>{detail}</span>
+        <span className="text-[12px] text-[var(--muted)] truncate flex-1 text-left" style={{ fontFamily: 'var(--font-mono)' }} title={detail}>{detail}</span>
         {actions && <div className="flex items-center gap-1 flex-shrink-0">{actions}</div>}
       </div>
       {(expanded || (status === 'running' && hasContent)) && hasContent && (
