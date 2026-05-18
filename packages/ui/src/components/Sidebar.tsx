@@ -16,11 +16,16 @@ export function Sidebar() {
   const [editValue, setEditValue] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [version, setVersion] = useState('')
+  const [updateAvailable, setUpdateAvailable] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     loadProjects()
     window.electronAPI?.getVersion?.().then((v: string) => setVersion(v))
+    const unsub = window.electronAPI?.on('updater:available', (_e: unknown, data: unknown) => {
+      setUpdateAvailable((data as { version: string }).version)
+    })
+    return unsub
   }, [loadProjects])
 
   useEffect(() => {
@@ -150,7 +155,17 @@ export function Sidebar() {
         >
           New project
         </button>
-        <div className="text-center text-[10px] text-[var(--muted)]">JDC Code {version ? `v${version}` : ''}</div>
+        <div className="text-center text-[10px] text-[var(--muted)]">
+          JDC Code {version ? `v${version}` : ''}
+          {updateAvailable && (
+            <button
+              onClick={() => (window as any).electronAPI?.invoke('updater:download')}
+              className="ml-1.5 text-[var(--accent)] hover:underline"
+            >
+              v{updateAvailable} 可用
+            </button>
+          )}
+        </div>
       </div>
     </aside>
   )

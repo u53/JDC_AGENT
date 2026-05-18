@@ -40,6 +40,10 @@ function setupAutoUpdater(win: BrowserWindow) {
     win.webContents.send('updater:error', { message: err.message })
   })
 
+  // Auto-check on launch (delay 5s) + every 30 minutes
+  setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 5000)
+  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 30 * 60 * 1000)
+
   ipcMain.handle('updater:check', async () => {
     try {
       const result = await autoUpdater.checkForUpdates()
