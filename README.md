@@ -1,6 +1,8 @@
 # JDCAGNET
 
-AI-powered coding assistant desktop app. 多模型支持的桌面端 AI 编程助手。
+[English](./README.md) | [简体中文](./README.zh-CN.md)
+
+AI-powered coding assistant desktop app.
 
 ## Features
 
