@@ -1,5 +1,6 @@
 appId: com.jdcagnet.app
 productName: JDC Code
+artifactName: "JDC-Code-${version}-${arch}-${os}.${ext}"
 electronVersion: "33.4.11"
 npmRebuild: true
 directories:
