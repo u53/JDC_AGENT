@@ -6,7 +6,7 @@
     "build": "pnpm -r build",
     "build:electron": "pnpm --filter @jdcagnet/electron build",
     "build:ui": "pnpm --filter @jdcagnet/ui build",
-    "package": "pnpm build && electron-builder",
+    "package": "pnpm build && electron-builder --publish never",
     "test": "pnpm --filter @jdcagnet/core test",
     "postinstall": "node -e \"if(process.platform==='darwin'){const{execSync}=require('child_process');try{execSync('EPATH=node_modules/.pnpm/electron@33.4.11/node_modules/electron/dist/Electron.app && cp assets/icon.icns $EPATH/Contents/Resources/electron.icns && /usr/libexec/PlistBuddy -c \\\"Set :CFBundleDisplayName JDCAGNET\\\" -c \\\"Set :CFBundleName JDCAGNET\\\" $EPATH/Contents/Info.plist',{shell:'/bin/bash'})}catch(e){}}\""
   },
