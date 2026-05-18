@@ -41,6 +41,9 @@ jobs:
           security unlock-keychain -p "actions" build.keychain
           security import cert.p12 -k build.keychain -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "actions" build.keychain
+          # Disable OCSP/CRL network checks that can hang
+          defaults write com.apple.security.revocation OCSPStyle -string None
+          defaults write com.apple.security.revocation CRLStyle -string None
           rm cert.p12
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
