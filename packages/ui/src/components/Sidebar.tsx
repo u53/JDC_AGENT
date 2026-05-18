@@ -9,10 +9,12 @@ export function Sidebar() {
   const createSession = useSessionStore((s) => s.createSession)
   const switchSession = useSessionStore((s) => s.switchSession)
   const renameSession = useSessionStore((s) => s.renameSession)
+  const deleteSession = useSessionStore((s) => s.deleteSession)
   const addProject = useSessionStore((s) => s.addProject)
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -37,6 +39,11 @@ export function Sidebar() {
       renameSession(sessionId, trimmed)
     }
     setEditingId(null)
+  }
+
+  const handleDelete = (sessionId: string) => {
+    deleteSession(sessionId)
+    setConfirmDeleteId(null)
   }
 
   return (
@@ -76,33 +83,51 @@ export function Sidebar() {
                   )
                 }
 
+                if (confirmDeleteId === session.id) {
+                  return (
+                    <div key={session.id} className="flex items-center gap-1 px-2.5 py-1.5 rounded-[6px] bg-[var(--surface-2)] border border-[var(--bad)]">
+                      <span className="text-[12px] text-[var(--bad)] flex-1 truncate">删除?</span>
+                      <button onClick={() => handleDelete(session.id)} className="text-[11px] px-1.5 py-0.5 rounded bg-[var(--bad)] text-white hover:opacity-80">确认</button>
+                      <button onClick={() => setConfirmDeleteId(null)} className="text-[11px] px-1.5 py-0.5 rounded text-[var(--muted)] hover:text-[var(--text)]">取消</button>
+                    </div>
+                  )
+                }
+
                 return (
-                  <button
-                    key={session.id}
-                    onClick={() => {
-                      switchSession(session.id)
-                      if (isFinished) useSessionStore.getState().dismissFinished(session.id)
-                    }}
-                    onDoubleClick={() => handleDoubleClick(session.id, displayName)}
-                    className={`w-full text-left px-2.5 py-1.5 text-[13px] truncate transition-colors flex items-center gap-1.5 rounded-[6px] ${
-                      isActive
-                        ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium'
-                        : 'text-[var(--text)] hover:bg-[var(--surface-3)]'
-                    }`}
-                  >
-                    {showLight && isBusy && (
-                      <span className="inline-block h-[6px] w-[6px] rounded-full bg-[var(--warn)] animate-pulse flex-shrink-0" />
-                    )}
-                    {showLight && !isBusy && hasError && (
-                      <span className="inline-block h-[6px] w-[6px] rounded-full bg-[var(--bad)] flex-shrink-0" />
-                    )}
-                    {showLight && !isBusy && !hasError && isFinished && (
-                      <span className="inline-block h-[6px] w-[6px] rounded-full bg-[var(--good)] flex-shrink-0" />
-                    )}
-                    <span className="block truncate">
-                      {displayName}
-                    </span>
-                  </button>
+                  <div key={session.id} className="group relative flex items-center">
+                    <button
+                      onClick={() => {
+                        switchSession(session.id)
+                        if (isFinished) useSessionStore.getState().dismissFinished(session.id)
+                      }}
+                      onDoubleClick={() => handleDoubleClick(session.id, displayName)}
+                      className={`w-full text-left px-2.5 py-1.5 text-[13px] truncate transition-colors flex items-center gap-1.5 rounded-[6px] ${
+                        isActive
+                          ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium'
+                          : 'text-[var(--text)] hover:bg-[var(--surface-3)]'
+                      }`}
+                    >
+                      {showLight && isBusy && (
+                        <span className="inline-block h-[6px] w-[6px] rounded-full bg-[var(--warn)] animate-pulse flex-shrink-0" />
+                      )}
+                      {showLight && !isBusy && hasError && (
+                        <span className="inline-block h-[6px] w-[6px] rounded-full bg-[var(--bad)] flex-shrink-0" />
+                      )}
+                      {showLight && !isBusy && !hasError && isFinished && (
+                        <span className="inline-block h-[6px] w-[6px] rounded-full bg-[var(--good)] flex-shrink-0" />
+                      )}
+                      <span className="block truncate">
+                        {displayName}
+                      </span>
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(session.id) }}
+                      className="absolute right-1 opacity-0 group-hover:opacity-100 p-1 rounded text-[var(--muted)] hover:text-[var(--bad)] hover:bg-[var(--surface-3)] transition-all"
+                      aria-label="Delete session"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 3h8M4.5 3V2h3v1M3 3v7h6V3M5 5v3M7 5v3"/></svg>
+                    </button>
+                  </div>
                 )
               })}
               <button

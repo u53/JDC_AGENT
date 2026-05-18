@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="system">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JDCAGNET 项目页面预览</title>
+  <style>
+    :root {
+      --bg: #f7f5ef;
+      --surface: #ffffff;
+      --surface-2: #fbfaf7;
+      --surface-3: #f4f1ea;
+      --text: #1e1d1a;
+      --muted: #757069;
+      --border: rgba(30, 29, 26, 0.1);
+      --border-strong: rgba(30, 29, 26, 0.16);
+      --shadow: 0 1px 0 rgba(30, 29, 26, 0.02);
+      --shadow-soft: 0 8px 28px rgba(30, 29, 26, 0.05);
+      --accent: #1f1d1a;
+      --accent-soft: #ece8dd;
+      --accent-ink: #ffffff;
+      --good: #7e9f7a;
+      --warn: #a07c37;
+      --bad: #a35b53;
+      --blue: #bfd7f1;
+      --green: #dfead7;
+      --yellow: #f3e7c3;
+      --red: #f0d8d5;
+      color-scheme: light;
+    }
+
+    html[data-theme="night"] {
+      --bg: #111215;
+      --surface: #17191d;
+      --surface-2: #1c1f24;
+      --surface-3: #22252b;
+      --text: #f4f0e8;
+      --muted: #a3a095;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.14);
+      --shadow: 0 1px 0 rgba(0, 0, 0, 0.24);
+      --shadow-soft: 0 12px 32px rgba(0, 0, 0, 0.25);
+      --accent: #f4f0e8;
+      --accent-soft: #262931;
+      --accent-ink: #111215;
+      --good: #9bb693;
+      --warn: #d0b57d;
+      --bad: #d29b94;
+      --blue: #29445d;
+      --green: #243622;
+      --yellow: #44361d;
+      --red: #402623;
+      color-scheme: dark;
+    }
+
+    html[data-theme="system"] {
+      color-scheme: light;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      html[data-theme="system"] {
+        --bg: #111215;
+        --surface: #17191d;
+        --surface-2: #1c1f24;
+        --surface-3: #22252b;
+        --text: #f4f0e8;
+        --muted: #a3a095;
+        --border: rgba(255, 255, 255, 0.08);
+        --border-strong: rgba(255, 255, 255, 0.14);
+        --shadow: 0 1px 0 rgba(0, 0, 0, 0.24);
+        --shadow-soft: 0 12px 32px rgba(0, 0, 0, 0.25);
+        --accent: #f4f0e8;
+        --accent-soft: #262931;
+        --accent-ink: #111215;
+        --good: #9bb693;
+        --warn: #d0b57d;
+        --bad: #d29b94;
+        --blue: #29445d;
+        --green: #243622;
+        --yellow: #44361d;
+        --red: #402623;
+        color-scheme: dark;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "SF Pro Display", "Geist Sans", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      padding: 24px;
+      transition: background-color 180ms ease, color 180ms ease;
+    }
+
+    button, input, textarea {
+      font: inherit;
+    }
+
+    ::selection {
+      background: var(--accent);
+      color: var(--accent-ink);
+    }
+
+    .frame {
+      max-width: 1600px;
+      margin: 0 auto;
+      display: grid;
+      gap: 16px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 20px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.55);
+      backdrop-filter: blur(14px);
+      box-shadow: var(--shadow);
+      border-radius: 14px;
+    }
+
+    html[data-theme="night"] .topbar,
+    html[data-theme="system"] .topbar {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .eyebrow {
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    .title {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .title h1 {
+      margin: 0;
+      font-family: "Iowan Old Style", "Baskerville", "Georgia", serif;
+      font-size: clamp(22px, 2vw, 32px);
+      font-weight: 500;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+    }
+
+    .title span {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .segmented {
+      display: inline-flex;
+      padding: 4px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .segmented button {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      padding: 9px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+    }
+
+    .segmented button[aria-pressed="true"] {
+      background: var(--accent);
+      color: var(--accent-ink);
+    }
+
+    .segmented button:active,
+    .ghost-button:active,
+    .primary-button:active {
+      transform: scale(0.98);
+    }
+
+    .ghost-button,
+    .primary-button {
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 12px;
+      letter-spacing: 0.02em;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+    }
+
+    .ghost-button {
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    .primary-button {
+      background: var(--accent);
+      color: var(--accent-ink);
+      border-color: transparent;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 270px minmax(0, 1fr) 320px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .rail,
+    .main,
+    .inspector {
+      display: grid;
+      gap: 16px;
+    }
+
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 18px 18px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .panel-header h2,
+    .panel-header h3 {
+      margin: 0;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .panel-body {
+      padding: 18px;
+    }
+
+    .project-card {
+      display: grid;
+      gap: 14px;
+    }
+
+    .project-meta {
+      display: grid;
+      gap: 8px;
+    }
+
+    .project-meta strong {
+      font-size: 18px;
+      letter-spacing: -0.02em;
+    }
+
+    .path {
+      font-family: "Geist Mono", "SF Mono", Menlo, monospace;
+      font-size: 12px;
+      color: var(--muted);
+      word-break: break-all;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: var(--surface-2);
+    }
+
+    .pill.good { background: var(--green); color: var(--good); }
+    .pill.warn { background: var(--yellow); color: var(--warn); }
+    .pill.bad { background: var(--red); color: var(--bad); }
+    .pill.blue { background: var(--blue); color: #4d7594; }
+
+    .list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .list-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface-2);
+    }
+
+    .list-item .left {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .list-item .label {
+      font-size: 13px;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .list-item .meta {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      flex: 0 0 auto;
+      background: var(--good);
+      box-shadow: 0 0 0 4px rgba(126, 159, 122, 0.12);
+    }
+
+    .status-dot.idle {
+      background: var(--muted);
+      box-shadow: none;
+    }
+
+    .status-dot.warn {
+      background: var(--warn);
+      box-shadow: 0 0 0 4px rgba(160, 124, 55, 0.12);
+    }
+
+    .hero {
+      display: grid;
+      gap: 18px;
+      padding: 28px;
+    }
+
+    .hero h2 {
+      margin: 0;
+      font-family: "Iowan Old Style", "Baskerville", "Georgia", serif;
+      font-size: clamp(32px, 4vw, 58px);
+      line-height: 0.98;
+      font-weight: 500;
+      letter-spacing: -0.04em;
+      max-width: 11ch;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 68ch;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 15px;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .metric {
+      padding: 18px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      display: grid;
+      gap: 14px;
+      min-height: 150px;
+    }
+
+    .metric .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--muted);
+    }
+
+    .metric .value {
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1;
+      letter-spacing: -0.04em;
+      font-weight: 600;
+    }
+
+    .metric .desc {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .metric .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1.3fr 0.9fr;
+      gap: 16px;
+    }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .table th,
+    .table td {
+      text-align: left;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      font-size: 13px;
+    }
+
+    .table th {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      font-weight: 600;
+      padding-top: 0;
+    }
+
+    .table td:last-child,
+    .table th:last-child {
+      text-align: right;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 12px;
+    }
+
+    .event {
+      display: grid;
+      grid-template-columns: 12px 1fr;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .event::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+      margin-top: 4px;
+      box-shadow: 0 0 0 4px rgba(31, 29, 26, 0.08);
+    }
+
+    html[data-theme="night"] .event::before,
+    html[data-theme="system"] .event::before {
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.06);
+    }
+
+    .event strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+
+    .event p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .key-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    kbd {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 30px;
+      padding: 5px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      font-family: "Geist Mono", "SF Mono", Menlo, monospace;
+      font-size: 11px;
+      color: var(--text);
+      box-shadow: var(--shadow);
+    }
+
+    .inspector .panel {
+      position: sticky;
+      top: 16px;
+    }
+
+    .workspace-preview {
+      padding: 18px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .mini-window {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      background: var(--surface-2);
+    }
+
+    .mini-window .chrome {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 12px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .chrome i {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      display: inline-block;
+      background: var(--border-strong);
+    }
+
+    .mini-window .body {
+      padding: 14px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .mini-line {
+      height: 10px;
+      border-radius: 999px;
+      background: var(--border);
+    }
+
+    .mini-line.wide { width: 85%; }
+    .mini-line.mid { width: 68%; }
+    .mini-line.short { width: 42%; }
+
+    .empty-note {
+      border: 1px dashed var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+      background: var(--surface-2);
+    }
+
+    .footer-note {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--muted);
+      padding: 2px 4px 0;
+    }
+
+    @media (max-width: 1300px) {
+      .layout {
+        grid-template-columns: 250px minmax(0, 1fr);
+      }
+
+      .inspector {
+        grid-column: 1 / -1;
+      }
+
+      .inspector .panel {
+        position: static;
+      }
+    }
+
+    @media (max-width: 980px) {
+      body {
+        padding: 16px;
+      }
+
+      .topbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .top-actions {
+        justify-content: flex-start;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .metrics,
+      .split {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <header class="topbar">
+      <div class="brand">
+        <div class="eyebrow">JDCAGNET / PROJECT PAGE PREVIEW</div>
+        <div class="title">
+          <h1>重构后的项目页面</h1>
+          <span id="theme-label">当前: 跟随系统</span>
+        </div>
+      </div>
+
+      <div class="top-actions">
+        <div class="segmented" role="tablist" aria-label="主题模式">
+          <button type="button" data-theme-mode="light" aria-pressed="false">白天</button>
+          <button type="button" data-theme-mode="night" aria-pressed="false">黑夜</button>
+          <button type="button" data-theme-mode="system" aria-pressed="true">系统</button>
+        </div>
+        <button class="ghost-button" type="button">打开项目</button>
+        <button class="primary-button" type="button">新会话</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="rail">
+        <section class="panel project-card">
+          <div class="panel-header">
+            <h2>项目</h2>
+            <span class="pill blue">ACTIVE</span>
+          </div>
+          <div class="panel-body">
+            <div class="project-meta">
+              <strong>jdcagnet-ui 重构</strong>
+              <div class="path">/Users/chenmingxu/Documents/jdcagnet/packages/ui</div>
+              <p style="margin:0;color:var(--muted);line-height:1.6;font-size:13px;">
+                把项目、会话、任务、模型和 MCP 状态收拢到一张更清晰的桌面上。
+              </p>
+            </div>
+
+            <div class="pill-row">
+              <span class="pill good">3 active sessions</span>
+              <span class="pill warn">1 queued</span>
+              <span class="pill">theme preview</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>会话</h2>
+            <span class="pill">08</span>
+          </div>
+          <div class="panel-body list">
+            <div class="list-item">
+              <div class="left">
+                <div class="label">UI overhaul spec 12</div>
+                <div class="meta">active · 12m ago</div>
+              </div>
+              <span class="status-dot"></span>
+            </div>
+            <div class="list-item">
+              <div class="left">
+                <div class="label">Permission rules cleanup</div>
+                <div class="meta">idle · 2h ago</div>
+              </div>
+              <span class="status-dot idle"></span>
+            </div>
+            <div class="list-item">
+              <div class="left">
+                <div class="label">Workspace enhancements</div>
+                <div class="meta">streaming · 1 queued</div>
+              </div>
+              <span class="status-dot warn"></span>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>快捷键</h2>
+            <span class="pill">kbd</span>
+          </div>
+          <div class="panel-body">
+            <div class="key-list">
+              <kbd>⌘</kbd><kbd>N</kbd>
+              <kbd>⌘</kbd><kbd>,</kbd>
+              <kbd>Esc</kbd>
+              <kbd>⌘</kbd><kbd>1</kbd>
+              <kbd>⌘</kbd><kbd>K</kbd>
+            </div>
+          </div>
+        </section>
+      </aside>
+
+      <main class="main">
+        <section class="panel hero">
+          <div class="eyebrow">项目概览</div>
+          <h2>把工作区收进一张更安静的桌面。</h2>
+          <p>
+            这个页面不是聊天窗口的简单延伸，而是项目级视图：左侧看项目和会话，中间看核心状态和任务，
+            右侧看模型、MCP、主题与环境。切换白天、黑夜和跟随系统时，层级和边界都应该保持稳。
+          </p>
+          <div class="hero-actions">
+            <button class="primary-button" type="button">进入会话</button>
+            <button class="ghost-button" type="button">查看任务</button>
+            <button class="ghost-button" type="button">主题设置</button>
+          </div>
+        </section>
+
+        <section class="metrics">
+          <article class="metric">
+            <div class="label">Context usage</div>
+            <div class="value">82%</div>
+            <div class="desc">当前上下文已经接近阈值，适合尽快压缩或切出新的工作段。</div>
+            <div class="footer">
+              <span>turn 18</span>
+              <span class="pill bad">near limit</span>
+            </div>
+          </article>
+          <article class="metric">
+            <div class="label">Tasks</div>
+            <div class="value">4</div>
+            <div class="desc">2 pending / 1 in progress / 1 waiting for review。</div>
+            <div class="footer">
+              <span>auto-updated</span>
+              <span class="pill good">sync on</span>
+            </div>
+          </article>
+          <article class="metric">
+            <div class="label">Model</div>
+            <div class="value">Claude</div>
+            <div class="desc">当前选中的模型组和上下文窗口会直接影响页面头部展示。</div>
+            <div class="footer">
+              <span>128k ctx</span>
+              <span class="pill blue">stable</span>
+            </div>
+          </article>
+          <article class="metric">
+            <div class="label">MCP</div>
+            <div class="value">4 / 5</div>
+            <div class="desc">连接状态一眼可见，失败项只保留必要提示，不占主视觉。</div>
+            <div class="footer">
+              <span>1 failed</span>
+              <span class="pill warn">needs retry</span>
+            </div>
+          </article>
+        </section>
+
+        <section class="split">
+          <section class="panel">
+            <div class="panel-header">
+              <h3>最近会话</h3>
+              <span class="pill">live</span>
+            </div>
+            <div class="panel-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>会话</th>
+                    <th>状态</th>
+                    <th>更新时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>ui overhaul / page mode</td>
+                    <td><span class="pill good">streaming</span></td>
+                    <td>2 分钟前</td>
+                  </tr>
+                  <tr>
+                    <td>session manager cleanup</td>
+                    <td><span class="pill">idle</span></td>
+                    <td>41 分钟前</td>
+                  </tr>
+                  <tr>
+                    <td>theme state wiring</td>
+                    <td><span class="pill warn">queued</span></td>
+                    <td>今天 09:18</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h3>活动</h3>
+              <span class="pill">feed</span>
+            </div>
+            <div class="panel-body timeline">
+              <div class="event">
+                <div>
+                  <strong>任务面板刷新</strong>
+                  <p>检测到 task_update 事件，自动同步当前会话的活跃任务。</p>
+                </div>
+              </div>
+              <div class="event">
+                <div>
+                  <strong>模型切换</strong>
+                  <p>从配置中读取 activeModelId，顶部状态栏同步显示当前模型组。</p>
+                </div>
+              </div>
+              <div class="event">
+                <div>
+                  <strong>消息排队</strong>
+                  <p>正在流式输出时，输入框可用但会把消息排进队列，而不是打断当前回复。</p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </section>
+      </main>
+
+      <aside class="inspector">
+        <section class="panel">
+          <div class="panel-header">
+            <h2>主题检查</h2>
+            <span class="pill blue" id="effective-mode">system / light</span>
+          </div>
+          <div class="workspace-preview">
+            <div class="mini-window">
+              <div class="chrome">
+                <i></i><i></i><i></i>
+              </div>
+              <div class="body">
+                <div class="mini-line wide"></div>
+                <div class="mini-line mid"></div>
+                <div class="mini-line short"></div>
+                <div class="mini-line wide"></div>
+              </div>
+            </div>
+            <div class="empty-note">
+              三种模式共用同一套页面骨架，只替换色板和边界强度。这样你能更容易判断，这次重构是不是只在换皮，还是把层级也顺了一遍。
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>状态</h2>
+            <span class="pill">summary</span>
+          </div>
+          <div class="panel-body list">
+            <div class="list-item">
+              <div class="left">
+                <div class="label">Permission mode</div>
+                <div class="meta">standard</div>
+              </div>
+              <span class="pill">ok</span>
+            </div>
+            <div class="list-item">
+              <div class="left">
+                <div class="label">Thinking</div>
+                <div class="meta">enabled</div>
+              </div>
+              <span class="pill good">on</span>
+            </div>
+            <div class="list-item">
+              <div class="left">
+                <div class="label">Queue</div>
+                <div class="meta">2 messages waiting</div>
+              </div>
+              <span class="pill warn">busy</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>页面判断</h2>
+            <span class="pill">notes</span>
+          </div>
+          <div class="panel-body">
+            <div class="empty-note">
+              这个预览页先看三件事：<br />
+              1. 主题切换是否够稳。<br />
+              2. 页面层级是否比原来清楚。<br />
+              3. 是否值得把正式界面按这个方向整页改造。
+            </div>
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    <div class="footer-note">
+      <span>Preview only · standalone HTML</span>
+      <span>layout: project page / theme modes</span>
+    </div>
+  </div>
+
+  <script>
+    const root = document.documentElement
+    const buttons = Array.from(document.querySelectorAll('[data-theme-mode]'))
+    const themeLabel = document.getElementById('theme-label')
+    const effectiveMode = document.getElementById('effective-mode')
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const stored = localStorage.getItem('jdcagnet-preview-theme') || 'system'
+
+    function resolveSystemLabel() {
+      return media.matches ? 'dark' : 'light'
+    }
+
+    function applyTheme(mode) {
+      root.dataset.theme = mode
+      localStorage.setItem('jdcagnet-preview-theme', mode)
+
+      buttons.forEach((button) => {
+        const active = button.dataset.themeMode === mode
+        button.setAttribute('aria-pressed', String(active))
+      })
+
+      const label = mode === 'system' ? `跟随系统 / ${resolveSystemLabel()}` : (mode === 'night' ? '黑夜' : '白天')
+      themeLabel.textContent = `当前: ${mode === 'system' ? '跟随系统' : mode === 'night' ? '黑夜' : '白天'}`
+      effectiveMode.textContent = label
+    }
+
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => applyTheme(button.dataset.themeMode))
+    })
+
+    media.addEventListener?.('change', () => {
+      if ((root.dataset.theme || 'system') === 'system') {
+        applyTheme('system')
+      }
+    })
+
+    applyTheme(stored)
+  </script>
+</body>
+</html>

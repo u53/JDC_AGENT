@@ -11,6 +11,10 @@ files:
   - ui/**/*
   - package.json
   - node_modules/node-pty/**/*
+publish:
+  provider: github
+  owner: u53
+  repo: JDC_AGENT
 mac:
   icon: assets/icon.icns
   category: public.app-category.developer-tools

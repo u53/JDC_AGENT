@@ -13,7 +13,8 @@ type SectionId = 'session' | 'usage' | 'tasks' | 'queue' | 'files'
 interface RailItem {
   id: SectionId
   Icon: React.ComponentType<{ size?: number; className?: string }>
-  badge: number | null
+  badge: string | number | null
+  badgeColor?: string
 }
 
 function formatTokens(n: number): string {
@@ -83,12 +84,15 @@ export function Inspector() {
     }
   }
 
-  const activeTasks = tasks.filter((t) => t.status !== 'done')
+  const completedCount = tasks.filter((t) => t.status === 'completed').length
+  const pendingCount = tasks.length - completedCount
+  const taskBadge = tasks.length > 0 ? (pendingCount > 0 ? pendingCount : null) : null
+  const taskBadgeColor = tasks.length > 0 && pendingCount === 0 ? 'var(--good)' : undefined
 
   const railItems: RailItem[] = [
     { id: 'session', Icon: IconSession, badge: null },
     { id: 'usage', Icon: IconUsage, badge: null },
-    { id: 'tasks', Icon: IconTasks, badge: activeTasks.length || null },
+    { id: 'tasks', Icon: IconTasks, badge: taskBadge, badgeColor: taskBadgeColor },
     { id: 'queue', Icon: IconQueue, badge: messageQueue.length || null },
     { id: 'files', Icon: IconFiles, badge: fileChanges.length || null },
   ]
@@ -96,7 +100,7 @@ export function Inspector() {
   if (!expanded) {
     return (
       <div className="w-[44px] border-l border-[var(--border)] bg-[var(--surface)] flex flex-col items-center py-3 gap-2">
-        {railItems.map(({ id, Icon, badge }) => (
+        {railItems.map(({ id, Icon, badge, badgeColor }) => (
           <button
             key={id}
             onClick={() => toggleSection(id)}
@@ -104,8 +108,8 @@ export function Inspector() {
             aria-label={id}
           >
             <Icon size={18} />
-            {badge != null && badge > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] rounded-full bg-[var(--accent)] text-[var(--accent-ink)] text-[9px] flex items-center justify-center leading-none font-medium">
+            {badge != null && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] rounded-full text-[var(--accent-ink)] text-[9px] flex items-center justify-center leading-none font-medium" style={{ backgroundColor: badgeColor || 'var(--accent)' }}>
                 {badge}
               </span>
             )}
@@ -131,7 +135,7 @@ export function Inspector() {
 
       {/* Rail row for section switching */}
       <div className="flex items-center gap-1 px-3 py-2 border-b border-[var(--border)]">
-        {railItems.map(({ id, Icon, badge }) => (
+        {railItems.map(({ id, Icon, badge, badgeColor }) => (
           <button
             key={id}
             onClick={() => toggleSection(id)}
@@ -143,8 +147,8 @@ export function Inspector() {
             aria-label={id}
           >
             <Icon size={16} />
-            {badge != null && badge > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] rounded-full bg-[var(--accent)] text-[var(--accent-ink)] text-[9px] flex items-center justify-center leading-none font-medium">
+            {badge != null && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] rounded-full text-[var(--accent-ink)] text-[9px] flex items-center justify-center leading-none font-medium" style={{ backgroundColor: badgeColor || 'var(--accent)' }}>
                 {badge}
               </span>
             )}
@@ -156,7 +160,7 @@ export function Inspector() {
       <div className="flex-1 overflow-y-auto p-3">
         {activeSection === 'session' && <SessionSection sessionId={activeSessionId} />}
         {activeSection === 'usage' && <UsageSection usage={usage} />}
-        {activeSection === 'tasks' && <TasksSection tasks={activeTasks} />}
+        {activeSection === 'tasks' && <TasksSection tasks={tasks} />}
         {activeSection === 'queue' && <QueueSection queue={messageQueue} removeFromQueue={removeFromQueue} />}
         {activeSection === 'files' && <FilesSection files={fileChanges} />}
       </div>
@@ -229,23 +233,25 @@ function TasksSection({ tasks }: { tasks: Array<{ id: string; subject: string; s
     return (
       <div>
         <SectionHeader>Tasks</SectionHeader>
-        <p className="text-[12px] text-[var(--muted)]">No active tasks</p>
+        <p className="text-[12px] text-[var(--muted)]">No tasks</p>
       </div>
     )
   }
 
+  const completed = tasks.filter((t) => t.status === 'completed').length
+
   const statusColor = (status: string) => {
     switch (status) {
-      case 'running': return 'var(--accent)'
-      case 'error': return 'var(--bad)'
-      case 'pending': return 'var(--warn)'
+      case 'completed': return 'var(--good)'
+      case 'in_progress': return 'var(--accent)'
+      case 'pending': return 'var(--muted)'
       default: return 'var(--muted)'
     }
   }
 
   return (
     <div>
-      <SectionHeader>Tasks</SectionHeader>
+      <SectionHeader>Tasks ({completed}/{tasks.length})</SectionHeader>
       <div className="space-y-1.5">
         {tasks.map((task) => (
           <div key={task.id} className="flex items-center gap-2 text-[12px]">
@@ -253,7 +259,7 @@ function TasksSection({ tasks }: { tasks: Array<{ id: string; subject: string; s
               className="w-2 h-2 rounded-full flex-shrink-0"
               style={{ backgroundColor: statusColor(task.status) }}
             />
-            <span className="text-[var(--text)] truncate">{task.subject}</span>
+            <span className={`truncate ${task.status === 'completed' ? 'text-[var(--good)]' : 'text-[var(--text)]'}`}>{task.subject}</span>
           </div>
         ))}
       </div>

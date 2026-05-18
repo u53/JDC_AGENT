@@ -3,10 +3,14 @@ import { MarkdownRenderer } from './MarkdownRenderer'
 import { ToolCardRouter } from './tool-cards/ToolCardRouter'
 import type { ContentBlock, Message, ToolResultContent, ToolExecutionEvent } from '@jdcagnet/core'
 
+interface AssistantPair {
+  message: Message
+  toolResultMessage?: Message
+}
+
 interface Props {
   userContent: ContentBlock[]
-  assistantContent: ContentBlock[]
-  nextMessage?: Message
+  assistantMessages: AssistantPair[]
   isActive?: boolean
   streamingText?: string
   thinkingText?: string
@@ -16,10 +20,10 @@ interface Props {
 
 function findToolResult(
   toolUseId: string,
-  nextMessage?: Message
+  toolResultMessage?: Message
 ): { content: string; is_error?: boolean } | undefined {
-  if (!nextMessage || nextMessage.role !== 'user') return undefined
-  const block = nextMessage.content.find(
+  if (!toolResultMessage || toolResultMessage.role !== 'user') return undefined
+  const block = toolResultMessage.content.find(
     (b): b is ToolResultContent => b.type === 'tool_result' && b.tool_use_id === toolUseId
   )
   if (!block) return undefined
@@ -28,8 +32,7 @@ function findToolResult(
 
 export function ConversationTurn({
   userContent,
-  assistantContent,
-  nextMessage,
+  assistantMessages,
   isActive,
   streamingText,
   thinkingText,
@@ -86,30 +89,33 @@ export function ConversationTurn({
           </div>
         )}
 
-        {/* Completed turns: text first, then tool blocks */}
-        {!isActive &&
-          assistantContent
-            .filter(
-              (b): b is Extract<ContentBlock, { type: 'text' }> =>
-                b.type === 'text' && !b.text.startsWith('__STATS__')
-            )
-            .map((block, i) => (
-              <div key={i} className="text-[14px] mb-3">
-                <MarkdownRenderer content={block.text} />
-              </div>
-            ))}
+        {/* Completed assistant messages: render all pairs in order */}
+        {assistantMessages.map((pair) => (
+          <div key={pair.message.id}>
+            {pair.message.content
+              .filter(
+                (b): b is Extract<ContentBlock, { type: 'text' }> =>
+                  b.type === 'text' && !b.text.startsWith('__STATS__')
+              )
+              .map((block, i) => (
+                <div key={i} className="text-[14px] mb-3">
+                  <MarkdownRenderer content={block.text} />
+                </div>
+              ))}
 
-        {!isActive && assistantContent
-          .filter((b): b is Extract<ContentBlock, { type: 'tool_use' }> => b.type === 'tool_use')
-          .map((block) => (
-            <div key={block.id} className="mb-2">
-              <ToolCardRouter
-                name={block.name}
-                input={block.input}
-                result={findToolResult(block.id, nextMessage)}
-              />
-            </div>
-          ))}
+            {pair.message.content
+              .filter((b): b is Extract<ContentBlock, { type: 'tool_use' }> => b.type === 'tool_use')
+              .map((block) => (
+                <div key={block.id} className="mb-2">
+                  <ToolCardRouter
+                    name={block.name}
+                    input={block.input}
+                    result={findToolResult(block.id, pair.toolResultMessage)}
+                  />
+                </div>
+              ))}
+          </div>
+        ))}
 
         {/* Active turn: streaming tool events (tools execute before final text) */}
         {isActive && toolEvents && toolEvents.length > 0 && (

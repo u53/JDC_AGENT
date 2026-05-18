@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, type KeyboardEvent, type ClipboardEvent, type DragEvent } from 'react'
 import { ImagePreview } from './ImagePreview'
 import { SlashCommandMenu, type SlashCommand } from './SlashCommandMenu'
+import { BranchSwitcher } from './BranchSwitcher'
 import { IconSend, IconStop } from './icons'
 import { useSessionStore } from '../stores/session-store'
 
@@ -54,6 +55,11 @@ export function Composer({
   const messageQueue = useSessionStore((s) => s.messageQueue)
   const enqueueMessage = useSessionStore((s) => s.enqueueMessage)
   const removeFromQueue = useSessionStore((s) => s.removeFromQueue)
+  const projects = useSessionStore((s) => s.projects)
+  const activeSessionId = useSessionStore((s) => s.activeSessionId)
+
+  const activeProject = projects.find((p) => p.sessions.some((s) => s.id === activeSessionId))
+  const cwd = activeProject?.cwd || ''
 
   const addImageFile = useCallback((file: File) => {
     const validTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
@@ -153,7 +159,14 @@ export function Composer({
     const el = textareaRef.current
     if (el) {
       el.style.height = 'auto'
-      el.style.height = `${el.scrollHeight}px`
+      const maxH = 200
+      if (el.scrollHeight > maxH) {
+        el.style.height = `${maxH}px`
+        el.style.overflowY = 'auto'
+      } else {
+        el.style.height = `${el.scrollHeight}px`
+        el.style.overflowY = 'hidden'
+      }
     }
   }
 
@@ -345,6 +358,9 @@ export function Composer({
               <span className={`inline-block h-1.5 w-1.5 rounded-full ${planMode ? 'bg-[var(--plan)]' : 'bg-[var(--muted)]'}`} />
               规划
             </button>
+
+            {/* Branch switcher */}
+            {cwd && <BranchSwitcher cwd={cwd} />}
           </div>
 
           {/* Model dropdown */}

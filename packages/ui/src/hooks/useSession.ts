@@ -40,13 +40,12 @@ export function useSession() {
       if (sessionId === current.activeSessionId) {
         useSessionStore.setState((s) => ({ messages: [...s.messages, message] }))
       }
-      // Clear accumulated streaming state for this turn — content is now persisted in messages.
-      // Tool execution events will arrive fresh via onToolEvent after this point.
+      // Only clear text streaming state — tool events persist until query:finished
+      // because tools execute AFTER onMessageComplete in multi-turn loops.
       store.updateSessionState(sessionId, {
         streamingText: '',
         thinkingText: '',
         isThinking: false,
-        toolEvents: [],
       })
     })
 

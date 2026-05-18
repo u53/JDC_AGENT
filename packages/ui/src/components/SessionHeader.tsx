@@ -1,7 +1,6 @@
 import { useSessionStore } from '../stores/session-store'
 import { useModelStore } from '../stores/model-store'
 import { useTerminalStore } from '../stores/terminal-store'
-import { BranchSwitcher } from './BranchSwitcher'
 import { AppLauncher } from './AppLauncher'
 import { IconTerminal } from './icons'
 
@@ -54,18 +53,23 @@ export function SessionHeader({ permissionMode, thinkingEnabled, planMode }: Pro
         <span className="text-[var(--muted)] font-mono">{activeSessionId?.slice(0, 8) || '—'}</span>
       </div>
 
-      {/* Center: devtools */}
+      {/* Center: devtools toolbar */}
       {activeProject?.cwd && (
-        <div className="flex items-center gap-1">
-          <BranchSwitcher cwd={activeProject.cwd} />
-          <AppLauncher cwd={activeProject.cwd} />
-          <button
-            onClick={toggleTerminal}
-            className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors"
-            aria-label="Toggle terminal"
-          >
-            <IconTerminal size={14} />
-          </button>
+        <div className="flex items-center gap-2">
+          {/* Open in + dropdown group */}
+          <div className="flex items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)]">
+            <AppLauncher cwd={activeProject.cwd} />
+          </div>
+          {/* Terminal button */}
+          <div className="flex items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)]">
+            <button
+              onClick={toggleTerminal}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-3)] transition-colors"
+              aria-label="Toggle terminal"
+            >
+              <IconTerminal size={15} />
+            </button>
+          </div>
         </div>
       )}
 
@@ -92,6 +96,8 @@ export function SessionHeader({ permissionMode, thinkingEnabled, planMode }: Pro
             规划
           </span>
         )}
+
+        {/* Branch switcher — next to plan indicator */}
 
         {isStreaming && (
           <span className="flex items-center gap-1 text-[var(--warn)]">

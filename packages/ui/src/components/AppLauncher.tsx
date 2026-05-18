@@ -1,69 +1,82 @@
-import { useState, useEffect, useRef } from "react";
-import { IconExternalLink } from "./icons";
+import { useState, useEffect, useRef } from 'react'
 
 interface DetectedApp {
-  id: string;
-  name: string;
-  available: boolean;
+  id: string
+  name: string
+  shortName: string
+  available: boolean
 }
 
 interface Props {
-  cwd: string;
+  cwd: string
 }
 
 export function AppLauncher({ cwd }: Props) {
-  const [open, setOpen] = useState(false);
-  const [apps, setApps] = useState<DetectedApp[]>([]);
-  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false)
+  const [apps, setApps] = useState<DetectedApp[]>([])
+  const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     window.electronAPI?.appsDetect().then((result: { apps: DetectedApp[] }) => {
-      setApps(result.apps);
-    });
-  }, []);
+      setApps(result.apps)
+    })
+  }, [])
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) return
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
 
   const openApp = async (appId: string) => {
-    await window.electronAPI?.appsOpen(appId, cwd);
-    setOpen(false);
-  };
+    await window.electronAPI?.appsOpen(appId, cwd)
+    setOpen(false)
+  }
+
+  if (apps.length === 0) return null
+
+  const defaultApp = apps[0]
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative flex items-center" ref={ref}>
+      <button
+        onClick={() => openApp(defaultApp.id)}
+        className="flex items-center px-2 py-1.5 hover:bg-[var(--surface-3)] transition-colors rounded-l-[6px]"
+        aria-label={`Open in ${defaultApp.name}`}
+      >
+        <span className="w-[18px] h-[18px] flex items-center justify-center rounded-[4px] bg-[var(--accent)] text-[var(--accent-ink)] text-[10px] font-bold">
+          {defaultApp.shortName}
+        </span>
+      </button>
       <button
         onClick={() => setOpen(!open)}
-        className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors"
-        aria-label="Open in..."
+        className="flex items-center px-1.5 py-1.5 border-l border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-3)] transition-colors rounded-r-[6px]"
+        aria-label="More apps"
       >
-        <IconExternalLink size={14} />
+        <svg width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M2 4 L5 7 L8 4" />
+        </svg>
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-[180px] bg-[var(--surface)] border border-[var(--border)] rounded-[8px] shadow-lg z-50 overflow-hidden py-1">
+        <div className="absolute top-full right-0 mt-1 w-[200px] bg-[var(--surface)] border border-[var(--border)] rounded-[8px] shadow-lg z-50 overflow-hidden py-1">
           {apps.map((app) => (
             <button
               key={app.id}
               onClick={() => openApp(app.id)}
-              className="flex items-center gap-2 w-full px-3 py-1.5 text-[12px] text-[var(--text)] hover:bg-[var(--surface-2)] text-left"
+              className="flex items-center gap-2.5 w-full px-3 py-1.5 text-[12px] text-[var(--text)] hover:bg-[var(--surface-2)] text-left"
             >
-              {app.name}
+              <span className="w-[18px] h-[18px] flex items-center justify-center rounded-[3px] bg-[var(--surface-3)] text-[var(--text)] text-[9px] font-bold flex-shrink-0">
+                {app.shortName}
+              </span>
+              <span>{app.name}</span>
             </button>
           ))}
-          {apps.length === 0 && (
-            <span className="px-3 py-1.5 text-[12px] text-[var(--muted)]">
-              未检测到应用
-            </span>
-          )}
         </div>
       )}
     </div>
-  );
+  )
 }

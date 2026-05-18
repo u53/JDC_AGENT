@@ -532,6 +532,7 @@ export class Session {
       }
       this.messages.push(toolMessage)
       this.history.addMessage(this.id, toolMessage)
+      events.onMessageComplete(toolMessage)
     }
 
     this.abortController = null

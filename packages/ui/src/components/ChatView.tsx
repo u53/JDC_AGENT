@@ -18,38 +18,52 @@ import type { Message } from '@jdcagnet/core'
 
 interface Turn {
   userMessage: Message
-  assistantMessage?: Message
-  nextAfterAssistant?: Message
+  assistantMessages: { message: Message; toolResultMessage?: Message }[]
 }
 
 function groupIntoTurns(messages: Message[]): Turn[] {
   const turns: Turn[] = []
-  for (let i = 0; i < messages.length; i++) {
+  let i = 0
+
+  while (i < messages.length) {
     const msg = messages[i]
+
     if (msg.role === 'user') {
-      // Skip tool_result-only user messages (they're internal, not user-initiated)
+      // Skip tool_result-only user messages
       if (Array.isArray(msg.content) && msg.content.every((b: any) => b.type === 'tool_result')) {
+        i++
         continue
       }
-      const next = messages[i + 1]
-      if (next?.role === 'assistant') {
-        // Find the tool_result message after the assistant (could be i+2 or further)
-        let toolResultMsg: Message | undefined
-        for (let j = i + 2; j < messages.length; j++) {
-          const candidate = messages[j]
-          if (candidate.role === 'user' && Array.isArray(candidate.content) && candidate.content.every((b: any) => b.type === 'tool_result')) {
-            toolResultMsg = candidate
-            break
+
+      const turn: Turn = { userMessage: msg, assistantMessages: [] }
+      i++
+
+      // Collect all assistant + tool_result pairs that follow
+      while (i < messages.length) {
+        const next = messages[i]
+        if (next.role === 'assistant') {
+          const pair: { message: Message; toolResultMessage?: Message } = { message: next }
+          i++
+          // Check if next is a tool_result user message
+          if (i < messages.length) {
+            const candidate = messages[i]
+            if (candidate.role === 'user' && Array.isArray(candidate.content) && candidate.content.every((b: any) => b.type === 'tool_result')) {
+              pair.toolResultMessage = candidate
+              i++
+            }
           }
+          turn.assistantMessages.push(pair)
+        } else {
           break
         }
-        turns.push({ userMessage: msg, assistantMessage: next, nextAfterAssistant: toolResultMsg })
-        i++ // skip the assistant message
-      } else {
-        turns.push({ userMessage: msg })
       }
+
+      turns.push(turn)
+    } else {
+      i++
     }
   }
+
   return turns
 }
 
@@ -249,7 +263,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
 
   const turns = groupIntoTurns(messages)
   const lastTurn = turns[turns.length - 1]
-  const isLastTurnActive = isStreaming && lastTurn && !lastTurn.assistantMessage
+  const isLastTurnActive = isStreaming && lastTurn && lastTurn.assistantMessages.length === 0
 
   return (
     <div className="flex flex-1 overflow-hidden relative">
@@ -266,8 +280,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
                 <ConversationTurn
                   key={turn.userMessage.id}
                   userContent={turn.userMessage.content}
-                  assistantContent={turn.assistantMessage?.content || []}
-                  nextMessage={turn.nextAfterAssistant}
+                  assistantMessages={turn.assistantMessages}
                   isActive={isActive}
                   streamingText={isActive ? streamingText : undefined}
                   thinkingText={isActive ? thinkingText : undefined}

@@ -88,7 +88,7 @@ export function BranchSwitcher({ cwd }: Props) {
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-[240px] bg-[var(--surface)] border border-[var(--border)] rounded-[8px] shadow-lg z-50 overflow-hidden">
+        <div className="absolute bottom-full left-0 mb-1 w-[240px] bg-[var(--surface)] border border-[var(--border)] rounded-[8px] shadow-lg z-50 overflow-hidden">
           {/* Search */}
           <div className="p-2 border-b border-[var(--border)]">
             <input

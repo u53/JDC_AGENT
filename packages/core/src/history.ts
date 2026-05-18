@@ -79,16 +79,30 @@ export class ConversationHistory {
       // Column already exists
     }
 
+    // Migration: recreate tasks table with composite primary key
+    try {
+      const tableInfo = this.db!.exec("SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'")
+      if (tableInfo.length > 0 && tableInfo[0].values.length > 0) {
+        const sql = tableInfo[0].values[0][0] as string
+        if (sql.includes('id TEXT PRIMARY KEY')) {
+          this.db!.run('DROP TABLE tasks')
+        }
+      }
+    } catch {
+      // Table doesn't exist yet, will be created below
+    }
+
     // Tasks table
     this.db!.run(`
       CREATE TABLE IF NOT EXISTS tasks (
-        id TEXT PRIMARY KEY,
+        id TEXT NOT NULL,
         session_id TEXT NOT NULL,
         subject TEXT NOT NULL,
         description TEXT,
         status TEXT NOT NULL DEFAULT 'pending',
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
+        PRIMARY KEY (id, session_id),
         FOREIGN KEY (session_id) REFERENCES sessions(id)
       )
     `)
@@ -176,6 +190,7 @@ export class ConversationHistory {
   }
 
   deleteSession(sessionId: string): void {
+    this.db!.run('DELETE FROM tasks WHERE session_id = ?', [sessionId])
     this.db!.run('DELETE FROM messages WHERE session_id = ?', [sessionId])
     this.db!.run('DELETE FROM sessions WHERE id = ?', [sessionId])
     this.save()
@@ -301,19 +316,19 @@ export class ConversationHistory {
     this.save()
   }
 
-  updateTask(id: string, updates: { status?: string; subject?: string; description?: string }): void {
+  updateTask(sessionId: string, id: string, updates: { status?: string; subject?: string; description?: string }): void {
     const parts: string[] = ['updated_at = ?']
     const values: any[] = [Date.now()]
     if (updates.status) { parts.push('status = ?'); values.push(updates.status) }
     if (updates.subject) { parts.push('subject = ?'); values.push(updates.subject) }
     if (updates.description) { parts.push('description = ?'); values.push(updates.description) }
-    values.push(id)
-    this.db!.run(`UPDATE tasks SET ${parts.join(', ')} WHERE id = ?`, values)
+    values.push(id, sessionId)
+    this.db!.run(`UPDATE tasks SET ${parts.join(', ')} WHERE id = ? AND session_id = ?`, values)
     this.save()
   }
 
-  deleteTask(id: string): void {
-    this.db!.run('DELETE FROM tasks WHERE id = ?', [id])
+  deleteTask(sessionId: string, id: string): void {
+    this.db!.run('DELETE FROM tasks WHERE id = ? AND session_id = ?', [id, sessionId])
     this.save()
   }
 

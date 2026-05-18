@@ -1,7 +1,11 @@
 import type { BrowserWindow } from 'electron'
 
-// node-pty is external (native addon), require at runtime
-const pty = require('node-pty')
+let pty: any = null
+try {
+  pty = require('node-pty')
+} catch (err) {
+  console.error('[TerminalService] Failed to load node-pty:', (err as Error).message)
+}
 
 interface PtyInstance {
   id: string
@@ -18,7 +22,9 @@ export class TerminalService {
     this.window = window
   }
 
-  create(cwd: string): { id: string } {
+  create(cwd: string): { id: string; error?: string } {
+    if (!pty) return { id: '', error: 'node-pty not available' }
+
     const id = `term-${this.nextId++}`
     const shell = process.env.SHELL || '/bin/zsh'
 

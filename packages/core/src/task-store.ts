@@ -43,14 +43,14 @@ export class TaskStore {
   update(id: string, updates: Partial<Pick<Task, 'status' | 'subject' | 'description'>>): Task | undefined {
     const task = this.get(id)
     if (!task) return undefined
-    this.history.updateTask(id, updates)
+    this.history.updateTask(this.sessionId, id, updates)
     return { ...task, ...updates, updatedAt: Date.now() }
   }
 
   delete(id: string): boolean {
     const task = this.get(id)
     if (!task) return false
-    this.history.deleteTask(id)
+    this.history.deleteTask(this.sessionId, id)
     return true
   }
 }
