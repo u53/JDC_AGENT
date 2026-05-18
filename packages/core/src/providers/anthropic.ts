@@ -87,7 +87,6 @@ export class AnthropicProvider implements ModelProvider {
       yield* this.streamRaw(params, signal)
     } else {
       yield* this.streamSDK(params, signal)
-      yield* this.streamSDK(params, signal)
     }
   }
 
