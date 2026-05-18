@@ -1,21 +1,28 @@
 appId: com.jdcagnet.app
 productName: JDCAGNET
+electronVersion: "33.4.11"
+npmRebuild: true
 directories:
   output: out
-  buildResources: resources
+  app: packages/electron
+  buildResources: assets
 files:
-  - packages/electron/dist/**/*
-  - packages/ui/dist/**/*
-  - node_modules/**/*
+  - dist/**/*
+  - ui/**/*
+  - package.json
+  - node_modules/node-pty/**/*
 mac:
+  icon: assets/icon.icns
   category: public.app-category.developer-tools
   target:
     - dmg
     - zip
 win:
+  icon: assets/icon.ico
   target:
     - nsis
 linux:
+  icon: assets/icon.png
   target:
     - AppImage
     - deb

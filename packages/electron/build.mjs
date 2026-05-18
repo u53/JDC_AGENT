@@ -1,7 +1,7 @@
 import { build } from 'esbuild'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { copyFileSync, existsSync } from 'node:fs'
+import { copyFileSync, existsSync, cpSync, mkdirSync } from 'node:fs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '../..')
@@ -12,7 +12,7 @@ await build({
   bundle: true,
   platform: 'node',
   outdir: path.join(__dirname, 'dist'),
-  external: ['electron'],
+  external: ['electron', 'node-pty'],
   format: 'cjs',
   alias: {
     '@jdcagnet/core': path.join(rootDir, 'packages/core/src/index.ts'),
@@ -35,8 +35,15 @@ const wasmDst = path.join(__dirname, 'dist/sql-wasm.wasm')
 if (existsSync(wasmSrc)) {
   copyFileSync(wasmSrc, wasmDst)
 } else {
-  // Fallback: search for it
   const { execSync } = await import('node:child_process')
   const found = execSync(`find ${rootDir}/node_modules -name "sql-wasm.wasm" -print -quit`, { encoding: 'utf-8' }).trim()
   if (found) copyFileSync(found, wasmDst)
+}
+
+// Copy UI dist to packages/electron/ui/ for production loadFile path
+const uiSrc = path.join(rootDir, 'packages/ui/dist')
+const uiDst = path.join(__dirname, 'ui')
+if (existsSync(uiSrc)) {
+  mkdirSync(uiDst, { recursive: true })
+  cpSync(uiSrc, uiDst, { recursive: true })
 }

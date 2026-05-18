@@ -38,4 +38,23 @@ export const IPC_CHANNELS = {
   PLAN_RESPOND: 'plan:respond',
   SESSION_GET_TASKS: 'session:get-tasks',
   SESSION_RENAME: 'session:rename',
+
+  // Git
+  GIT_BRANCH_LIST: 'git:branch-list',
+  GIT_BRANCH_SWITCH: 'git:branch-switch',
+  GIT_BRANCH_CREATE: 'git:branch-create',
+  GIT_BRANCH_DELETE: 'git:branch-delete',
+  GIT_STATUS: 'git:status',
+
+  // App Launcher
+  APPS_DETECT: 'apps:detect',
+  APPS_OPEN: 'apps:open',
+
+  // Terminal
+  TERMINAL_CREATE: 'terminal:create',
+  TERMINAL_WRITE: 'terminal:write',
+  TERMINAL_RESIZE: 'terminal:resize',
+  TERMINAL_DESTROY: 'terminal:destroy',
+  TERMINAL_DATA: 'terminal:data',
+  TERMINAL_EXIT: 'terminal:exit',
 } as const
