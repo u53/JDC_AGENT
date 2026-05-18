@@ -209,7 +209,7 @@ function UsageSection({ usage }: { usage?: { totalTokens: number; cacheHitRate: 
         </div>
         <div className="flex justify-between">
           <span className="text-[var(--muted)]">Cache hit</span>
-          <span className="text-[var(--text)] font-mono">{Math.round(usage.cacheHitRate * 100)}%</span>
+          <span className="text-[var(--text)] font-mono">{Math.round(usage.cacheHitRate)}%</span>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-[var(--muted)]">Context</span>

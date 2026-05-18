@@ -192,7 +192,7 @@ export function ProjectPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-[var(--muted)]">Cache hit</span>
-                  <span>{Math.round(usage.cacheHitRate * 100)}%</span>
+                  <span>{Math.round(usage.cacheHitRate)}%</span>
                 </div>
                 <div className="flex justify-between items-center gap-3">
                   <span className="text-[var(--muted)]">Context</span>

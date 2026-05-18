@@ -4,10 +4,24 @@ import type { ContentBlock, Message, ModelConfig, PromptSegment, StreamChunk, To
 import { joinSegments } from '../context.js'
 import { parseThinkTags } from './think-parser.js'
 
-function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): string | undefined {
+function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): any {
   if (!systemPrompt) return undefined
-  if (typeof systemPrompt === 'string') return systemPrompt
-  return joinSegments(systemPrompt)
+  if (typeof systemPrompt === 'string') return [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }]
+  const blocks: any[] = []
+  let lastCacheableIdx = -1
+  for (let i = 0; i < systemPrompt.length; i++) {
+    if (systemPrompt[i].cacheable) lastCacheableIdx = i
+  }
+  for (let i = 0; i < systemPrompt.length; i++) {
+    const seg = systemPrompt[i]
+    if (!seg.content) continue
+    const block: any = { type: 'text', text: seg.content }
+    if (i === lastCacheableIdx) {
+      block.cache_control = { type: 'ephemeral' }
+    }
+    blocks.push(block)
+  }
+  return blocks
 }
 
 export class AnthropicProvider implements ModelProvider {
@@ -68,11 +82,17 @@ export class AnthropicProvider implements ModelProvider {
       max_tokens: config.maxTokens,
       system: resolveSystemPrompt(config.systemPrompt),
       messages: formattedMessages,
-      tools: tools.map(t => ({
-        name: t.name,
-        description: t.description,
-        input_schema: t.inputSchema as Anthropic.Tool['input_schema'],
-      })),
+      tools: tools.map((t, i) => {
+        const tool: any = {
+          name: t.name,
+          description: t.description,
+          input_schema: t.inputSchema as Anthropic.Tool['input_schema'],
+        }
+        if (i === tools.length - 1) {
+          tool.cache_control = { type: 'ephemeral' }
+        }
+        return tool
+      }),
       stream: true,
     }
 
@@ -84,11 +104,7 @@ export class AnthropicProvider implements ModelProvider {
       delete params.temperature
     }
 
-    if (hasThinkingBlocks) {
-      yield* this.streamRaw(params, signal)
-    } else {
-      yield* this.streamSDK(params, signal)
-    }
+    yield* this.streamRaw(params, signal)
   }
 
   private async *streamSDK(params: any, signal?: AbortSignal): AsyncIterable<StreamChunk> {
@@ -339,6 +355,17 @@ export class AnthropicProvider implements ModelProvider {
             merged[i].content = [{ type: 'text', text: '.' }] as any
           }
         }
+      }
+    }
+
+    // Add cache_control to the last content block of the last user message
+    for (let i = merged.length - 1; i >= 0; i--) {
+      if (merged[i].role === 'user') {
+        const content = merged[i].content as any[]
+        if (content.length > 0) {
+          content[content.length - 1].cache_control = { type: 'ephemeral' }
+        }
+        break
       }
     }
 
