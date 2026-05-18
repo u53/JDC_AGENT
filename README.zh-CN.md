@@ -62,6 +62,20 @@ git push && git push --tags
 
 工作流会自动构建 macOS（.dmg）和 Windows（.exe）安装包，发布到 GitHub Releases。
 
+## 安装说明
+
+### macOS
+
+应用未进行代码签名。下载后 macOS 可能提示「JDCAGNET 已损坏，无法打开」。在终端执行以下命令即可：
+
+```bash
+xattr -cr /Applications/JDCAGNET.app
+```
+
+### Windows
+
+Windows 可能弹出 SmartScreen 警告，点击「更多信息」→「仍要运行」即可。
+
 ## 许可证
 
 本项目仅供学习和个人使用，禁止商业用途。详见 [LICENSE](./LICENSE)。

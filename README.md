@@ -64,6 +64,20 @@ git push && git push --tags
 
 The workflow builds macOS (.dmg) and Windows (.exe) installers, then publishes them to GitHub Releases.
 
+## Installation Notes
+
+### macOS
+
+The app is not code-signed. After downloading, macOS may show "JDCAGNET is damaged and can't be opened." Run this in Terminal to fix:
+
+```bash
+xattr -cr /Applications/JDCAGNET.app
+```
+
+### Windows
+
+Windows may show a SmartScreen warning. Click "More info" → "Run anyway" to proceed.
+
 ## License
 
 本项目仅供学习和个人使用，禁止商业用途。详见 [LICENSE](./LICENSE)。
