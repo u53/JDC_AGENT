@@ -11,7 +11,7 @@ import { AppLauncher } from './app-launcher.js'
 import { TerminalService } from './terminal-service.js'
 
 process.on('uncaughtException', (err) => {
-  console.error('[JDCAGNET] Uncaught exception:', err.message)
+  console.error('[JDC Code] Uncaught exception:', err.message)
 })
 
 const sessionManager = new SessionManager()
@@ -78,7 +78,7 @@ app.whenReady().then(async () => {
 
   win.webContents.on('did-finish-load', () => {
     sessionManager.initMcp(process.env.HOME || '/').catch((err) => {
-      console.error('[JDCAGNET] MCP init error:', err.message)
+      console.error('[JDC Code] MCP init error:', err.message)
     })
     // Check for updates on launch (non-blocking)
     autoUpdater.checkForUpdates().catch(() => {})

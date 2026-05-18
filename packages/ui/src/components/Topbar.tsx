@@ -12,7 +12,7 @@ export function Topbar() {
   const activeProject = projects.find((p) =>
     p.sessions.some((s) => s.id === activeSessionId)
   )
-  const projectName = activeProject?.name || projects[0]?.name || 'JDCAGNET'
+  const projectName = activeProject?.name || projects[0]?.name || 'JDC Code'
 
   return (
     <header

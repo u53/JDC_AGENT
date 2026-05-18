@@ -6,8 +6,8 @@ let mainWindow: BrowserWindow | null = null
 
 export function createMainWindow(): BrowserWindow {
   const preloadPath = path.join(__dirname, 'preload.js')
-  console.log('[JDCAGNET] Preload path:', preloadPath)
-  console.log('[JDCAGNET] Preload exists:', existsSync(preloadPath))
+  console.log('[JDC Code] Preload path:', preloadPath)
+  console.log('[JDC Code] Preload exists:', existsSync(preloadPath))
 
   // Register preload via session API (more reliable with ESM main process)
   session.defaultSession.setPreloads([preloadPath])
@@ -37,9 +37,9 @@ export function createMainWindow(): BrowserWindow {
   }
 
   mainWindow.webContents.on('did-finish-load', () => {
-    console.log('[JDCAGNET] Page loaded, checking preload...')
+    console.log('[JDC Code] Page loaded, checking preload...')
     mainWindow?.webContents.executeJavaScript('typeof window.electronAPI').then((result) => {
-      console.log('[JDCAGNET] electronAPI type in renderer:', result)
+      console.log('[JDC Code] electronAPI type in renderer:', result)
     })
   })
 

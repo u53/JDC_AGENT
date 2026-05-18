@@ -25,7 +25,7 @@ export function HelpDialog({ visible, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#333]">
-          <span className="text-[11px] uppercase tracking-[0.1em] text-[#EAEAEA]">JDCAGNET 帮助</span>
+          <span className="text-[11px] uppercase tracking-[0.1em] text-[#EAEAEA]">JDC Code 帮助</span>
           <button onClick={onClose} className="text-[10px] text-[#666] hover:text-[#EAEAEA]">[ESC]</button>
         </div>
 

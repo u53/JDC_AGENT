@@ -268,7 +268,7 @@ function AdvancedTab() {
       <div>
         <h3 className="text-[13px] font-medium text-[var(--text)] mb-3">关于</h3>
         <div className="space-y-2 text-[13px] text-[var(--muted)]">
-          <p>JDCAGNET — AI-powered coding assistant</p>
+          <p>JDC Code — AI-powered coding assistant</p>
           <p>Electron {window.electronAPI ? '33' : '?'} · React 19 · Node.js</p>
         </div>
       </div>

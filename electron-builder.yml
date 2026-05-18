@@ -1,5 +1,5 @@
 appId: com.jdcagnet.app
-productName: JDCAGNET
+productName: JDC Code
 electronVersion: "33.4.11"
 npmRebuild: true
 directories:

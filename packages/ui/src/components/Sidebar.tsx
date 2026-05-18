@@ -150,7 +150,7 @@ export function Sidebar() {
         >
           New project
         </button>
-        <div className="text-center text-[10px] text-[var(--muted)]">JDCAGNET {version ? `v${version}` : ''}</div>
+        <div className="text-center text-[10px] text-[var(--muted)]">JDC Code {version ? `v${version}` : ''}</div>
       </div>
     </aside>
   )

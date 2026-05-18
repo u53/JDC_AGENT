@@ -138,7 +138,7 @@ export class SessionManager {
     }
     session.registerTool(createAskUserTool(onAskUser))
     const onNotify: NotifyCallback = (message: string) => {
-      const notification = new Notification({ title: 'JDCAGNET', body: message })
+      const notification = new Notification({ title: 'JDC Code', body: message })
       notification.on('click', () => { this.window?.focus() })
       notification.show()
     }
