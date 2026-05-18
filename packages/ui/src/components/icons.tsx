@@ -200,3 +200,12 @@ export function IconExternalLink({ size = 18, className }: IconProps) {
     </svg>
   );
 }
+
+export function IconTerminal({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...defaultProps}>
+      <polyline points="4 17 10 11 4 5" />
+      <line x1={12} y1={19} x2={20} y2={19} />
+    </svg>
+  );
+}

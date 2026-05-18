@@ -6,9 +6,11 @@ import { SettingsOverlay } from './components/SettingsOverlay'
 import { ProjectPage } from './components/ProjectPage'
 import { AskUserDialog } from './components/AskUserDialog'
 import { Inspector } from './components/Inspector'
+import { TerminalPanel } from './components/TerminalPanel'
 import { useSessionStore } from './stores/session-store'
 import { useModelStore } from './stores/model-store'
 import { useSettingsStore } from './stores/settings-store'
+import { useTerminalStore } from './stores/terminal-store'
 import { useHotkeys } from './hooks/useHotkeys'
 
 export function App() {
@@ -23,6 +25,10 @@ export function App() {
   const closeSettings = useSettingsStore((s) => s.close)
 
   useEffect(() => { loadModels() }, [loadModels])
+
+  const activeProject = projects.find((p) =>
+    p.sessions.some((s) => s.id === activeSessionId)
+  )
 
   // Flatten all sessions across project groups for index-based switching
   const allSessions = useMemo(
@@ -65,6 +71,11 @@ export function App() {
           openSettings()
         }
       },
+      // Cmd/Ctrl+` — toggle terminal panel
+      'mod+`': () => {
+        const { toggle } = useTerminalStore.getState()
+        toggle()
+      },
     }
 
     // Cmd/Ctrl+1~9 — switch to Nth session
@@ -89,7 +100,12 @@ export function App() {
         <Sidebar />
         <div className="flex-1 flex flex-col overflow-hidden border-l border-[var(--border)]">
           {activeSessionId ? (
-            <ChatView onOpenMcp={() => openSettings('mcp')} />
+            <>
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <ChatView onOpenMcp={() => openSettings('mcp')} />
+              </div>
+              <TerminalPanel cwd={activeProject?.cwd || ''} />
+            </>
           ) : (
             <ProjectPage />
           )}

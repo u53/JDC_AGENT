@@ -1,5 +1,9 @@
 import { useSessionStore } from '../stores/session-store'
 import { useModelStore } from '../stores/model-store'
+import { useTerminalStore } from '../stores/terminal-store'
+import { BranchSwitcher } from './BranchSwitcher'
+import { AppLauncher } from './AppLauncher'
+import { IconTerminal } from './icons'
 
 interface Props {
   permissionMode: string
@@ -25,6 +29,8 @@ export function SessionHeader({ permissionMode, thinkingEnabled, planMode }: Pro
   const usage = state?.usage
   const isStreaming = state?.isStreaming ?? false
 
+  const toggleTerminal = useTerminalStore((s) => s.toggle)
+
   const activeProject = projects.find((p) =>
     p.sessions.some((s) => s.id === activeSessionId)
   )
@@ -47,6 +53,21 @@ export function SessionHeader({ permissionMode, thinkingEnabled, planMode }: Pro
         <span className="text-[var(--muted)]">/</span>
         <span className="text-[var(--muted)] font-mono">{activeSessionId?.slice(0, 8) || '—'}</span>
       </div>
+
+      {/* Center: devtools */}
+      {activeProject?.cwd && (
+        <div className="flex items-center gap-1">
+          <BranchSwitcher cwd={activeProject.cwd} />
+          <AppLauncher cwd={activeProject.cwd} />
+          <button
+            onClick={toggleTerminal}
+            className="p-1.5 rounded-[6px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors"
+            aria-label="Toggle terminal"
+          >
+            <IconTerminal size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Right: status indicators */}
       <div className="flex items-center gap-3 text-[12px]">
