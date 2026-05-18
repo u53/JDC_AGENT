@@ -8,7 +8,7 @@
     "build:ui": "pnpm --filter @jdcagnet/ui build",
     "package": "pnpm build && electron-builder",
     "test": "pnpm --filter @jdcagnet/core test",
-    "postinstall": "EPATH=node_modules/.pnpm/electron@33.4.11/node_modules/electron/dist/Electron.app; cp assets/icon.icns $EPATH/Contents/Resources/electron.icns 2>/dev/null; /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName JDCAGNET' -c 'Set :CFBundleName JDCAGNET' $EPATH/Contents/Info.plist 2>/dev/null || true"
+    "postinstall": "node -e \"if(process.platform==='darwin'){const{execSync}=require('child_process');try{execSync('EPATH=node_modules/.pnpm/electron@33.4.11/node_modules/electron/dist/Electron.app && cp assets/icon.icns $EPATH/Contents/Resources/electron.icns && /usr/libexec/PlistBuddy -c \\\"Set :CFBundleDisplayName JDCAGNET\\\" -c \\\"Set :CFBundleName JDCAGNET\\\" $EPATH/Contents/Info.plist',{shell:'/bin/bash'})}catch(e){}}\""
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",
