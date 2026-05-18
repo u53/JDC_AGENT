@@ -66,4 +66,4 @@ The workflow builds macOS (.dmg) and Windows (.exe) installers, then publishes t
 
 ## License
 
-MIT
+本项目仅供学习和个人使用，禁止商业用途。详见 [LICENSE](./LICENSE)。

@@ -64,4 +64,4 @@ git push && git push --tags
 
 ## 许可证
 
-MIT
+本项目仅供学习和个人使用，禁止商业用途。详见 [LICENSE](./LICENSE)。
