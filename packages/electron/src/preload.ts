@@ -62,6 +62,26 @@ const api = {
     ipcRenderer.on('terminal:exit', listener)
     return () => ipcRenderer.removeListener('terminal:exit', listener)
   },
+
+  // Updater
+  updaterCheck: () => ipcRenderer.invoke('updater:check'),
+  updaterDownload: () => ipcRenderer.invoke('updater:download'),
+  updaterInstall: () => ipcRenderer.invoke('updater:install'),
+  onUpdaterAvailable: (callback: (data: { version: string }) => void) => {
+    const listener = (_event: unknown, payload: { version: string }) => callback(payload)
+    ipcRenderer.on('updater:available', listener)
+    return () => ipcRenderer.removeListener('updater:available', listener)
+  },
+  onUpdaterProgress: (callback: (data: { percent: number }) => void) => {
+    const listener = (_event: unknown, payload: { percent: number }) => callback(payload)
+    ipcRenderer.on('updater:progress', listener)
+    return () => ipcRenderer.removeListener('updater:progress', listener)
+  },
+  onUpdaterDownloaded: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('updater:downloaded', listener)
+    return () => ipcRenderer.removeListener('updater:downloaded', listener)
+  },
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)
