@@ -5,3 +5,7 @@ out
 *.tsbuildinfo
 .env
 .env.local
+.DS_Store
+packages/electron/ui
+tmp
+output
