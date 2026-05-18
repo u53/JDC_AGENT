@@ -84,7 +84,7 @@ export function AskUserCard({
         <input
           value={textInput}
           onChange={(e) => setTextInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && submit()}
+          onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && submit()}
           className="w-full bg-[var(--surface-2)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] mb-4 focus:border-[var(--good)] outline-none placeholder-[var(--muted)]"
           placeholder={options ? '补充输入（可选）...' : '输入回答...'}
         />
