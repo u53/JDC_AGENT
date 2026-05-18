@@ -12,8 +12,12 @@ function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): string | 
 export class AnthropicProvider implements ModelProvider {
   name = 'anthropic'
   private client: Anthropic
+  private apiKey: string
+  private baseURL: string
 
   constructor(apiKey: string, baseURL?: string) {
+    this.apiKey = apiKey
+    this.baseURL = baseURL || 'https://api.anthropic.com'
     this.client = new Anthropic({
       apiKey,
       ...(baseURL ? { baseURL } : {}),
@@ -54,6 +58,10 @@ export class AnthropicProvider implements ModelProvider {
     signal?: AbortSignal
   ): AsyncIterable<StreamChunk> {
     const formattedMessages = this.formatMessages(messages)
+    const hasThinkingBlocks = formattedMessages.some((m: any) =>
+      Array.isArray(m.content) && m.content.some((b: any) => b.type === 'thinking')
+    )
+
     const params: any = {
       model: config.model,
       max_tokens: config.maxTokens,
@@ -64,6 +72,7 @@ export class AnthropicProvider implements ModelProvider {
         description: t.description,
         input_schema: t.inputSchema as Anthropic.Tool['input_schema'],
       })),
+      stream: true,
     }
 
     if (config.thinking) {
@@ -74,6 +83,16 @@ export class AnthropicProvider implements ModelProvider {
       delete params.temperature
     }
 
+    if (hasThinkingBlocks) {
+      yield* this.streamRaw(params, signal)
+    } else {
+      yield* this.streamSDK(params, signal)
+      yield* this.streamSDK(params, signal)
+    }
+  }
+
+  private async *streamSDK(params: any, signal?: AbortSignal): AsyncIterable<StreamChunk> {
+    delete params.stream
     const stream = this.client.messages.stream(params, { signal })
 
     let usage = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }
@@ -99,6 +118,8 @@ export class AnthropicProvider implements ModelProvider {
           yield { type: 'tool_use_delta', toolUse: { id: '', name: '', input: event.delta.partial_json } }
         } else if ((event.delta as any).type === 'thinking_delta') {
           yield { type: 'thinking_delta', text: (event.delta as any).thinking }
+        } else if ((event.delta as any).type === 'signature_delta') {
+          yield { type: 'thinking_end', signature: (event.delta as any).signature }
         }
       } else if (event.type === 'content_block_start') {
         if (event.content_block.type === 'tool_use') {
@@ -114,20 +135,97 @@ export class AnthropicProvider implements ModelProvider {
     }
   }
 
+  private async *streamRaw(params: any, signal?: AbortSignal): AsyncIterable<StreamChunk> {
+    const url = this.baseURL.replace(/\/$/, '') + '/v1/messages'
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': this.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(params),
+      signal,
+    })
+
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(`${response.status} ${text}`)
+    }
+
+    const reader = response.body!.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let usage = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const data = line.slice(6).trim()
+        if (!data || data === '[DONE]') continue
+
+        let event: any
+        try { event = JSON.parse(data) } catch { continue }
+
+        if (event.type === 'message_start') {
+          if (event.message?.usage) {
+            usage.inputTokens = event.message.usage.input_tokens || 0
+            usage.outputTokens = event.message.usage.output_tokens || 0
+            usage.cacheCreationInputTokens = event.message.usage.cache_creation_input_tokens || 0
+            usage.cacheReadInputTokens = event.message.usage.cache_read_input_tokens || 0
+          }
+        } else if (event.type === 'message_delta') {
+          if (event.usage) {
+            usage.outputTokens = event.usage.output_tokens || usage.outputTokens
+          }
+        } else if (event.type === 'content_block_delta') {
+          if (event.delta?.type === 'text_delta') {
+            yield { type: 'text_delta', text: event.delta.text }
+          } else if (event.delta?.type === 'input_json_delta') {
+            yield { type: 'tool_use_delta', toolUse: { id: '', name: '', input: event.delta.partial_json } }
+          } else if (event.delta?.type === 'thinking_delta') {
+            yield { type: 'thinking_delta', text: event.delta.thinking }
+          } else if (event.delta?.type === 'signature_delta') {
+            yield { type: 'thinking_end', signature: event.delta.signature }
+          }
+        } else if (event.type === 'content_block_start') {
+          if (event.content_block?.type === 'tool_use') {
+            yield { type: 'tool_use_start', toolUse: { id: event.content_block.id, name: event.content_block.name, input: '' } }
+          } else if (event.content_block?.type === 'thinking') {
+            yield { type: 'thinking_delta', text: '' }
+          }
+        } else if (event.type === 'content_block_stop') {
+          yield { type: 'tool_use_end' }
+        } else if (event.type === 'message_stop') {
+          yield { type: 'message_end', usage }
+        }
+      }
+    }
+  }
+
   private formatMessages(messages: Message[]): Anthropic.MessageParam[] {
-    const raw = messages
+    const raw = (messages
       .filter(m => m.role !== 'system')
-      .map(m => ({
-        role: m.role as 'user' | 'assistant',
-        content: m.content.map(block => {
-          if (block.type === 'text') return { type: 'text' as const, text: block.text }
-          if (block.type === 'image') return { type: 'image' as const, source: { type: 'base64' as const, media_type: block.source.media_type, data: block.source.data } }
-          if (block.type === 'tool_use') return { type: 'tool_use' as const, id: block.id, name: block.name, input: block.input }
-          if (block.type === 'tool_result') return { type: 'tool_result' as const, tool_use_id: block.tool_use_id, content: block.content }
-          return block
-        }),
-      }))
-      .filter(m => Array.isArray(m.content) && m.content.length > 0)
+      .map(m => {
+        const content = m.content
+          .map(block => {
+            if (block.type === 'text') return { type: 'text' as const, text: block.text }
+            if (block.type === 'image') return { type: 'image' as const, source: { type: 'base64' as const, media_type: block.source.media_type, data: block.source.data } }
+            if (block.type === 'tool_use') return { type: 'tool_use' as const, id: block.id, name: block.name, input: block.input }
+            if (block.type === 'tool_result') return { type: 'tool_result' as const, tool_use_id: block.tool_use_id, content: block.content }
+            if (block.type === 'thinking') return { type: 'thinking' as const, thinking: block.thinking, signature: block.signature || '' }
+            return { type: 'text' as const, text: '' }
+          }).filter((b: any) => !(b.type === 'text' && b.text === ''))
+
+        return { role: m.role as 'user' | 'assistant', content }
+      })).filter((m: any) => Array.isArray(m.content) && m.content.length > 0) as any[]
 
     // Anthropic requires strict user/assistant alternation — merge consecutive same-role messages
     const merged: Anthropic.MessageParam[] = []

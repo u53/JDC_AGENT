@@ -1,9 +1,69 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSettingsStore, type SettingsTab } from '../stores/settings-store'
 import { useModelStore, type ApiProtocol, type ModelGroup } from '../stores/model-store'
 import { ThemeSegmented } from './ThemeSegmented'
 import { IconX } from './icons'
 import type { McpServerState } from '../lib/ipc-client'
+
+function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  const [show, setShow] = useState(false)
+  return (
+    <span className="relative inline-flex" onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
+      {children}
+      {show && (
+        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[11px] text-[var(--text)] bg-[var(--surface-3)] border border-[var(--border)] rounded-[4px] whitespace-nowrap z-50 pointer-events-none">
+          {text}
+        </span>
+      )}
+    </span>
+  )
+}
+
+const PROTOCOL_OPTIONS: { value: ApiProtocol; label: string }[] = [
+  { value: 'anthropic', label: 'Anthropic (/v1/messages)' },
+  { value: 'openai', label: 'OpenAI (/v1/chat/completions)' },
+  { value: 'openai-responses', label: 'OpenAI Responses (/v1/responses)' },
+]
+
+function ProtocolSelect({ value, onChange }: { value: ApiProtocol; onChange: (v: ApiProtocol) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const current = PROTOCOL_OPTIONS.find(o => o.value === value)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-[6px] px-3 py-2 text-[13px] text-[var(--text)] text-left flex items-center justify-between hover:border-[var(--border-strong)] transition-colors"
+      >
+        <span>{current?.label}</span>
+        <span className="text-[var(--muted)]">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 border border-[var(--border)] rounded-[6px] bg-[var(--surface)] overflow-hidden" style={{ boxShadow: 'var(--shadow-soft)' }}>
+          {PROTOCOL_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => { onChange(opt.value); setOpen(false) }}
+              className={`w-full text-left px-3 py-2 text-[13px] transition-colors ${opt.value === value ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'text-[var(--text)] hover:bg-[var(--surface-2)]'}`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 const TABS: { key: SettingsTab; label: string }[] = [
   { key: 'appearance', label: '外观' },
@@ -136,7 +196,7 @@ function AdvancedTab() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-[13px] text-[var(--muted)]">当前版本</span>
-            <span className="text-[13px] font-mono text-[var(--text)]">v0.0.1</span>
+            <span className="text-[13px] font-mono text-[var(--text)]">v0.0.3</span>
           </div>
 
           <div className="flex items-center justify-between">
@@ -293,11 +353,7 @@ function ModelsTab() {
       {showNewGroup && (
         <div className="mb-4 border border-[var(--border)] rounded-[6px] p-4 space-y-3">
           <input value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} placeholder="分组名称" className={inputCls} />
-          <select value={newGroupProtocol} onChange={(e) => setNewGroupProtocol(e.target.value as ApiProtocol)} className={inputCls}>
-            <option value="anthropic">Anthropic (/v1/messages)</option>
-            <option value="openai">OpenAI (/v1/chat/completions)</option>
-            <option value="openai-responses">OpenAI Responses (/v1/responses)</option>
-          </select>
+          <ProtocolSelect value={newGroupProtocol} onChange={setNewGroupProtocol} />
           <input value={newGroupUrl} onChange={(e) => setNewGroupUrl(e.target.value)} placeholder="Base URL" className={inputCls} />
           <input type="password" value={newGroupKey} onChange={(e) => setNewGroupKey(e.target.value)} placeholder="API Key" className={inputCls} />
           <div className="flex gap-2">
@@ -334,7 +390,7 @@ interface ModelGroupCardProps {
   onToggle: () => void
   onDelete: () => void
   onUpdate: (updates: Partial<Omit<ModelGroup, 'id' | 'models'>>) => void
-  onAddModel: (model: { modelId: string; name: string; contextWindow: number; compressAt: number }) => void
+  onAddModel: (model: { modelId: string; name: string; contextWindow: number; maxTokens: number; compressAt: number }) => void
   onRemoveModel: (modelId: string) => void
 }
 
@@ -345,11 +401,26 @@ function ModelGroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddMo
   const [mName, setMName] = useState('')
   const [mId, setMId] = useState('')
   const [mCtx, setMCtx] = useState('200000')
+  const [mMaxTokens, setMMaxTokens] = useState('32000')
   const [mCompress, setMCompress] = useState('90')
+  const [testing, setTesting] = useState<string | null>(null)
+  const [testResult, setTestResult] = useState<{ id: string; success: boolean; msg: string } | null>(null)
 
   const inputCls = 'w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-[6px] px-3 py-2 text-[13px] text-[var(--text)] outline-none focus:border-[var(--border-strong)]'
   const btnPrimary = 'bg-[var(--accent)] text-[var(--accent-ink)] rounded-[6px] px-3 py-1.5 text-[12px]'
   const btnGhost = 'border border-[var(--border)] rounded-[6px] px-3 py-1.5 text-[12px] text-[var(--muted)] hover:text-[var(--text)]'
+
+  const handleTestModel = async (modelId: string, modelEntryId: string) => {
+    setTesting(modelEntryId)
+    setTestResult(null)
+    const result = await window.electronAPI?.modelTest({ protocol: group.protocol, baseUrl: group.baseUrl, apiKey: group.apiKey, modelId })
+    if (result?.success) {
+      setTestResult({ id: modelEntryId, success: true, msg: result.reply || '' })
+    } else {
+      setTestResult({ id: modelEntryId, success: false, msg: result?.error || '连接失败' })
+    }
+    setTesting(null)
+  }
 
   const handleAddModel = () => {
     if (!mName.trim() || !mId.trim()) return
@@ -357,11 +428,13 @@ function ModelGroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddMo
       name: mName.trim(),
       modelId: mId.trim(),
       contextWindow: parseInt(mCtx) || 200000,
+      maxTokens: parseInt(mMaxTokens) || 32000,
       compressAt: (parseInt(mCompress) || 90) / 100,
     })
     setMName('')
     setMId('')
     setMCtx('200000')
+    setMMaxTokens('32000')
     setMCompress('90')
     setShowAddModel(false)
   }
@@ -385,14 +458,30 @@ function ModelGroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddMo
 
           <div className="space-y-2">
             {group.models.map((model) => (
-              <div key={model.id} className="flex items-center justify-between border border-[var(--border)] rounded-[6px] px-3 py-2">
-                <div>
-                  <div className="text-[13px] text-[var(--text)]">{model.name}</div>
-                  <div className="text-[11px] text-[var(--muted)]">
-                    {model.modelId} &middot; {formatContextWindow(model.contextWindow)} &middot; {Math.round(model.compressAt * 100)}%
+              <div key={model.id} className="border border-[var(--border)] rounded-[6px] px-3 py-2 space-y-1">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-[13px] text-[var(--text)]">{model.name}</div>
+                    <div className="text-[11px] text-[var(--muted)]">
+                      {model.modelId} &middot; {formatContextWindow(model.contextWindow)} &middot; 输出 {formatContextWindow(model.maxTokens || 32000)} &middot; {Math.round(model.compressAt * 100)}%
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleTestModel(model.modelId, model.id)}
+                      disabled={testing === model.id}
+                      className="text-[12px] text-[var(--accent)] hover:opacity-80 transition-colors disabled:opacity-50"
+                    >
+                      {testing === model.id ? '测试中...' : '测试'}
+                    </button>
+                    <button onClick={() => onRemoveModel(model.id)} className="text-[12px] text-[var(--muted)] hover:text-red-500 transition-colors">删除</button>
                   </div>
                 </div>
-                <button onClick={() => onRemoveModel(model.id)} className="text-[12px] text-[var(--muted)] hover:text-red-500 transition-colors">删除</button>
+                {testResult?.id === model.id && (
+                  <div className={`text-[11px] ${testResult.success ? 'text-[var(--good)]' : 'text-[var(--bad)]'}`}>
+                    {testResult.success ? '✓' : '✗'} {testResult.msg}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -402,8 +491,18 @@ function ModelGroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddMo
               <div className="grid grid-cols-2 gap-2">
                 <input value={mName} onChange={(e) => setMName(e.target.value)} placeholder="显示名称" className={inputCls} />
                 <input value={mId} onChange={(e) => setMId(e.target.value)} placeholder="Model ID" className={inputCls} />
-                <input value={mCtx} onChange={(e) => setMCtx(e.target.value)} placeholder="Context Window" type="number" className={inputCls} />
-                <input value={mCompress} onChange={(e) => setMCompress(e.target.value)} placeholder="Compress %" type="number" className={inputCls} />
+                <div className="relative">
+                  <input value={mCtx} onChange={(e) => setMCtx(e.target.value)} placeholder="200000" type="number" className={inputCls + ' pr-8 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'} />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2"><Tooltip text="上下文窗口大小 (tokens)"><span className="text-[var(--muted)] cursor-help">ⓘ</span></Tooltip></span>
+                </div>
+                <div className="relative">
+                  <input value={mMaxTokens} onChange={(e) => setMMaxTokens(e.target.value)} placeholder="32000" type="number" className={inputCls + ' pr-8 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'} />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2"><Tooltip text="最大输出 tokens"><span className="text-[var(--muted)] cursor-help">ⓘ</span></Tooltip></span>
+                </div>
+                <div className="relative">
+                  <input value={mCompress} onChange={(e) => setMCompress(e.target.value)} placeholder="90" type="number" className={inputCls + ' pr-8 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'} />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2"><Tooltip text="压缩阈值 (%)"><span className="text-[var(--muted)] cursor-help">ⓘ</span></Tooltip></span>
+                </div>
               </div>
               <div className="flex gap-2">
                 <button onClick={handleAddModel} className={btnPrimary}>添加</button>

@@ -6,6 +6,7 @@ export interface ModelEntry {
   modelId: string
   name: string
   contextWindow: number
+  maxTokens: number
   compressAt: number
 }
 

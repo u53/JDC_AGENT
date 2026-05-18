@@ -3,6 +3,28 @@ import { MarkdownRenderer } from './MarkdownRenderer'
 import { ToolCardRouter } from './tool-cards/ToolCardRouter'
 import type { ContentBlock, Message, ToolResultContent, ToolExecutionEvent } from '@jdcagnet/core'
 
+function ThinkingBlock({ content, streaming }: { content: string; streaming?: boolean }) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div className="mb-3 border border-[var(--border)] rounded-[8px] bg-[var(--surface-2)] overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-[var(--muted)] hover:bg-[var(--surface-3)] transition-colors"
+      >
+        <span className={`w-1.5 h-1.5 rounded-full bg-[var(--plan)] ${streaming ? 'animate-pulse' : ''}`} />
+        <span>{expanded ? '▼' : '▶'}</span>
+        <span>{streaming ? '思考中...' : '思考过程'}</span>
+        <span className="ml-auto">{content.length} 字</span>
+      </button>
+      {expanded && (
+        <div className="border-t border-[var(--border)] px-3 py-2 text-[12px] text-[var(--muted)] whitespace-pre-wrap max-h-[300px] overflow-y-auto">
+          {content}
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface AssistantPair {
   message: Message
   toolResultMessage?: Message
@@ -81,39 +103,38 @@ export function ConversationTurn({
 
       {/* Assistant section */}
       <div className="pl-4">
-        {/* Thinking indicator */}
+        {/* Thinking indicator — live, expandable */}
         {isActive && isThinking && thinkingText && (
-          <div className="flex items-center gap-2 text-[12px] text-[var(--muted)] mb-3">
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--plan)] animate-pulse" />
-            <span>Thinking... ({thinkingText.length} chars)</span>
-          </div>
+          <ThinkingBlock content={thinkingText} streaming />
         )}
 
         {/* Completed assistant messages: render all pairs in order */}
         {assistantMessages.map((pair) => (
           <div key={pair.message.id}>
-            {pair.message.content
-              .filter(
-                (b): b is Extract<ContentBlock, { type: 'text' }> =>
-                  b.type === 'text' && !b.text.startsWith('__STATS__')
-              )
-              .map((block, i) => (
-                <div key={i} className="text-[14px] mb-3">
-                  <MarkdownRenderer content={block.text} />
-                </div>
-              ))}
-
-            {pair.message.content
-              .filter((b): b is Extract<ContentBlock, { type: 'tool_use' }> => b.type === 'tool_use')
-              .map((block) => (
-                <div key={block.id} className="mb-2">
-                  <ToolCardRouter
-                    name={block.name}
-                    input={block.input}
-                    result={findToolResult(block.id, pair.toolResultMessage)}
-                  />
-                </div>
-              ))}
+            {pair.message.content.map((block, i) => {
+              if (block.type === 'text' && !block.text.startsWith('__STATS__')) {
+                return (
+                  <div key={i} className="text-[14px] mb-3">
+                    <MarkdownRenderer content={block.text} />
+                  </div>
+                )
+              }
+              if (block.type === 'tool_use') {
+                return (
+                  <div key={block.id} className="mb-2">
+                    <ToolCardRouter
+                      name={block.name}
+                      input={block.input}
+                      result={findToolResult(block.id, pair.toolResultMessage)}
+                    />
+                  </div>
+                )
+              }
+              if (block.type === 'thinking') {
+                return <ThinkingBlock key={`thinking-${i}`} content={block.thinking} />
+              }
+              return null
+            })}
           </div>
         ))}
 

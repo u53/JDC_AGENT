@@ -30,7 +30,13 @@ export interface ImageContent {
   }
 }
 
-export type ContentBlock = TextContent | ToolUseContent | ToolResultContent | ImageContent
+export interface ThinkingContent {
+  type: 'thinking'
+  thinking: string
+  signature?: string
+}
+
+export type ContentBlock = TextContent | ToolUseContent | ToolResultContent | ImageContent | ThinkingContent
 
 export interface Message {
   id: string
@@ -46,8 +52,9 @@ export interface ToolDefinition {
 }
 
 export interface StreamChunk {
-  type: 'text_delta' | 'thinking_delta' | 'tool_use_start' | 'tool_use_delta' | 'tool_use_end' | 'message_end' | 'compact_complete'
+  type: 'text_delta' | 'thinking_delta' | 'thinking_end' | 'tool_use_start' | 'tool_use_delta' | 'tool_use_end' | 'message_end' | 'compact_complete'
   text?: string
+  signature?: string
   toolUse?: { id: string; name: string; input: string }
   usage?: {
     inputTokens: number
@@ -75,6 +82,7 @@ export interface ModelConfig {
   thinking?: boolean
   thinkingBudget?: number
   contextWindow?: number
+  compressAt?: number
 }
 
 export interface SessionConfig {

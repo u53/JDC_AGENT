@@ -380,8 +380,9 @@ export function Composer({
                   <button
                     key={m.id}
                     onClick={() => { onModelChange?.(m.id); setShowModelMenu(false) }}
-                    className={`block w-full text-left px-3 py-1.5 text-[12px] hover:bg-[var(--surface-2)] ${m.id === modelId ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}
+                    className={`block w-full text-left px-3 py-1.5 text-[12px] hover:bg-[var(--surface-2)] ${m.id === modelId ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'text-[var(--text)]'}`}
                   >
+                    {m.id === modelId && <span className="mr-1">✓</span>}
                     <span>{m.name}</span>
                     <span className="text-[11px] text-[var(--muted)] ml-2">{m.groupName}</span>
                   </button>

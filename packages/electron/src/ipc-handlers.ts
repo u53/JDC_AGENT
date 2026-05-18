@@ -1,7 +1,7 @@
 import { ipcMain, dialog } from 'electron'
 import { IPC_CHANNELS } from './ipc-channels.js'
 import type { SessionManager } from './session-manager.js'
-import { loadAppConfig, saveAppConfig } from '@jdcagnet/core'
+import { loadAppConfig, saveAppConfig, AnthropicProvider, OpenAIChatProvider, OpenAIResponsesProvider } from '@jdcagnet/core'
 import { GitService } from './git-service.js'
 import { AppLauncher } from './app-launcher.js'
 import { TerminalService } from './terminal-service.js'
@@ -189,5 +189,30 @@ export function registerIpcHandlers(sessionManager: SessionManager, services: De
   })
   ipcMain.handle(IPC_CHANNELS.TERMINAL_DESTROY, async (_event, { id }) => {
     return terminalService.destroy(id)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.MODEL_TEST, async (_event, { protocol, baseUrl, apiKey, modelId }) => {
+    try {
+      const provider = (() => {
+        switch (protocol) {
+          case 'openai':
+            return new OpenAIChatProvider(apiKey, baseUrl)
+          case 'openai-responses':
+            return new OpenAIResponsesProvider(apiKey, baseUrl)
+          case 'anthropic':
+          default:
+            return new AnthropicProvider(apiKey, baseUrl || undefined)
+        }
+      })()
+      const messages = [{ id: '1', role: 'user' as const, content: [{ type: 'text' as const, text: 'hi' }], timestamp: Date.now() }]
+      const config = { model: modelId, maxTokens: 100 }
+      let reply = ''
+      for await (const chunk of provider.stream(messages, [], config)) {
+        if (chunk.type === 'text_delta' && chunk.text) reply += chunk.text
+      }
+      return { success: true, reply: reply.slice(0, 100) }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
   })
 }

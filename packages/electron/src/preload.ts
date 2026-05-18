@@ -67,6 +67,11 @@ const api = {
   updaterCheck: () => ipcRenderer.invoke('updater:check'),
   updaterDownload: () => ipcRenderer.invoke('updater:download'),
   updaterInstall: () => ipcRenderer.invoke('updater:install'),
+
+  // Model
+  modelTest: (params: { protocol: string; baseUrl: string; apiKey: string; modelId: string }) =>
+    ipcRenderer.invoke('model:test', params),
+
   onUpdaterAvailable: (callback: (data: { version: string }) => void) => {
     const listener = (_event: unknown, payload: { version: string }) => callback(payload)
     ipcRenderer.on('updater:available', listener)

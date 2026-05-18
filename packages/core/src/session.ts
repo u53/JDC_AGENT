@@ -350,7 +350,8 @@ export class Session {
   }
 
   private shouldCompact(): boolean {
-    const compressAt = this.config.modelConfig.maxTokens * 0.8
+    const contextWindow = this.config.modelConfig.contextWindow || 200000
+    const compressAt = contextWindow * (this.config.modelConfig.compressAt || 0.9)
     const tokenEstimate = estimateTokens(this.messages)
     return tokenEstimate > compressAt
   }
@@ -433,7 +434,19 @@ export class Session {
           for await (const chunk of stream) {
             events.onStreamChunk(chunk)
 
-            if (chunk.type === 'text_delta' && chunk.text) {
+            if (chunk.type === 'thinking_delta' && chunk.text) {
+              const last = assistantContent[assistantContent.length - 1]
+              if (last?.type === 'thinking') {
+                last.thinking += chunk.text
+              } else {
+                assistantContent.push({ type: 'thinking', thinking: chunk.text })
+              }
+            } else if (chunk.type === 'thinking_end' && chunk.signature) {
+              const last = assistantContent[assistantContent.length - 1]
+              if (last?.type === 'thinking') {
+                last.signature = chunk.signature
+              }
+            } else if (chunk.type === 'text_delta' && chunk.text) {
               const last = assistantContent[assistantContent.length - 1]
               if (last?.type === 'text') {
                 last.text += chunk.text
@@ -504,6 +517,10 @@ export class Session {
         content: assistantContent,
         timestamp: Date.now(),
       }
+
+      if (assistantContent.length === 0) {
+        console.warn('[SESSION] Empty assistant response')
+      }
       this.messages.push(assistantMessage)
       this.history.addMessage(this.id, assistantMessage)
       events.onMessageComplete(assistantMessage)
@@ -534,6 +551,16 @@ export class Session {
       this.history.addMessage(this.id, toolMessage)
       events.onMessageComplete(toolMessage)
     }
+
+    // Ensure usage is reported at end of runLoop (fallback for APIs that don't report token counts)
+    const finalSnapshot = this.usageTracker.getSnapshot()
+    if (finalSnapshot.contextUsedPercent === 0 && this.messages.length > 0) {
+      const contextWindow = this.config.modelConfig.contextWindow || 200000
+      const estimated = estimateTokens(this.messages)
+      const percent = Math.min(Math.round((estimated / contextWindow) * 100), 100)
+      finalSnapshot.contextUsedPercent = percent
+    }
+    events.onUsage?.(finalSnapshot)
 
     this.abortController = null
     this.currentEvents = undefined

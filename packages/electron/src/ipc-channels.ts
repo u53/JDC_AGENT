@@ -57,4 +57,7 @@ export const IPC_CHANNELS = {
   TERMINAL_DESTROY: 'terminal:destroy',
   TERMINAL_DATA: 'terminal:data',
   TERMINAL_EXIT: 'terminal:exit',
+
+  // Model
+  MODEL_TEST: 'model:test',
 } as const

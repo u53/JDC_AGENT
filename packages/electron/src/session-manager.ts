@@ -87,8 +87,9 @@ export class SessionManager {
 
     const modelConfig: ModelConfig = {
       model: active.model.modelId,
-      maxTokens: active.model.contextWindow || 8192,
+      maxTokens: active.model.maxTokens || 32000,
       contextWindow: active.model.contextWindow || 200000,
+      compressAt: active.model.compressAt || 0.9,
     }
     const sessionConfig: SessionConfig = {
       id: sessionId, projectName: meta.projectName, cwd: meta.cwd, modelConfig,
@@ -119,8 +120,9 @@ export class SessionManager {
           const resolvedProvider = this.createProvider(group)
           const resolvedConfig = {
             model: model.modelId,
-            maxTokens: model.contextWindow || 8192,
+            maxTokens: model.maxTokens || 32000,
             contextWindow: model.contextWindow || 200000,
+            compressAt: model.compressAt || 0.9,
           }
           return { provider: resolvedProvider, modelConfig: resolvedConfig }
         }
@@ -142,6 +144,7 @@ export class SessionManager {
     }
     session.registerTool(createNotifyTool(onNotify))
     session.loadHistory()
+    ;(session as any)._protocol = active.group.protocol
     this.sessions.set(sessionId, session)
   }
 
@@ -161,14 +164,16 @@ export class SessionManager {
     // Dynamic model switching: check if active model changed since session was created
     const currentActive = getActiveModelConfig()
     console.log('[MODEL CHECK] session model:', session.config.modelConfig.model, '| config active:', currentActive?.model.modelId)
-    if (currentActive && session.config.modelConfig.model !== currentActive.model.modelId) {
+    if (currentActive && (session.config.modelConfig.model !== currentActive.model.modelId || (session as any)._protocol !== currentActive.group.protocol)) {
       console.log('[MODEL SWITCH] Switching to:', currentActive.model.modelId, 'protocol:', currentActive.group.protocol)
       const provider = this.createProvider(currentActive.group)
       session.updateProvider(provider, {
         model: currentActive.model.modelId,
-        maxTokens: currentActive.model.contextWindow || 8192,
+        maxTokens: currentActive.model.maxTokens || 32000,
         contextWindow: currentActive.model.contextWindow || 200000,
+        compressAt: currentActive.model.compressAt || 0.9,
       })
+      ;(session as any)._protocol = currentActive.group.protocol
     }
 
     const events: SessionEvents = {

@@ -101,8 +101,12 @@ export class OpenAIChatProvider implements ModelProvider {
     let toolCallsStarted = 0
 
     for await (const chunk of stream) {
-      const delta = chunk.choices[0]?.delta
+      const delta = chunk.choices[0]?.delta as any
       const finishReason = chunk.choices[0]?.finish_reason
+
+      if (delta?.reasoning_content) {
+        yield { type: 'thinking_delta', text: delta.reasoning_content }
+      }
 
       if (delta?.content) {
         yield { type: 'text_delta', text: delta.content }
@@ -223,6 +227,16 @@ export class OpenAIChatProvider implements ModelProvider {
       } else if (msg.role === 'assistant') {
         const assistantMsg: OpenAI.ChatCompletionAssistantMessageParam = {
           role: 'assistant',
+        }
+        const thinkingBlocks = msg.content.filter(b => b.type === 'thinking')
+        if (thinkingBlocks.length > 0) {
+          const thinking = thinkingBlocks
+            .filter((b): b is Extract<typeof b, { type: 'thinking' }> => b.type === 'thinking')
+            .map(b => b.thinking)
+            .join('')
+          if (thinking) {
+            ;(assistantMsg as any).reasoning_content = thinking
+          }
         }
         if (textBlocks.length > 0) {
           assistantMsg.content = textBlocks
