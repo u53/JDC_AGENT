@@ -25,6 +25,7 @@ mac:
   target:
     - dmg
     - zip
+afterSign: scripts/notarize.js
 win:
   icon: assets/icon.ico
   target:
