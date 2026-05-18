@@ -196,7 +196,7 @@ function AdvancedTab() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-[13px] text-[var(--muted)]">当前版本</span>
-            <span className="text-[13px] font-mono text-[var(--text)]">v0.0.3</span>
+            <span className="text-[13px] font-mono text-[var(--text)]">v0.0.4</span>
           </div>
 
           <div className="flex items-center justify-between">

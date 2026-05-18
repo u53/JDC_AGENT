@@ -33,6 +33,7 @@ export function HelpDialog({ visible, onClose }: Props) {
           <section>
             <h3 className="text-[10px] uppercase tracking-[0.15em] text-[#666] mb-2">斜杠命令</h3>
             <div className="space-y-1.5">
+              <HelpRow cmd="/init" desc="分析项目并生成 JDCAGNET.md 配置文件" />
               <HelpRow cmd="/compact" desc="压缩当前对话上下文，释放 token 空间" />
               <HelpRow cmd="/mcp" desc="打开 MCP 服务器管理面板" />
               <HelpRow cmd="/stats" desc="显示当前会话的 token 使用统计" />

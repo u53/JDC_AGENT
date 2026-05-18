@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useSession } from '../hooks/useSession'
+import { ipc } from '../lib/ipc-client'
 import { SessionHeader } from './SessionHeader'
 import { ConversationTurn } from './ConversationTurn'
 import { Composer } from './Composer'
@@ -15,6 +16,18 @@ import { useAgentStore } from '../stores/agent-store'
 import { useAgentEvents } from '../hooks/useAgentEvents'
 import { copyToClipboard } from '../lib/clipboard'
 import type { Message } from '@jdcagnet/core'
+
+const INIT_PROMPT = `Read the project structure in the current working directory and generate a JDCAGNET.md file in the project root. This file provides guidance to JDCAGNET when working with code in this repository.
+
+Analyze the project by reading key files (package.json, config files, source structure, etc.) and produce a markdown file that includes:
+
+1. **Project Overview** — What this project is, language/framework, key technologies
+2. **Build Commands** — How to install, build, test, lint, and run the project (in a code block)
+3. **Architecture** — Key modules/directories, how they relate, data flow
+4. **Key Patterns** — Important conventions, patterns, or constraints a developer should know
+5. **Development Notes** — Any gotchas, environment setup, or special considerations
+
+Keep it concise and practical. Write the file using the Write tool to the project root as JDCAGNET.md. If one already exists, read it first and update it with any new information.`
 
 interface Turn {
   userMessage: Message
@@ -181,6 +194,19 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   const handleSlashCommand = (command: string) => {
     const api = (window as any).electronAPI
     switch (command) {
+      case '/init':
+        if (activeSessionId) {
+          const initMsg = {
+            id: crypto.randomUUID(),
+            role: 'user' as const,
+            content: [{ type: 'text' as const, text: '/init' }],
+            timestamp: Date.now(),
+          }
+          useSessionStore.setState((s) => ({ messages: [...s.messages, initMsg] }))
+          useSessionStore.getState().markStreaming(activeSessionId, true)
+          ipc.query.send(activeSessionId, INIT_PROMPT)
+        }
+        break
       case '/compact':
         if (activeSessionId && api?.compactSession) {
           useSessionStore.getState().markStreaming(activeSessionId, true)
