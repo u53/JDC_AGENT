@@ -49,12 +49,14 @@ export function useSession() {
       if (sessionId === current.activeSessionId) {
         useSessionStore.setState((s) => ({ messages: [...s.messages, message] }))
       }
-      // Only clear text streaming state — tool events persist until query:finished
-      // because tools execute AFTER onMessageComplete in multi-turn loops.
+      // Clear streaming text state. Clear tool events only for assistant messages
+      // (tool results come after tools finish, so events are already done by then).
+      const clearToolEvents = message.role === 'user'
       store.updateSessionState(sessionId, {
         streamingText: '',
         thinkingText: '',
         isThinking: false,
+        ...(clearToolEvents ? { toolEvents: [] } : {}),
       })
     })
 

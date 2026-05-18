@@ -109,7 +109,11 @@ export function ConversationTurn({
         )}
 
         {/* Completed assistant messages: render all pairs in order */}
-        {assistantMessages.map((pair) => (
+        {assistantMessages.map((pair, pairIdx) => {
+          const isLastPair = pairIdx === assistantMessages.length - 1
+          const skipToolUse = isActive && isLastPair && toolEvents && toolEvents.length > 0
+
+          return (
           <div key={pair.message.id}>
             {pair.message.content.map((block, i) => {
               if (block.type === 'text' && !block.text.startsWith('__STATS__')) {
@@ -120,6 +124,7 @@ export function ConversationTurn({
                 )
               }
               if (block.type === 'tool_use') {
+                if (skipToolUse && !findToolResult(block.id, pair.toolResultMessage)) return null
                 return (
                   <div key={block.id} className="mb-2">
                     <ToolCardRouter
@@ -136,7 +141,8 @@ export function ConversationTurn({
               return null
             })}
           </div>
-        ))}
+          )
+        })}
 
         {/* Active turn: streaming tool events (tools execute before final text) */}
         {isActive && toolEvents && toolEvents.length > 0 && (

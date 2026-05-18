@@ -13,6 +13,7 @@ exports.default = async function notarizing(context) {
   console.log(`Notarizing ${appName}...`)
 
   await notarize({
+    tool: 'notarytool',
     appBundleId: 'com.jdcagnet.app',
     appPath: `${appOutDir}/${appName}.app`,
     appleId: process.env.APPLE_ID,
