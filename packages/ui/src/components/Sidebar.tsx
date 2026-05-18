@@ -15,10 +15,12 @@ export function Sidebar() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [version, setVersion] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     loadProjects()
+    window.electronAPI?.getVersion?.().then((v: string) => setVersion(v))
   }, [loadProjects])
 
   useEffect(() => {
@@ -141,13 +143,14 @@ export function Sidebar() {
         ))}
       </div>
 
-      <div className="px-3 pb-3">
+      <div className="px-3 pb-3 space-y-2">
         <button
           onClick={addProject}
           className="w-full border border-[var(--border)] text-[var(--text)] text-[12px] py-2.5 rounded-[8px] hover:bg-[var(--surface-2)] transition-colors"
         >
           New project
         </button>
+        <div className="text-center text-[10px] text-[var(--muted)]">JDCAGNET {version ? `v${version}` : ''}</div>
       </div>
     </aside>
   )

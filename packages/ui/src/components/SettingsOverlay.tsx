@@ -140,8 +140,10 @@ function AdvancedTab() {
   const [updateVersion, setUpdateVersion] = useState('')
   const [downloadPercent, setDownloadPercent] = useState(0)
   const [errorMsg, setErrorMsg] = useState('')
+  const [appVersion, setAppVersion] = useState('')
 
   useEffect(() => {
+    window.electronAPI?.getVersion?.().then((v: string) => setAppVersion(v))
     const unsub1 = window.electronAPI?.onUpdaterAvailable?.((data: { version: string }) => {
       setUpdateStatus('available')
       setUpdateVersion(data.version)
@@ -196,7 +198,7 @@ function AdvancedTab() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-[13px] text-[var(--muted)]">当前版本</span>
-            <span className="text-[13px] font-mono text-[var(--text)]">v0.0.4</span>
+            <span className="text-[13px] font-mono text-[var(--text)]">v{appVersion || '...'}</span>
           </div>
 
           <div className="flex items-center justify-between">

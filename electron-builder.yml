@@ -18,6 +18,7 @@ publish:
 mac:
   icon: assets/icon.icns
   category: public.app-category.developer-tools
+  identity: null
   target:
     - dmg
     - zip

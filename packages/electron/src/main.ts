@@ -57,6 +57,8 @@ function setupAutoUpdater(win: BrowserWindow) {
   })
 }
 
+ipcMain.handle('app:version', () => app.getVersion())
+
 app.whenReady().then(async () => {
   if (process.platform === 'darwin') {
     const iconPath = path.join(__dirname, '../../assets/icon.png')

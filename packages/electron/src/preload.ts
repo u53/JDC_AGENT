@@ -97,6 +97,8 @@ const api = {
     ipcRenderer.on('updater:error', listener)
     return () => ipcRenderer.removeListener('updater:error', listener)
   },
+
+  getVersion: () => ipcRenderer.invoke('app:version'),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)
