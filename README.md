@@ -1,4 +1,4 @@
-# JDCAGNET
+# JDC Code
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
@@ -68,10 +68,10 @@ The workflow builds macOS (.dmg) and Windows (.exe) installers, then publishes t
 
 ### macOS
 
-The app is not code-signed. After downloading, macOS may show "JDCAGNET is damaged and can't be opened." Run this in Terminal to fix:
+The app is not code-signed. After downloading, macOS may show "JDC Code is damaged and can't be opened." Run this in Terminal to fix:
 
 ```bash
-xattr -cr /Applications/JDCAGNET.app
+xattr -cr "/Applications/JDC Code.app"
 ```
 
 ### Windows
