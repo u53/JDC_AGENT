@@ -5,12 +5,18 @@ import { createMainWindow } from './window.js'
 import { SessionManager } from './session-manager.js'
 import { registerIpcHandlers } from './ipc-handlers.js'
 import { registerMcpIpcHandlers } from './mcp-ipc.js'
+import { GitService } from './git-service.js'
+import { AppLauncher } from './app-launcher.js'
+import { TerminalService } from './terminal-service.js'
 
 process.on('uncaughtException', (err) => {
   console.error('[JDCAGNET] Uncaught exception:', err.message)
 })
 
 const sessionManager = new SessionManager()
+const gitService = new GitService()
+const appLauncher = new AppLauncher()
+const terminalService = new TerminalService()
 
 app.whenReady().then(async () => {
   // Set dock icon on macOS
@@ -22,11 +28,12 @@ app.whenReady().then(async () => {
   }
 
   await sessionManager.ensureReady()
-  registerIpcHandlers(sessionManager)
+  registerIpcHandlers(sessionManager, { gitService, appLauncher, terminalService })
   registerMcpIpcHandlers(sessionManager)
 
   const win = createMainWindow()
   sessionManager.setWindow(win)
+  terminalService.setWindow(win)
 
   win.webContents.on('did-finish-load', () => {
     sessionManager.initMcp(process.env.HOME || '/').catch((err) => {
@@ -38,6 +45,7 @@ app.whenReady().then(async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       const newWin = createMainWindow()
       sessionManager.setWindow(newWin)
+      terminalService.setWindow(newWin)
     }
   })
 })
@@ -49,5 +57,6 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  terminalService.destroyAll()
   sessionManager.close()
 })

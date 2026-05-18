@@ -2,8 +2,17 @@ import { ipcMain, dialog } from 'electron'
 import { IPC_CHANNELS } from './ipc-channels.js'
 import type { SessionManager } from './session-manager.js'
 import { loadAppConfig, saveAppConfig } from '@jdcagnet/core'
+import { GitService } from './git-service.js'
+import { AppLauncher } from './app-launcher.js'
+import { TerminalService } from './terminal-service.js'
 
-export function registerIpcHandlers(sessionManager: SessionManager): void {
+interface DevToolServices {
+  gitService: GitService
+  appLauncher: AppLauncher
+  terminalService: TerminalService
+}
+
+export function registerIpcHandlers(sessionManager: SessionManager, services: DevToolServices): void {
   ipcMain.on('permission:response', (_event, { id, allowed }) => {
     sessionManager.respondToPermission(id, allowed)
   })
@@ -139,5 +148,46 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
 
   ipcMain.handle(IPC_CHANNELS.SESSION_GET_TASKS, async (_event, { sessionId }) => {
     return sessionManager.getTasks(sessionId)
+  })
+
+  const { gitService, appLauncher, terminalService } = services
+
+  // Git
+  ipcMain.handle(IPC_CHANNELS.GIT_BRANCH_LIST, async (_event, { cwd }) => {
+    return gitService.listBranches(cwd)
+  })
+  ipcMain.handle(IPC_CHANNELS.GIT_BRANCH_SWITCH, async (_event, { cwd, branch }) => {
+    return gitService.switchBranch(cwd, branch)
+  })
+  ipcMain.handle(IPC_CHANNELS.GIT_BRANCH_CREATE, async (_event, { cwd, branch, from }) => {
+    return gitService.createBranch(cwd, branch, from)
+  })
+  ipcMain.handle(IPC_CHANNELS.GIT_BRANCH_DELETE, async (_event, { cwd, branch }) => {
+    return gitService.deleteBranch(cwd, branch)
+  })
+  ipcMain.handle(IPC_CHANNELS.GIT_STATUS, async (_event, { cwd }) => {
+    return gitService.getStatus(cwd)
+  })
+
+  // Apps
+  ipcMain.handle(IPC_CHANNELS.APPS_DETECT, async () => {
+    return { apps: appLauncher.detect() }
+  })
+  ipcMain.handle(IPC_CHANNELS.APPS_OPEN, async (_event, { appId, cwd }) => {
+    return appLauncher.open(appId, cwd)
+  })
+
+  // Terminal
+  ipcMain.handle(IPC_CHANNELS.TERMINAL_CREATE, async (_event, { cwd }) => {
+    return terminalService.create(cwd)
+  })
+  ipcMain.on(IPC_CHANNELS.TERMINAL_WRITE, (_event, { id, data }) => {
+    terminalService.write(id, data)
+  })
+  ipcMain.on(IPC_CHANNELS.TERMINAL_RESIZE, (_event, { id, cols, rows }) => {
+    terminalService.resize(id, cols, rows)
+  })
+  ipcMain.handle(IPC_CHANNELS.TERMINAL_DESTROY, async (_event, { id }) => {
+    return terminalService.destroy(id)
   })
 }

@@ -35,6 +35,33 @@ const api = {
   getPlanMode: (sessionId: string) =>
     ipcRenderer.invoke('session:get-plan-mode', { sessionId }),
   writeClipboard: (text: string) => clipboard.writeText(text),
+
+  // Git
+  gitBranchList: (cwd: string) => ipcRenderer.invoke('git:branch-list', { cwd }),
+  gitBranchSwitch: (cwd: string, branch: string) => ipcRenderer.invoke('git:branch-switch', { cwd, branch }),
+  gitBranchCreate: (cwd: string, branch: string, from?: string) => ipcRenderer.invoke('git:branch-create', { cwd, branch, from }),
+  gitBranchDelete: (cwd: string, branch: string) => ipcRenderer.invoke('git:branch-delete', { cwd, branch }),
+  gitStatus: (cwd: string) => ipcRenderer.invoke('git:status', { cwd }),
+
+  // Apps
+  appsDetect: () => ipcRenderer.invoke('apps:detect'),
+  appsOpen: (appId: string, cwd: string) => ipcRenderer.invoke('apps:open', { appId, cwd }),
+
+  // Terminal
+  terminalCreate: (cwd: string) => ipcRenderer.invoke('terminal:create', { cwd }),
+  terminalWrite: (id: string, data: string) => ipcRenderer.send('terminal:write', { id, data }),
+  terminalResize: (id: string, cols: number, rows: number) => ipcRenderer.send('terminal:resize', { id, cols, rows }),
+  terminalDestroy: (id: string) => ipcRenderer.invoke('terminal:destroy', { id }),
+  onTerminalData: (callback: (data: { id: string; data: string }) => void) => {
+    const listener = (_event: unknown, payload: { id: string; data: string }) => callback(payload)
+    ipcRenderer.on('terminal:data', listener)
+    return () => ipcRenderer.removeListener('terminal:data', listener)
+  },
+  onTerminalExit: (callback: (data: { id: string; code: number }) => void) => {
+    const listener = (_event: unknown, payload: { id: string; code: number }) => callback(payload)
+    ipcRenderer.on('terminal:exit', listener)
+    return () => ipcRenderer.removeListener('terminal:exit', listener)
+  },
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)
