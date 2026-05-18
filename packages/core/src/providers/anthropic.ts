@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { ModelProvider } from '../model-provider.js'
 import type { ContentBlock, Message, ModelConfig, PromptSegment, StreamChunk, ToolDefinition } from '../types.js'
 import { joinSegments } from '../context.js'
+import { parseThinkTags } from './think-parser.js'
 
 function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): string | undefined {
   if (!systemPrompt) return undefined
@@ -95,6 +96,8 @@ export class AnthropicProvider implements ModelProvider {
     const stream = this.client.messages.stream(params, { signal })
 
     let usage = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }
+    let insideThink = false
+    let pendingText = ''
 
     for await (const event of stream) {
       if (event.type === 'message_start') {
@@ -112,7 +115,11 @@ export class AnthropicProvider implements ModelProvider {
         }
       } else if (event.type === 'content_block_delta') {
         if (event.delta.type === 'text_delta') {
-          yield { type: 'text_delta', text: event.delta.text }
+          pendingText += event.delta.text
+          const result = parseThinkTags(pendingText, insideThink)
+          for (const chunk of result.chunks) yield chunk
+          pendingText = result.remaining
+          insideThink = result.insideThink
         } else if (event.delta.type === 'input_json_delta') {
           yield { type: 'tool_use_delta', toolUse: { id: '', name: '', input: event.delta.partial_json } }
         } else if ((event.delta as any).type === 'thinking_delta') {
@@ -127,8 +134,24 @@ export class AnthropicProvider implements ModelProvider {
           yield { type: 'thinking_delta', text: '' }
         }
       } else if (event.type === 'content_block_stop') {
+        if (pendingText) {
+          if (insideThink) {
+            yield { type: 'thinking_delta', text: pendingText }
+          } else {
+            yield { type: 'text_delta', text: pendingText }
+          }
+          pendingText = ''
+        }
         yield { type: 'tool_use_end' }
       } else if (event.type === 'message_stop') {
+        if (pendingText) {
+          if (insideThink) {
+            yield { type: 'thinking_delta', text: pendingText }
+          } else {
+            yield { type: 'text_delta', text: pendingText }
+          }
+          pendingText = ''
+        }
         yield { type: 'message_end', usage }
       }
     }
@@ -156,6 +179,8 @@ export class AnthropicProvider implements ModelProvider {
     const decoder = new TextDecoder()
     let buffer = ''
     let usage = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }
+    let insideThink = false
+    let pendingText = ''
 
     while (true) {
       const { done, value } = await reader.read()
@@ -186,7 +211,11 @@ export class AnthropicProvider implements ModelProvider {
           }
         } else if (event.type === 'content_block_delta') {
           if (event.delta?.type === 'text_delta') {
-            yield { type: 'text_delta', text: event.delta.text }
+            pendingText += event.delta.text
+            const result = parseThinkTags(pendingText, insideThink)
+            for (const chunk of result.chunks) yield chunk
+            pendingText = result.remaining
+            insideThink = result.insideThink
           } else if (event.delta?.type === 'input_json_delta') {
             yield { type: 'tool_use_delta', toolUse: { id: '', name: '', input: event.delta.partial_json } }
           } else if (event.delta?.type === 'thinking_delta') {
@@ -201,8 +230,24 @@ export class AnthropicProvider implements ModelProvider {
             yield { type: 'thinking_delta', text: '' }
           }
         } else if (event.type === 'content_block_stop') {
+          if (pendingText) {
+            if (insideThink) {
+              yield { type: 'thinking_delta', text: pendingText }
+            } else {
+              yield { type: 'text_delta', text: pendingText }
+            }
+            pendingText = ''
+          }
           yield { type: 'tool_use_end' }
         } else if (event.type === 'message_stop') {
+          if (pendingText) {
+            if (insideThink) {
+              yield { type: 'thinking_delta', text: pendingText }
+            } else {
+              yield { type: 'text_delta', text: pendingText }
+            }
+            pendingText = ''
+          }
           yield { type: 'message_end', usage }
         }
       }

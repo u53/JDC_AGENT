@@ -140,6 +140,17 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     }
   }, [activeSessionId])
 
+  // Listen for AI-triggered plan mode changes
+  useEffect(() => {
+    if (!window.electronAPI) return
+    return window.electronAPI.on('plan:mode-changed', (_e: unknown, data: unknown) => {
+      const { sessionId: sid, mode } = data as { sessionId: string; mode: string }
+      if (sid === activeSessionId) {
+        setPlanModeState(mode === 'planning')
+      }
+    })
+  }, [activeSessionId])
+
   // Shift+Tab toggles plan mode
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

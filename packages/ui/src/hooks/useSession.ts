@@ -20,8 +20,17 @@ export function useSession() {
       } else if (chunk.type === 'compact_complete' && chunk.compactInfo) {
         const { originalCount, keptCount, memoriesExtracted } = chunk.compactInfo
         const memText = memoriesExtracted > 0 ? ` ${memoriesExtracted} memories saved.` : ''
-        const compactMsg = `\n\n[Context compressed: ${originalCount} messages → summary + ${keptCount} recent.${memText}]\n`
-        store.appendStreamText(sessionId, compactMsg)
+        const compactText = `[Context compressed: ${originalCount} messages → summary + ${keptCount} recent.${memText}]`
+        const compactMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant' as const,
+          content: [{ type: 'text' as const, text: compactText }],
+          timestamp: Date.now(),
+        }
+        const current = useSessionStore.getState()
+        if (sessionId === current.activeSessionId) {
+          useSessionStore.setState((s) => ({ messages: [...s.messages, compactMessage] }))
+        }
       }
     })
 

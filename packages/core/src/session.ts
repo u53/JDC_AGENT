@@ -350,10 +350,12 @@ export class Session {
   }
 
   private shouldCompact(): boolean {
+    const compressAt = this.config.modelConfig.compressAt || 0.9
+    if (this.usageTracker.shouldCompact(compressAt)) return true
+    // Fallback: character-based estimate for first turn (no API data yet)
     const contextWindow = this.config.modelConfig.contextWindow || 200000
-    const compressAt = contextWindow * (this.config.modelConfig.compressAt || 0.9)
     const tokenEstimate = estimateTokens(this.messages)
-    return tokenEstimate > compressAt
+    return tokenEstimate > contextWindow * compressAt
   }
 
   private microCompact(): void {

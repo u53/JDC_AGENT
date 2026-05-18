@@ -2,6 +2,7 @@ import OpenAI from 'openai'
 import type { ModelProvider } from '../model-provider.js'
 import type { ContentBlock, Message, ModelConfig, PromptSegment, StreamChunk, ToolDefinition } from '../types.js'
 import { joinSegments } from '../context.js'
+import { parseThinkTags } from './think-parser.js'
 
 function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): string | undefined {
   if (!systemPrompt) return undefined
@@ -145,9 +146,16 @@ export class OpenAIResponsesProvider implements ModelProvider {
 
     const stream = await (this.client as any).responses.create(params, { signal })
 
+    let insideThink = false
+    let pendingText = ''
+
     for await (const event of stream) {
       if (event.type === 'response.output_text.delta') {
-        yield { type: 'text_delta', text: event.delta }
+        pendingText += event.delta
+        const result = parseThinkTags(pendingText, insideThink)
+        for (const c of result.chunks) yield c
+        pendingText = result.remaining
+        insideThink = result.insideThink
       } else if (event.type === 'response.output_item.added' && event.item?.type === 'function_call') {
         yield {
           type: 'tool_use_start',
@@ -161,6 +169,14 @@ export class OpenAIResponsesProvider implements ModelProvider {
       } else if (event.type === 'response.output_item.done' && event.item?.type === 'function_call') {
         yield { type: 'tool_use_end' }
       } else if (event.type === 'response.completed') {
+        if (pendingText) {
+          if (insideThink) {
+            yield { type: 'thinking_delta', text: pendingText }
+          } else {
+            yield { type: 'text_delta', text: pendingText }
+          }
+          pendingText = ''
+        }
         const usage = event.response?.usage
         const cachedTokens = usage?.input_tokens_details?.cached_tokens ?? 0
         yield {

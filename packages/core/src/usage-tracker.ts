@@ -24,6 +24,7 @@ export class UsageTracker {
   private cumCacheRead = 0
   private turnCount = 0
   private lastInputTokens = 0
+  private lastOutputTokens = 0
 
   constructor(contextWindow: number) {
     this.contextWindow = contextWindow || 200000
@@ -35,6 +36,7 @@ export class UsageTracker {
     this.cumCacheCreation += usage.cacheCreationInputTokens || 0
     this.cumCacheRead += usage.cacheReadInputTokens || 0
     this.lastInputTokens = usage.inputTokens + (usage.cacheCreationInputTokens || 0) + (usage.cacheReadInputTokens || 0)
+    this.lastOutputTokens = usage.outputTokens
     this.turnCount++
   }
 
@@ -42,8 +44,9 @@ export class UsageTracker {
     const totalTokens = this.cumInput + this.cumOutput
     const cacheTotal = this.cumInput + this.cumCacheCreation + this.cumCacheRead
     const cacheHitRate = cacheTotal > 0 ? (this.cumCacheRead / cacheTotal) * 100 : 0
+    const contextUsed = this.lastInputTokens + this.lastOutputTokens
     const contextUsedPercent = this.contextWindow > 0
-      ? Math.round((this.lastInputTokens / this.contextWindow) * 100)
+      ? Math.round((contextUsed / this.contextWindow) * 100)
       : 0
 
     return {
@@ -62,6 +65,12 @@ export class UsageTracker {
     this.contextWindow = contextWindow
   }
 
+  shouldCompact(compressAt: number): boolean {
+    if (this.turnCount === 0) return false
+    const contextUsed = this.lastInputTokens + this.lastOutputTokens
+    return contextUsed > this.contextWindow * compressAt
+  }
+
   reset(): void {
     this.cumInput = 0
     this.cumOutput = 0
@@ -69,6 +78,7 @@ export class UsageTracker {
     this.cumCacheRead = 0
     this.turnCount = 0
     this.lastInputTokens = 0
+    this.lastOutputTokens = 0
   }
 
   serialize(): string {
@@ -79,6 +89,7 @@ export class UsageTracker {
       cumCacheRead: this.cumCacheRead,
       turnCount: this.turnCount,
       lastInputTokens: this.lastInputTokens,
+      lastOutputTokens: this.lastOutputTokens,
       contextWindow: this.contextWindow,
     })
   }
@@ -92,7 +103,8 @@ export class UsageTracker {
       this.cumCacheRead = parsed.cumCacheRead || 0
       this.turnCount = parsed.turnCount || 0
       this.lastInputTokens = parsed.lastInputTokens || 0
-      if (parsed.contextWindow) this.contextWindow = parsed.contextWindow
+      this.lastOutputTokens = parsed.lastOutputTokens || 0
+      // Don't restore contextWindow — always use current model config
     } catch {
       // Invalid data, keep defaults
     }

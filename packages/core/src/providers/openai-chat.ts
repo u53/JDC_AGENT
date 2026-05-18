@@ -2,6 +2,7 @@ import OpenAI from 'openai'
 import type { ModelProvider } from '../model-provider.js'
 import type { ContentBlock, Message, ModelConfig, PromptSegment, StreamChunk, ToolDefinition } from '../types.js'
 import { joinSegments } from '../context.js'
+import { parseThinkTags } from './think-parser.js'
 
 function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): string | undefined {
   if (!systemPrompt) return undefined
@@ -99,6 +100,8 @@ export class OpenAIChatProvider implements ModelProvider {
     const stream = await this.client.chat.completions.create(params, { signal })
 
     let toolCallsStarted = 0
+    let insideThink = false
+    let pendingText = ''
 
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta as any
@@ -109,7 +112,11 @@ export class OpenAIChatProvider implements ModelProvider {
       }
 
       if (delta?.content) {
-        yield { type: 'text_delta', text: delta.content }
+        pendingText += delta.content
+        const result = parseThinkTags(pendingText, insideThink)
+        for (const c of result.chunks) yield c
+        pendingText = result.remaining
+        insideThink = result.insideThink
       }
 
       if (delta?.tool_calls) {
@@ -135,11 +142,29 @@ export class OpenAIChatProvider implements ModelProvider {
       }
 
       if (finishReason === 'tool_calls') {
+        // Flush remaining pendingText before tool calls
+        if (pendingText) {
+          if (insideThink) {
+            yield { type: 'thinking_delta', text: pendingText }
+          } else {
+            yield { type: 'text_delta', text: pendingText }
+          }
+          pendingText = ''
+        }
         // Close the last open tool call
         if (toolCallsStarted > 0) {
           yield { type: 'tool_use_end' }
         }
       } else if (finishReason === 'stop') {
+        // Flush remaining pendingText
+        if (pendingText) {
+          if (insideThink) {
+            yield { type: 'thinking_delta', text: pendingText }
+          } else {
+            yield { type: 'text_delta', text: pendingText }
+          }
+          pendingText = ''
+        }
         yield {
           type: 'message_end',
           usage: {

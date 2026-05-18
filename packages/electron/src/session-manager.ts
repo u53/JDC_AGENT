@@ -182,6 +182,11 @@ export class SessionManager {
       },
       onToolEvent: (event: ToolExecutionEvent) => {
         this.window?.webContents.send('query:tool-event', { sessionId, event })
+        if (event.type === 'complete' && event.toolName === 'enter_plan_mode') {
+          this.window?.webContents.send('plan:mode-changed', { sessionId, mode: 'planning' })
+        } else if (event.type === 'complete' && event.toolName === 'exit_plan_mode') {
+          this.window?.webContents.send('plan:mode-changed', { sessionId, mode: 'normal' })
+        }
       },
       onMessageComplete: (message) => {
         this.window?.webContents.send('query:complete', { sessionId, message })
