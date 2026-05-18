@@ -171,3 +171,22 @@ export function IconPanelRight({ size = 18, className }: IconProps) {
     </svg>
   );
 }
+
+export function IconCheck({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...defaultProps}>
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+export function IconGitBranch({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...defaultProps}>
+      <line x1={6} y1={3} x2={6} y2={15} />
+      <circle cx={18} cy={6} r={3} />
+      <circle cx={6} cy={18} r={3} />
+      <path d="M18 9a9 9 0 0 1-9 9" />
+    </svg>
+  );
+}

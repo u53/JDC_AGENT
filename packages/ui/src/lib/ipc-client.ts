@@ -20,6 +20,12 @@ declare global {
       mcpSaveConfig: (servers: any, scope: string, cwd?: string) => Promise<void>
       onMcpStateChanged: (callback: (states: McpServerState[]) => void) => void
       agentAbort?: (sessionId: string, agentToolUseId: string) => Promise<void>
+      // Git
+      gitBranchList: (cwd: string) => Promise<{ branches: string[]; current: string }>
+      gitBranchSwitch: (cwd: string, branch: string) => Promise<{ success: boolean; error?: string }>
+      gitBranchCreate: (cwd: string, branch: string, from?: string) => Promise<{ success: boolean; error?: string }>
+      gitBranchDelete: (cwd: string, branch: string) => Promise<{ success: boolean; error?: string }>
+      gitStatus: (cwd: string) => Promise<{ dirty: boolean; changes: number }>
     }
   }
 }
