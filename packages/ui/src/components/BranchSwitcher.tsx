@@ -144,7 +144,7 @@ export function BranchSwitcher({ cwd }: Props) {
                 <div className="flex items-center gap-2 mt-1">
                   <button
                     onClick={stashAndSwitch}
-                    className="text-[11px] px-2 py-0.5 rounded bg-[var(--accent)] text-white hover:opacity-80"
+                    className="text-[11px] px-2 py-0.5 rounded bg-[var(--accent)] text-[var(--accent-ink)] hover:opacity-80"
                   >
                     Stash 并切换
                   </button>
@@ -164,7 +164,7 @@ export function BranchSwitcher({ cwd }: Props) {
               <span className="text-[11px] text-[var(--warn)]">有暂存的更改</span>
               <button
                 onClick={popStash}
-                className="text-[11px] px-2 py-0.5 rounded bg-[var(--warn)] text-white hover:opacity-80"
+                className="text-[11px] px-2 py-0.5 rounded bg-[var(--warn)] text-[var(--accent-ink)] hover:opacity-80"
               >
                 恢复
               </button>
