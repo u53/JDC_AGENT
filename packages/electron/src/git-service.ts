@@ -5,7 +5,7 @@ const exec = promisify(execFile)
 
 export class GitService {
   private async git(args: string[], cwd: string): Promise<string> {
-    const { stdout } = await exec('git', args, { cwd, timeout: 10000 })
+    const { stdout } = await exec('git', args, { cwd, timeout: 30000 })
     return stdout.trim()
   }
 
@@ -74,8 +74,18 @@ export class GitService {
       if (idx === -1) {
         return { success: false, error: '没有找到暂存的更改' }
       }
-      await this.git(['stash', 'pop', `stash@{${idx}}`], cwd)
-      return { success: true }
+      const ref = `stash@{${idx}}`
+      try {
+        await this.git(['stash', 'apply', ref], cwd)
+        await this.git(['stash', 'drop', ref], cwd)
+        return { success: true }
+      } catch (applyErr: any) {
+        const msg = applyErr.stderr || applyErr.message || ''
+        if (msg.includes('CONFLICT') || msg.includes('conflict')) {
+          return { success: false, error: '恢复时有冲突，请手动解决: git stash pop' }
+        }
+        return { success: false, error: msg }
+      }
     } catch (err: any) {
       return { success: false, error: err.stderr || err.message }
     }
