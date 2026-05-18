@@ -70,7 +70,7 @@ const TABS: { key: SettingsTab; label: string }[] = [
   { key: 'models', label: '模型' },
   { key: 'mcp', label: 'MCP' },
   { key: 'shortcuts', label: '快捷键' },
-  { key: 'advanced', label: '高级' },
+  { key: 'advanced', label: '版本信息' },
 ]
 
 export function SettingsOverlay() {

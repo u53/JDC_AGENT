@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useSessionStore } from '../stores/session-store'
+import { useSettingsStore } from '../stores/settings-store'
 
 export function Sidebar() {
   const projects = useSessionStore((s) => s.projects)
@@ -159,7 +160,7 @@ export function Sidebar() {
           JDC Code {version ? `v${version}` : ''}
           {updateAvailable && (
             <button
-              onClick={() => (window as any).electronAPI?.invoke('updater:download')}
+              onClick={() => useSettingsStore.getState().open('advanced')}
               className="ml-1.5 text-[var(--accent)] hover:underline"
             >
               v{updateAvailable} 可用

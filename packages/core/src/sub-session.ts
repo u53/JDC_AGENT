@@ -41,7 +41,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
     toolRegistry,
     modelConfig,
     cwd,
-    maxTurns = 300,
+    maxTurns = 1000,
     signal,
     onToolEvent,
     onPermissionRequest,
@@ -50,7 +50,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
   } = opts
 
   const agentDef = opts.agentType ? getAgentType(opts.agentType) : undefined
-  const effectiveMaxTurns = maxTurns || agentDef?.maxTurns || 300
+  const effectiveMaxTurns = maxTurns || agentDef?.maxTurns || 1000
   const systemPrompt = agentDef?.systemPrompt || SUB_AGENT_SYSTEM
 
   const permChecker = new PermissionChecker(opts.permissionMode || 'relaxed')

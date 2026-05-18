@@ -88,10 +88,21 @@ export function AgentToolCard({ event, input, result }: ToolCardRouterProps) {
         {status === 'running' && toolCount > 0 && (
           <div className="text-[10px] text-[var(--muted)] mt-1">{toolCount} tools executed</div>
         )}
+        {status !== 'running' && prompt && (
+          <div className="mb-2">
+            <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--muted)] mb-1">Input</div>
+            <pre className="max-h-32 overflow-auto p-2 text-[12px] whitespace-pre-wrap text-[var(--text)] bg-[var(--surface-2)] rounded-[4px]" style={{ fontFamily: 'var(--font-mono)' }}>
+              {truncateText(prompt, 500)}
+            </pre>
+          </div>
+        )}
         {status !== 'running' && resultContent && (
-          <pre className={`max-h-48 overflow-auto p-2 text-[12px] whitespace-pre-wrap ${isError ? 'text-[var(--bad)]' : 'text-[var(--text)]'}`} style={{ fontFamily: 'var(--font-mono)' }}>
-            {truncateText(resultContent, 500)}
-          </pre>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--muted)] mb-1">Output</div>
+            <pre className={`max-h-48 overflow-auto p-2 text-[12px] whitespace-pre-wrap ${isError ? 'text-[var(--bad)]' : 'text-[var(--text)]'}`} style={{ fontFamily: 'var(--font-mono)' }}>
+              {truncateText(resultContent, 500)}
+            </pre>
+          </div>
         )}
       </ToolCardShell>
     </div>
