@@ -20,6 +20,8 @@ const READ_TOOLS = new Set([
   'list_mcp_resources', 'read_mcp_resource', 'skill',
 ])
 
+const LONG_RUNNING_TOOLS = new Set(['Agent', 'bash', 'monitor'])
+
 const MAX_CONCURRENCY = 5
 
 class Semaphore {
@@ -86,8 +88,9 @@ export class ParallelExecutor {
             results[idx] = { tool_use_id: blocks[idx].id, content: 'Cancelled: sibling tool failed', is_error: true }
             return
           }
-          const timeoutSignal = AbortSignal.timeout(120_000)
-          const toolSignal = AbortSignal.any([combinedSignal, timeoutSignal])
+          const toolSignal = LONG_RUNNING_TOOLS.has(blocks[idx].name)
+            ? combinedSignal
+            : AbortSignal.any([combinedSignal, AbortSignal.timeout(120_000)])
           const result = await this.toolRunner.execute(
             blocks[idx].name, blocks[idx].id, blocks[idx].input, onEvent, toolSignal
           )
@@ -108,8 +111,9 @@ export class ParallelExecutor {
         results[idx] = { tool_use_id: blocks[idx].id, content: 'Cancelled: sibling tool failed', is_error: true }
         continue
       }
-      const timeoutSignal = AbortSignal.timeout(120_000)
-      const toolSignal = AbortSignal.any([combinedSignal, timeoutSignal])
+      const toolSignal = LONG_RUNNING_TOOLS.has(blocks[idx].name)
+        ? combinedSignal
+        : AbortSignal.any([combinedSignal, AbortSignal.timeout(120_000)])
       const result = await this.toolRunner.execute(
         blocks[idx].name, blocks[idx].id, blocks[idx].input, onEvent, toolSignal
       )

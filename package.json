@@ -11,6 +11,7 @@
     "postinstall": "node -e \"if(process.platform==='darwin'){const{execSync}=require('child_process');try{execSync('EPATH=node_modules/.pnpm/electron@33.4.11/node_modules/electron/dist/Electron.app && cp assets/icon.icns $EPATH/Contents/Resources/electron.icns && /usr/libexec/PlistBuddy -c \\\"Set :CFBundleDisplayName JDCAGNET\\\" -c \\\"Set :CFBundleName JDCAGNET\\\" $EPATH/Contents/Info.plist',{shell:'/bin/bash'})}catch(e){}}\""
   },
   "devDependencies": {
+    "@electron/notarize": "^3.1.1",
     "@electron/rebuild": "^4.0.4",
     "electron-builder": "^25.1.0",
     "electron-updater": "^6.8.3",

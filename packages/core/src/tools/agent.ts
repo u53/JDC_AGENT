@@ -42,7 +42,7 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
             description: 'The type of specialized agent to use (default: general)',
           },
           modelId: { type: 'string', description: 'Model ID to use for this sub-agent (from configured models). Defaults to current session model.' },
-          maxTurns: { type: 'number', description: 'Maximum conversation turns (default: 150)' },
+          maxTurns: { type: 'number', description: 'Maximum conversation turns (default: 300)' },
         },
         required: ['prompt'],
       },
@@ -53,7 +53,7 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
       }
 
       const prompt = input.prompt as string
-      const maxTurns = (input.maxTurns as number) || 150
+      const maxTurns = (input.maxTurns as number) || 300
       const agentType = (input.type as string) || 'general'
       const requestedModelId = input.modelId as string | undefined
       const toolUseId = context.toolUseId || 'unknown'
