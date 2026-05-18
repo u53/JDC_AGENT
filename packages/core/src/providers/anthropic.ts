@@ -224,6 +224,15 @@ export class AnthropicProvider implements ModelProvider {
         } else if (event.type === 'message_delta') {
           if (event.usage) {
             usage.outputTokens = event.usage.output_tokens || usage.outputTokens
+            if (event.usage.cache_read_input_tokens !== undefined) {
+              usage.cacheReadInputTokens = event.usage.cache_read_input_tokens || 0
+            }
+            if (event.usage.cache_creation_input_tokens !== undefined) {
+              usage.cacheCreationInputTokens = event.usage.cache_creation_input_tokens || 0
+            }
+            if (event.usage.input_tokens !== undefined) {
+              usage.inputTokens = event.usage.input_tokens || 0
+            }
           }
         } else if (event.type === 'content_block_delta') {
           if (event.delta?.type === 'text_delta') {
