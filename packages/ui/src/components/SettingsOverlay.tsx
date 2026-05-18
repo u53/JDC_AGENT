@@ -76,7 +76,129 @@ function AppearanceTab() {
 
 /* ─── Advanced ─── */
 function AdvancedTab() {
-  return <p className="text-[13px] text-[var(--muted)]">更多设置即将推出</p>
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error'>('idle')
+  const [updateVersion, setUpdateVersion] = useState('')
+  const [downloadPercent, setDownloadPercent] = useState(0)
+  const [errorMsg, setErrorMsg] = useState('')
+
+  useEffect(() => {
+    const unsub1 = window.electronAPI?.onUpdaterAvailable?.((data: { version: string }) => {
+      setUpdateStatus('available')
+      setUpdateVersion(data.version)
+    })
+    const unsub2 = window.electronAPI?.onUpdaterProgress?.((data: { percent: number }) => {
+      setUpdateStatus('downloading')
+      setDownloadPercent(data.percent)
+    })
+    const unsub3 = window.electronAPI?.onUpdaterDownloaded?.(() => {
+      setUpdateStatus('ready')
+    })
+    return () => { unsub1?.(); unsub2?.(); unsub3?.() }
+  }, [])
+
+  const checkUpdate = async () => {
+    setUpdateStatus('checking')
+    setErrorMsg('')
+    const result = await window.electronAPI?.updaterCheck()
+    if (result?.error) {
+      setUpdateStatus('error')
+      setErrorMsg(result.error)
+    } else if (!result?.version) {
+      setUpdateStatus('idle')
+    }
+  }
+
+  const downloadUpdate = () => {
+    setUpdateStatus('downloading')
+    setDownloadPercent(0)
+    window.electronAPI?.updaterDownload()
+  }
+
+  const installUpdate = () => {
+    window.electronAPI?.updaterInstall()
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Version & Update */}
+      <div>
+        <h3 className="text-[13px] font-medium text-[var(--text)] mb-3">版本信息</h3>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[13px] text-[var(--muted)]">当前版本</span>
+            <span className="text-[13px] font-mono text-[var(--text)]">v0.0.1</span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-[13px] text-[var(--muted)]">检查更新</span>
+            <div className="flex items-center gap-2">
+              {updateStatus === 'idle' && (
+                <button
+                  onClick={checkUpdate}
+                  className="px-3 py-1 text-[12px] rounded-[6px] border border-[var(--border)] text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors"
+                >
+                  检查更新
+                </button>
+              )}
+              {updateStatus === 'checking' && (
+                <span className="text-[12px] text-[var(--muted)]">检查中...</span>
+              )}
+              {updateStatus === 'available' && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] text-[var(--good)]">v{updateVersion} 可用</span>
+                  <button
+                    onClick={downloadUpdate}
+                    className="px-3 py-1 text-[12px] rounded-[6px] bg-[var(--accent)] text-[var(--accent-ink)] hover:opacity-90 transition-colors"
+                  >
+                    下载
+                  </button>
+                </div>
+              )}
+              {updateStatus === 'downloading' && (
+                <div className="flex items-center gap-2">
+                  <div className="w-24 h-1.5 rounded-full bg-[var(--surface-3)] overflow-hidden">
+                    <div className="h-full rounded-full bg-[var(--accent)] transition-all" style={{ width: `${downloadPercent}%` }} />
+                  </div>
+                  <span className="text-[12px] text-[var(--muted)]">{downloadPercent}%</span>
+                </div>
+              )}
+              {updateStatus === 'ready' && (
+                <button
+                  onClick={installUpdate}
+                  className="px-3 py-1 text-[12px] rounded-[6px] bg-[var(--good)] text-white hover:opacity-90 transition-colors"
+                >
+                  重启并安装
+                </button>
+              )}
+              {updateStatus === 'error' && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] text-[var(--bad)]">失败</span>
+                  <button
+                    onClick={checkUpdate}
+                    className="px-3 py-1 text-[12px] rounded-[6px] border border-[var(--border)] text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors"
+                  >
+                    重试
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          {errorMsg && (
+            <p className="text-[11px] text-[var(--bad)]">{errorMsg}</p>
+          )}
+        </div>
+      </div>
+
+      {/* About */}
+      <div>
+        <h3 className="text-[13px] font-medium text-[var(--text)] mb-3">关于</h3>
+        <div className="space-y-2 text-[13px] text-[var(--muted)]">
+          <p>JDCAGNET — AI-powered coding assistant</p>
+          <p>Electron {window.electronAPI ? '33' : '?'} · React 19 · Node.js</p>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 /* ─── Shortcuts ─── */
