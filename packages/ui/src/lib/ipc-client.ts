@@ -26,6 +26,13 @@ declare global {
       gitBranchCreate: (cwd: string, branch: string, from?: string) => Promise<{ success: boolean; error?: string }>
       gitBranchDelete: (cwd: string, branch: string) => Promise<{ success: boolean; error?: string }>
       gitStatus: (cwd: string) => Promise<{ dirty: boolean; changes: number }>
+      // Terminal
+      terminalCreate: (cwd: string) => Promise<{ id: string }>
+      terminalWrite: (id: string, data: string) => void
+      terminalResize: (id: string, cols: number, rows: number) => void
+      terminalDestroy: (id: string) => Promise<{ success: boolean }>
+      onTerminalData: (callback: (payload: { id: string; data: string }) => void) => () => void
+      onTerminalExit: (callback: (payload: { id: string; code: number }) => void) => () => void
     }
   }
 }
