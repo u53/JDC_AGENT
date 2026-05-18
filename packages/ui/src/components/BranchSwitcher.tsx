@@ -138,7 +138,7 @@ export function BranchSwitcher({ cwd }: Props) {
 
           {/* Error / Stash prompt */}
           {error && (
-            <div className="px-3 py-1.5 border-b border-[var(--border)] bg-[var(--bad)]/10">
+            <div className="px-3 py-1.5 border-b border-[var(--border)] bg-[var(--surface-2)]">
               <div className="text-[11px] text-[var(--bad)]">{error}</div>
               {pendingBranch && (
                 <div className="flex items-center gap-2 mt-1">
@@ -160,7 +160,7 @@ export function BranchSwitcher({ cwd }: Props) {
           )}
           {/* Stash restore prompt */}
           {hasStash && !error && (
-            <div className="px-3 py-1.5 border-b border-[var(--border)] bg-[var(--warn)]/10 flex items-center justify-between">
+            <div className="px-3 py-1.5 border-b border-[var(--border)] bg-[var(--surface-2)] flex items-center justify-between">
               <span className="text-[11px] text-[var(--warn)]">有暂存的更改</span>
               <button
                 onClick={popStash}

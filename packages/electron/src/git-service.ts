@@ -68,7 +68,13 @@ export class GitService {
 
   async stashPop(cwd: string): Promise<{ success: boolean; error?: string }> {
     try {
-      await this.git(['stash', 'pop'], cwd)
+      const list = await this.git(['stash', 'list'], cwd)
+      const lines = list.split('\n')
+      const idx = lines.findIndex(l => l.includes('jdcagnet-auto-stash'))
+      if (idx === -1) {
+        return { success: false, error: '没有找到暂存的更改' }
+      }
+      await this.git(['stash', 'pop', `stash@{${idx}}`], cwd)
       return { success: true }
     } catch (err: any) {
       return { success: false, error: err.stderr || err.message }
