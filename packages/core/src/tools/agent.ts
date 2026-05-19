@@ -18,6 +18,7 @@ export interface AgentToolDeps {
   onAgentText?: (agentToolUseId: string, text: string) => void
   onAgentComplete?: (agentToolUseId: string, result: { content: string; turns: number; toolsUsed: string[] }) => void
   agentAbortControllers?: Map<string, AbortController>
+  backgroundTasks?: import('../background-tasks.js').BackgroundTaskManager
 }
 
 export function createAgentTool(deps: AgentToolDeps): ToolHandler {
@@ -31,7 +32,8 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
         '- refactor: Improve code structure without changing behavior (no bash)\n' +
         '- security-auditor: Analyze code for vulnerabilities\n' +
         '- frontend-designer: Convert designs into components\n' +
-        '- general: Full tool access for complex multi-step tasks (default)',
+        '- general: Full tool access for complex multi-step tasks (default)' +
+        '\n\nSet run_in_background: true for long-running tasks. The agent runs independently and you receive a <task-notification> when it completes.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -43,6 +45,10 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
           },
           modelId: { type: 'string', description: 'Model ID to use for this sub-agent (from configured models). Defaults to current session model.' },
           maxTurns: { type: 'number', description: 'Maximum conversation turns (default: 1000)' },
+          run_in_background: {
+            type: 'boolean',
+            description: 'Run this agent in the background. Returns immediately with a task_id. You will receive a <task-notification> when it completes.',
+          },
         },
         required: ['prompt'],
       },
@@ -76,6 +82,37 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
       context.signal?.addEventListener('abort', onParentAbort)
       if (context.signal?.aborted) {
         agentAbort.abort()
+      }
+
+      if (input.run_in_background && deps.backgroundTasks) {
+        const task = deps.backgroundTasks.registerAgent(prompt, agentType)
+
+        runSubSession({
+          prompt,
+          provider: effectiveProvider,
+          toolRegistry: deps.toolRegistry,
+          modelConfig: effectiveModelConfig,
+          cwd: deps.cwd,
+          maxTurns,
+          agentType,
+          signal: agentAbort.signal,
+          onToolEvent: deps.onToolEvent,
+          onPermissionRequest: deps.onPermissionRequest,
+          onAgentProgress: (event) => deps.onAgentProgress?.(toolUseId, event),
+          onAgentText: (text) => deps.onAgentText?.(toolUseId, text),
+        }).then(result => {
+          deps.onAgentComplete?.(toolUseId, result)
+          deps.backgroundTasks!.completeAgent(task.id, { result: result.content, turns: result.turns, toolsUsed: result.toolsUsed })
+        }).catch(err => {
+          deps.backgroundTasks!.failAgent(task.id, err instanceof Error ? err.message : String(err))
+        }).finally(() => {
+          deps.agentAbortControllers?.delete(toolUseId)
+          context.signal?.removeEventListener('abort', onParentAbort)
+        })
+
+        return {
+          content: `Background agent started.\nTask ID: ${task.id}\nType: ${agentType}\nPrompt: ${prompt}\nYou will receive a <task-notification> when it completes.`,
+        }
       }
 
       try {
