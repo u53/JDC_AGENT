@@ -15,7 +15,7 @@ jobs:
         with:
           node-version: 20
       - name: Install dependencies
-        run: cd packages/vscode-extension && npm ci
+        run: cd packages/vscode-extension && npm install
       - name: Build
         run: cd packages/vscode-extension && npm run build
       - name: Package
