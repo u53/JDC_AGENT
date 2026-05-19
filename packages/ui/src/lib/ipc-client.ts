@@ -116,4 +116,17 @@ export const ipc = {
     onComplete: (cb: (data: { sessionId: string; agentToolUseId: string; content: string; turns: number; toolsUsed: string[] }) => void) =>
       on('agent:complete', (_e, data) => cb(data as any)),
   },
+
+  background: {
+    list: (sessionId: string) =>
+      invoke('background:list', { sessionId }) as Promise<any[]>,
+    stop: (sessionId: string, taskId: string) =>
+      invoke('background:stop', { sessionId, taskId }) as Promise<{ success: boolean }>,
+    output: (sessionId: string, taskId: string, tail?: number) =>
+      invoke('background:output', { sessionId, taskId, tail }) as Promise<string>,
+    onStateChanged: (cb: (data: { sessionId: string }) => void) =>
+      on('background:state-changed', (_e, data) => cb(data as any)),
+    onNotification: (cb: (data: { sessionId: string }) => void) =>
+      on('background:notification', (_e, data) => cb(data as any)),
+  },
 }
