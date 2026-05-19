@@ -1,0 +1,22 @@
+<idea-plugin>
+    <id>com.jdcagnet.ide</id>
+    <name>JDC Code IDE</name>
+    <vendor>JDCAGNET</vendor>
+    <description>Bidirectional communication between JDC Code and JetBrains IDEs</description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <applicationListeners>
+        <listener class="com.jdcagnet.ide.JdcagnetPlugin"
+                  topic="com.intellij.ide.AppLifecycleListener"/>
+    </applicationListeners>
+
+    <actions>
+        <action id="jdcagnet.sendToChat"
+                class="com.jdcagnet.ide.notifications.AtMentionAction"
+                text="Send to JDC Code (@)"
+                description="Send selected code to JDC Code">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>
