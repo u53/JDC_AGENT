@@ -349,9 +349,10 @@ export class SessionManager {
     }
   }
 
-  getSkills(sessionId: string): { name: string; description: string; argumentHint?: string }[] {
+  async getSkills(sessionId: string): Promise<{ name: string; description: string; argumentHint?: string }[]> {
     const session = this.sessions.get(sessionId)
     if (!session) return []
+    await session.ensureSkillsReady()
     const loader = session.getSkillLoader()
     if (!loader) return []
     return loader.getInvocable().map(s => ({
