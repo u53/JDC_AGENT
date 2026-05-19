@@ -75,6 +75,7 @@ export class Session {
   private planMode: 'normal' | 'planning' | 'awaiting_approval' = 'normal'
   private onPlanReview?: (planFile: string, content: string) => Promise<{ approved: boolean; feedback?: string }>
   resolveModel?: (modelId: string) => { provider: ModelProvider; modelConfig: ModelConfig } | null
+  ideContext?: { filePath?: string; text?: string; selection?: { start: { line: number }; end: { line: number } } | null }
 
   constructor(
     config: SessionConfig,
@@ -343,9 +344,23 @@ export class Session {
       content,
       timestamp: Date.now(),
     }
-    this.messages.push(userMessage)
     this.history.addMessage(this.id, userMessage)
 
+    // Inject IDE context into the live message only (not saved to history)
+    if (this.ideContext) {
+      let ideInfo = ''
+      if (this.ideContext.text && this.ideContext.selection) {
+        ideInfo = `<ide-context>\nThe user has the following code selected in their IDE (${this.ideContext.filePath}, lines ${this.ideContext.selection.start.line}-${this.ideContext.selection.end.line}):\n\`\`\`\n${this.ideContext.text}\n\`\`\`\n</ide-context>`
+      } else if (this.ideContext.filePath) {
+        ideInfo = `<ide-context>\nThe user's IDE currently has this file open: ${this.ideContext.filePath}\n</ide-context>`
+      }
+      if (ideInfo) {
+        userMessage.content = [...content, { type: 'text', text: ideInfo }]
+      }
+      this.ideContext = undefined
+    }
+
+    this.messages.push(userMessage)
     await this.runLoop(events)
   }
 

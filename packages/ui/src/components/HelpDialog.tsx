@@ -77,6 +77,22 @@ export function HelpDialog({ visible, onClose }: Props) {
               确认后的文件不再显示，状态持久化到数据库。
             </p>
           </section>
+
+          <section>
+            <h3 className="text-[10px] uppercase tracking-[0.15em] text-[#666] mb-2">IDE 集成</h3>
+            <p className="text-[11px] text-[#666] mb-2">
+              安装 IDE 扩展后，JDC Code 可自动感知你在 IDE 中的操作（当前文件、选中代码），作为隐式上下文传给 AI。
+            </p>
+            <div className="space-y-1.5">
+              <HelpRow cmd="VS Code" desc="安装 .vsix 扩展 → 打开同一项目 → 自动连接" />
+              <HelpRow cmd="JetBrains" desc="安装 .zip 插件 → 打开同一项目 → 自动连接" />
+              <HelpRow cmd="状态指示" desc="Composer 底部绿色圆点 + IDE 名称 = 已连接" />
+              <HelpRow cmd="选中代码" desc="IDE 中选中代码后发消息，AI 可看到选中内容（一次性）" />
+            </div>
+            <p className="text-[11px] text-[#555] mt-2">
+              下载地址: <a href="https://github.com/u53/JDC_AGENT/releases" target="_blank" className="text-[#888] underline hover:text-[#EAEAEA]">GitHub Releases</a>
+            </p>
+          </section>
         </div>
       </div>
     </div>

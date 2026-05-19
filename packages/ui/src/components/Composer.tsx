@@ -4,6 +4,7 @@ import { SlashCommandMenu, type SlashCommand } from './SlashCommandMenu'
 import { BranchSwitcher } from './BranchSwitcher'
 import { IconSend, IconStop } from './icons'
 import { useSessionStore } from '../stores/session-store'
+import { useIdeStore } from '../stores/ide-store'
 
 interface Props {
   onSend: (text: string, images?: { data: string; mediaType: string }[]) => void
@@ -60,6 +61,10 @@ export function Composer({
 
   const activeProject = projects.find((p) => p.sessions.some((s) => s.id === activeSessionId))
   const cwd = activeProject?.cwd || ''
+
+  const ideConnections = useIdeStore((s) => s.connections)
+  const ideSelection = useIdeStore((s) => s.selection)
+  const connectedIde = ideConnections.find((c) => c.status === 'connected' && c.workspaceFolders.some(f => cwd.startsWith(f)))
 
   const addImageFile = useCallback((file: File) => {
     const validTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
@@ -361,6 +366,20 @@ export function Composer({
 
             {/* Branch switcher */}
             {cwd && <BranchSwitcher cwd={cwd} />}
+
+            {/* IDE connection + selection */}
+            {connectedIde && (
+              <span className="flex items-center gap-1 text-[var(--good)]">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--good)]" />
+                {connectedIde.ideName}
+                {ideSelection?.filePath && (
+                  <span className="text-[var(--muted)] ml-1">
+                    · {ideSelection.filePath.split('/').pop()}
+                    {ideSelection.text ? ` (${ideSelection.selection?.start.line}-${ideSelection.selection?.end.line})` : ''}
+                  </span>
+                )}
+              </span>
+            )}
           </div>
 
           {/* Model dropdown */}

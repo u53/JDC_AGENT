@@ -1,26 +1,49 @@
 import * as vscode from 'vscode'
 
-export function createSelectionTracker(onSelection: (data: any) => void): vscode.Disposable {
+export function createSelectionTracker(onSelection: (data: any) => void): vscode.Disposable[] {
   let timer: ReturnType<typeof setTimeout> | undefined
 
-  return vscode.window.onDidChangeTextEditorSelection((e) => {
+  const selectionDisposable = vscode.window.onDidChangeTextEditorSelection((e) => {
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {
       const editor = e.textEditor
       const selection = editor.selection
+      const filePath = editor.document.uri.fsPath
       if (selection.isEmpty) {
-        onSelection({ filePath: editor.document.uri.fsPath, text: undefined, selection: null })
+        // No text selected — send filePath only (active file info)
+        onSelection({ filePath, text: null, selection: null })
         return
       }
       const text = editor.document.getText(selection)
       onSelection({
-        filePath: editor.document.uri.fsPath,
+        filePath,
         text,
         selection: {
-          start: { line: selection.start.line, character: selection.start.character },
-          end: { line: selection.end.line, character: selection.end.character },
+          start: { line: selection.start.line + 1, character: selection.start.character },
+          end: { line: selection.end.line + 1, character: selection.end.character },
         },
       })
-    }, 500)
+    }, 300)
   })
+
+  const editorDisposable = vscode.window.onDidChangeActiveTextEditor((editor) => {
+    if (!editor) return
+    const filePath = editor.document.uri.fsPath
+    const selection = editor.selection
+    if (selection.isEmpty) {
+      onSelection({ filePath, text: null, selection: null })
+    } else {
+      const text = editor.document.getText(selection)
+      onSelection({
+        filePath,
+        text,
+        selection: {
+          start: { line: selection.start.line + 1, character: selection.start.character },
+          end: { line: selection.end.line + 1, character: selection.end.character },
+        },
+      })
+    }
+  })
+
+  return [selectionDisposable, editorDisposable]
 }

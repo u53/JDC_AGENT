@@ -49,6 +49,11 @@ export function initIdeListeners(): () => void {
   const api = (window as any).electronAPI
   if (!api?.onIdeStateChanged) return () => {}
 
+  // Fetch current state on init (in case discovery already ran)
+  api.ideGetState?.().then((connections: IdeConnection[]) => {
+    if (connections) useIdeStore.getState().setConnections(connections)
+  }).catch(() => {})
+
   const unsub1 = api.onIdeStateChanged((connections: IdeConnection[]) => {
     useIdeStore.getState().setConnections(connections)
   })

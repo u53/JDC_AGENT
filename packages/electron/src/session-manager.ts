@@ -44,6 +44,14 @@ export class SessionManager {
         this.window?.webContents.send('ide:state-changed', connections)
       },
       onSelectionChanged: (data) => {
+        // Preserve last selected text if new event only has filePath (cursor moved, no selection)
+        if (!data.text && this.lastIdeSelection?.text && data.filePath === this.lastIdeSelection.filePath) {
+          data = { ...data, text: this.lastIdeSelection.text, selection: this.lastIdeSelection.selection }
+        }
+        this.lastIdeSelection = data
+        for (const session of this.sessions.values()) {
+          session.ideContext = data
+        }
         this.window?.webContents.send('ide:selection-changed', data)
       },
       onAtMentioned: (data) => {
@@ -51,6 +59,8 @@ export class SessionManager {
       },
     })
   }
+
+  private lastIdeSelection: any = null
 
   async ensureReady(): Promise<void> {
     await this.readyPromise
@@ -115,9 +125,10 @@ export class SessionManager {
   }
 
   async activateSession(sessionId: string): Promise<void> {
-    if (this.sessions.has(sessionId)) return
     const meta = this.history.listSessions().find(s => s.id === sessionId)
     if (!meta) throw new Error(`Session ${sessionId} not found`)
+    this.ideManager.startDiscovery(meta.cwd)
+    if (this.sessions.has(sessionId)) return
 
     const active = getActiveModelConfig()
     if (!active) throw new Error('No active model selected. Please configure a model in settings.')
@@ -147,6 +158,7 @@ export class SessionManager {
       })
     }
     const session = new Session(sessionConfig, provider, this.history, permissionCallback, this.mcpManager, onPlanReview)
+    session.ideContext = this.lastIdeSelection
     session.resolveModel = (modelId: string) => {
       const config = loadAppConfig()
       const data = config.modelGroups
@@ -166,7 +178,6 @@ export class SessionManager {
       }
       return null
     }
-    this.ideManager.startDiscovery(meta.cwd)
     const onAskUser: AskUserCallback = async (question, options, multiSelect) => {
       return new Promise<string>((resolve) => {
         const id = uuid()

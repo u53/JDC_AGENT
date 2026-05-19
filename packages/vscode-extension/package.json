@@ -1,9 +1,13 @@
 {
-  "name": "jdcagnet-ide",
-  "displayName": "JDC Code IDE",
+  "name": "jdc-code",
+  "displayName": "JDC Code",
   "description": "Bidirectional communication between JDC Code and VS Code",
   "version": "0.1.0",
   "publisher": "jdcagnet",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/u53/JDC_AGENT"
+  },
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Other"],
   "activationEvents": ["onStartupFinished"],

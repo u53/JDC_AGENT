@@ -44,9 +44,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
   lockfile.write(port, workspaceFolders)
 
-  context.subscriptions.push(
-    createSelectionTracker((data) => server?.sendNotification('selection_changed', data))
-  )
+  const selectionDisposables = createSelectionTracker((data) => server?.sendNotification('selection_changed', data))
+  context.subscriptions.push(...selectionDisposables)
   context.subscriptions.push(
     registerAtMentionCommand((data) => server?.sendNotification('at_mentioned', data))
   )

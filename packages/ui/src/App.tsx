@@ -12,6 +12,7 @@ import { useModelStore } from './stores/model-store'
 import { useSettingsStore } from './stores/settings-store'
 import { useTerminalStore } from './stores/terminal-store'
 import { useHotkeys } from './hooks/useHotkeys'
+import { initIdeListeners } from './stores/ide-store'
 
 export function App() {
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
@@ -25,6 +26,7 @@ export function App() {
   const closeSettings = useSettingsStore((s) => s.close)
 
   useEffect(() => { loadModels() }, [loadModels])
+  useEffect(() => { return initIdeListeners() }, [])
 
   const activeProject = projects.find((p) =>
     p.sessions.some((s) => s.id === activeSessionId)

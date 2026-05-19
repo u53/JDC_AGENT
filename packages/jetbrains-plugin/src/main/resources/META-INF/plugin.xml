@@ -1,6 +1,6 @@
 <idea-plugin>
     <id>com.jdcagnet.ide</id>
-    <name>JDC Code IDE</name>
+    <name>JDC Code</name>
     <vendor>JDCAGNET</vendor>
     <description>Bidirectional communication between JDC Code and JetBrains IDEs</description>
 

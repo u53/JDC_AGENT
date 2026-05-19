@@ -116,7 +116,7 @@ export function ConversationTurn({
           return (
           <div key={pair.message.id}>
             {pair.message.content.map((block, i) => {
-              if (block.type === 'text' && !block.text.startsWith('__STATS__')) {
+              if (block.type === 'text' && !block.text.startsWith('__STATS__') && !block.text.startsWith('<ide-context>')) {
                 return (
                   <div key={i} className="text-[14px] mb-3">
                     <MarkdownRenderer content={block.text} />

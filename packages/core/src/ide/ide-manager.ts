@@ -99,16 +99,18 @@ export class IdeManager {
   }
 
   private async connectToIde(port: number, authToken: string, ideName: string, workspaceFolders: string[]): Promise<void> {
+    let wasConnected = false
     const client = new IdeClient(port, authToken, {
       onStatusChanged: (status) => {
         this.connections.set(port, { port, ideName, workspaceFolders, status })
         this.callbacks.onConnectionChanged(this.getConnections())
 
-        if (status === 'disconnected' || status === 'error') {
-          this.scheduleReconnect(port, authToken, ideName, workspaceFolders)
-        }
         if (status === 'connected') {
+          wasConnected = true
           this.reconnectAttempts.delete(port)
+        }
+        if ((status === 'disconnected' || status === 'error') && wasConnected) {
+          this.scheduleReconnect(port, authToken, ideName, workspaceFolders)
         }
       },
       onSelectionChanged: (data) => this.callbacks.onSelectionChanged(data),
@@ -122,7 +124,9 @@ export class IdeManager {
     try {
       await client.connect()
     } catch {
-      // Connection failed — will retry via scheduleReconnect
+      this.clients.delete(port)
+      this.connections.delete(port)
+      this.callbacks.onConnectionChanged(this.getConnections())
     }
   }
 

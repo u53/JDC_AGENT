@@ -90,6 +90,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   loadProjects: async () => {
     const projects = await ipc.session.list()
     set({ projects: projects || [] })
+    // Auto-switch to first session if none active (triggers IDE discovery)
+    const current = get().activeSessionId
+    if (!current && projects?.length > 0) {
+      const firstSession = projects[0].sessions?.[0]
+      if (firstSession) get().switchSession(firstSession.id)
+    }
   },
 
   createSession: async (cwd: string) => {

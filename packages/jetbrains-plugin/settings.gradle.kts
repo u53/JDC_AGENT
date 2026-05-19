@@ -1,1 +1,1 @@
-rootProject.name = "jdcagnet-ide"
+rootProject.name = "jdc-code"
