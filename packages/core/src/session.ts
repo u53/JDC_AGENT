@@ -32,6 +32,7 @@ import { createAgentTool } from './tools/agent.js'
 import { classifyError, getMaxRetries, getRetryDelay } from './retry.js'
 import { UsageTracker, type UsageSnapshot } from './usage-tracker.js'
 import { FileTracker } from './file-tracker.js'
+import { FileReadStateCache } from './file-read-state.js'
 import { ParallelExecutor } from './parallel-executor.js'
 import { BackgroundTaskManager } from './background-tasks.js'
 import { createTaskOutputTool } from './tools/task-output.js'
@@ -71,6 +72,7 @@ export class Session {
   private currentEvents?: SessionEvents
   private usageTracker: UsageTracker
   private fileTracker: FileTracker
+  private fileReadState: FileReadStateCache
   private backgroundTasks: BackgroundTaskManager
   private turnIndex = 0
   private planMode: 'normal' | 'planning' | 'awaiting_approval' = 'normal'
@@ -105,6 +107,7 @@ export class Session {
     this.history = history
     this.usageTracker = new UsageTracker(config.modelConfig.contextWindow || 200000)
     this.fileTracker = new FileTracker(history, config.id)
+    this.fileReadState = new FileReadStateCache()
     this.taskStore = new TaskStore(history, config.id)
     this.backgroundTasks = new BackgroundTaskManager(path.join(getConfigDir(), 'tasks'))
     this.backgroundTasks.setOnComplete((task) => {
@@ -177,6 +180,7 @@ export class Session {
     this.permissionChecker = new PermissionChecker('standard', config.cwd)
     this.toolRunner = new ToolRunner(this.toolRegistry, config.cwd, this.permissionChecker, onPermissionRequest)
     this.toolRunner.fileTracker = this.fileTracker
+    this.toolRunner.fileReadState = this.fileReadState
     this.toolRunner.backgroundTasks = this.backgroundTasks
     this.toolRunner.planModeCwd = this.config.cwd
     this.parallelExecutor = new ParallelExecutor(this.toolRunner)
@@ -228,6 +232,7 @@ export class Session {
         this.id
       )
       this.toolRunner.fileTracker = this.fileTracker
+      this.toolRunner.fileReadState = this.fileReadState
       this.toolRunner.backgroundTasks = this.backgroundTasks
       this.toolRunner.planModeCwd = this.config.cwd
       this.parallelExecutor = new ParallelExecutor(this.toolRunner)
@@ -416,16 +421,49 @@ export class Session {
 
   private microCompact(): void {
     const snapshot = this.usageTracker.getSnapshot()
-    if (snapshot.contextUsedPercent < 60) return
 
-    const cutoff = this.messages.length - 10
-    for (let i = 0; i < cutoff; i++) {
-      const msg = this.messages[i]
-      for (let j = 0; j < msg.content.length; j++) {
-        const block = msg.content[j]
-        if (block.type === 'tool_result' && !block.is_error && block.content.length > 500) {
-          const removed = block.content.length - 200
-          msg.content[j] = { ...block, content: block.content.slice(0, 200) + `\n[...truncated, ${removed} chars]` }
+    // Phase 1: At 50%+ context, clear old tool results entirely (keep last 8)
+    // This is the most impactful optimization — old grep/read results are rarely needed
+    if (snapshot.contextUsedPercent >= 50) {
+      const keepRecent = 8
+      let toolResultCount = 0
+      // Count total tool results
+      for (const msg of this.messages) {
+        for (const block of msg.content) {
+          if (block.type === 'tool_result') toolResultCount++
+        }
+      }
+
+      if (toolResultCount > keepRecent) {
+        let cleared = 0
+        const toClear = toolResultCount - keepRecent
+        for (const msg of this.messages) {
+          for (let j = 0; j < msg.content.length; j++) {
+            const block = msg.content[j]
+            if (block.type === 'tool_result' && !block.is_error && cleared < toClear) {
+              const originalLength = block.content.length
+              if (originalLength > 200) {
+                msg.content[j] = { ...block, content: `[Tool result cleared — ${originalLength} chars. Recent results are kept.]` }
+                cleared++
+              }
+            }
+          }
+        }
+      }
+      return
+    }
+
+    // Phase 2: At 40%+ context, truncate large tool results (keep first 200 chars)
+    if (snapshot.contextUsedPercent >= 40) {
+      const cutoff = this.messages.length - 10
+      for (let i = 0; i < cutoff; i++) {
+        const msg = this.messages[i]
+        for (let j = 0; j < msg.content.length; j++) {
+          const block = msg.content[j]
+          if (block.type === 'tool_result' && !block.is_error && block.content.length > 500) {
+            const removed = block.content.length - 200
+            msg.content[j] = { ...block, content: block.content.slice(0, 200) + `\n[...truncated, ${removed} chars removed]` }
+          }
         }
       }
     }
@@ -613,6 +651,7 @@ export class Session {
         events.onToolEvent,
         this.abortController!.signal
       )
+      if (this.abortController?.signal.aborted) break
       const reminder = this.getSystemReminder()
       const toolResults = batchResults.map(r => ({
         type: 'tool_result' as const,

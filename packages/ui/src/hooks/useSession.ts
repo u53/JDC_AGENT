@@ -139,6 +139,7 @@ export function useSession() {
   const abort = useCallback(() => {
     if (!activeSessionId) return
     ipc.query.abort(activeSessionId)
+    useSessionStore.getState().clearSessionStreamState(activeSessionId)
   }, [activeSessionId])
 
   return {

@@ -151,6 +151,7 @@ The shell runs in a non-interactive environment (CI=true, GIT_TERMINAL_PROMPT=0,
         timeout,
         env,
         stdio: ['ignore', 'pipe', 'pipe'],
+        detached: true,
       })
 
       let stdout = ''
@@ -187,11 +188,11 @@ The shell runs in a non-interactive environment (CI=true, GIT_TERMINAL_PROMPT=0,
       })
 
       if (context.signal?.aborted) {
-        proc.kill('SIGKILL')
+        try { process.kill(-proc.pid!, 'SIGKILL') } catch {}
       } else {
         context.signal?.addEventListener('abort', () => {
-          proc.kill('SIGTERM')
-          setTimeout(() => { try { proc.kill('SIGKILL') } catch {} }, 500)
+          try { process.kill(-proc.pid!, 'SIGTERM') } catch {}
+          setTimeout(() => { try { process.kill(-proc.pid!, 'SIGKILL') } catch {} }, 500)
         })
       }
     })
