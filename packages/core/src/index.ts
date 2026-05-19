@@ -29,6 +29,7 @@ export { UsageTracker, type UsageSnapshot, type TurnUsage } from './usage-tracke
 export { FileTracker, type FileSnapshot, type FileChange } from './file-tracker.js'
 export { ParallelExecutor, type ToolUseBlock, type ToolBatchResult } from './parallel-executor.js'
 export { BackgroundTaskManager, type BackgroundTask, type TaskType } from './background-tasks.js'
+export { getNonInteractiveEnv } from './tools/bash.js'
 export { createTaskOutputTool } from './tools/task-output.js'
 export { monitorTool } from './tools/monitor.js'
 export { AGENT_TYPES, getAgentType, filterToolsForAgent, isWriteAllowedForPlanAgent, isBashAllowedForAuditor, type AgentTypeDefinition } from './agent-types.js'
