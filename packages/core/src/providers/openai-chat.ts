@@ -87,7 +87,7 @@ export class OpenAIChatProvider implements ModelProvider {
     config: ModelConfig,
     signal?: AbortSignal
   ): AsyncIterable<StreamChunk> {
-    const params: any = {
+    const params: OpenAI.ChatCompletionCreateParamsStreaming = {
       model: config.model,
       max_tokens: config.maxTokens > 32768 ? 16384 : config.maxTokens,
       messages: this.formatMessages(messages, resolveSystemPrompt(config.systemPrompt)),
@@ -97,17 +97,7 @@ export class OpenAIChatProvider implements ModelProvider {
       ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
     }
 
-    let stream: any
-    try {
-      stream = await this.client.chat.completions.create(params, { signal })
-    } catch (err: any) {
-      if (err?.status === 400) {
-        delete params.stream_options
-        stream = await this.client.chat.completions.create(params, { signal })
-      } else {
-        throw err
-      }
-    }
+    const stream = await this.client.chat.completions.create(params, { signal })
 
     let toolCallsStarted = 0
     let insideThink = false
