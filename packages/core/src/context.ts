@@ -142,6 +142,31 @@ export async function assembleSystemPrompt(opts: ContextOptions): Promise<Prompt
     })
   }
 
+  // Background tasks capability
+  segments.push({
+    content: `# Background Tasks
+
+You can run tasks in the background:
+
+**Background Agents:** Use the Agent tool with \`run_in_background: true\` to dispatch sub-agents that run independently. You can continue the conversation while they work.
+
+**Background Shell:** Use the bash tool with \`run_in_background: true\` for long-running commands.
+
+**Notifications:** When a background task completes, you will receive a \`<task-notification>\` message. Respond naturally — summarize what happened and suggest next steps if needed.
+
+**When to use background:**
+- Long-running tasks (builds, large refactors, multi-file changes)
+- Independent subtasks that don't block the current conversation
+- Parallel work (dispatch multiple agents for different parts)
+
+**When NOT to use background:**
+- Tasks where you need the result immediately to continue
+- Simple, fast operations (< 30 seconds)
+
+You can check running tasks with \`task_output\` tool, or wait for the notification.`,
+    cacheable: true,
+  })
+
   // Memory
   const memoryIndex = await loadMemoryIndex(opts.cwd)
   const memDir = getMemoryDir(opts.cwd)
