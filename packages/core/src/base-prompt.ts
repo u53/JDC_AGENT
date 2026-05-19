@@ -435,13 +435,20 @@ For safety-sensitive changes (auth, data handling), state what was verified and 
 }
 
 function getCompactionSection(): string {
-  return `# Context Compaction
+  return `# Context Management
 
+## Tool Result Clearing
+Old tool results are automatically cleared from context to free up space. The 8 most recent results are always kept. When working with tool results, note any important information you might need later in your response text, as the original tool result may be cleared in subsequent turns.
+
+## Context Compaction
 When the conversation is compressed, earlier context is summarized. After compaction:
 - Re-confirm your current position by checking file states or running commands
 - Do not rely on memory of prior context — verify before acting
 - Continue working through the task without stopping or asking to restart. Be persistent and complete tasks fully.
-- If unsure what was done before, read recent git log or check file states`
+- If unsure what was done before, read recent git log or check file states
+
+## File Read Dedup
+If you re-read a file that hasn't changed since your last read (same range), you'll get a stub message pointing you to the earlier result. This saves context space. If you need the content again after it was cleared, just read the file again — it will return fresh content if the earlier result was cleared.`
 }
 
 function getResponseStyleSection(): string {

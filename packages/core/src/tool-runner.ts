@@ -23,6 +23,7 @@ export class ToolRunner {
   private hookEngine?: HookEngine
   private sessionId?: string
   fileTracker?: FileTracker
+  fileReadState?: import('./file-read-state.js').FileReadStateCache
   backgroundTasks?: import('./background-tasks.js').BackgroundTaskManager
   turnIndex = 0
   planMode: 'normal' | 'planning' | 'awaiting_approval' = 'normal'
@@ -115,6 +116,7 @@ export class ToolRunner {
       signal,
       toolUseId,
       fileTracker: this.fileTracker,
+      fileReadState: this.fileReadState,
       turnIndex: this.turnIndex,
       backgroundTasks: this.backgroundTasks,
       onProgress: (message) => {

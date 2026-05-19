@@ -11,6 +11,7 @@ export interface ToolContext {
   onProgress?: (message: string) => void
   toolUseId?: string
   fileTracker?: import('./file-tracker.js').FileTracker
+  fileReadState?: import('./file-read-state.js').FileReadStateCache
   turnIndex?: number
   backgroundTasks?: import('./background-tasks.js').BackgroundTaskManager
   ideManager?: import('./ide/ide-manager.js').IdeManager
