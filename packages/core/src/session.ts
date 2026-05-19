@@ -76,6 +76,19 @@ export class Session {
   private onPlanReview?: (planFile: string, content: string) => Promise<{ approved: boolean; feedback?: string }>
   resolveModel?: (modelId: string) => { provider: ModelProvider; modelConfig: ModelConfig } | null
   ideContext?: { filePath?: string; text?: string; selection?: { start: { line: number }; end: { line: number } } | null }
+  private pendingNotifications: Array<{
+    type: 'shell_complete' | 'agent_complete'
+    taskId: string
+    status: 'completed' | 'failed'
+    command?: string
+    prompt?: string
+    output?: string
+    exitCode?: number
+    result?: string
+    turns?: number
+    toolsUsed?: string[]
+  }> = []
+  onNotificationReady?: () => void
 
   constructor(
     config: SessionConfig,
@@ -93,6 +106,29 @@ export class Session {
     this.fileTracker = new FileTracker(history, config.id)
     this.taskStore = new TaskStore(history, config.id)
     this.backgroundTasks = new BackgroundTaskManager(path.join(getConfigDir(), 'tasks'))
+    this.backgroundTasks.setOnComplete((task) => {
+      if (task.type === 'shell') {
+        this.pendingNotifications.push({
+          type: 'shell_complete',
+          taskId: task.id,
+          status: task.status as 'completed' | 'failed',
+          command: task.command,
+          output: this.backgroundTasks.getOutput(task.id, 50),
+          exitCode: task.exitCode,
+        })
+      } else {
+        this.pendingNotifications.push({
+          type: 'agent_complete',
+          taskId: task.id,
+          status: task.status as 'completed' | 'failed',
+          prompt: task.prompt,
+          result: task.result,
+          turns: task.turns,
+          toolsUsed: task.toolsUsed,
+        })
+      }
+      this.onNotificationReady?.()
+    })
     this.onPlanReview = onPlanReview
     this.toolRegistry = new ToolRegistry()
     registerBuiltinTools(this.toolRegistry)
@@ -418,9 +454,31 @@ export class Session {
     })
   }
 
+  private drainNotifications(): Message | null {
+    if (this.pendingNotifications.length === 0) return null
+    const items = this.pendingNotifications.splice(0)
+    const parts = items.map(n => {
+      if (n.type === 'shell_complete') {
+        return `<task-notification>\n<task-id>${n.taskId}</task-id>\n<type>shell_complete</type>\n<status>${n.status}</status>\n<command>${n.command || ''}</command>\n<exit-code>${n.exitCode ?? 'N/A'}</exit-code>\n<output>\n${n.output || '(no output)'}\n</output>\n</task-notification>`
+      }
+      return `<task-notification>\n<task-id>${n.taskId}</task-id>\n<type>agent_complete</type>\n<status>${n.status}</status>\n<agent-prompt>${n.prompt || ''}</agent-prompt>\n<result>${n.result || '(no result)'}</result>\n<turns>${n.turns ?? 0}</turns>\n<tools-used>${(n.toolsUsed || []).join(', ')}</tools-used>\n</task-notification>`
+    })
+    return {
+      id: uuid(),
+      role: 'user',
+      content: [{ type: 'text', text: parts.join('\n\n') }],
+      timestamp: Date.now(),
+    }
+  }
+
   private async runLoop(events: SessionEvents): Promise<void> {
     this.abortController = new AbortController()
     this.currentEvents = events
+
+    const notificationMsg = this.drainNotifications()
+    if (notificationMsg) {
+      this.messages.push(notificationMsg)
+    }
 
     this.microCompact()
 
@@ -597,6 +655,12 @@ export class Session {
     }
     if (parts.length <= 1) return null  // only date, no user config — skip
     return `\n\n<system-reminder>\n${parts.join('\n')}\n</system-reminder>`
+  }
+
+  async processNotifications(events: SessionEvents): Promise<void> {
+    if (this.pendingNotifications.length === 0) return
+    if (this.abortController) return
+    await this.runLoop(events)
   }
 
   abort(): void {
