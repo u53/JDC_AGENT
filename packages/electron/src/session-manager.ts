@@ -469,6 +469,9 @@ export class SessionManager {
   }
 
   async getSkills(sessionId: string): Promise<{ name: string; description: string; argumentHint?: string }[]> {
+    if (!this.sessions.has(sessionId)) {
+      try { await this.activateSession(sessionId) } catch { return [] }
+    }
     const session = this.sessions.get(sessionId)
     if (!session) return []
     await session.ensureSkillsReady()
