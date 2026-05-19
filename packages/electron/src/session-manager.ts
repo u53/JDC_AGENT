@@ -200,6 +200,7 @@ export class SessionManager {
     session.loadHistory()
     ;(session as any)._protocol = active.group.protocol
     session.onNotificationReady = () => {
+      this.window?.webContents.send('background:state-changed', { sessionId })
       if ((session as any).abortController) return
       const notificationEvents: SessionEvents = {
         onStreamChunk: (chunk: StreamChunk) => {
@@ -432,6 +433,7 @@ export class SessionManager {
     const session = this.sessions.get(sessionId)
     if (!session) return
     ;(session as any).backgroundTasks.stop(taskId)
+    this.window?.webContents.send('background:state-changed', { sessionId })
   }
 
   getBackgroundTaskOutput(sessionId: string, taskId: string, tail?: number): string {
