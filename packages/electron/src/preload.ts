@@ -50,6 +50,30 @@ const api = {
   appsDetect: () => ipcRenderer.invoke('apps:detect'),
   appsOpen: (appId: string, cwd: string) => ipcRenderer.invoke('apps:open', { appId, cwd }),
 
+  // IDE Integration
+  ideGetState: () => ipcRenderer.invoke('ide:get-state'),
+  ideOpenFile: (filePath: string, line?: number, column?: number) =>
+    ipcRenderer.invoke('ide:open-file', { filePath, line, column }),
+  ideOpenDiff: (params: any) => ipcRenderer.invoke('ide:open-diff', params),
+  ideCloseDiffTabs: () => ipcRenderer.invoke('ide:close-diff-tabs'),
+  ideGetDiagnostics: (filePaths: string[]) =>
+    ipcRenderer.invoke('ide:get-diagnostics', { filePaths }),
+  onIdeStateChanged: (callback: (connections: any[]) => void) => {
+    const listener = (_event: unknown, connections: any[]) => callback(connections)
+    ipcRenderer.on('ide:state-changed', listener)
+    return () => { ipcRenderer.removeListener('ide:state-changed', listener) }
+  },
+  onIdeSelectionChanged: (callback: (data: any) => void) => {
+    const listener = (_event: unknown, data: any) => callback(data)
+    ipcRenderer.on('ide:selection-changed', listener)
+    return () => { ipcRenderer.removeListener('ide:selection-changed', listener) }
+  },
+  onIdeAtMentioned: (callback: (data: any) => void) => {
+    const listener = (_event: unknown, data: any) => callback(data)
+    ipcRenderer.on('ide:at-mentioned', listener)
+    return () => { ipcRenderer.removeListener('ide:at-mentioned', listener) }
+  },
+
   // Terminal
   terminalCreate: (cwd: string) => ipcRenderer.invoke('terminal:create', { cwd }),
   terminalWrite: (id: string, data: string) => ipcRenderer.send('terminal:write', { id, data }),
