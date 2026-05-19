@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { ipc } from '../lib/ipc-client'
+import { useIdeStore } from './ide-store'
 import type { ToolExecutionEvent } from '@jdcagnet/core'
 
 interface Session {
@@ -107,6 +108,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   switchSession: async (sessionId: string) => {
     set({ isLoading: true })
+    // Clear IDE selection/atMentions from previous session
+    useIdeStore.getState().setSelection(null)
+    useIdeStore.getState().clearAtMentions()
     const { messages, usage } = await ipc.session.switch(sessionId)
     set((s) => ({
       activeSessionId: sessionId,
@@ -192,7 +196,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       if (event.type === 'start') {
         events.push(event)
       } else {
-        const idx = events.findIndex((e) => e.toolUseId === event.toolUseId && e.type === 'start')
+        const idx = events.findIndex((e) => e.toolUseId === event.toolUseId)
         if (idx !== -1) {
           events[idx] = { ...events[idx], ...event }
         } else {

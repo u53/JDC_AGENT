@@ -49,14 +49,14 @@ export function useSession() {
       if (sessionId === current.activeSessionId) {
         useSessionStore.setState((s) => ({ messages: [...s.messages, message] }))
       }
-      // Clear streaming text state. Clear tool events only for assistant messages
-      // (tool results come after tools finish, so events are already done by then).
-      const clearToolEvents = message.role === 'user'
+      // Clear streaming text and tool events on every message completion.
+      // Tool events for the current batch are already rendered in the persisted message,
+      // so we reset to avoid stale cards accumulating across agentic loop iterations.
       store.updateSessionState(sessionId, {
         streamingText: '',
         thinkingText: '',
         isThinking: false,
-        ...(clearToolEvents ? { toolEvents: [] } : {}),
+        toolEvents: [],
       })
     })
 
