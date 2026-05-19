@@ -1,0 +1,38 @@
+{
+  "name": "jdcagnet-ide",
+  "displayName": "JDC Code IDE",
+  "description": "Bidirectional communication between JDC Code and VS Code",
+  "version": "0.1.0",
+  "publisher": "jdcagnet",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "jdcagnet.sendToChat", "title": "Send to JDC Code (@)" }
+    ],
+    "menus": {
+      "editor/context": [
+        { "command": "jdcagnet.sendToChat", "group": "jdcagnet@1" }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "package": "npx @vscode/vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "ws": "^8.16.0",
+    "uuid": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/ws": "^8.5.10",
+    "@types/uuid": "^11.0.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.4.0"
+  }
+}
