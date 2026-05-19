@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSessionStore } from '../stores/session-store'
+import { useBackgroundTaskStore, type BackgroundTaskItem } from '../stores/background-task-store'
+import { ipc } from '../lib/ipc-client'
 import { IconTasks, IconQueue, IconUsage, IconFiles, IconSession, IconX } from './icons'
 
 interface FileChange {
@@ -41,6 +43,7 @@ export function Inspector() {
   const tasks = useSessionStore((s) => s.tasks)
   const messageQueue = useSessionStore((s) => s.messageQueue)
   const removeFromQueue = useSessionStore((s) => s.removeFromQueue)
+  const backgroundTasks = useBackgroundTaskStore((s) => s.tasks)
 
   const currentState = activeSessionId ? sessionStates[activeSessionId] : undefined
   const usage = currentState?.usage
@@ -67,6 +70,19 @@ export function Inspector() {
     }
   }, [isStreaming, loadFileChanges])
 
+  // Periodically refresh background tasks
+  useEffect(() => {
+    if (!activeSessionId) return
+    const refresh = () => {
+      ipc.background.list(activeSessionId).then(tasks => {
+        useBackgroundTaskStore.getState().setTasks(tasks)
+      })
+    }
+    refresh()
+    const interval = setInterval(refresh, 2000)
+    return () => clearInterval(interval)
+  }, [activeSessionId])
+
   // Hide entirely on very narrow windows
   if (windowWidth < 700) return null
 
@@ -86,8 +102,11 @@ export function Inspector() {
 
   const completedCount = tasks.filter((t) => t.status === 'completed').length
   const pendingCount = tasks.length - completedCount
-  const taskBadge = tasks.length > 0 ? (pendingCount > 0 ? pendingCount : null) : null
-  const taskBadgeColor = tasks.length > 0 && pendingCount === 0 ? 'var(--good)' : undefined
+  const bgRunning = backgroundTasks.filter(t => t.status === 'running').length
+  const taskBadge = (tasks.length > 0 || bgRunning > 0)
+    ? (pendingCount + bgRunning > 0 ? pendingCount + bgRunning : null)
+    : null
+  const taskBadgeColor = tasks.length > 0 && pendingCount === 0 && bgRunning === 0 ? 'var(--good)' : undefined
 
   const railItems: RailItem[] = [
     { id: 'session', Icon: IconSession, badge: null },
@@ -160,7 +179,7 @@ export function Inspector() {
       <div className="flex-1 overflow-y-auto p-3">
         {activeSection === 'session' && <SessionSection sessionId={activeSessionId} />}
         {activeSection === 'usage' && <UsageSection usage={usage} />}
-        {activeSection === 'tasks' && <TasksSection tasks={tasks} />}
+        {activeSection === 'tasks' && <TasksSection tasks={tasks} backgroundTasks={backgroundTasks} />}
         {activeSection === 'queue' && <QueueSection queue={messageQueue} removeFromQueue={removeFromQueue} />}
         {activeSection === 'files' && <FilesSection files={fileChanges} />}
       </div>
@@ -228,41 +247,76 @@ function UsageSection({ usage }: { usage?: { totalTokens: number; cacheHitRate: 
   )
 }
 
-function TasksSection({ tasks }: { tasks: Array<{ id: string; subject: string; status: string }> }) {
-  if (tasks.length === 0) {
-    return (
-      <div>
-        <SectionHeader>Tasks</SectionHeader>
-        <p className="text-[12px] text-[var(--muted)]">No tasks</p>
-      </div>
-    )
-  }
+function TasksSection({ tasks, backgroundTasks }: {
+  tasks: Array<{ id: string; subject: string; status: string }>
+  backgroundTasks: BackgroundTaskItem[]
+}) {
+  const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const runningBg = backgroundTasks.filter(t => t.status === 'running')
 
-  const completed = tasks.filter((t) => t.status === 'completed').length
-
-  const statusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return 'var(--good)'
-      case 'in_progress': return 'var(--accent)'
-      case 'pending': return 'var(--muted)'
-      default: return 'var(--muted)'
+  const handleStop = (taskId: string) => {
+    if (activeSessionId) {
+      ipc.background.stop(activeSessionId, taskId)
     }
   }
 
   return (
-    <div>
-      <SectionHeader>Tasks ({completed}/{tasks.length})</SectionHeader>
-      <div className="space-y-1.5">
-        {tasks.map((task) => (
-          <div key={task.id} className="flex items-center gap-2 text-[12px]">
-            <span
-              className="w-2 h-2 rounded-full flex-shrink-0"
-              style={{ backgroundColor: statusColor(task.status) }}
-            />
-            <span className={`truncate ${task.status === 'completed' ? 'text-[var(--good)]' : 'text-[var(--text)]'}`}>{task.subject}</span>
+    <div className="space-y-4">
+      {backgroundTasks.length > 0 && (
+        <div>
+          <SectionHeader>Background ({runningBg.length} running)</SectionHeader>
+          <div className="space-y-1.5">
+            {backgroundTasks.map((task) => (
+              <div key={task.id} className="flex items-center gap-2 text-[12px] group">
+                <span
+                  className={`w-2 h-2 rounded-full flex-shrink-0 ${task.status === 'running' ? 'animate-pulse' : ''}`}
+                  style={{ backgroundColor: task.status === 'running' ? 'var(--accent)' : task.status === 'completed' ? 'var(--good)' : 'var(--bad)' }}
+                />
+                <span className="text-[10px] text-[var(--muted)] uppercase w-[32px] flex-shrink-0">
+                  {task.type === 'shell' ? 'SH' : 'AI'}
+                </span>
+                <span className="truncate text-[var(--text)] flex-1">
+                  {task.type === 'shell' ? (task.command || '').slice(0, 40) : (task.prompt || '').slice(0, 40)}
+                </span>
+                {task.status === 'running' && (
+                  <button
+                    onClick={() => handleStop(task.id)}
+                    className="opacity-0 group-hover:opacity-100 text-[10px] text-[var(--bad)] hover:opacity-80"
+                  >
+                    [STOP]
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
+
+      {tasks.length > 0 && (
+        <div>
+          <SectionHeader>Tasks ({tasks.filter(t => t.status === 'completed').length}/{tasks.length})</SectionHeader>
+          <div className="space-y-1.5">
+            {tasks.map((task) => (
+              <div key={task.id} className="flex items-center gap-2 text-[12px]">
+                <span
+                  className="w-2 h-2 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: task.status === 'completed' ? 'var(--good)' : task.status === 'in_progress' ? 'var(--accent)' : 'var(--muted)' }}
+                />
+                <span className={`truncate ${task.status === 'completed' ? 'text-[var(--good)]' : 'text-[var(--text)]'}`}>
+                  {task.subject}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {backgroundTasks.length === 0 && tasks.length === 0 && (
+        <div>
+          <SectionHeader>Tasks</SectionHeader>
+          <p className="text-[12px] text-[var(--muted)]">No tasks</p>
+        </div>
+      )}
     </div>
   )
 }
