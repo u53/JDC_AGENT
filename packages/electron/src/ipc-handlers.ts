@@ -200,6 +200,45 @@ export function registerIpcHandlers(sessionManager: SessionManager, services: De
     return terminalService.destroy(id)
   })
 
+  // IDE Integration
+  ipcMain.handle(IPC_CHANNELS.IDE_GET_STATE, async () => {
+    return sessionManager.getIdeConnections()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.IDE_OPEN_FILE, async (_event, { filePath, line, column }) => {
+    try {
+      await sessionManager.ideOpenFile(filePath, line, column)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.IDE_OPEN_DIFF, async (_event, params) => {
+    try {
+      return await sessionManager.ideOpenDiff(params)
+    } catch (err: any) {
+      return { action: 'rejected', error: err.message }
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.IDE_CLOSE_DIFF_TABS, async () => {
+    try {
+      await sessionManager.ideCloseAllDiffTabs()
+      return { success: true }
+    } catch {
+      return { success: true }
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.IDE_GET_DIAGNOSTICS, async (_event, { filePaths }) => {
+    try {
+      return await sessionManager.ideGetDiagnostics(filePaths)
+    } catch (err: any) {
+      return { files: [] }
+    }
+  })
+
   ipcMain.handle(IPC_CHANNELS.MODEL_TEST, async (_event, { protocol, baseUrl, apiKey, modelId }) => {
     try {
       const provider = (() => {

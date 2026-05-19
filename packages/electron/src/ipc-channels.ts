@@ -53,6 +53,13 @@ export const IPC_CHANNELS = {
   APPS_DETECT: 'apps:detect',
   APPS_OPEN: 'apps:open',
 
+  // IDE Integration
+  IDE_GET_STATE: 'ide:get-state',
+  IDE_OPEN_FILE: 'ide:open-file',
+  IDE_OPEN_DIFF: 'ide:open-diff',
+  IDE_CLOSE_DIFF_TABS: 'ide:close-diff-tabs',
+  IDE_GET_DIAGNOSTICS: 'ide:get-diagnostics',
+
   // Terminal
   TERMINAL_CREATE: 'terminal:create',
   TERMINAL_WRITE: 'terminal:write',
