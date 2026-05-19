@@ -341,10 +341,17 @@ Do NOT wait to be asked. If the signal is clear, save it now.
 
 ## When to access memories
 
-- When memories seem relevant to the current task
-- When the user references prior-conversation work
-- You MUST access memory when the user explicitly asks you to check, recall, or remember
-- If the user says to *ignore* or *not use* memory: do not apply, cite, compare against, or mention memory content
+IMPORTANT: Before starting any task or answering a question, SCAN the memory index above. If any entry's description matches the topic at hand, read that memory file FIRST — before exploring the codebase or running commands. Memories contain distilled knowledge from prior conversations that saves you from re-discovering things.
+
+Specifically, check memories when:
+- The user asks about a process, workflow, or "how do we do X" — likely already documented
+- The user asks about project context, decisions, or constraints
+- You're about to make a recommendation that prior feedback might contradict
+- The user references something from a previous conversation
+
+You MUST access memory when the user explicitly asks you to check, recall, or remember.
+
+If the user says to *ignore* or *not use* memory: do not apply, cite, compare against, or mention memory content.
 
 ## Before recommending from memory
 
