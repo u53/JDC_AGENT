@@ -87,19 +87,21 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
       if (input.run_in_background && deps.backgroundTasks) {
         const task = deps.backgroundTasks.registerAgent(prompt, agentType)
 
-        runSubSession({
-          prompt,
-          provider: effectiveProvider,
-          toolRegistry: deps.toolRegistry,
-          modelConfig: effectiveModelConfig,
-          cwd: deps.cwd,
-          maxTurns,
-          agentType,
-          signal: agentAbort.signal,
-          onToolEvent: deps.onToolEvent,
-          onPermissionRequest: deps.onPermissionRequest,
-          onAgentProgress: (event) => deps.onAgentProgress?.(toolUseId, event),
-          onAgentText: (text) => deps.onAgentText?.(toolUseId, text),
+        deps.backgroundTasks.acquireAgentSlot().then(() => {
+          return runSubSession({
+            prompt,
+            provider: effectiveProvider,
+            toolRegistry: deps.toolRegistry,
+            modelConfig: effectiveModelConfig,
+            cwd: deps.cwd,
+            maxTurns,
+            agentType,
+            signal: agentAbort.signal,
+            onToolEvent: deps.onToolEvent,
+            onPermissionRequest: deps.onPermissionRequest,
+            onAgentProgress: (event) => deps.onAgentProgress?.(toolUseId, event),
+            onAgentText: (text) => deps.onAgentText?.(toolUseId, text),
+          })
         }).then(result => {
           deps.onAgentComplete?.(toolUseId, result)
           deps.backgroundTasks!.completeAgent(task.id, { result: result.content, turns: result.turns, toolsUsed: result.toolsUsed })

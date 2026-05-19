@@ -27,6 +27,8 @@ export class BackgroundTaskManager {
   private processes = new Map<string, ChildProcess>()
   private logDir: string
   private onComplete?: (task: BackgroundTask) => void
+  private maxConcurrentAgents = 3
+  private agentQueue: Array<{ resolve: () => void }> = []
 
   constructor(logDir: string) {
     this.logDir = logDir
@@ -37,15 +39,33 @@ export class BackgroundTaskManager {
     this.onComplete = cb
   }
 
-  spawn(command: string, cwd: string): BackgroundTask {
+  setMaxConcurrentAgents(max: number): void {
+    this.maxConcurrentAgents = max
+  }
+
+  async acquireAgentSlot(): Promise<void> {
+    const runningAgents = [...this.tasks.values()].filter(t => t.type === 'agent' && t.status === 'running').length
+    if (runningAgents < this.maxConcurrentAgents) return
+    return new Promise(resolve => {
+      this.agentQueue.push({ resolve })
+    })
+  }
+
+  private releaseAgentSlot(): void {
+    const next = this.agentQueue.shift()
+    if (next) next.resolve()
+  }
+
+  spawn(command: string, cwd: string, env?: Record<string, string>): BackgroundTask {
     const id = uuid().slice(0, 8)
     const logFile = path.join(this.logDir, `${id}.log`)
     writeFileSync(logFile, '')
 
-    const proc = spawn('sh', ['-c', command], {
+    const proc = spawn('bash', ['-c', command], {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: false,
+      env: env || process.env as Record<string, string>,
     })
 
     const task: BackgroundTask = {
@@ -102,6 +122,7 @@ export class BackgroundTaskManager {
     task.turns = opts.turns
     task.toolsUsed = opts.toolsUsed
     this.onComplete?.(task)
+    this.releaseAgentSlot()
   }
 
   failAgent(id: string, error: string): void {
@@ -111,6 +132,7 @@ export class BackgroundTaskManager {
     task.completedAt = Date.now()
     task.result = error
     this.onComplete?.(task)
+    this.releaseAgentSlot()
   }
 
   getTask(id: string): BackgroundTask | undefined {

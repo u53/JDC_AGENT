@@ -127,4 +127,17 @@ describe('BackgroundTaskManager', () => {
     const task = mgr.spawn('echo hi', '/tmp')
     expect(task.type).toBe('shell')
   })
+
+  it('queues agents when max concurrent reached', async () => {
+    mgr.setMaxConcurrentAgents(1)
+    const t1 = mgr.registerAgent('task 1', 'general')
+    let slotAcquired = false
+    mgr.acquireAgentSlot().then(() => { slotAcquired = true })
+    await new Promise(r => setTimeout(r, 100))
+    expect(slotAcquired).toBe(false)
+    mgr.completeAgent(t1.id, { result: 'done', turns: 1, toolsUsed: [] })
+    await new Promise(r => setTimeout(r, 100))
+    expect(slotAcquired).toBe(true)
+    mgr.setMaxConcurrentAgents(3)
+  })
 })
