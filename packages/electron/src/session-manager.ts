@@ -5,6 +5,7 @@ import {
   ConversationHistory, loadAppConfig, getConfigDir, type ModelConfig, type SessionConfig, type StreamChunk,
   type PermissionCallback, createAskUserTool, type AskUserCallback, createNotifyTool, type NotifyCallback,
   McpManager, loadMcpConfig, saveMcpConfig, type McpServerConfig, type McpServerState,
+  IdeManager, type IdeConnection, type OpenDiffParams, type OpenDiffResult, type DiagnosticFile,
 } from '@jdcagnet/core'
 import type { ToolExecutionEvent } from '@jdcagnet/core'
 import { Notification, type BrowserWindow } from 'electron'
@@ -24,6 +25,7 @@ export class SessionManager {
   private sessions = new Map<string, Session>()
   private history: ConversationHistory
   private mcpManager: McpManager
+  private ideManager: IdeManager
   private window: BrowserWindow | null = null
   private readyPromise: Promise<void>
   private pendingPermissions = new Map<string, { resolve: (allowed: boolean) => void }>()
@@ -37,6 +39,17 @@ export class SessionManager {
     this.mcpManager = new McpManager(() => {
       this.window?.webContents.send('mcp:state-changed', this.mcpManager.getServerStates())
     })
+    this.ideManager = new IdeManager({
+      onConnectionChanged: (connections) => {
+        this.window?.webContents.send('ide:state-changed', connections)
+      },
+      onSelectionChanged: (data) => {
+        this.window?.webContents.send('ide:selection-changed', data)
+      },
+      onAtMentioned: (data) => {
+        this.window?.webContents.send('ide:at-mentioned', data)
+      },
+    })
   }
 
   async ensureReady(): Promise<void> {
@@ -45,6 +58,30 @@ export class SessionManager {
 
   setWindow(window: BrowserWindow): void {
     this.window = window
+  }
+
+  startIdeDiscovery(cwd: string): void {
+    this.ideManager.startDiscovery(cwd)
+  }
+
+  getIdeConnections(): IdeConnection[] {
+    return this.ideManager.getConnections()
+  }
+
+  async ideOpenFile(filePath: string, line?: number, column?: number): Promise<void> {
+    await this.ideManager.openFile(filePath, line, column)
+  }
+
+  async ideOpenDiff(params: OpenDiffParams): Promise<OpenDiffResult> {
+    return this.ideManager.openDiff(params)
+  }
+
+  async ideCloseAllDiffTabs(): Promise<void> {
+    await this.ideManager.closeAllDiffTabs()
+  }
+
+  async ideGetDiagnostics(filePaths: string[]): Promise<DiagnosticFile[]> {
+    return this.ideManager.getDiagnostics(filePaths)
   }
 
   createSession(projectName: string, cwd: string): string {
@@ -129,6 +166,7 @@ export class SessionManager {
       }
       return null
     }
+    this.ideManager.startDiscovery(meta.cwd)
     const onAskUser: AskUserCallback = async (question, options, multiSelect) => {
       return new Promise<string>((resolve) => {
         const id = uuid()
