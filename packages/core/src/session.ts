@@ -197,6 +197,7 @@ export class Session {
       onPermissionRequest,
       isSubAgent: false,
       resolveModel: (modelId: string) => this.resolveModel?.(modelId) ?? null,
+      backgroundTasks: this.backgroundTasks,
       onAgentProgress: (agentToolUseId, event) => {
         this.currentEvents?.onAgentProgress?.(agentToolUseId, event)
       },
