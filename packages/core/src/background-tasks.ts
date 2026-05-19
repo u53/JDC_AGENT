@@ -3,24 +3,38 @@ import { mkdirSync, writeFileSync, readFileSync, appendFileSync } from 'node:fs'
 import { v4 as uuid } from 'uuid'
 import path from 'node:path'
 
+export type TaskType = 'shell' | 'agent'
+
 export interface BackgroundTask {
   id: string
-  command: string
+  type: TaskType
+  command?: string
+  prompt?: string
+  agentType?: string
   pid: number
   status: 'running' | 'completed' | 'failed'
   exitCode?: number
   logFile: string
   startedAt: number
+  completedAt?: number
+  result?: string
+  turns?: number
+  toolsUsed?: string[]
 }
 
 export class BackgroundTaskManager {
   private tasks = new Map<string, BackgroundTask>()
   private processes = new Map<string, ChildProcess>()
   private logDir: string
+  private onComplete?: (task: BackgroundTask) => void
 
   constructor(logDir: string) {
     this.logDir = logDir
     mkdirSync(logDir, { recursive: true })
+  }
+
+  setOnComplete(cb: ((task: BackgroundTask) => void) | undefined): void {
+    this.onComplete = cb
   }
 
   spawn(command: string, cwd: string): BackgroundTask {
@@ -36,6 +50,7 @@ export class BackgroundTaskManager {
 
     const task: BackgroundTask = {
       id,
+      type: 'shell',
       command,
       pid: proc.pid || 0,
       status: 'running',
@@ -48,12 +63,54 @@ export class BackgroundTaskManager {
     proc.on('close', (code) => {
       task.status = code === 0 ? 'completed' : 'failed'
       task.exitCode = code ?? 1
+      task.completedAt = Date.now()
       this.processes.delete(id)
+      this.onComplete?.(task)
     })
 
     this.tasks.set(id, task)
     this.processes.set(id, proc)
     return task
+  }
+
+  registerAgent(prompt: string, agentType: string): BackgroundTask {
+    const id = uuid().slice(0, 8)
+    const logFile = path.join(this.logDir, `${id}.log`)
+    writeFileSync(logFile, '')
+
+    const task: BackgroundTask = {
+      id,
+      type: 'agent',
+      prompt,
+      agentType,
+      pid: 0,
+      status: 'running',
+      logFile,
+      startedAt: Date.now(),
+    }
+
+    this.tasks.set(id, task)
+    return task
+  }
+
+  completeAgent(id: string, opts: { result?: string; turns?: number; toolsUsed?: string[] }): void {
+    const task = this.tasks.get(id)
+    if (!task || task.type !== 'agent') return
+    task.status = 'completed'
+    task.completedAt = Date.now()
+    task.result = opts.result
+    task.turns = opts.turns
+    task.toolsUsed = opts.toolsUsed
+    this.onComplete?.(task)
+  }
+
+  failAgent(id: string, error: string): void {
+    const task = this.tasks.get(id)
+    if (!task || task.type !== 'agent') return
+    task.status = 'failed'
+    task.completedAt = Date.now()
+    task.result = error
+    this.onComplete?.(task)
   }
 
   getTask(id: string): BackgroundTask | undefined {
@@ -78,14 +135,29 @@ export class BackgroundTaskManager {
     if (proc) {
       proc.kill('SIGTERM')
       setTimeout(() => { if (!proc.killed) proc.kill('SIGKILL') }, 3000)
+    } else {
+      // Handle agent tasks that have no process
+      const task = this.tasks.get(id)
+      if (task && task.status === 'running') {
+        task.status = 'failed'
+        task.completedAt = Date.now()
+      }
     }
   }
 
   stopAll(): void {
-    for (const id of this.processes.keys()) { this.stop(id) }
+    for (const [id, task] of this.tasks.entries()) {
+      if (task.status === 'running') {
+        this.stop(id)
+      }
+    }
   }
 
   listRunning(): BackgroundTask[] {
     return [...this.tasks.values()].filter(t => t.status === 'running')
+  }
+
+  listAll(): BackgroundTask[] {
+    return [...this.tasks.values()]
   }
 }
