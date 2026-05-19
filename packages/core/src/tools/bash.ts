@@ -84,7 +84,14 @@ Creating PRs (when user asks):
         resolve({ content: `Failed to execute: ${err.message}`, isError: true })
       })
 
-      context.signal?.addEventListener('abort', () => proc.kill())
+      if (context.signal?.aborted) {
+        proc.kill('SIGKILL')
+      } else {
+        context.signal?.addEventListener('abort', () => {
+          proc.kill('SIGTERM')
+          setTimeout(() => { try { proc.kill('SIGKILL') } catch {} }, 500)
+        })
+      }
     })
   },
 }
