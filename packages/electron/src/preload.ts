@@ -92,6 +92,21 @@ const api = {
     return () => ipcRenderer.removeListener('terminal:exit', listener)
   },
 
+  // Background Tasks
+  backgroundList: (sessionId: string) => ipcRenderer.invoke('background:list', { sessionId }),
+  backgroundStop: (sessionId: string, taskId: string) => ipcRenderer.invoke('background:stop', { sessionId, taskId }),
+  backgroundOutput: (sessionId: string, taskId: string, tail?: number) => ipcRenderer.invoke('background:output', { sessionId, taskId, tail }),
+  onBackgroundStateChanged: (callback: (data: { sessionId: string }) => void) => {
+    const listener = (_event: unknown, data: any) => callback(data)
+    ipcRenderer.on('background:state-changed', listener)
+    return () => { ipcRenderer.removeListener('background:state-changed', listener) }
+  },
+  onBackgroundNotification: (callback: (data: { sessionId: string }) => void) => {
+    const listener = (_event: unknown, data: any) => callback(data)
+    ipcRenderer.on('background:notification', listener)
+    return () => { ipcRenderer.removeListener('background:notification', listener) }
+  },
+
   // Updater
   updaterCheck: () => ipcRenderer.invoke('updater:check'),
   updaterDownload: () => ipcRenderer.invoke('updater:download'),
