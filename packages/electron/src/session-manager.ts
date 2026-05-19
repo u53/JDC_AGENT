@@ -49,8 +49,12 @@ export class SessionManager {
           data = { ...data, text: this.lastIdeSelection.text, selection: this.lastIdeSelection.selection }
         }
         this.lastIdeSelection = data
-        for (const session of this.sessions.values()) {
-          session.ideContext = data
+        // Only set ideContext on the active session, not all sessions
+        if (this.activeSessionId) {
+          const activeSession = this.sessions.get(this.activeSessionId)
+          if (activeSession) {
+            activeSession.ideContext = data
+          }
         }
         this.window?.webContents.send('ide:selection-changed', data)
       },
@@ -61,6 +65,7 @@ export class SessionManager {
   }
 
   private lastIdeSelection: any = null
+  private activeSessionId: string | null = null
 
   async ensureReady(): Promise<void> {
     await this.readyPromise
@@ -127,6 +132,7 @@ export class SessionManager {
   async activateSession(sessionId: string): Promise<void> {
     const meta = this.history.listSessions().find(s => s.id === sessionId)
     if (!meta) throw new Error(`Session ${sessionId} not found`)
+    this.activeSessionId = sessionId
     this.ideManager.startDiscovery(meta.cwd)
     if (this.sessions.has(sessionId)) return
 
@@ -158,7 +164,6 @@ export class SessionManager {
       })
     }
     const session = new Session(sessionConfig, provider, this.history, permissionCallback, this.mcpManager, onPlanReview)
-    session.ideContext = this.lastIdeSelection
     session.resolveModel = (modelId: string) => {
       const config = loadAppConfig()
       const data = config.modelGroups
@@ -194,6 +199,44 @@ export class SessionManager {
     session.registerTool(createNotifyTool(onNotify))
     session.loadHistory()
     ;(session as any)._protocol = active.group.protocol
+    session.onNotificationReady = () => {
+      if ((session as any).abortController) return
+      const notificationEvents: SessionEvents = {
+        onStreamChunk: (chunk: StreamChunk) => {
+          this.window?.webContents.send('query:stream', { sessionId, chunk })
+        },
+        onToolEvent: (event: ToolExecutionEvent) => {
+          this.window?.webContents.send('query:tool-event', { sessionId, event })
+        },
+        onMessageComplete: (message) => {
+          this.window?.webContents.send('query:complete', { sessionId, message })
+        },
+        onError: (error) => {
+          this.window?.webContents.send('query:error', { sessionId, error: error.message })
+        },
+        onRetrying: (attempt: number, error: Error, delayMs: number, category: string) => {
+          this.window?.webContents.send('query:retrying', { sessionId, attempt, error: error.message, delayMs, category })
+        },
+        onAgentProgress: (agentToolUseId: string, event: any) => {
+          this.window?.webContents.send('agent:progress', { sessionId, agentToolUseId, ...event })
+        },
+        onAgentText: (agentToolUseId: string, text: string) => {
+          this.window?.webContents.send('agent:text', { sessionId, agentToolUseId, text })
+        },
+        onAgentComplete: (agentToolUseId: string, result: any) => {
+          this.window?.webContents.send('agent:complete', { sessionId, agentToolUseId, ...result })
+        },
+        onUsage: (usage) => {
+          this.window?.webContents.send('query:usage', { sessionId, usage })
+        },
+      }
+      this.window?.webContents.send('background:notification', { sessionId })
+      session.processNotifications(notificationEvents).then(() => {
+        this.window?.webContents.send('query:finished', { sessionId })
+      }).catch((err: any) => {
+        this.window?.webContents.send('query:error', { sessionId, error: err.message })
+      })
+    }
     this.sessions.set(sessionId, session)
   }
 
@@ -370,6 +413,24 @@ export class SessionManager {
   acceptAllFiles(sessionId: string): void {
     const session = this.sessions.get(sessionId)
     if (session) session.getFileTracker().acceptAllFiles()
+  }
+
+  getBackgroundTasks(sessionId: string): any[] {
+    const session = this.sessions.get(sessionId)
+    if (!session) return []
+    return (session as any).backgroundTasks.listAll()
+  }
+
+  stopBackgroundTask(sessionId: string, taskId: string): void {
+    const session = this.sessions.get(sessionId)
+    if (!session) return
+    ;(session as any).backgroundTasks.stop(taskId)
+  }
+
+  getBackgroundTaskOutput(sessionId: string, taskId: string, tail?: number): string {
+    const session = this.sessions.get(sessionId)
+    if (!session) return ''
+    return (session as any).backgroundTasks.getOutput(taskId, tail)
   }
 
   close(): void {

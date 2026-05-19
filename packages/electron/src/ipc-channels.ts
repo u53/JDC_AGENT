@@ -68,6 +68,14 @@ export const IPC_CHANNELS = {
   TERMINAL_DATA: 'terminal:data',
   TERMINAL_EXIT: 'terminal:exit',
 
+  // Background Tasks
+  BACKGROUND_LIST: 'background:list',
+  BACKGROUND_STOP: 'background:stop',
+  BACKGROUND_OUTPUT: 'background:output',
+  BACKGROUND_STATE_CHANGED: 'background:state-changed',
+  BACKGROUND_NOTIFICATION: 'background:notification',
+  AGENT_BACKGROUND: 'agent:background',
+
   // Model
   MODEL_TEST: 'model:test',
 } as const

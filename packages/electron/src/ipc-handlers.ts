@@ -263,4 +263,18 @@ export function registerIpcHandlers(sessionManager: SessionManager, services: De
       return { success: false, error: err.message }
     }
   })
+
+  // Background Tasks
+  ipcMain.handle(IPC_CHANNELS.BACKGROUND_LIST, async (_event, { sessionId }) => {
+    return sessionManager.getBackgroundTasks(sessionId)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BACKGROUND_STOP, async (_event, { sessionId, taskId }) => {
+    sessionManager.stopBackgroundTask(sessionId, taskId)
+    return { success: true }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BACKGROUND_OUTPUT, async (_event, { sessionId, taskId, tail }) => {
+    return sessionManager.getBackgroundTaskOutput(sessionId, taskId, tail)
+  })
 }
