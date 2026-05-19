@@ -19,6 +19,7 @@ export interface AgentToolDeps {
   onAgentComplete?: (agentToolUseId: string, result: { content: string; turns: number; toolsUsed: string[] }) => void
   agentAbortControllers?: Map<string, AbortController>
   backgroundTasks?: import('../background-tasks.js').BackgroundTaskManager
+  registerBackgroundTrigger?: (toolUseId: string, resolve: () => void) => void
 }
 
 export function createAgentTool(deps: AgentToolDeps): ToolHandler {
@@ -118,7 +119,15 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
       }
 
       try {
-        const result = await runSubSession({
+        let backgroundResolver: (() => void) | undefined
+        const backgroundSignal = new Promise<void>(resolve => {
+          backgroundResolver = resolve
+        })
+        deps.registerBackgroundTrigger?.(toolUseId, () => {
+          backgroundResolver?.()
+        })
+
+        const sessionPromise = runSubSession({
           prompt,
           provider: effectiveProvider,
           toolRegistry: deps.toolRegistry,
@@ -133,8 +142,26 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
           onAgentText: (text) => deps.onAgentText?.(toolUseId, text),
         })
 
-        deps.onAgentComplete?.(toolUseId, result)
-        return { content: result.content }
+        const raceResult = await Promise.race([
+          sessionPromise.then(r => ({ type: 'done' as const, result: r })),
+          backgroundSignal.then(() => ({ type: 'backgrounded' as const, result: undefined })),
+        ])
+
+        if (raceResult.type === 'backgrounded') {
+          const task = deps.backgroundTasks!.registerAgent(prompt, agentType)
+          sessionPromise.then(result => {
+            deps.onAgentComplete?.(toolUseId, result)
+            deps.backgroundTasks!.completeAgent(task.id, { result: result.content, turns: result.turns, toolsUsed: result.toolsUsed })
+          }).catch(err => {
+            deps.backgroundTasks!.failAgent(task.id, err instanceof Error ? err.message : String(err))
+          })
+          return {
+            content: `Agent moved to background.\nTask ID: ${task.id}\nYou will receive a <task-notification> when it completes.`,
+          }
+        }
+
+        deps.onAgentComplete?.(toolUseId, raceResult.result!)
+        return { content: raceResult.result!.content }
       } catch (error) {
         return {
           content: `Sub-agent error: ${error instanceof Error ? error.message : String(error)}`,

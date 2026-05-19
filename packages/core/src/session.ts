@@ -67,6 +67,7 @@ export class Session {
   private skillsReady: Promise<void>
   private permissionChecker: PermissionChecker
   private agentAbortControllers = new Map<string, AbortController>()
+  private backgroundTriggers = new Map<string, () => void>()
   private currentEvents?: SessionEvents
   private usageTracker: UsageTracker
   private fileTracker: FileTracker
@@ -208,6 +209,9 @@ export class Session {
         this.currentEvents?.onAgentComplete?.(agentToolUseId, result)
       },
       agentAbortControllers: this.agentAbortControllers,
+      registerBackgroundTrigger: (toolUseId: string, resolve: () => void) => {
+        this.backgroundTriggers.set(toolUseId, resolve)
+      },
     }))
   }
 
@@ -672,6 +676,14 @@ export class Session {
     const controller = this.agentAbortControllers.get(agentToolUseId)
     if (controller) {
       controller.abort()
+    }
+  }
+
+  backgroundAgent(agentToolUseId: string): void {
+    const trigger = this.backgroundTriggers.get(agentToolUseId)
+    if (trigger) {
+      trigger()
+      this.backgroundTriggers.delete(agentToolUseId)
     }
   }
 }
