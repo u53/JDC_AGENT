@@ -19,6 +19,12 @@ export function AgentDetailPanel() {
     }
   }
 
+  const handleBackground = () => {
+    if (activeSessionId && activeAgentId) {
+      ipc.agent.background(activeSessionId, activeAgentId)
+    }
+  }
+
   const handleClose = () => {
     setActiveAgent(null)
   }
@@ -36,12 +42,20 @@ export function AgentDetailPanel() {
         </div>
         <div className="flex items-center gap-2">
           {agent.status === 'running' && (
-            <button
-              onClick={handleAbort}
-              className="text-[10px] uppercase tracking-[0.05em] text-[var(--bad)] hover:opacity-80 transition-opacity"
-            >
-              [ABORT]
-            </button>
+            <>
+              <button
+                onClick={handleBackground}
+                className="text-[10px] uppercase tracking-[0.05em] text-[var(--accent)] hover:opacity-80 transition-opacity"
+              >
+                [BG]
+              </button>
+              <button
+                onClick={handleAbort}
+                className="text-[10px] uppercase tracking-[0.05em] text-[var(--bad)] hover:opacity-80 transition-opacity"
+              >
+                [ABORT]
+              </button>
+            </>
           )}
           <button
             onClick={handleClose}

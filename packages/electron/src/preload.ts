@@ -28,6 +28,8 @@ const api = {
   setThinking: (sessionId: string, enabled: boolean, budget?: number) => ipcRenderer.invoke('session:set-thinking', { sessionId, enabled, budget }),
   agentAbort: (sessionId: string, agentToolUseId: string) =>
     ipcRenderer.invoke('agent:abort', { sessionId, agentToolUseId }),
+  agentBackground: (sessionId: string, agentToolUseId: string) =>
+    ipcRenderer.invoke('agent:background', { sessionId, agentToolUseId }),
   planRespond: (id: string, approved: boolean, feedback?: string) =>
     ipcRenderer.send('plan:respond', { id, approved, feedback }),
   setPlanMode: (sessionId: string, mode: string) =>

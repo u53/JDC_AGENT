@@ -66,6 +66,11 @@ export function registerIpcHandlers(sessionManager: SessionManager, services: De
     return { success: true }
   })
 
+  ipcMain.handle(IPC_CHANNELS.AGENT_BACKGROUND, async (_event, { sessionId, agentToolUseId }) => {
+    sessionManager.backgroundAgent(sessionId, agentToolUseId)
+    return { success: true }
+  })
+
   ipcMain.handle(IPC_CHANNELS.CONFIG_GET, async () => {
     return loadAppConfig()
   })

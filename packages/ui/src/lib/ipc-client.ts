@@ -107,6 +107,8 @@ export const ipc = {
   agent: {
     abort: (sessionId: string, agentToolUseId: string) =>
       invoke('agent:abort', { sessionId, agentToolUseId }),
+    background: (sessionId: string, agentToolUseId: string) =>
+      invoke('agent:background', { sessionId, agentToolUseId }),
     onProgress: (cb: (data: { sessionId: string; agentToolUseId: string; toolName: string; toolStatus: string; toolInput?: Record<string, unknown>; toolResult?: { content: string; isError?: boolean }; toolCount: number }) => void) =>
       on('agent:progress', (_e, data) => cb(data as any)),
     onText: (cb: (data: { sessionId: string; agentToolUseId: string; text: string }) => void) =>

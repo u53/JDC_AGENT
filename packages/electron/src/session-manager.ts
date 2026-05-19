@@ -338,6 +338,13 @@ export class SessionManager {
     this.sessions.get(sessionId)?.abortAgent(agentToolUseId)
   }
 
+  backgroundAgent(sessionId: string, agentToolUseId: string): void {
+    const session = this.sessions.get(sessionId)
+    if (session) {
+      session.backgroundAgent(agentToolUseId)
+    }
+  }
+
   respondToPermission(id: string, allowed: boolean): void {
     const pending = this.pendingPermissions.get(id)
     if (pending) {
