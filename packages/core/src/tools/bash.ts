@@ -141,17 +141,32 @@ The shell runs in a non-interactive environment (CI=true, GIT_TERMINAL_PROMPT=0,
     const rawTimeout = (input.timeout as number) || 120000
     const timeout = Math.min(rawTimeout, 600000)
 
-    // CWD tracking: append pwd -P to capture the final working directory
+    const isWindows = process.platform === 'win32'
+
+    // CWD tracking: append a command to capture the final working directory
     const cwdFile = join(tmpdir(), `jdcagnet-cwd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
-    const wrappedCommand = `${command}; __jdcagnet_exit=$?; pwd -P > ${cwdFile} 2>/dev/null; exit $__jdcagnet_exit`
+
+    let shellCmd: string
+    let shellArgs: string[]
+
+    if (isWindows) {
+      // On Windows, use cmd.exe with /C. CWD tracking uses cd > file.
+      const wrappedCommand = `${command} & set __jdcagnet_exit=!ERRORLEVEL! & cd > "${cwdFile}" 2>nul & exit /b !__jdcagnet_exit!`
+      shellCmd = 'cmd.exe'
+      shellArgs = ['/V:ON', '/S', '/C', wrappedCommand]
+    } else {
+      const wrappedCommand = `${command}; __jdcagnet_exit=$?; pwd -P > ${cwdFile} 2>/dev/null; exit $__jdcagnet_exit`
+      shellCmd = 'bash'
+      shellArgs = ['-c', wrappedCommand]
+    }
 
     return new Promise((resolve) => {
-      const proc = spawn('bash', ['-c', wrappedCommand], {
+      const proc = spawn(shellCmd, shellArgs, {
         cwd: context.cwd,
         timeout,
         env,
         stdio: ['ignore', 'pipe', 'pipe'],
-        detached: true,
+        ...(isWindows ? {} : { detached: true }),
       })
 
       let stdout = ''
@@ -170,7 +185,6 @@ The shell runs in a non-interactive environment (CI=true, GIT_TERMINAL_PROMPT=0,
         try {
           const newCwd = readFileSync(cwdFile, 'utf-8').trim()
           if (newCwd && newCwd !== context.cwd) {
-            // Store the new CWD so the session can update
             ;(context as unknown as Record<string, unknown>).__newCwd = newCwd
           }
         } catch {
@@ -187,13 +201,19 @@ The shell runs in a non-interactive environment (CI=true, GIT_TERMINAL_PROMPT=0,
         resolve({ content: `Failed to execute: ${err.message}`, isError: true })
       })
 
-      if (context.signal?.aborted) {
-        try { process.kill(-proc.pid!, 'SIGKILL') } catch {}
-      } else {
-        context.signal?.addEventListener('abort', () => {
+      const killProc = () => {
+        if (isWindows) {
+          try { spawn('taskkill', ['/T', '/F', '/PID', String(proc.pid)], { stdio: 'ignore' }) } catch {}
+        } else {
           try { process.kill(-proc.pid!, 'SIGTERM') } catch {}
           setTimeout(() => { try { process.kill(-proc.pid!, 'SIGKILL') } catch {} }, 500)
-        })
+        }
+      }
+
+      if (context.signal?.aborted) {
+        killProc()
+      } else {
+        context.signal?.addEventListener('abort', killProc)
       }
     })
   },

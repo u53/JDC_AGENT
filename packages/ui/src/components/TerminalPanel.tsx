@@ -45,7 +45,12 @@ export function TerminalPanel({ cwd }: Props) {
     fitRef.current = fit
 
     // Create pty
-    window.electronAPI?.terminalCreate(cwd).then((result: { id: string }) => {
+    window.electronAPI?.terminalCreate(cwd).then((result: { id: string; error?: string }) => {
+      if (result.error) {
+        term.write(`\r\n[终端启动失败] ${result.error}\r\n`)
+        return
+      }
+
       setTerminalId(result.id)
 
       term.onData((data) => {

@@ -96,25 +96,21 @@ export function registerIpcHandlers(sessionManager: SessionManager, services: De
   })
 
   ipcMain.handle(IPC_CHANNELS.SESSION_COMPACT, async (_event, { sessionId }) => {
-    console.log('[IPC] session:compact called for', sessionId)
     await sessionManager.compactSession(sessionId)
     return { success: true }
   })
 
   ipcMain.handle(IPC_CHANNELS.SESSION_CLEAR, async (_event, { sessionId }) => {
-    console.log('[IPC] session:clear called for', sessionId)
     sessionManager.clearSession(sessionId)
     return { success: true }
   })
 
   ipcMain.handle(IPC_CHANNELS.SESSION_SET_THINKING, async (_event, { sessionId, enabled, budget }) => {
-    console.log('[IPC] session:set-thinking called', sessionId, enabled)
     sessionManager.setThinking(sessionId, enabled, budget)
     return { success: true }
   })
 
   ipcMain.handle(IPC_CHANNELS.SESSION_SET_PLAN_MODE, async (_event, { sessionId, mode }) => {
-    console.log('[IPC] session:set-plan-mode called', sessionId, mode)
     sessionManager.setPlanMode(sessionId, mode)
     return { success: true }
   })
@@ -132,12 +128,10 @@ export function registerIpcHandlers(sessionManager: SessionManager, services: De
   })
 
   ipcMain.handle(IPC_CHANNELS.FILE_REWIND, async (_event, { sessionId, snapshotId }) => {
-    console.log('[IPC] file:rewind called', sessionId, snapshotId)
     return sessionManager.rewindFile(sessionId, snapshotId)
   })
 
   ipcMain.handle(IPC_CHANNELS.FILE_REWIND_TURN, async (_event, { sessionId, turnIndex }) => {
-    console.log('[IPC] file:rewind-turn called', sessionId, turnIndex)
     return sessionManager.rewindToTurn(sessionId, turnIndex)
   })
 

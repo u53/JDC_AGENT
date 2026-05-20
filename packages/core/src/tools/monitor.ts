@@ -21,13 +21,25 @@ export const monitorTool: ToolHandler = {
     const timeout = (input.timeout_ms as number) || 300000
 
     return new Promise<ToolResult>((resolve) => {
-      const proc = spawn('sh', ['-c', command], { cwd: context.cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+      const isWindows = process.platform === 'win32'
+      const shellCmd = isWindows ? 'cmd.exe' : 'sh'
+      const shellArgs = isWindows ? ['/S', '/C', command] : ['-c', command]
+      const proc = spawn(shellCmd, shellArgs, { cwd: context.cwd, stdio: ['ignore', 'pipe', 'pipe'] })
       const lines: string[] = []
       let killed = false
 
-      const timer = setTimeout(() => { killed = true; proc.kill('SIGTERM') }, timeout)
+      const killProc = () => {
+        killed = true
+        if (isWindows) {
+          try { spawn('taskkill', ['/T', '/F', '/PID', String(proc.pid)], { stdio: 'ignore' }) } catch {}
+        } else {
+          proc.kill('SIGTERM')
+        }
+      }
 
-      const onAbort = () => { proc.kill('SIGTERM'); killed = true }
+      const timer = setTimeout(killProc, timeout)
+
+      const onAbort = killProc
       context.signal?.addEventListener('abort', onAbort, { once: true })
 
       proc.stdout?.on('data', (data) => {

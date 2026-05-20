@@ -26,15 +26,29 @@ export class TerminalService {
     if (!pty) return { id: '', error: 'node-pty not available' }
 
     const id = `term-${this.nextId++}`
-    const shell = process.env.SHELL || '/bin/zsh'
+    const isWindows = process.platform === 'win32'
+    const shell = isWindows
+      ? process.env.COMSPEC || 'cmd.exe'
+      : process.env.SHELL || '/bin/zsh'
 
-    const ptyProcess = pty.spawn(shell, [], {
-      name: 'xterm-256color',
-      cols: 80,
-      rows: 24,
-      cwd,
-      env: { ...process.env, TERM: 'xterm-256color' },
-    })
+    let ptyProcess: any
+    try {
+      ptyProcess = pty.spawn(shell, [], {
+        name: 'xterm-256color',
+        cols: 80,
+        rows: 24,
+        cwd,
+        env: { ...process.env, ...(isWindows ? {} : { TERM: 'xterm-256color' }) },
+        encoding: 'utf8',
+        useConpty: isWindows,
+      })
+    } catch (err) {
+      return { id: '', error: (err as Error).message }
+    }
+
+    if (isWindows) {
+      ptyProcess.write('chcp 65001 > nul\r')
+    }
 
     ptyProcess.onData((data: string) => {
       this.window?.webContents.send('terminal:data', { id, data })

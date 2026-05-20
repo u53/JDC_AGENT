@@ -61,7 +61,11 @@ export class BackgroundTaskManager {
     const logFile = path.join(this.logDir, `${id}.log`)
     writeFileSync(logFile, '')
 
-    const proc = spawn('bash', ['-c', command], {
+    const isWindows = process.platform === 'win32'
+    const shellCmd = isWindows ? 'cmd.exe' : 'bash'
+    const shellArgs = isWindows ? ['/S', '/C', command] : ['-c', command]
+
+    const proc = spawn(shellCmd, shellArgs, {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: false,
@@ -155,8 +159,12 @@ export class BackgroundTaskManager {
   stop(id: string): void {
     const proc = this.processes.get(id)
     if (proc) {
-      proc.kill('SIGTERM')
-      setTimeout(() => { if (!proc.killed) proc.kill('SIGKILL') }, 3000)
+      if (process.platform === 'win32') {
+        try { spawn('taskkill', ['/T', '/F', '/PID', String(proc.pid)], { stdio: 'ignore' }) } catch {}
+      } else {
+        proc.kill('SIGTERM')
+        setTimeout(() => { if (!proc.killed) proc.kill('SIGKILL') }, 3000)
+      }
     } else {
       // Handle agent tasks that have no process
       const task = this.tasks.get(id)

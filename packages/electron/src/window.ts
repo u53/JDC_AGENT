@@ -1,4 +1,4 @@
-import { BrowserWindow, session, nativeImage } from 'electron'
+import { BrowserWindow, nativeImage } from 'electron'
 import path from 'node:path'
 import { existsSync } from 'node:fs'
 
@@ -6,11 +6,6 @@ let mainWindow: BrowserWindow | null = null
 
 export function createMainWindow(): BrowserWindow {
   const preloadPath = path.join(__dirname, 'preload.js')
-  console.log('[JDC Code] Preload path:', preloadPath)
-  console.log('[JDC Code] Preload exists:', existsSync(preloadPath))
-
-  // Register preload via session API (more reliable with ESM main process)
-  session.defaultSession.setPreloads([preloadPath])
 
   const iconPath = path.join(__dirname, '../../assets/icon.png')
 
@@ -36,12 +31,15 @@ export function createMainWindow(): BrowserWindow {
     mainWindow.loadFile(path.join(__dirname, '../ui/index.html'))
   }
 
-  mainWindow.webContents.on('did-finish-load', () => {
-    console.log('[JDC Code] Page loaded, checking preload...')
-    mainWindow?.webContents.executeJavaScript('typeof window.electronAPI').then((result) => {
-      console.log('[JDC Code] electronAPI type in renderer:', result)
+  if (process.env.NODE_ENV === 'development') {
+    mainWindow.webContents.on('did-finish-load', () => {
+      mainWindow?.webContents.executeJavaScript('typeof window.electronAPI').then((result) => {
+        if (result !== 'object') {
+          console.warn('[JDC Code] electronAPI preload unavailable:', result)
+        }
+      })
     })
-  })
+  }
 
   if (process.env.NODE_ENV === 'development') {
     mainWindow.webContents.on('before-input-event', (_event, input) => {

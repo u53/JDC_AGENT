@@ -30,7 +30,7 @@ export class OpenAIChatProvider implements ModelProvider {
   ) {
     const params: OpenAI.ChatCompletionCreateParamsNonStreaming = {
       model: config.model,
-      max_tokens: config.maxTokens > 32768 ? 16384 : config.maxTokens,
+      max_tokens: config.maxTokens,
       messages: this.formatMessages(messages, resolveSystemPrompt(config.systemPrompt)),
       ...(tools.length > 0 ? { tools: this.formatTools(tools) } : {}),
       ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
@@ -89,7 +89,7 @@ export class OpenAIChatProvider implements ModelProvider {
   ): AsyncIterable<StreamChunk> {
     const params: OpenAI.ChatCompletionCreateParamsStreaming = {
       model: config.model,
-      max_tokens: config.maxTokens > 32768 ? 16384 : config.maxTokens,
+      max_tokens: config.maxTokens,
       messages: this.formatMessages(messages, resolveSystemPrompt(config.systemPrompt)),
       stream: true,
       stream_options: { include_usage: true },
