@@ -2,73 +2,125 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-AI-powered coding assistant desktop app.
+Your AI pair programmer — a desktop app that writes code, runs commands, and manages your project alongside you.
 
-## Features
+JDC Code connects to any LLM (Claude, GPT, Gemini, Ollama, or any OpenAI-compatible endpoint) and gives it full access to your codebase through 30+ built-in tools. It reads, writes, searches, executes, and iterates — all within a permission system you control.
 
-- **Multi-model support** — Claude, GPT, Gemini, Ollama, any OpenAI-compatible API
-- **Tool execution** — File read/write/edit, bash commands, web search, MCP servers
-- **Git integration** — Branch switching, create, delete directly in the app
-- **Open in IDE** — Detect and launch VS Code, JetBrains IDEs, Xcode, etc.
-- **Integrated terminal** — Built-in terminal panel (xterm.js + node-pty)
-- **Task management** — Track AI task progress in real-time
-- **File snapshots** — View and rewind file changes made by AI
-- **Sub-agents** — Spawn parallel AI agents for complex tasks
-- **Plan mode** — AI proposes a plan before executing
-- **Auto-update** — Check and install updates from GitHub Releases
+## What Makes It Different
 
-## Tech Stack
+### Use Multiple Models, Each for What It's Best At
 
-- **Electron 33** — Desktop runtime
-- **React 19** — UI framework
-- **Zustand 5** — State management
-- **Tailwind CSS 4** — Styling
-- **esbuild** — Bundling
-- **node-pty + xterm.js** — Terminal emulation
-- **sql.js** — Local SQLite for conversation history
+Configure model groups with different providers and assign them to different roles. Your main conversation can run on Claude Opus while sub-agents use Sonnet for speed. Switch models mid-session without losing context.
 
-## Development
+### Sub-Agents That Work in Parallel
+
+Dispatch specialized agents to handle independent tasks simultaneously:
+
+- **Explore** — Fast read-only codebase search (10 turns max)
+- **Refactor** — Restructure code without bash access
+- **Security Auditor** — Vulnerability scanning with restricted commands
+- **Frontend Designer** — UI component generation
+- **General** — Full tool access for complex multi-step work
+
+Run up to 3 agents concurrently. They report back when done.
+
+### Skills: Reusable AI Instructions
+
+Drop a markdown file in `.jdcagnet/skills/` and it becomes a slash command. Skills support argument substitution, tool restrictions, and can be scoped globally or per-project.
+
+```yaml
+---
+name: review
+description: Code review with security focus
+user-invocable: true
+argument-hint: "<file-path>"
+allowed-tools: [file_read, grep, glob]
+---
+Review ${1} for security vulnerabilities, focusing on...
+```
+
+### Plan Mode: Think Before Acting
+
+AI enters a restricted read-only mode to analyze your codebase and write a plan. You review and approve before any changes are made. Plans are stored as markdown in `.jdcagnet/plans/`.
+
+### Persistent Memory Across Sessions
+
+The AI remembers your preferences, project context, and past decisions. Memory is extracted automatically during context compaction and stored as structured markdown files — no database, fully inspectable.
+
+### MCP Server Integration
+
+Connect external tools via Model Context Protocol. Configure stdio or SSE servers globally or per-project. The AI discovers available tools automatically and can use them alongside built-in tools.
+
+### Hooks: Automate Around Tool Calls
+
+Run shell commands before or after any tool execution. Block dangerous operations, enforce policies, or trigger side effects — all configurable via JSON.
+
+## Core Capabilities
+
+### File Operations
+- Read, write, edit, multi-edit with diff tracking
+- File snapshots with before/after state for every modification
+- Rewind changes through IDE diff view
+- Smart path suggestions when files aren't found
+- Read deduplication (skips re-reading unchanged files)
+
+### Code Execution
+- Non-interactive bash with automatic environment isolation
+- Built-in terminal panel (xterm.js + node-pty) for interactive use
+- Background command execution with notifications
+- Long-running process monitoring
+
+### Search & Navigation
+- Glob, grep, directory listing, tree view
+- LSP integration for go-to-definition, find references, hover info
+- Web search and URL fetching
+
+### IDE Integration
+- Auto-detects VS Code, JetBrains, Xcode
+- Open files at specific line/column
+- Show diff views with accept/reject actions
+- Pull LSP diagnostics from your editor
+- Selection tracking and @-mention support
+
+### Git
+- Branch detection, status, recent commits in context
+- Safety checks block dangerous operations (force push, reset --hard)
+- Git user detection for commit attribution
+
+### Context Management
+- Configurable context window (up to 1M+ tokens)
+- Auto-compaction with structured 8-section summaries
+- Micro-compaction: clears old tool results before full compression
+- Memory extraction during compaction
+- Real-time context usage indicator
+
+### Permission System
+Three modes to match your trust level:
+- **Strict** — Approve every write operation
+- **Standard** — Reads auto-approved, writes need confirmation
+- **Relaxed** — Most operations auto-approved, only critical commands blocked
+
+### Custom Instructions
+- `JDCAGNET.md` at project root or `.jdcagnet/JDCAGNET.md`
+- `.jdcagnet/rules/*.md` for modular rule files
+- `~/.jdcagnet/JDCAGNET.md` for global instructions
+
+## Quick Start
 
 ```bash
-# Install dependencies
 pnpm install
-
-# Run in development mode
 pnpm dev
-
-# Build all packages
-pnpm build
-
-# Package for distribution
-pnpm package
 ```
 
-## Project Structure
+Configure your first model group in Settings → Models, then start a conversation.
 
-```
-packages/
-  core/       — AI session engine, tools, providers, MCP
-  electron/   — Electron main process, IPC, services
-  ui/         — React frontend (Vite)
-```
+## Installation
 
-## Release
-
-Push a version tag to trigger the GitHub Actions release workflow:
-
-```bash
-# Update version in packages/electron/package.json
-git tag v0.0.2
-git push && git push --tags
-```
-
-The workflow builds macOS (.dmg) and Windows (.exe) installers, then publishes them to GitHub Releases.
-
-## Installation Notes
+Download the latest release from [GitHub Releases](https://github.com/u53/jdc_agent/releases).
 
 ### macOS
 
-The app is not code-signed. After downloading, macOS may show "JDC Code is damaged and can't be opened." Run this in Terminal to fix:
+The app is not code-signed. If macOS blocks it:
 
 ```bash
 xattr -cr "/Applications/JDC Code.app"
@@ -76,8 +128,30 @@ xattr -cr "/Applications/JDC Code.app"
 
 ### Windows
 
-Windows may show a SmartScreen warning. Click "More info" → "Run anyway" to proceed.
+Click "More info" → "Run anyway" on the SmartScreen warning.
+
+## Development
+
+```bash
+pnpm install       # Install dependencies
+pnpm dev           # Development mode (Vite + Electron)
+pnpm build         # Build all packages
+pnpm package       # Package for distribution
+```
+
+## Architecture
+
+```
+packages/
+  core/       — Session engine, 30+ tools, providers, MCP, IDE, hooks, skills
+  electron/   — Main process, IPC handlers, terminal service, git service
+  ui/         — React 19 + Zustand + Tailwind CSS 4 (Vite)
+```
+
+## Tech Stack
+
+Electron 33 · React 19 · Zustand 5 · Tailwind CSS 4 · esbuild · node-pty · xterm.js · sql.js
 
 ## License
 
-本项目仅供学习和个人使用，禁止商业用途。详见 [LICENSE](./LICENSE)。
+For learning and personal use only. Commercial use prohibited. See [LICENSE](./LICENSE).
