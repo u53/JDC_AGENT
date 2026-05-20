@@ -253,7 +253,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       return {
         sessionStates: {
           ...s.sessionStates,
-          [sessionId]: { ...EMPTY_STREAM_STATE, finished: true, usage: current.usage },
+          [sessionId]: { ...EMPTY_STREAM_STATE, finished: true, usage: current.usage, error: current.error },
         },
       }
     })

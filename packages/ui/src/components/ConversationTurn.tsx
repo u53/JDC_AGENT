@@ -177,7 +177,7 @@ export function ConversationTurn({
               <span>生成中 {streamingText.length} 字</span>
               <span>· 收起</span>
             </button>
-            <MarkdownRenderer content={streamingText} />
+            <pre className="whitespace-pre-wrap break-words font-[var(--font-sans)] text-[var(--text)]">{streamingText}</pre>
             <span className="inline-block w-[2px] h-[14px] bg-[var(--accent)] animate-pulse ml-0.5 align-middle" />
           </div>
         )}

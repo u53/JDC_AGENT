@@ -72,6 +72,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
     turns++
 
     let textContent = ''
+    let thinkingContent = ''
     const toolUses: { id: string; name: string; input: string }[] = []
     let currentToolUse: { id: string; name: string; input: string } | null = null
 
@@ -79,14 +80,13 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
     const stream = provider.stream(messages, toolDefs, config, signal)
 
     for await (const chunk of stream) {
-      if (chunk.type === 'text_delta') textContent += chunk.text || ''
-      if (chunk.type === 'tool_use_start' && chunk.toolUse) {
+      if (chunk.type === 'thinking_delta') thinkingContent += chunk.text || ''
+      else if (chunk.type === 'text_delta') textContent += chunk.text || ''
+      else if (chunk.type === 'tool_use_start' && chunk.toolUse) {
         currentToolUse = { id: chunk.toolUse.id, name: chunk.toolUse.name, input: '' }
-      }
-      if (chunk.type === 'tool_use_delta' && currentToolUse) {
+      } else if (chunk.type === 'tool_use_delta' && currentToolUse) {
         currentToolUse.input += chunk.toolUse?.input || chunk.text || ''
-      }
-      if (chunk.type === 'tool_use_end' && currentToolUse) {
+      } else if (chunk.type === 'tool_use_end' && currentToolUse) {
         toolUses.push(currentToolUse)
         currentToolUse = null
       }
@@ -94,6 +94,9 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
 
     // Build assistant message
     const contentBlocks: ContentBlock[] = []
+    if (thinkingContent) {
+      contentBlocks.push({ type: 'thinking', thinking: thinkingContent } as any)
+    }
     if (textContent) {
       contentBlocks.push({ type: 'text', text: textContent })
       onAgentText?.(textContent)
