@@ -494,11 +494,8 @@ export class Session {
       }
     }
 
-    // Recalculate usage after compaction — messages are now much smaller
-    const contextWindow = this.config.modelConfig.contextWindow || 200000
-    const estimated = estimateTokens(this.messages)
-    const percent = Math.min(Math.round((estimated / contextWindow) * 100), 100)
-    this.usageTracker.resetLastTurn(estimated)
+    // Reset usage after compaction — will be recalculated on next API response
+    this.usageTracker.resetLastTurn(0)
     events.onUsage?.(this.usageTracker.getSnapshot())
 
     // Emit compact_complete
