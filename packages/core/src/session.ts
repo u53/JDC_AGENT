@@ -494,6 +494,13 @@ export class Session {
       }
     }
 
+    // Recalculate usage after compaction — messages are now much smaller
+    const contextWindow = this.config.modelConfig.contextWindow || 200000
+    const estimated = estimateTokens(this.messages)
+    const percent = Math.min(Math.round((estimated / contextWindow) * 100), 100)
+    this.usageTracker.resetLastTurn(estimated)
+    events.onUsage?.(this.usageTracker.getSnapshot())
+
     // Emit compact_complete
     events.onStreamChunk({
       type: 'compact_complete',

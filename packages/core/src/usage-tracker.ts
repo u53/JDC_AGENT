@@ -65,6 +65,11 @@ export class UsageTracker {
     this.contextWindow = contextWindow
   }
 
+  resetLastTurn(estimatedInputTokens: number): void {
+    this.lastInputTokens = estimatedInputTokens
+    this.lastOutputTokens = 0
+  }
+
   shouldCompact(compressAt: number): boolean {
     if (this.turnCount === 0) return false
     const contextUsed = this.lastInputTokens + this.lastOutputTokens
