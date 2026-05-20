@@ -544,6 +544,7 @@ export class Session {
       await this.compact(events)
     }
 
+    let justCompacted = false
     while (true) {
       this.turnIndex++
       this.toolRunner.turnIndex = this.turnIndex
@@ -686,9 +687,14 @@ export class Session {
       events.onMessageComplete(toolMessage)
 
       // Check if compaction is needed between runloop iterations
-      this.microCompact()
-      if (this.shouldCompact()) {
-        await this.compact(events)
+      if (!justCompacted) {
+        this.microCompact()
+        if (this.shouldCompact()) {
+          await this.compact(events)
+          justCompacted = true
+        }
+      } else {
+        justCompacted = false
       }
     }
 

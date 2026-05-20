@@ -239,6 +239,7 @@ export class SessionManager {
       })
     }
     this.sessions.set(sessionId, session)
+    ;(session as any)._protocol = active.group.protocol
   }
 
   async sendMessage(sessionId: string, text: string, images?: { data: string; mediaType: string }[]): Promise<void> {
@@ -256,9 +257,7 @@ export class SessionManager {
 
     // Dynamic model switching: check if active model changed since session was created
     const currentActive = getActiveModelConfig()
-    console.log('[MODEL CHECK] session model:', session.config.modelConfig.model, '| config active:', currentActive?.model.modelId)
     if (currentActive && (session.config.modelConfig.model !== currentActive.model.modelId || (session as any)._protocol !== currentActive.group.protocol)) {
-      console.log('[MODEL SWITCH] Switching to:', currentActive.model.modelId, 'protocol:', currentActive.group.protocol)
       const provider = this.createProvider(currentActive.group)
       session.updateProvider(provider, {
         model: currentActive.model.modelId,
@@ -336,9 +335,7 @@ export class SessionManager {
     }))
 
     try {
-      console.log('[SEND] Calling session.sendMessage, text:', text.slice(0, 50))
       await session.sendMessage(text, events, extraContent)
-      console.log('[SEND] session.sendMessage completed')
       this.window?.webContents.send('query:finished', { sessionId })
     } catch (err: any) {
       console.error('[SEND] Error:', err.message, err.stack)
