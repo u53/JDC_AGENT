@@ -29,6 +29,7 @@ interface ModelState {
   removeGroup: (groupId: string) => void
   updateGroup: (groupId: string, updates: Partial<Omit<ModelGroup, 'id' | 'models'>>) => void
   addModel: (groupId: string, model: Omit<ModelEntry, 'id'>) => void
+  updateModel: (groupId: string, modelId: string, updates: Partial<Omit<ModelEntry, 'id'>>) => void
   removeModel: (groupId: string, modelId: string) => void
   setActiveModel: (modelId: string) => void
   getActiveModel: () => { model: ModelEntry; group: ModelGroup } | null
@@ -70,6 +71,17 @@ export const useModelStore = create<ModelState>((set, get) => ({
     set((s) => ({
       groups: s.groups.map((g) =>
         g.id === groupId ? { ...g, models: [...g.models, entry] } : g
+      ),
+    }))
+    get().saveToConfig()
+  },
+
+  updateModel: (groupId, modelId, updates) => {
+    set((s) => ({
+      groups: s.groups.map((g) =>
+        g.id === groupId
+          ? { ...g, models: g.models.map((m) => m.id === modelId ? { ...m, ...updates } : m) }
+          : g
       ),
     }))
     get().saveToConfig()

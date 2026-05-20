@@ -320,6 +320,7 @@ function ModelsTab() {
   const removeGroup = useModelStore((s) => s.removeGroup)
   const updateGroup = useModelStore((s) => s.updateGroup)
   const addModel = useModelStore((s) => s.addModel)
+  const updateModel = useModelStore((s) => s.updateModel)
   const removeModel = useModelStore((s) => s.removeModel)
   const loadFromConfig = useModelStore((s) => s.loadFromConfig)
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null)
@@ -373,6 +374,7 @@ function ModelsTab() {
           onDelete={() => removeGroup(group.id)}
           onUpdate={(updates) => updateGroup(group.id, updates)}
           onAddModel={(model) => addModel(group.id, model)}
+          onUpdateModel={(modelId, updates) => updateModel(group.id, modelId, updates)}
           onRemoveModel={(modelId) => removeModel(group.id, modelId)}
         />
       ))}
@@ -380,6 +382,38 @@ function ModelsTab() {
       {groups.length === 0 && !showNewGroup && (
         <p className="text-[13px] text-[var(--muted)] text-center py-8">暂无分组，点击上方按钮创建</p>
       )}
+    </div>
+  )
+}
+
+/* ─── Model Edit Form ─── */
+function ModelEditForm({ model, inputCls, onSave, onCancel }: {
+  model: { modelId: string; name: string; contextWindow: number; maxTokens: number; compressAt: number }
+  inputCls: string
+  onSave: (updates: { modelId: string; name: string; contextWindow: number; maxTokens: number; compressAt: number }) => void
+  onCancel: () => void
+}) {
+  const [name, setName] = useState(model.name)
+  const [modelId, setModelId] = useState(model.modelId)
+  const [ctx, setCtx] = useState(String(model.contextWindow))
+  const [maxTokens, setMaxTokens] = useState(String(model.maxTokens || 32000))
+  const [compress, setCompress] = useState(String(Math.round(model.compressAt * 100)))
+  const btnPrimary = 'bg-[var(--accent)] text-[var(--accent-ink)] rounded-[6px] px-3 py-1.5 text-[12px]'
+  const btnGhost = 'border border-[var(--border)] rounded-[6px] px-3 py-1.5 text-[12px] text-[var(--muted)] hover:text-[var(--text)]'
+
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="显示名称" className={inputCls} />
+        <input value={modelId} onChange={(e) => setModelId(e.target.value)} placeholder="Model ID" className={inputCls} />
+        <input value={ctx} onChange={(e) => setCtx(e.target.value)} placeholder="200000" type="number" className={inputCls + ' [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'} />
+        <input value={maxTokens} onChange={(e) => setMaxTokens(e.target.value)} placeholder="32000" type="number" className={inputCls + ' [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'} />
+        <input value={compress} onChange={(e) => setCompress(e.target.value)} placeholder="90" type="number" className={inputCls + ' [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'} />
+      </div>
+      <div className="flex gap-2">
+        <button onClick={() => onSave({ name: name.trim(), modelId: modelId.trim(), contextWindow: parseInt(ctx) || 200000, maxTokens: parseInt(maxTokens) || 32000, compressAt: (parseInt(compress) || 90) / 100 })} className={btnPrimary}>保存</button>
+        <button onClick={onCancel} className={btnGhost}>取消</button>
+      </div>
     </div>
   )
 }
@@ -392,13 +426,17 @@ interface ModelGroupCardProps {
   onDelete: () => void
   onUpdate: (updates: Partial<Omit<ModelGroup, 'id' | 'models'>>) => void
   onAddModel: (model: { modelId: string; name: string; contextWindow: number; maxTokens: number; compressAt: number }) => void
+  onUpdateModel: (modelId: string, updates: Partial<{ modelId: string; name: string; contextWindow: number; maxTokens: number; compressAt: number }>) => void
   onRemoveModel: (modelId: string) => void
 }
 
-function ModelGroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddModel, onRemoveModel }: ModelGroupCardProps) {
+function ModelGroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddModel, onUpdateModel, onRemoveModel }: ModelGroupCardProps) {
   const [editUrl, setEditUrl] = useState(group.baseUrl)
   const [editKey, setEditKey] = useState(group.apiKey)
+  const [editName, setEditName] = useState(group.name)
+  const [editingName, setEditingName] = useState(false)
   const [showAddModel, setShowAddModel] = useState(false)
+  const [editingModelId, setEditingModelId] = useState<string | null>(null)
   const [mName, setMName] = useState('')
   const [mId, setMId] = useState('')
   const [mCtx, setMCtx] = useState('200000')
@@ -445,8 +483,29 @@ function ModelGroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddMo
       <div className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-[var(--surface-2)] transition-colors" onClick={onToggle}>
         <div className="flex items-center gap-2">
           <span className="text-[12px] text-[var(--muted)]">{expanded ? '▼' : '▶'}</span>
-          <span className="text-[13px] text-[var(--text)] font-medium">{group.name}</span>
-          <span className="text-[11px] text-[var(--muted)] border border-[var(--border)] rounded px-1.5 py-0.5">{group.protocol}</span>
+          {editingName ? (
+            <input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onBlur={() => { onUpdate({ name: editName }); setEditingName(false) }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { onUpdate({ name: editName }); setEditingName(false) } }}
+              onClick={(e) => e.stopPropagation()}
+              autoFocus
+              className="text-[13px] text-[var(--text)] font-medium bg-[var(--surface-2)] border border-[var(--border)] rounded px-1.5 py-0.5 outline-none w-32"
+            />
+          ) : (
+            <span className="text-[13px] text-[var(--text)] font-medium" onDoubleClick={(e) => { e.stopPropagation(); setEditingName(true) }}>{group.name}</span>
+          )}
+          <select
+            value={group.protocol}
+            onChange={(e) => { e.stopPropagation(); onUpdate({ protocol: e.target.value as ApiProtocol }) }}
+            onClick={(e) => e.stopPropagation()}
+            className="text-[11px] text-[var(--muted)] border border-[var(--border)] rounded px-1.5 py-0.5 bg-transparent outline-none cursor-pointer"
+          >
+            <option value="anthropic">anthropic</option>
+            <option value="openai">openai</option>
+            <option value="openai-responses">openai-responses</option>
+          </select>
         </div>
         <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="text-[12px] text-[var(--muted)] hover:text-red-500 transition-colors">
           删除
@@ -460,28 +519,40 @@ function ModelGroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddMo
           <div className="space-y-2">
             {group.models.map((model) => (
               <div key={model.id} className="border border-[var(--border)] rounded-[6px] px-3 py-2 space-y-1">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-[13px] text-[var(--text)]">{model.name}</div>
-                    <div className="text-[11px] text-[var(--muted)]">
-                      {model.modelId} &middot; {formatContextWindow(model.contextWindow)} &middot; 输出 {formatContextWindow(model.maxTokens || 32000)} &middot; {Math.round(model.compressAt * 100)}%
+                {editingModelId === model.id ? (
+                  <ModelEditForm
+                    model={model}
+                    inputCls={inputCls}
+                    onSave={(updates) => { onUpdateModel(model.id, updates); setEditingModelId(null) }}
+                    onCancel={() => setEditingModelId(null)}
+                  />
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-[13px] text-[var(--text)]">{model.name}</div>
+                        <div className="text-[11px] text-[var(--muted)]">
+                          {model.modelId} &middot; {formatContextWindow(model.contextWindow)} &middot; 输出 {formatContextWindow(model.maxTokens || 32000)} &middot; {Math.round(model.compressAt * 100)}%
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleTestModel(model.modelId, model.id)}
+                          disabled={testing === model.id}
+                          className="text-[12px] text-[var(--accent)] hover:opacity-80 transition-colors disabled:opacity-50"
+                        >
+                          {testing === model.id ? '测试中...' : '测试'}
+                        </button>
+                        <button onClick={() => setEditingModelId(model.id)} className="text-[12px] text-[var(--accent)] hover:opacity-80 transition-colors">编辑</button>
+                        <button onClick={() => onRemoveModel(model.id)} className="text-[12px] text-[var(--muted)] hover:text-red-500 transition-colors">删除</button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleTestModel(model.modelId, model.id)}
-                      disabled={testing === model.id}
-                      className="text-[12px] text-[var(--accent)] hover:opacity-80 transition-colors disabled:opacity-50"
-                    >
-                      {testing === model.id ? '测试中...' : '测试'}
-                    </button>
-                    <button onClick={() => onRemoveModel(model.id)} className="text-[12px] text-[var(--muted)] hover:text-red-500 transition-colors">删除</button>
-                  </div>
-                </div>
-                {testResult?.id === model.id && (
-                  <div className={`text-[11px] ${testResult.success ? 'text-[var(--good)]' : 'text-[var(--bad)]'}`}>
-                    {testResult.success ? '✓' : '✗'} {testResult.msg}
-                  </div>
+                    {testResult?.id === model.id && (
+                      <div className={`text-[11px] ${testResult.success ? 'text-[var(--good)]' : 'text-[var(--bad)]'}`}>
+                        {testResult.success ? '✓' : '✗'} {testResult.msg}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             ))}

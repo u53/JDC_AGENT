@@ -267,6 +267,21 @@ export class SessionManager {
         compressAt: currentActive.model.compressAt || 0.9,
       })
       ;(session as any)._protocol = currentActive.group.protocol
+    } else if (currentActive) {
+      // Same model but config may have changed (contextWindow, compressAt, maxTokens)
+      const newCtx = currentActive.model.contextWindow || 200000
+      const newCompressAt = currentActive.model.compressAt || 0.9
+      const newMaxTokens = currentActive.model.maxTokens || 32000
+      if (session.config.modelConfig.contextWindow !== newCtx ||
+          session.config.modelConfig.compressAt !== newCompressAt ||
+          session.config.modelConfig.maxTokens !== newMaxTokens) {
+        session.updateProvider(session.getProvider(), {
+          model: currentActive.model.modelId,
+          maxTokens: newMaxTokens,
+          contextWindow: newCtx,
+          compressAt: newCompressAt,
+        })
+      }
     }
 
     const events: SessionEvents = {
@@ -475,6 +490,7 @@ export class SessionManager {
     const session = this.sessions.get(sessionId)
     if (!session) return []
     await session.ensureSkillsReady()
+    await session.reloadSkills()
     const loader = session.getSkillLoader()
     if (!loader) return []
     return loader.getInvocable().map(s => ({

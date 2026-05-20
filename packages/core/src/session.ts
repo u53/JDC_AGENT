@@ -258,12 +258,20 @@ export class Session {
     await this.skillsReady
   }
 
+  async reloadSkills(): Promise<void> {
+    await this.skillLoader.loadAll(this.config.cwd)
+  }
+
   getSkillLoader(): SkillLoader {
     return this.skillLoader
   }
 
   setPermissionMode(mode: import('./permissions.js').PermissionMode): void {
     this.permissionChecker.setMode(mode)
+  }
+
+  getProvider(): ModelProvider {
+    return this.provider
   }
 
   updateProvider(provider: ModelProvider, modelConfig: ModelConfig): void {
@@ -669,6 +677,12 @@ export class Session {
       this.messages.push(toolMessage)
       this.history.addMessage(this.id, toolMessage)
       events.onMessageComplete(toolMessage)
+
+      // Check if compaction is needed between runloop iterations
+      this.microCompact()
+      if (this.shouldCompact()) {
+        await this.compact(events)
+      }
     }
 
     // Ensure usage is reported at end of runLoop (fallback for APIs that don't report token counts)
