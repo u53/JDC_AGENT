@@ -311,8 +311,8 @@ export function Composer({
         </div>
 
         {/* Status bar */}
-        <div className="flex items-center justify-between text-[12px]">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between text-[12px] min-w-0">
+          <div className="flex items-center gap-3 min-w-0 overflow-hidden">
             {/* Permission dropdown */}
             <div className="relative">
               <button
@@ -369,11 +369,11 @@ export function Composer({
 
             {/* IDE connection + selection */}
             {connectedIde && (
-              <span className="flex items-center gap-1 text-[var(--good)]">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--good)]" />
-                {connectedIde.ideName}
+              <span className="flex items-center gap-1 text-[var(--good)] min-w-0 shrink truncate">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--good)] shrink-0" />
+                <span className="shrink-0">{connectedIde.ideName}</span>
                 {ideSelection?.filePath && (
-                  <span className="text-[var(--muted)] ml-1">
+                  <span className="text-[var(--muted)] ml-1 truncate">
                     · {ideSelection.filePath.split('/').pop()}
                     {ideSelection.text ? ` (${ideSelection.selection?.start.line}-${ideSelection.selection?.end.line})` : ''}
                   </span>
