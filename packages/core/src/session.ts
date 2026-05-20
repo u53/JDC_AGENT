@@ -642,14 +642,19 @@ export class Session {
         }
       }
 
+      // Reorder content blocks: thinking → merged text → tool_uses
+      // OpenAI Responses API often interleaves text/function_call within one response,
+      // which renders as text being split by tool cards. Group them into a clean structure.
+      const reorderedContent = reorderAssistantContent(assistantContent)
+
       const assistantMessage: Message = {
         id: uuid(),
         role: 'assistant',
-        content: assistantContent,
+        content: reorderedContent,
         timestamp: Date.now(),
       }
 
-      if (assistantContent.length === 0) {
+      if (reorderedContent.length === 0) {
         console.warn('[SESSION] Empty assistant response')
       }
       this.messages.push(assistantMessage)
@@ -749,4 +754,29 @@ export class Session {
       this.backgroundTriggers.delete(agentToolUseId)
     }
   }
+}
+
+function reorderAssistantContent(content: any[]): any[] {
+  if (content.length === 0) return content
+
+  const thinkingBlocks: any[] = []
+  const textParts: string[] = []
+  const toolBlocks: any[] = []
+
+  for (const block of content) {
+    if (block.type === 'thinking') {
+      thinkingBlocks.push(block)
+    } else if (block.type === 'text') {
+      if (block.text) textParts.push(block.text)
+    } else if (block.type === 'tool_use') {
+      toolBlocks.push(block)
+    }
+  }
+
+  const result: any[] = [...thinkingBlocks]
+  if (textParts.length > 0) {
+    result.push({ type: 'text', text: textParts.join('\n\n') })
+  }
+  result.push(...toolBlocks)
+  return result
 }
