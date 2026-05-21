@@ -1,6 +1,7 @@
 import type { ToolCardRouterProps } from './ToolCardRouter'
 import { ToolCardShell } from './ToolCardShell'
 import { computeLineDiff } from './shared'
+import { DiffView } from './DiffView'
 
 export function EditToolCard({ event, input, result }: ToolCardRouterProps) {
   const status = event
@@ -34,25 +35,7 @@ export function EditToolCard({ event, input, result }: ToolCardRouterProps) {
         </pre>
       )}
       {!isError && diffLines.length > 0 && (
-        <div className="max-h-[300px] overflow-auto p-2 text-[12px]" style={{ fontFamily: 'var(--font-mono)' }}>
-          {diffLines.map((line, i) => (
-            <div
-              key={i}
-              className={
-                line.type === 'add'
-                  ? 'bg-green-900/20 text-green-400'
-                  : line.type === 'remove'
-                  ? 'bg-red-900/20 text-red-400'
-                  : 'text-[var(--muted)]'
-              }
-            >
-              <span className="select-none inline-block w-4">
-                {line.type === 'add' ? '+' : line.type === 'remove' ? '-' : ' '}
-              </span>
-              {line.content}
-            </div>
-          ))}
-        </div>
+        <DiffView diffLines={diffLines} />
       )}
     </ToolCardShell>
   )

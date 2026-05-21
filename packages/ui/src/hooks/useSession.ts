@@ -71,8 +71,15 @@ export function useSession() {
       const next = useSessionStore.getState().dequeueMessage()
       if (next && sessionId === useSessionStore.getState().activeSessionId) {
         setTimeout(() => {
-          (window as any).electronAPI?.invoke('query:send', { sessionId, text: next })
+          const userMessage = {
+            id: crypto.randomUUID(),
+            role: 'user' as const,
+            content: [{ type: 'text' as const, text: next }],
+            timestamp: Date.now(),
+          }
+          useSessionStore.setState((s) => ({ messages: [...s.messages, userMessage] }))
           useSessionStore.getState().markStreaming(sessionId, true)
+          ;(window as any).electronAPI?.invoke('query:send', { sessionId, text: next })
         }, 100)
       }
     }) || (() => {})

@@ -31,16 +31,23 @@ export function WriteToolCard({ event, input, result }: ToolCardRouterProps) {
         </pre>
       )}
       {!isError && lines.length > 0 && (
-        <div className="max-h-[300px] overflow-auto p-2 text-[12px]" style={{ fontFamily: 'var(--font-mono)' }}>
-          {displayLines.map((line, i) => (
-            <div key={i} className="bg-green-900/20 text-green-400">
-              <span className="select-none inline-block w-4">+</span>
-              {line}
-            </div>
-          ))}
+        <div className="max-h-[400px] overflow-auto text-[12px]" style={{ fontFamily: 'var(--font-mono)' }}>
+          <table className="w-full border-collapse">
+            <tbody>
+              {displayLines.map((line, i) => (
+                <tr key={i}>
+                  <td className="select-none text-right pr-1 w-[30px] align-top" style={{ color: 'var(--muted)', opacity: 0.5 }}>
+                    {i + 1}
+                  </td>
+                  <td className="select-none w-[14px] text-center" style={{ color: 'var(--good)' }}>+</td>
+                  <td className="whitespace-pre-wrap break-all pl-1" style={{ color: 'var(--good)' }}>{line}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
           {hasMore && !showAll && (
             <div
-              className="text-[var(--muted)] cursor-pointer hover:text-[var(--text)] mt-1"
+              className="text-[var(--muted)] cursor-pointer hover:text-[var(--text)] mt-1 pl-[74px]"
               onClick={(e) => { e.stopPropagation(); setShowAll(true) }}
             >
               ... {lines.length - 5} more lines

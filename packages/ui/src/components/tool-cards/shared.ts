@@ -1,38 +1,54 @@
+import { diffLines, diffWordsWithSpace } from 'diff'
+
 export interface DiffLine {
   type: 'add' | 'remove' | 'context'
   content: string
+  oldLineNum?: number
+  newLineNum?: number
+}
+
+export interface InlineDiffSegment {
+  type: 'added' | 'removed' | 'common'
+  value: string
 }
 
 export function computeLineDiff(oldStr: string, newStr: string): DiffLine[] {
-  const oldLines = oldStr.split('\n')
-  const newLines = newStr.split('\n')
+  const changes = diffLines(oldStr, newStr)
   const result: DiffLine[] = []
+  let oldLine = 1
+  let newLine = 1
 
-  let oi = 0
-  let ni = 0
-
-  while (oi < oldLines.length || ni < newLines.length) {
-    if (oi >= oldLines.length) {
-      result.push({ type: 'add', content: newLines[ni]! })
-      ni++
-    } else if (ni >= newLines.length) {
-      result.push({ type: 'remove', content: oldLines[oi]! })
-      oi++
-    } else if (oldLines[oi] === newLines[ni]) {
-      result.push({ type: 'context', content: oldLines[oi]! })
-      oi++
-      ni++
-    } else {
-      result.push({ type: 'remove', content: oldLines[oi]! })
-      oi++
-      if (ni < newLines.length && (oi >= oldLines.length || oldLines[oi] !== newLines[ni])) {
-        result.push({ type: 'add', content: newLines[ni]! })
-        ni++
+  for (const change of changes) {
+    const lines = change.value.replace(/\n$/, '').split('\n')
+    for (const line of lines) {
+      if (change.added) {
+        result.push({ type: 'add', content: line, newLineNum: newLine++ })
+      } else if (change.removed) {
+        result.push({ type: 'remove', content: line, oldLineNum: oldLine++ })
+      } else {
+        result.push({ type: 'context', content: line, oldLineNum: oldLine++, newLineNum: newLine++ })
       }
     }
   }
-
   return result
+}
+
+export function computeInlineDiff(oldLine: string, newLine: string): { oldSegments: InlineDiffSegment[]; newSegments: InlineDiffSegment[] } {
+  const changes = diffWordsWithSpace(oldLine, newLine)
+  const oldSegments: InlineDiffSegment[] = []
+  const newSegments: InlineDiffSegment[] = []
+
+  for (const change of changes) {
+    if (change.added) {
+      newSegments.push({ type: 'added', value: change.value })
+    } else if (change.removed) {
+      oldSegments.push({ type: 'removed', value: change.value })
+    } else {
+      oldSegments.push({ type: 'common', value: change.value })
+      newSegments.push({ type: 'common', value: change.value })
+    }
+  }
+  return { oldSegments, newSegments }
 }
 
 export function extractFileName(filePath: string): string {
