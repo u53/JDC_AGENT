@@ -23,9 +23,13 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "electron",
-      "better-sqlite3",
       "esbuild",
+      "keytar",
       "node-pty"
+    ],
+    "ignoredBuiltDependencies": [
+      "@vscode/vsce-sign",
+      "electron"
     ]
   }
 }

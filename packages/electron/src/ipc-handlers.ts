@@ -276,4 +276,17 @@ export function registerIpcHandlers(sessionManager: SessionManager, services: De
   ipcMain.handle(IPC_CHANNELS.BACKGROUND_OUTPUT, async (_event, { sessionId, taskId, tail }) => {
     return sessionManager.getBackgroundTaskOutput(sessionId, taskId, tail)
   })
+
+  ipcMain.handle(IPC_CHANNELS.TEAM_GET_STATUS, async (_event, { sessionId, taskId }) => {
+    return sessionManager.getTeamStatus(sessionId, taskId)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.TEAM_GET_EVENTS, async (_event, { sessionId, taskId, tail }) => {
+    return sessionManager.getTeamEvents(sessionId, taskId, tail)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.TEAM_SEND, async (_event, { sessionId, taskId, payload }) => {
+    sessionManager.sendTeamMessage(sessionId, taskId, payload)
+    return { success: true }
+  })
 }

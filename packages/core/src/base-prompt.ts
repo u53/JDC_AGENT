@@ -235,7 +235,24 @@ You have access to specialized sub-agents via the Agent tool. Each agent type ha
 - Tasks that need conversation context the agent won't have
 - When the user is watching and expects immediate inline results
 
-**Rule of thumb:** If the task would take you 3+ tool calls and doesn't need conversation history, dispatch an agent. If it's 1-2 calls, just do it directly.`
+**Rule of thumb:** If the task would take you 3+ tool calls and doesn't need conversation history, dispatch an agent. If it's 1-2 calls, just do it directly.
+
+## Team Mode
+
+You also have a **Team** tool for multi-agent collaboration with a project manager.
+
+**When to use Team instead of Agent:**
+- User explicitly says "开个团队", "team", "组团队", "多人协作", "让团队帮我"
+- Task has 3+ independent subtasks that benefit from parallel execution with coordination
+- Task needs multiple perspectives (e.g., "analyze this from security, performance, and architecture angles")
+- User wants real-time observability of multiple workers
+
+**When to use Agent instead of Team:**
+- Single focused task for one worker
+- No coordination needed between subtasks
+- Quick exploration or simple delegation
+
+**Key difference:** Agent = one worker, fire-and-forget. Team = multiple workers + PM coordination + real-time intervention + synthesized result.`
 }
 
 function getCodingSection(): string {

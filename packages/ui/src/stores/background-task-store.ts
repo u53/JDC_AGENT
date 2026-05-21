@@ -2,7 +2,7 @@ import { create } from 'zustand'
 
 export interface BackgroundTaskItem {
   id: string
-  type: 'shell' | 'agent'
+  type: 'shell' | 'agent' | 'team'
   status: 'running' | 'completed' | 'failed'
   command?: string
   prompt?: string

@@ -75,6 +75,10 @@ export const IPC_CHANNELS = {
   BACKGROUND_STATE_CHANGED: 'background:state-changed',
   BACKGROUND_NOTIFICATION: 'background:notification',
   AGENT_BACKGROUND: 'agent:background',
+  TEAM_GET_STATUS: 'team:get-status',
+  TEAM_GET_EVENTS: 'team:get-events',
+  TEAM_SEND: 'team:send',
+  TEAM_STATE_CHANGED: 'team:state-changed',
 
   // Model
   MODEL_TEST: 'model:test',

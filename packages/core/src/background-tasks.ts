@@ -2,8 +2,10 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdirSync, writeFileSync, readFileSync, appendFileSync } from 'node:fs'
 import { v4 as uuid } from 'uuid'
 import path from 'node:path'
+import { RingBuffer } from './team/team-mailbox.js'
+import type { TeamEvent, TeamMemberSpec, TeamMessage } from './team/team-types.js'
 
-export type TaskType = 'shell' | 'agent'
+export type TaskType = 'shell' | 'agent' | 'team'
 
 export interface BackgroundTask {
   id: string
@@ -29,6 +31,8 @@ export class BackgroundTaskManager {
   private onComplete?: (task: BackgroundTask) => void
   private maxConcurrentAgents = 3
   private agentQueue: Array<{ resolve: () => void }> = []
+  private mailboxes = new Map<string, TeamMessage[]>()
+  private eventBuffers = new Map<string, RingBuffer<TeamEvent>>()
 
   constructor(logDir: string) {
     this.logDir = logDir
@@ -137,6 +141,70 @@ export class BackgroundTaskManager {
     task.result = error
     this.onComplete?.(task)
     this.releaseAgentSlot()
+  }
+
+  registerTeam(objective: string, members: TeamMemberSpec[]): BackgroundTask {
+    const id = uuid().slice(0, 8)
+    const logFile = path.join(this.logDir, `${id}.log`)
+    writeFileSync(logFile, '')
+    const task: BackgroundTask = {
+      id,
+      type: 'team',
+      prompt: objective,
+      pid: 0,
+      status: 'running',
+      logFile,
+      startedAt: Date.now(),
+    }
+    this.tasks.set(id, task)
+    this.mailboxes.set(id, [])
+    this.eventBuffers.set(id, new RingBuffer<TeamEvent>(500))
+    return task
+  }
+
+  completeTeam(id: string, result: { summary: string }): void {
+    const task = this.tasks.get(id)
+    if (!task || task.type !== 'team') return
+    task.status = 'completed'
+    task.completedAt = Date.now()
+    task.result = result.summary
+    this.onComplete?.(task)
+  }
+
+  failTeam(id: string, error: string): void {
+    const task = this.tasks.get(id)
+    if (!task || task.type !== 'team') return
+    task.status = 'failed'
+    task.completedAt = Date.now()
+    task.result = error
+    this.onComplete?.(task)
+  }
+
+  sendMessage(id: string, msg: TeamMessage): void {
+    const mailbox = this.mailboxes.get(id)
+    if (mailbox) mailbox.push(msg)
+  }
+
+  getMailbox(id: string): TeamMessage[] {
+    return [...(this.mailboxes.get(id) || [])]
+  }
+
+  drainMailbox(id: string): TeamMessage[] {
+    const mailbox = this.mailboxes.get(id)
+    if (!mailbox) return []
+    return mailbox.splice(0)
+  }
+
+  emitEvent(id: string, event: TeamEvent): void {
+    const buffer = this.eventBuffers.get(id)
+    if (buffer) buffer.push(event)
+  }
+
+  getEvents(id: string, tail?: number): TeamEvent[] {
+    const buffer = this.eventBuffers.get(id)
+    if (!buffer) return []
+    if (tail) return buffer.tail(tail)
+    return buffer.getAll()
   }
 
   getTask(id: string): BackgroundTask | undefined {

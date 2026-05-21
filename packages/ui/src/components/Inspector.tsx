@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSessionStore } from '../stores/session-store'
 import { useBackgroundTaskStore, type BackgroundTaskItem } from '../stores/background-task-store'
+import { useTeamStore } from '../stores/team-store'
 import { ipc } from '../lib/ipc-client'
 import { IconTasks, IconQueue, IconUsage, IconFiles, IconSession, IconX } from './icons'
 
@@ -252,11 +253,18 @@ function TasksSection({ tasks, backgroundTasks }: {
   backgroundTasks: BackgroundTaskItem[]
 }) {
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const setActiveTeam = useTeamStore((s) => s.setActiveTeam)
   const runningBg = backgroundTasks.filter(t => t.status === 'running')
 
   const handleStop = (taskId: string) => {
     if (activeSessionId) {
       ipc.background.stop(activeSessionId, taskId)
+    }
+  }
+
+  const handleOpen = (task: BackgroundTaskItem) => {
+    if (task.type === 'team') {
+      setActiveTeam(task.id)
     }
   }
 
@@ -267,20 +275,24 @@ function TasksSection({ tasks, backgroundTasks }: {
           <SectionHeader>Background ({runningBg.length} running)</SectionHeader>
           <div className="space-y-1.5">
             {backgroundTasks.map((task) => (
-              <div key={task.id} className="flex items-center gap-2 text-[12px] group">
+              <div
+                key={task.id}
+                className={`flex items-center gap-2 text-[12px] group ${task.type === 'team' ? 'cursor-pointer hover:opacity-80' : ''}`}
+                onClick={() => handleOpen(task)}
+              >
                 <span
                   className={`w-2 h-2 rounded-full flex-shrink-0 ${task.status === 'running' ? 'animate-pulse' : ''}`}
                   style={{ backgroundColor: task.status === 'running' ? 'var(--accent)' : task.status === 'completed' ? 'var(--good)' : 'var(--bad)' }}
                 />
                 <span className="text-[10px] text-[var(--muted)] uppercase w-[32px] flex-shrink-0">
-                  {task.type === 'shell' ? 'SH' : 'AI'}
+                  {task.type === 'shell' ? 'SH' : task.type === 'team' ? 'TM' : 'AI'}
                 </span>
                 <span className="truncate text-[var(--text)] flex-1">
                   {task.type === 'shell' ? (task.command || '').slice(0, 40) : (task.prompt || '').slice(0, 40)}
                 </span>
                 {task.status === 'running' && (
                   <button
-                    onClick={() => handleStop(task.id)}
+                    onClick={(e) => { e.stopPropagation(); handleStop(task.id) }}
                     className="opacity-0 group-hover:opacity-100 text-[10px] text-[var(--bad)] hover:opacity-80"
                   >
                     [STOP]

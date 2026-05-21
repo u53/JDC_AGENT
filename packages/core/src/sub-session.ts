@@ -26,12 +26,21 @@ export interface SubSessionOptions {
   permissionMode?: 'standard' | 'relaxed' | 'strict'
   onAgentProgress?: (event: { toolName: string; toolStatus: 'start' | 'complete' | 'error'; toolInput?: Record<string, unknown>; toolResult?: { content: string; isError?: boolean }; toolCount: number }) => void
   onAgentText?: (text: string) => void
+  mailbox?: { drain(): Array<{ id: string; from: string; content: string; intent?: string; priority: string; createdAt: number }> }
 }
 
 export interface SubSessionResult {
   content: string
   turns: number
   toolsUsed: string[]
+}
+
+export function formatExternalMessages(msgs: Array<{ from: string; content: string; intent?: string; priority: string }>): string {
+  return msgs.map(m => {
+    const prefix = m.priority === 'urgent' ? '[URGENT] ' : ''
+    const intentTag = m.intent ? ` (${m.intent})` : ''
+    return `${prefix}[${m.from}]${intentTag}: ${m.content}`
+  }).join('\n\n')
 }
 
 export async function runSubSession(opts: SubSessionOptions): Promise<SubSessionResult> {
@@ -70,6 +79,17 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
   while (turns < effectiveMaxTurns) {
     if (signal?.aborted) break
     turns++
+
+    const incoming = opts.mailbox?.drain() ?? []
+    if (incoming.length > 0) {
+      const injectedText = formatExternalMessages(incoming)
+      messages.push({
+        id: uuid(),
+        role: 'user',
+        content: [{ type: 'text', text: `<external-messages>\n${injectedText}\n</external-messages>` }],
+        timestamp: Date.now(),
+      })
+    }
 
     let textContent = ''
     let thinkingContent = ''

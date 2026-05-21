@@ -312,9 +312,9 @@ export function Composer({
 
         {/* Status bar */}
         <div className="flex items-center justify-between text-[12px] min-w-0">
-          <div className="flex items-center gap-3 min-w-0 overflow-hidden">
+          <div className="flex items-center gap-3 min-w-0">
             {/* Permission dropdown */}
-            <div className="relative">
+            <div className="relative shrink-0">
               <button
                 onClick={() => setShowPermMenu(!showPermMenu)}
                 className="flex items-center gap-1 text-[var(--text)] hover:opacity-80 transition-opacity"

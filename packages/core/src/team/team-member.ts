@@ -1,0 +1,173 @@
+import { v4 as uuid } from 'uuid'
+import { runSubSession, type SubSessionOptions, type SubSessionResult } from '../sub-session.js'
+import { Mailbox, type MailboxMessage } from './team-mailbox.js'
+import type {
+  TeamMemberState,
+  TeamMemberSpec,
+  MemberStatus,
+  TeamCapability,
+  TeamMessage,
+  TeamEvent,
+  TeamTaskResult,
+} from './team-types.js'
+
+const READ_ONLY_TYPES = new Set(['explore', 'plan', 'security-auditor'])
+const WRITE_TYPES = new Set(['general', 'refactor', 'frontend-designer'])
+const SHELL_TYPES = new Set(['general', 'security-auditor'])
+
+function deriveCapabilities(agentType: string): TeamCapability[] {
+  const caps: TeamCapability[] = ['read']
+  if (WRITE_TYPES.has(agentType)) caps.push('write')
+  if (SHELL_TYPES.has(agentType)) caps.push('shell')
+  return caps
+}
+
+export interface TeamMemberOptions {
+  spec: TeamMemberSpec
+  taskPrompt: string
+  taskId?: string
+  id?: string
+  existingMailbox?: Mailbox
+  subSessionDeps: Omit<SubSessionOptions, 'prompt' | 'agentType' | 'signal' | 'onAgentProgress' | 'onAgentText' | 'mailbox' | 'onToolEvent'>
+  onEvent?: (event: TeamEvent) => void
+  onComplete?: (memberId: string, result: TeamTaskResult) => void
+  onFail?: (memberId: string, error: string) => void
+}
+
+export class TeamMember {
+  readonly id: string
+  readonly name: string
+  readonly role: string
+  readonly agentType: string
+  readonly modelId?: string
+
+  private status: MemberStatus = 'queued'
+  private currentTaskId?: string
+  private toolCount = 0
+  private lastActivityAt: number = Date.now()
+  private textBuffer = ''
+  private result?: TeamTaskResult
+  private capabilities: TeamCapability[]
+
+  private mailbox = new Mailbox()
+  private abortController = new AbortController()
+  private opts: TeamMemberOptions
+  private runPromise?: Promise<void>
+
+  constructor(opts: TeamMemberOptions) {
+    this.opts = opts
+    this.id = opts.id ?? `member_${uuid().slice(0, 8)}`
+    this.role = opts.spec.role
+    this.name = opts.spec.role
+    this.agentType = opts.spec.agentType ?? 'explore'
+    this.modelId = opts.spec.modelId
+    this.currentTaskId = opts.taskId
+    this.capabilities = deriveCapabilities(this.agentType)
+    if (opts.existingMailbox) {
+      this.mailbox = opts.existingMailbox
+    }
+  }
+
+  getState(): TeamMemberState {
+    return {
+      id: this.id,
+      name: this.name,
+      role: this.role,
+      agentType: this.agentType,
+      modelId: this.modelId,
+      status: this.status,
+      capabilities: this.capabilities,
+      currentTaskId: this.currentTaskId,
+      lastActivityAt: this.lastActivityAt,
+      toolCount: this.toolCount,
+      result: this.result,
+    }
+  }
+
+  getStatus(): MemberStatus {
+    return this.status
+  }
+
+  getMailboxLength(): number {
+    return this.mailbox.length
+  }
+
+  getMailbox(): Mailbox {
+    return this.mailbox
+  }
+
+  sendMessage(msg: TeamMessage): void {
+    const mb: MailboxMessage = {
+      id: msg.id,
+      from: msg.from + (msg.fromMemberId ? `:${msg.fromMemberId}` : ''),
+      content: msg.content,
+      intent: msg.intent,
+      priority: msg.priority,
+      createdAt: msg.createdAt,
+    }
+    this.mailbox.push(mb)
+    this.lastActivityAt = Date.now()
+  }
+
+  abort(): void {
+    this.abortController.abort()
+    this.status = 'stopped'
+  }
+
+  async start(): Promise<void> {
+    if (this.runPromise) return this.runPromise
+    this.runPromise = this.run()
+    return this.runPromise
+  }
+
+  private async run(): Promise<void> {
+    this.status = 'running'
+    this.lastActivityAt = Date.now()
+
+    try {
+      const subOpts: SubSessionOptions = {
+        ...this.opts.subSessionDeps,
+        prompt: this.opts.taskPrompt,
+        agentType: this.agentType,
+        signal: this.abortController.signal,
+        mailbox: this.mailbox,
+        onAgentProgress: (event) => {
+          this.toolCount = event.toolCount
+          this.lastActivityAt = Date.now()
+          this.opts.onEvent?.({
+            type: event.toolStatus === 'start' ? 'tool_start' : 'tool_complete',
+            memberId: this.id,
+            toolName: event.toolName,
+            timestamp: Date.now(),
+          })
+        },
+        onAgentText: (text) => {
+          this.textBuffer += text
+          this.lastActivityAt = Date.now()
+          this.opts.onEvent?.({
+            type: 'member_progress',
+            memberId: this.id,
+            text,
+            timestamp: Date.now(),
+          })
+        },
+      }
+
+      const result: SubSessionResult = await runSubSession(subOpts)
+
+      const taskResult: TeamTaskResult = {
+        summary: result.content,
+        findings: [],
+      }
+      this.result = taskResult
+      this.status = 'completed'
+      this.lastActivityAt = Date.now()
+      this.opts.onComplete?.(this.id, taskResult)
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err)
+      this.status = 'failed'
+      this.lastActivityAt = Date.now()
+      this.opts.onFail?.(this.id, errorMsg)
+    }
+  }
+}

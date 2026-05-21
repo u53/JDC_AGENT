@@ -37,6 +37,11 @@ import { ParallelExecutor } from './parallel-executor.js'
 import { BackgroundTaskManager } from './background-tasks.js'
 import { createTaskOutputTool } from './tools/task-output.js'
 import { monitorTool } from './tools/monitor.js'
+import { TeamRegistry } from './team/team-registry.js'
+import { createTeamTool } from './tools/team.js'
+import { createBackgroundSendTool } from './tools/background-send.js'
+import { createBackgroundStatusTool } from './tools/background-status.js'
+import { createBackgroundEventsTool } from './tools/background-events.js'
 
 export interface SessionEvents {
   onStreamChunk: (chunk: StreamChunk) => void
@@ -74,15 +79,16 @@ export class Session {
   private fileTracker: FileTracker
   private fileReadState: FileReadStateCache
   private backgroundTasks: BackgroundTaskManager
+  private teamRegistry: TeamRegistry
   private turnIndex = 0
   private planMode: 'normal' | 'planning' | 'awaiting_approval' = 'normal'
   private onPlanReview?: (planFile: string, content: string) => Promise<{ approved: boolean; feedback?: string }>
   resolveModel?: (modelId: string) => { provider: ModelProvider; modelConfig: ModelConfig } | null
   ideContext?: { filePath?: string; text?: string; selection?: { start: { line: number }; end: { line: number } } | null }
   private pendingNotifications: Array<{
-    type: 'shell_complete' | 'agent_complete'
+    type: 'shell_complete' | 'agent_complete' | 'team_progress'
     taskId: string
-    status: 'completed' | 'failed'
+    status: 'completed' | 'failed' | 'running'
     command?: string
     prompt?: string
     output?: string
@@ -90,6 +96,7 @@ export class Session {
     result?: string
     turns?: number
     toolsUsed?: string[]
+    teamEvent?: string
   }> = []
   onNotificationReady?: () => void
 
@@ -110,6 +117,7 @@ export class Session {
     this.fileReadState = new FileReadStateCache()
     this.taskStore = new TaskStore(history, config.id)
     this.backgroundTasks = new BackgroundTaskManager(path.join(getConfigDir(), 'tasks'))
+    this.teamRegistry = new TeamRegistry()
     this.backgroundTasks.setOnComplete((task) => {
       if (task.type === 'shell') {
         this.pendingNotifications.push({
@@ -144,6 +152,51 @@ export class Session {
     this.toolRegistry.register(createTodoWriteTool(this.taskStore))
     this.toolRegistry.register(createTaskOutputTool(this.backgroundTasks))
     this.toolRegistry.register(monitorTool)
+    // Team Mode tools
+    const buildTeamSubSessionDeps = () => ({
+      provider: this.provider,
+      toolRegistry: this.toolRegistry,
+      modelConfig: this.config.modelConfig,
+      cwd: this.config.cwd,
+    })
+    this.toolRegistry.register(createTeamTool({
+      teamRegistry: this.teamRegistry,
+      backgroundTasks: this.backgroundTasks,
+      buildSubSessionDeps: buildTeamSubSessionDeps as any,
+      onTeamEvent: (teamId, event) => {
+        const notifyTypes = new Set([
+          'manager_decision',
+          'task_completed',
+          'task_cancelled',
+          'intervention_received',
+          'team_synthesizing',
+        ])
+        if (notifyTypes.has(event.type)) {
+          const text = event.type === 'manager_decision' ? (event as any).text
+            : event.type === 'task_completed' ? `Task ${(event as any).taskId} completed by ${(event as any).memberId}`
+            : event.type === 'task_cancelled' ? `Task ${(event as any).taskId} cancelled: ${(event as any).reason}`
+            : event.type === 'intervention_received' ? `Intervention "${(event as any).intent}" received from ${(event as any).from}`
+            : 'Team synthesizing results...'
+          this.pendingNotifications.push({
+            type: 'team_progress',
+            taskId: teamId,
+            status: 'running',
+            teamEvent: text,
+          })
+        }
+      },
+    }))
+    this.toolRegistry.register(createBackgroundSendTool({
+      backgroundTasks: this.backgroundTasks,
+      teamRegistry: this.teamRegistry,
+    }))
+    this.toolRegistry.register(createBackgroundStatusTool({
+      backgroundTasks: this.backgroundTasks,
+      teamRegistry: this.teamRegistry,
+    }))
+    this.toolRegistry.register(createBackgroundEventsTool({
+      backgroundTasks: this.backgroundTasks,
+    }))
     this.toolRegistry.register(createEnterPlanModeTool(() => {
       this.planMode = 'planning'
       this.toolRunner.planMode = 'planning'
@@ -516,6 +569,9 @@ export class Session {
       if (n.type === 'shell_complete') {
         return `<task-notification>\n<task-id>${n.taskId}</task-id>\n<type>shell_complete</type>\n<status>${n.status}</status>\n<command>${n.command || ''}</command>\n<exit-code>${n.exitCode ?? 'N/A'}</exit-code>\n<output>\n${n.output || '(no output)'}\n</output>\n</task-notification>`
       }
+      if (n.type === 'team_progress') {
+        return `<task-notification>\n<task-id>${n.taskId}</task-id>\n<type>team_progress</type>\n<status>${n.status}</status>\n<event>${n.teamEvent || ''}</event>\n</task-notification>`
+      }
       return `<task-notification>\n<task-id>${n.taskId}</task-id>\n<type>agent_complete</type>\n<status>${n.status}</status>\n<agent-prompt>${n.prompt || ''}</agent-prompt>\n<result>${n.result || '(no result)'}</result>\n<turns>${n.turns ?? 0}</turns>\n<tools-used>${(n.toolsUsed || []).join(', ')}</tools-used>\n</task-notification>`
     })
     return {
@@ -753,6 +809,69 @@ export class Session {
       trigger()
       this.backgroundTriggers.delete(agentToolUseId)
     }
+  }
+
+  getTeamStatus(taskId: string): any {
+    const task = this.backgroundTasks.getTask(taskId)
+    if (!task || task.type !== 'team') return null
+    const team = this.teamRegistry.get(taskId)
+    if (!team) {
+      return {
+        type: 'team',
+        id: task.id,
+        status: task.status,
+        finished: true,
+      }
+    }
+    const tasks = team.getTasks()
+    return {
+      type: 'team',
+      id: team.id,
+      objective: team.objective,
+      status: team.getStatus(),
+      manager: team.getManagerState(),
+      members: team.getMembers(),
+      tasks: tasks.map(t => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        status: t.status,
+        assigneeId: t.assigneeId,
+        priority: t.priority,
+      })),
+      taskStats: {
+        total: tasks.length,
+        completed: tasks.filter(t => t.status === 'completed').length,
+        running: tasks.filter(t => t.status === 'running' || t.status === 'assigned').length,
+        blocked: tasks.filter(t => t.status === 'blocked').length,
+        cancelled: tasks.filter(t => t.status === 'cancelled').length,
+        todo: tasks.filter(t => t.status === 'todo').length,
+        failed: tasks.filter(t => t.status === 'failed').length,
+      },
+    }
+  }
+
+  getTeamEvents(taskId: string, tail?: number): any[] {
+    const task = this.backgroundTasks.getTask(taskId)
+    if (!task || task.type !== 'team') return []
+    return this.backgroundTasks.getEvents(taskId, tail)
+  }
+
+  sendTeamMessage(taskId: string, payload: { message: string; target?: string; intent?: string; priority?: string }): void {
+    const task = this.backgroundTasks.getTask(taskId)
+    if (!task || task.type !== 'team') return
+    const msg = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      from: 'user' as const,
+      to: payload.target ?? 'manager',
+      intent: (payload.intent ?? 'message') as any,
+      content: payload.message,
+      priority: (payload.priority ?? 'normal') as any,
+      createdAt: Date.now(),
+    }
+    this.backgroundTasks.sendMessage(taskId, msg)
+    const team = this.teamRegistry.get(taskId)
+    if (team) team.sendMessage(msg)
   }
 }
 

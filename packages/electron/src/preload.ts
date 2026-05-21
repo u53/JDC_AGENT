@@ -105,6 +105,19 @@ const api = {
     return () => { ipcRenderer.removeListener('background:notification', listener) }
   },
 
+  // Team Mode
+  teamGetStatus: (sessionId: string, taskId: string) =>
+    ipcRenderer.invoke('team:get-status', { sessionId, taskId }),
+  teamGetEvents: (sessionId: string, taskId: string, tail?: number) =>
+    ipcRenderer.invoke('team:get-events', { sessionId, taskId, tail }),
+  teamSend: (sessionId: string, taskId: string, payload: { message: string; target?: string; intent?: string; priority?: string }) =>
+    ipcRenderer.invoke('team:send', { sessionId, taskId, payload }),
+  onTeamStateChanged: (callback: (data: { sessionId: string; taskId: string }) => void) => {
+    const listener = (_event: unknown, data: any) => callback(data)
+    ipcRenderer.on('team:state-changed', listener)
+    return () => { ipcRenderer.removeListener('team:state-changed', listener) }
+  },
+
   // Updater
   updaterCheck: () => ipcRenderer.invoke('updater:check'),
   updaterDownload: () => ipcRenderer.invoke('updater:download'),

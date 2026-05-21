@@ -9,10 +9,12 @@ import { PermissionDialog } from './PermissionDialog'
 import { PlanReviewDialog } from './PlanReviewDialog'
 import { HelpDialog } from './HelpDialog'
 import { AgentDetailPanel } from './AgentDetailPanel'
+import { TeamDetailPanel } from './TeamDetailPanel'
 import { useSessionStore } from '../stores/session-store'
 import { useModelStore } from '../stores/model-store'
 import { useSettingsStore } from '../stores/settings-store'
 import { useAgentStore } from '../stores/agent-store'
+import { useTeamStore } from '../stores/team-store'
 import { useAgentEvents } from '../hooks/useAgentEvents'
 import { copyToClipboard } from '../lib/clipboard'
 import type { Message } from '@jdcagnet/core'
@@ -94,6 +96,8 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   const openSettings = useSettingsStore((s) => s.open)
   useAgentEvents()
   const activeAgentId = useAgentStore((s) => s.activeAgentId)
+  const activeTeamId = useTeamStore((s) => s.activeTeamId)
+  const setActiveTeam = useTeamStore((s) => s.setActiveTeam)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [permissionMode, setPermissionMode] = useState(() => {
     return localStorage.getItem('jdcagnet-permission-mode') || 'standard'
@@ -301,11 +305,12 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   const turns = groupIntoTurns(messages)
   const lastTurn = turns[turns.length - 1]
   const isLastTurnActive = isStreaming && lastTurn && lastTurn.assistantMessages.length === 0
+  const showRightPanel = activeAgentId || activeTeamId
 
   return (
     <div className="flex flex-1 overflow-hidden relative">
       {/* Left: main chat */}
-      <div className={`flex flex-col overflow-hidden ${activeAgentId ? 'w-[60%]' : 'w-full'} transition-all`}>
+      <div className={`flex flex-col overflow-hidden ${showRightPanel ? 'w-[60%]' : 'w-full'} transition-all`}>
         <SessionHeader permissionMode={permissionMode} thinkingEnabled={thinkingEnabled} planMode={planMode} />
 
         {/* Conversation Timeline */}
@@ -393,8 +398,17 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         <HelpDialog visible={showHelp} onClose={() => setShowHelp(false)} />
       </div>
 
-      {/* Right: agent detail panel */}
-      {activeAgentId && (
+      {/* Right: agent or team detail panel */}
+      {activeTeamId && activeSessionId && (
+        <div className="w-[40%]">
+          <TeamDetailPanel
+            sessionId={activeSessionId}
+            taskId={activeTeamId}
+            onClose={() => setActiveTeam(null)}
+          />
+        </div>
+      )}
+      {!activeTeamId && activeAgentId && (
         <div className="w-[40%]">
           <AgentDetailPanel />
         </div>

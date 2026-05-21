@@ -454,6 +454,25 @@ export class SessionManager {
     return (session as any).backgroundTasks.getOutput(taskId, tail)
   }
 
+  getTeamStatus(sessionId: string, taskId: string): any {
+    const session = this.sessions.get(sessionId)
+    if (!session) return null
+    return session.getTeamStatus(taskId)
+  }
+
+  getTeamEvents(sessionId: string, taskId: string, tail?: number): any[] {
+    const session = this.sessions.get(sessionId)
+    if (!session) return []
+    return session.getTeamEvents(taskId, tail)
+  }
+
+  sendTeamMessage(sessionId: string, taskId: string, payload: { message: string; target?: string; intent?: string; priority?: string }): void {
+    const session = this.sessions.get(sessionId)
+    if (!session) return
+    session.sendTeamMessage(taskId, payload)
+    this.window?.webContents.send('team:state-changed', { sessionId, taskId })
+  }
+
   close(): void {
     this.mcpManager.close()
     this.history.close()
@@ -517,6 +536,9 @@ export class SessionManager {
       onMessageComplete: () => {},
       onError: (error) => {
         this.window?.webContents.send('query:error', { sessionId, error: error.message })
+      },
+      onUsage: (usage) => {
+        this.window?.webContents.send('query:usage', { sessionId, usage })
       },
     }
     try {
