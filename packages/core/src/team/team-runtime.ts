@@ -465,6 +465,19 @@ export class TeamRuntime {
 
   private recycleMember(memberId: string, originalSpec: { role: string; agentType: string; modelId?: string }): void {
     if (this.completed) return
+    // If no remaining work, don't recycle — the team is about to complete
+    // and we'd just leave a ghost queued member behind.
+    const tasks = this.manager.getTasks()
+    const hasMoreWork = tasks.some(t =>
+      t.status === 'todo' || t.status === 'assigned' || t.status === 'running'
+    )
+    if (!hasMoreWork) {
+      // Drop the member entirely so the UI doesn't show a confusing queued-but-team-finished state
+      this.memberById.delete(memberId)
+      const idx = this.members.findIndex(m => m.id === memberId)
+      if (idx >= 0) this.members.splice(idx, 1)
+      return
+    }
     const freshMember = new TeamMember({
       spec: { role: originalSpec.role, agentType: originalSpec.agentType, modelId: originalSpec.modelId },
       taskPrompt: '',

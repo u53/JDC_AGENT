@@ -24,9 +24,10 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
         'Create a multi-agent team to work on a complex objective collaboratively. ' +
         'Use this when the user says "开个团队", "team", "组个团队", "多人协作", or when a task benefits from multiple agents working in parallel with coordination. ' +
         'Prefer Team over multiple Agent calls when: (1) the user explicitly asks for a team, (2) the task has 3+ subtasks that benefit from parallel execution, or (3) the task needs coordination between workers. ' +
+        'IMPORTANT: Only ONE running team is allowed per session. If a team is already active, this tool will return an error — wrap_up the existing team first (use background_send with intent="wrap_up"), then create a new one. ' +
         'The team has a PM that assigns tasks, coordinates members, and synthesizes results. ' +
         'Use background_send to message the team, background_status to check progress, ' +
-        'background_events to view detailed events. The team runs as a background task.',
+        'background_events to view detailed events, team_list to see all teams. The team runs as a background task.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -66,6 +67,32 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
     },
     async execute(input: Record<string, unknown>, _ctx: ToolContext): Promise<ToolResult> {
       const objective = input.objective as string
+
+      // One running team per session: reject if there's already a running team.
+      // Archived (completed/failed) teams don't count.
+      const activeTeams = deps.teamRegistry.getAll().filter(t => {
+        const status = t.getStatus()
+        return status !== 'completed' && status !== 'failed' && status !== 'stopped'
+      })
+      if (activeTeams.length > 0) {
+        const existing = activeTeams[0]
+        return {
+          content: [
+            `Error: this session already has an active team.`,
+            ``,
+            `  Team ID: ${existing.id}`,
+            `  Objective: ${existing.objective}`,
+            `  Status: ${existing.getStatus()}`,
+            ``,
+            `Only one running team is allowed per session. Wrap up the existing team first:`,
+            `  - background_send with intent="wrap_up" to finish gracefully`,
+            `  - or wait for it to complete naturally`,
+            `Then create a new team. Use team_list to see all teams (including archived).`,
+          ].join('\n'),
+          isError: true,
+        }
+      }
+
       const requestedMembers = (input.members as TeamMemberSpec[] | undefined) ?? []
       const requestedTasks = (input.tasks as any[] | undefined) ?? []
       const maxWorkers = Math.min((input.maxWorkers as number | undefined) ?? 5, 10)

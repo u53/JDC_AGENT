@@ -97,7 +97,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
 
   if (!team) {
     return (
-      <div className="flex flex-col h-full border-l border-[var(--border)] bg-[var(--panel)]">
+      <div className="flex flex-col h-full min-h-0 bg-[var(--panel)]">
         <Header title={`Team ${taskId.slice(0, 8)}`} onClose={onClose} />
         <div className="flex-1 flex items-center justify-center text-[12px] text-[var(--muted)]">
           Loading…
@@ -107,14 +107,14 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
   }
 
   return (
-    <div className="flex flex-col h-full border-l border-[var(--border)] bg-[var(--panel)]">
+    <div className="flex flex-col h-full min-h-0 bg-[var(--panel)]">
       <Header
         title={team.objective}
         status={team.status}
         onClose={onClose}
       />
 
-      <div className="flex border-b border-[var(--border)] px-3 gap-1">
+      <div className="flex-shrink-0 flex border-b border-[var(--border)] px-3 gap-1">
         <TabButton active={tab === 'overview'} onClick={() => setTab('overview')}>
           Overview
         </TabButton>
@@ -124,7 +124,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
         </TabButton>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {tab === 'overview' ? (
           <div className="p-3 space-y-4">
             <StatsRow team={team} />
@@ -189,16 +189,18 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
             )}
           </div>
         ) : (
-          <div className="p-3">
-            <pre className="text-[11px] leading-[1.55] font-mono text-[var(--muted)] whitespace-pre-wrap break-all">
-              {events.length === 0 ? '(no events yet)' : events.slice(-200).join('\n')}
-            </pre>
-            <div ref={eventsEndRef} />
+          <div className="h-full flex flex-col">
+            <div className="flex-1 min-h-0 overflow-y-auto p-3">
+              <pre className="text-[11px] leading-[1.55] font-mono text-[var(--muted)] whitespace-pre-wrap break-all m-0">
+                {events.length === 0 ? '(no events yet)' : events.slice(-200).join('\n')}
+              </pre>
+              <div ref={eventsEndRef} />
+            </div>
           </div>
         )}
       </div>
 
-      <div className="border-t border-[var(--border)] p-3 space-y-2">
+      <div className="flex-shrink-0 border-t border-[var(--border)] p-3 space-y-2">
         {isFinished && (
           <div className="text-[10px] text-[var(--muted)] italic px-1">
             Team has {team.status}. Messages are disabled.
@@ -328,7 +330,7 @@ function Header({
   onClose?: () => void
 }) {
   return (
-    <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2.5">
+    <div className="flex-shrink-0 flex items-center justify-between border-b border-[var(--border)] px-3 py-2.5">
       <div className="flex items-center gap-2 min-w-0 flex-1">
         <span className="text-[10px] uppercase tracking-wider text-[var(--muted)] font-semibold">
           Team

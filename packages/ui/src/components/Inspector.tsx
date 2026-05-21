@@ -208,7 +208,7 @@ export function Inspector() {
 
   return (
     <div
-      className="border-l border-[var(--border)] bg-[var(--surface)] flex flex-col relative"
+      className="h-full border-l border-[var(--border)] bg-[var(--surface)] flex flex-col relative overflow-hidden"
       style={{ width: `${width}px` }}
     >
       {/* Drag handle on the left edge */}
@@ -219,7 +219,7 @@ export function Inspector() {
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border)]">
+      <div className="flex-shrink-0 flex items-center justify-between px-3 py-2 border-b border-[var(--border)]">
         <span className="text-[12px] font-medium text-[var(--text)]">Inspector</span>
         <button
           onClick={() => { setExpanded(false); setActiveSection(null) }}
@@ -231,7 +231,7 @@ export function Inspector() {
       </div>
 
       {/* Rail row for section switching */}
-      <div className="flex items-center gap-1 px-3 py-2 border-b border-[var(--border)]">
+      <div className="flex-shrink-0 flex items-center gap-1 px-3 py-2 border-b border-[var(--border)]">
         {railItems.map(({ id, Icon, badge, badgeColor }) => (
           <button
             key={id}
@@ -255,7 +255,7 @@ export function Inspector() {
 
       {/* Section content — Team section uses full panel without inner padding */}
       {activeSection === 'team' ? (
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           {effectiveTeamId && activeSessionId ? (
             <TeamDetailPanel
               sessionId={activeSessionId}
@@ -269,7 +269,7 @@ export function Inspector() {
           )}
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto p-3">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3">
           {activeSection === 'session' && <SessionSection sessionId={activeSessionId} />}
           {activeSection === 'usage' && <UsageSection usage={usage} />}
           {activeSection === 'tasks' && (

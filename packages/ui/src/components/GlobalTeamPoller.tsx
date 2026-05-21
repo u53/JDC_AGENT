@@ -78,6 +78,41 @@ export function GlobalTeamPoller() {
                   timestamp: e.timestamp,
                   status: 'delivered',
                 }, dedupKey)
+              } else if (e.type === 'member_added') {
+                const dedupKey = `member_added:${e.timestamp}:${e.memberId}`
+                const reasonText = e.reason ? `（${e.reason}）` : ''
+                appendConversationIfNew(taskId, {
+                  id: dedupKey,
+                  direction: 'received',
+                  from: 'pm',
+                  intent: 'finding',
+                  content: `🧑‍💼 招了一位 ${e.role}${reasonText}`,
+                  timestamp: e.timestamp,
+                  status: 'delivered',
+                }, dedupKey)
+              } else if (e.type === 'member_removed') {
+                const dedupKey = `member_removed:${e.timestamp}:${e.memberId}`
+                const reasonText = e.reason ? `（${e.reason}）` : ''
+                appendConversationIfNew(taskId, {
+                  id: dedupKey,
+                  direction: 'received',
+                  from: 'pm',
+                  intent: 'finding',
+                  content: `👋 让 ${e.role} 离开了团队${reasonText}`,
+                  timestamp: e.timestamp,
+                  status: 'delivered',
+                }, dedupKey)
+              } else if (e.type === 'task_assigned') {
+                const dedupKey = `task_assigned:${e.timestamp}:${e.taskId}:${e.memberId}`
+                appendConversationIfNew(taskId, {
+                  id: dedupKey,
+                  direction: 'received',
+                  from: 'pm',
+                  intent: 'message',
+                  content: `📋 把任务 ${e.taskId} 分配给了 ${e.memberId}`,
+                  timestamp: e.timestamp,
+                  status: 'delivered',
+                }, dedupKey)
               } else if (e.type === 'member_progress' && e.text) {
                 const text: string = e.text
                 if (text.startsWith('[FINDING]') || text.startsWith('[QUESTION]') || text.startsWith('[BLOCKER]')) {
