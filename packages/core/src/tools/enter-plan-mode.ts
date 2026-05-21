@@ -3,9 +3,10 @@ import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 
 export const PLAN_MODE_ALLOWED_TOOLS = [
   'file_read', 'glob', 'grep', 'ls', 'tree', 'lsp',
-  'file_write', 'Agent',
+  'file_write', 'Agent', 'Skill',
   'exit_plan_mode',
   'task_create', 'task_get', 'task_list', 'task_update',
+  'background_status', 'background_events', 'team_list',
 ]
 
 export function isPlanModeToolAllowed(

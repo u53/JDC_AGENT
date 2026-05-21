@@ -10,6 +10,7 @@ export type TeamMessageIntent =
   | 'message' | 'hurry' | 'wrap_up' | 'request_status'
   | 'reprioritize' | 'narrow_scope' | 'expand_scope'
   | 'block' | 'unblock' | 'question' | 'answer' | 'finding' | 'handoff'
+  | 'assign' | 'schedule'
 
 export interface TeamMemberSpec {
   role: string
@@ -138,7 +139,10 @@ export interface TeamMemberState {
 export type TeamEvent =
   | { type: 'team_started'; teamId: string; timestamp: number }
   | { type: 'manager_decision'; text: string; timestamp: number }
+  | { type: 'manager_reply'; text: string; timestamp: number }
   | { type: 'member_created'; memberId: string; role: string; timestamp: number }
+  | { type: 'member_added'; memberId: string; role: string; agentType: string; reason?: string; timestamp: number }
+  | { type: 'member_removed'; memberId: string; role: string; reason?: string; timestamp: number }
   | { type: 'task_created'; taskId: string; title: string; timestamp: number }
   | { type: 'task_assigned'; taskId: string; memberId: string; timestamp: number }
   | { type: 'task_completed'; taskId: string; memberId: string; timestamp: number }
@@ -165,6 +169,6 @@ export const DEFAULT_CONCURRENCY_POLICY: TeamConcurrencyPolicy = {
   maxWorkersPerTeam: 10,
   maxActiveWorkers: 8,
   maxReadOnlyWorkers: 8,
-  maxWriteWorkers: 1,
-  maxShellWorkers: 2,
+  maxWriteWorkers: 3,
+  maxShellWorkers: 3,
 }

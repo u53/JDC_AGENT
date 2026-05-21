@@ -26,7 +26,7 @@ export function createBackgroundSendTool(deps: BackgroundSendDeps): ToolHandler 
           target: { type: 'string', description: 'Target: manager (default), team, or member:<id>' },
           intent: {
             type: 'string',
-            enum: ['message', 'hurry', 'wrap_up', 'request_status', 'reprioritize', 'narrow_scope', 'expand_scope'],
+            enum: ['message', 'hurry', 'wrap_up', 'request_status', 'reprioritize', 'narrow_scope', 'expand_scope', 'assign', 'schedule'],
             description: 'Message intent',
           },
           priority: { type: 'string', enum: ['low', 'normal', 'high', 'urgent'] },

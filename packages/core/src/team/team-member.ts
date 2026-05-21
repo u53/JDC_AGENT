@@ -1,6 +1,7 @@
 import { v4 as uuid } from 'uuid'
 import { runSubSession, type SubSessionOptions, type SubSessionResult } from '../sub-session.js'
 import { Mailbox, type MailboxMessage } from './team-mailbox.js'
+import { createTeamReportTool } from '../tools/team-report.js'
 import type {
   TeamMemberState,
   TeamMemberSpec,
@@ -28,6 +29,7 @@ export interface TeamMemberOptions {
   taskId?: string
   id?: string
   existingMailbox?: Mailbox
+  teamMailbox?: { push(msg: any): void }
   subSessionDeps: Omit<SubSessionOptions, 'prompt' | 'agentType' | 'signal' | 'onAgentProgress' | 'onAgentText' | 'mailbox' | 'onToolEvent'>
   onEvent?: (event: TeamEvent) => void
   onComplete?: (memberId: string, result: TeamTaskResult) => void
@@ -107,11 +109,25 @@ export class TeamMember {
     }
     this.mailbox.push(mb)
     this.lastActivityAt = Date.now()
+
+    // Interrupt current execution for wrap_up (hard stop)
+    if (msg.intent === 'wrap_up') {
+      this.interruptCurrentExecution()
+    }
   }
 
   abort(): void {
     this.abortController.abort()
     this.status = 'stopped'
+  }
+
+  /**
+   * Interrupt the worker's current tool execution.
+   * Aborts the signal so the sub-session's current tool call and streaming stop.
+   */
+  interruptCurrentExecution(): void {
+    if (this.status !== 'running') return
+    this.abortController.abort()
   }
 
   async start(): Promise<void> {
@@ -125,12 +141,34 @@ export class TeamMember {
     this.lastActivityAt = Date.now()
 
     try {
+      // Build extra tools for team communication
+      const extraTools: SubSessionOptions['extraTools'] = []
+      if (this.opts.teamMailbox) {
+        const reportTool = createTeamReportTool({
+          memberId: this.id,
+          teamMailbox: this.opts.teamMailbox,
+          onReport: (_mid, report) => {
+            this.opts.onEvent?.({
+              type: 'member_progress',
+              memberId: this.id,
+              text: `[${report.type}] ${report.content.slice(0, 100)}`,
+              timestamp: Date.now(),
+            })
+          },
+        })
+        extraTools.push({
+          definition: reportTool.definition as any,
+          execute: reportTool.execute as any,
+        })
+      }
+
       const subOpts: SubSessionOptions = {
         ...this.opts.subSessionDeps,
         prompt: this.opts.taskPrompt,
         agentType: this.agentType,
         signal: this.abortController.signal,
         mailbox: this.mailbox,
+        extraTools: extraTools.length > 0 ? extraTools : undefined,
         onAgentProgress: (event) => {
           this.toolCount = event.toolCount
           this.lastActivityAt = Date.now()

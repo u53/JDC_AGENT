@@ -1,5 +1,6 @@
 import { v4 as uuid } from 'uuid'
 import { TeamManager, type ManagerAction } from './team-manager.js'
+import { TeamManagerAI, type TeamManagerAIOptions } from './team-manager-ai.js'
 import { TeamMember } from './team-member.js'
 import { TeamConcurrencyController } from './team-concurrency.js'
 import { RingBuffer } from './team-mailbox.js'
@@ -17,6 +18,8 @@ import {
   type TeamMessageIntent,
 } from './team-types.js'
 import type { SubSessionOptions } from '../sub-session.js'
+import type { ModelProvider } from '../model-provider.js'
+import type { ModelConfig } from '../types.js'
 
 export interface TeamRuntimePlan {
   members: TeamMemberSpec[]
@@ -36,6 +39,9 @@ export interface TeamRuntimeOptions {
   plan: TeamRuntimePlan
   subSessionDeps: Omit<SubSessionOptions, 'prompt' | 'agentType' | 'signal' | 'onAgentProgress' | 'onAgentText' | 'mailbox' | 'onToolEvent'>
   concurrency?: TeamConcurrencyPolicy
+  taskTimeoutMs?: number
+  teamTimeoutMs?: number
+  aiPM?: { provider: ModelProvider; modelConfig: ModelConfig }
   onEvent?: (event: TeamEvent) => void
   onComplete?: (summary: string) => void
   onFail?: (error: string) => void
@@ -56,6 +62,8 @@ export class TeamRuntime {
   private opts: TeamRuntimeOptions
   private tickScheduled = false
   private completed = false
+  private taskTimeouts = new Map<string, NodeJS.Timeout>()
+  private teamTimeout?: NodeJS.Timeout
 
   constructor(opts: TeamRuntimeOptions) {
     this.opts = opts
@@ -77,6 +85,19 @@ export class TeamRuntime {
       initialTasks: opts.plan.tasks,
       onEvent: (e) => this.recordEvent(e),
     })
+
+    // Upgrade to AI PM if provider is available
+    if (opts.aiPM) {
+      const aiManager = new TeamManagerAI({
+        initialTasks: opts.plan.tasks,
+        onEvent: (e) => this.recordEvent(e),
+        provider: opts.aiPM.provider,
+        modelConfig: opts.aiPM.modelConfig,
+        memberStates: () => this.getMembers(),
+        objective: opts.objective,
+      })
+      this.manager = aiManager
+    }
 
     // Create members from plan (cap at 10)
     const memberSpecs = opts.plan.members.slice(0, 10)
@@ -127,9 +148,95 @@ export class TeamRuntime {
     return this.manager.getTasks()
   }
 
+  addTask(task: { title: string; description: string; priority?: Priority; dependsOn?: string[] }): void {
+    this.manager.addTask(task)
+    this.scheduleTick()
+  }
+
+  /**
+   * Dynamically add a new worker (up to 10-cap).
+   * Returns the new memberId, or null if capped or completed.
+   */
+  addMember(spec: TeamMemberSpec, reason?: string): string | null {
+    if (this.completed) return null
+    if (this.members.length >= 10) {
+      this.recordEvent({
+        type: 'manager_decision',
+        text: `Cannot add member: team is at the 10-worker cap.`,
+        timestamp: Date.now(),
+      })
+      return null
+    }
+    const member = new TeamMember({
+      spec,
+      taskPrompt: '',
+      subSessionDeps: this.opts.subSessionDeps,
+      onEvent: (e) => this.recordEvent(e),
+      onComplete: (memberId, result) => this.handleMemberComplete(memberId, result),
+      onFail: (memberId, error) => this.handleMemberFail(memberId, error),
+    })
+    this.members.push(member)
+    this.memberById.set(member.id, member)
+    this.recordEvent({
+      type: 'member_added',
+      memberId: member.id,
+      role: member.role,
+      agentType: member.agentType,
+      reason,
+      timestamp: Date.now(),
+    })
+    this.scheduleTick()
+    return member.id
+  }
+
+  /**
+   * Dynamically remove a worker.
+   * Default: only removes 'queued' members. force=true also removes running ones (aborts them).
+   */
+  removeMember(memberId: string, opts: { force?: boolean; reason?: string } = {}): boolean {
+    const member = this.memberById.get(memberId)
+    if (!member) return false
+    const status = member.getStatus()
+    if (status === 'running' && !opts.force) {
+      this.recordEvent({
+        type: 'manager_decision',
+        text: `Cannot remove ${member.role} (${memberId}): currently running. Use force=true to abort.`,
+        timestamp: Date.now(),
+      })
+      return false
+    }
+    if (status === 'running') {
+      member.abort()
+    }
+    this.memberById.delete(memberId)
+    const idx = this.members.findIndex(m => m.id === memberId)
+    if (idx >= 0) this.members.splice(idx, 1)
+    this.concurrency.markDone(memberId)
+    this.recordEvent({
+      type: 'member_removed',
+      memberId,
+      role: member.role,
+      reason: opts.reason,
+      timestamp: Date.now(),
+    })
+    this.scheduleTick()
+    return true
+  }
+
   start(): void {
     this.status = 'running'
     this.recordEvent({ type: 'team_started', teamId: this.id, timestamp: Date.now() })
+
+    // Team-level timeout (default: 30 minutes)
+    const teamTimeoutMs = this.opts.teamTimeoutMs ?? 30 * 60 * 1000
+    this.teamTimeout = setTimeout(() => {
+      if (!this.completed) {
+        this.recordEvent({ type: 'team_failed', error: `Team timed out after ${teamTimeoutMs / 1000}s`, timestamp: Date.now() })
+        this.stop()
+        this.opts.onFail?.(`Team timed out after ${teamTimeoutMs / 1000}s`)
+      }
+    }, teamTimeoutMs)
+
     this.scheduleTick()
   }
 
@@ -150,6 +257,9 @@ export class TeamRuntime {
   }
 
   stop(): void {
+    if (this.teamTimeout) clearTimeout(this.teamTimeout)
+    for (const [, timeout] of this.taskTimeouts) clearTimeout(timeout)
+    this.taskTimeouts.clear()
     for (const member of this.members) {
       member.abort()
     }
@@ -178,6 +288,14 @@ export class TeamRuntime {
     for (const msg of incoming) {
       const actions = this.manager.handleIntervention(msg)
       this.executeActions(actions)
+    }
+
+    // Consume any pending AI PM actions
+    if ('consumeAIActions' in this.manager) {
+      const aiActions = (this.manager as TeamManagerAI).consumeAIActions()
+      if (aiActions.length > 0) {
+        this.executeActions(aiActions)
+      }
     }
 
     // Get available members (not running, not failed/stopped)
@@ -212,6 +330,21 @@ export class TeamRuntime {
         case 'broadcast':
           this.broadcast(action.message ?? '', action.intent)
           break
+        case 'reply':
+          if (action.message) {
+            this.recordEvent({ type: 'manager_reply', text: action.message, timestamp: Date.now() })
+          }
+          break
+        case 'add_member':
+          if (action.spec) {
+            this.addMember(action.spec, action.message)
+          }
+          break
+        case 'remove_member':
+          if (action.memberId) {
+            this.removeMember(action.memberId, { force: action.force, reason: action.message })
+          }
+          break
         case 'cancel_task':
           if (action.taskId) this.manager.cancelTask(action.taskId, 'manager decision')
           break
@@ -232,23 +365,29 @@ export class TeamRuntime {
     this.concurrency.markRunning(memberId, member.agentType)
 
     const taskPrompt = `Task: ${task.title}\n\n${task.description}`
+    const memberSpec = { role: member.role, agentType: member.agentType, modelId: member.modelId }
     // Build new member instance for this task, preserving ID and mailbox
     const taskMember = new TeamMember({
-      spec: { role: member.role, agentType: member.agentType, modelId: member.modelId },
+      spec: memberSpec,
       taskPrompt,
       taskId,
       id: memberId,
       existingMailbox: member.getMailbox(),
+      teamMailbox: { push: (msg: any) => this.sendMessage(msg) },
       subSessionDeps: this.opts.subSessionDeps,
       onEvent: (e) => this.recordEvent(e),
       onComplete: (_mId, result) => {
+        this.clearTaskTimeout(taskId)
         this.manager.markTaskCompleted(taskId, result)
         this.concurrency.markDone(memberId)
+        this.recycleMember(memberId, memberSpec)
         this.scheduleTick()
       },
       onFail: (_mId, error) => {
+        this.clearTaskTimeout(taskId)
         this.manager.markTaskFailed(taskId, error)
         this.concurrency.markDone(memberId)
+        this.recycleMember(memberId, memberSpec)
         this.scheduleTick()
       },
     })
@@ -256,6 +395,20 @@ export class TeamRuntime {
     this.memberById.set(memberId, taskMember)
     const idx = this.members.findIndex(m => m.id === memberId)
     if (idx >= 0) this.members[idx] = taskMember
+
+    // Start task timeout (default: 10 minutes per task)
+    const taskTimeoutMs = this.opts.taskTimeoutMs ?? 10 * 60 * 1000
+    const timeout = setTimeout(() => {
+      if (taskMember.getStatus() === 'running') {
+        taskMember.abort()
+        this.manager.markTaskFailed(taskId, `Task timed out after ${taskTimeoutMs / 1000}s`)
+        this.concurrency.markDone(memberId)
+        this.recycleMember(memberId, memberSpec)
+        this.recordEvent({ type: 'task_cancelled', taskId, reason: 'timeout', timestamp: Date.now() })
+        this.scheduleTick()
+      }
+    }, taskTimeoutMs)
+    this.taskTimeouts.set(taskId, timeout)
 
     taskMember.start().catch(() => {
       // failure handled in onFail
@@ -268,6 +421,31 @@ export class TeamRuntime {
 
   private handleMemberFail(_memberId: string, _error: string): void {
     // Already handled in assignTask's onFail
+  }
+
+  private clearTaskTimeout(taskId: string): void {
+    const timeout = this.taskTimeouts.get(taskId)
+    if (timeout) {
+      clearTimeout(timeout)
+      this.taskTimeouts.delete(taskId)
+    }
+  }
+
+  private recycleMember(memberId: string, originalSpec: { role: string; agentType: string; modelId?: string }): void {
+    if (this.completed) return
+    const freshMember = new TeamMember({
+      spec: { role: originalSpec.role, agentType: originalSpec.agentType, modelId: originalSpec.modelId },
+      taskPrompt: '',
+      id: memberId,
+      subSessionDeps: this.opts.subSessionDeps,
+      onEvent: (e) => this.recordEvent(e),
+      onComplete: (mId, result) => this.handleMemberComplete(mId, result),
+      onFail: (mId, error) => this.handleMemberFail(mId, error),
+    })
+    this.memberById.set(memberId, freshMember)
+    const idx = this.members.findIndex(m => m.id === memberId)
+    if (idx >= 0) this.members[idx] = freshMember
+    this.recordEvent({ type: 'member_created', memberId, role: originalSpec.role, timestamp: Date.now() })
   }
 
   private routeMessageToMember(memberId: string, content: string, intent?: string): void {
@@ -303,6 +481,9 @@ export class TeamRuntime {
   private completeTeam(summary: string): void {
     if (this.completed) return
     this.completed = true
+    if (this.teamTimeout) clearTimeout(this.teamTimeout)
+    for (const [, timeout] of this.taskTimeouts) clearTimeout(timeout)
+    this.taskTimeouts.clear()
     this.status = 'completed'
     this.recordEvent({ type: 'team_synthesizing', timestamp: Date.now() })
     this.recordEvent({ type: 'team_completed', summary, timestamp: Date.now() })

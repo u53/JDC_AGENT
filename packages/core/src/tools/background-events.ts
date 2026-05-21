@@ -33,7 +33,10 @@ export function createBackgroundEventsTool(deps: BackgroundEventsDeps): ToolHand
         switch (e.type) {
           case 'team_started': return `[${ts}] team_started ${e.teamId}`
           case 'manager_decision': return `[${ts}] PM: ${e.text}`
+          case 'manager_reply': return `[${ts}] PM (reply): ${e.text}`
           case 'member_created': return `[${ts}] member_created ${e.memberId} (${e.role})`
+          case 'member_added': return `[${ts}] member_added ${e.memberId} (${e.role}, ${e.agentType})${e.reason ? ` — ${e.reason}` : ''}`
+          case 'member_removed': return `[${ts}] member_removed ${e.memberId} (${e.role})${e.reason ? ` — ${e.reason}` : ''}`
           case 'task_created': return `[${ts}] task_created ${e.taskId} "${e.title}"`
           case 'task_assigned': return `[${ts}] task_assigned ${e.taskId} -> ${e.memberId}`
           case 'task_completed': return `[${ts}] task_completed ${e.taskId} by ${e.memberId}`

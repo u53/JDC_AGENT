@@ -120,3 +120,19 @@ body {
   outline-offset: 2px;
   border-radius: 4px;
 }
+
+@keyframes toast-slide-in {
+  from { transform: translateX(20px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+.animate-toast-slide-in {
+  animation: toast-slide-in 180ms ease-out;
+}
+
+@keyframes bubble-pop-in {
+  from { transform: scale(0.96); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+.animate-bubble-pop-in {
+  animation: bubble-pop-in 160ms ease-out;
+}

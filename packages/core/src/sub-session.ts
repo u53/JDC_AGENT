@@ -27,6 +27,7 @@ export interface SubSessionOptions {
   onAgentProgress?: (event: { toolName: string; toolStatus: 'start' | 'complete' | 'error'; toolInput?: Record<string, unknown>; toolResult?: { content: string; isError?: boolean }; toolCount: number }) => void
   onAgentText?: (text: string) => void
   mailbox?: { drain(): Array<{ id: string; from: string; content: string; intent?: string; priority: string; createdAt: number }> }
+  extraTools?: Array<{ definition: ToolDefinition; execute: (input: Record<string, unknown>, ctx: any) => Promise<{ content: string; isError?: boolean }> }>
 }
 
 export interface SubSessionResult {
@@ -65,9 +66,19 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
   const permChecker = new PermissionChecker(opts.permissionMode || 'relaxed')
   const toolRunner = new ToolRunner(toolRegistry, cwd, permChecker, onPermissionRequest)
 
-  // Filter out Agent tool to prevent recursion
+  // Register extra tools (e.g., team_report for team workers)
+  const extraToolMap = new Map<string, (input: Record<string, unknown>, ctx: any) => Promise<{ content: string; isError?: boolean }>>()
+  if (opts.extraTools) {
+    for (const et of opts.extraTools) {
+      extraToolMap.set(et.definition.name, et.execute)
+    }
+  }
+
+  // Filter out Agent tool to prevent recursion, then add extra tool definitions
   const allDefs = toolRegistry.getDefinitions().filter(t => t.name !== 'Agent')
-  const toolDefs = opts.agentType ? filterToolsForAgent(opts.agentType, toolRegistry.getDefinitions()) : allDefs
+  const baseDefs = opts.agentType ? filterToolsForAgent(opts.agentType, toolRegistry.getDefinitions()) : allDefs
+  const extraDefs = opts.extraTools?.map(et => et.definition) ?? []
+  const toolDefs = [...baseDefs, ...extraDefs]
 
   const messages: Message[] = [
     { id: uuid(), role: 'user', content: [{ type: 'text', text: prompt }], timestamp: Date.now() },
@@ -144,6 +155,21 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
       totalToolCount++
 
       onAgentProgress?.({ toolName: tu.name, toolStatus: 'start', toolInput: parsedInput, toolCount: totalToolCount })
+
+      // Handle extra tools (e.g., team_report) directly
+      if (extraToolMap.has(tu.name)) {
+        const handler = extraToolMap.get(tu.name)!
+        const result = await handler(parsedInput, { cwd })
+        onAgentProgress?.({
+          toolName: tu.name,
+          toolStatus: result.isError ? 'error' : 'complete',
+          toolInput: parsedInput,
+          toolResult: { content: result.content, isError: result.isError },
+          toolCount: totalToolCount,
+        })
+        toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: result.content, is_error: result.isError })
+        continue
+      }
 
       // Agent-type-specific restrictions
       if (opts.agentType === 'plan' && tu.name === 'file_write') {

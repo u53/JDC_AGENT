@@ -7,6 +7,7 @@ import { ProjectPage } from './components/ProjectPage'
 import { AskUserDialog } from './components/AskUserDialog'
 import { Inspector } from './components/Inspector'
 import { TerminalPanel } from './components/TerminalPanel'
+import { ToastContainer } from './components/Toast'
 import { useSessionStore } from './stores/session-store'
 import { useModelStore } from './stores/model-store'
 import { useSettingsStore } from './stores/settings-store'
@@ -116,6 +117,7 @@ export function App() {
       </div>
       <SettingsOverlay />
       <AskUserDialog />
+      <ToastContainer />
     </div>
   )
 }

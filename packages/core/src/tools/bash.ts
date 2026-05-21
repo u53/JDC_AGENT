@@ -155,9 +155,12 @@ The shell runs in a non-interactive environment (CI=true, GIT_TERMINAL_PROMPT=0,
       shellCmd = 'cmd.exe'
       shellArgs = ['/V:ON', '/S', '/C', wrappedCommand]
     } else {
+      // Use login shell (-l) to source user's profile (.bash_profile, .zshrc, etc.)
+      // This ensures NVM, pyenv, rbenv, and custom PATH entries are available.
+      const userShell = process.env.SHELL || 'bash'
       const wrappedCommand = `${command}; __jdcagnet_exit=$?; pwd -P > ${cwdFile} 2>/dev/null; exit $__jdcagnet_exit`
-      shellCmd = 'bash'
-      shellArgs = ['-c', wrappedCommand]
+      shellCmd = userShell
+      shellArgs = ['-l', '-c', wrappedCommand]
     }
 
     return new Promise((resolve) => {

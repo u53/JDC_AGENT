@@ -42,6 +42,8 @@ import { createTeamTool } from './tools/team.js'
 import { createBackgroundSendTool } from './tools/background-send.js'
 import { createBackgroundStatusTool } from './tools/background-status.js'
 import { createBackgroundEventsTool } from './tools/background-events.js'
+import { createTeamListTool } from './tools/team-list.js'
+import { createTeamAddTaskTool } from './tools/team-add-task.js'
 
 export interface SessionEvents {
   onStreamChunk: (chunk: StreamChunk) => void
@@ -163,6 +165,8 @@ export class Session {
       teamRegistry: this.teamRegistry,
       backgroundTasks: this.backgroundTasks,
       buildSubSessionDeps: buildTeamSubSessionDeps as any,
+      provider: this.provider,
+      modelConfig: this.config.modelConfig,
       onTeamEvent: (teamId, event) => {
         const notifyTypes = new Set([
           'manager_decision',
@@ -196,6 +200,14 @@ export class Session {
     }))
     this.toolRegistry.register(createBackgroundEventsTool({
       backgroundTasks: this.backgroundTasks,
+    }))
+    this.toolRegistry.register(createTeamListTool({
+      backgroundTasks: this.backgroundTasks,
+      teamRegistry: this.teamRegistry,
+    }))
+    this.toolRegistry.register(createTeamAddTaskTool({
+      backgroundTasks: this.backgroundTasks,
+      teamRegistry: this.teamRegistry,
     }))
     this.toolRegistry.register(createEnterPlanModeTool(() => {
       this.planMode = 'planning'

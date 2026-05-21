@@ -66,8 +66,9 @@ export class BackgroundTaskManager {
     writeFileSync(logFile, '')
 
     const isWindows = process.platform === 'win32'
-    const shellCmd = isWindows ? 'cmd.exe' : 'bash'
-    const shellArgs = isWindows ? ['/S', '/C', command] : ['-c', command]
+    const userShell = process.env.SHELL || 'bash'
+    const shellCmd = isWindows ? 'cmd.exe' : userShell
+    const shellArgs = isWindows ? ['/S', '/C', command] : ['-l', '-c', command]
 
     const proc = spawn(shellCmd, shellArgs, {
       cwd,

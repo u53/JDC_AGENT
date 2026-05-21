@@ -10,13 +10,15 @@ import type {
 } from './team-types.js'
 
 export interface ManagerAction {
-  type: 'assign_task' | 'cancel_task' | 'send_member_message' | 'request_member_status' | 'broadcast' | 'add_constraint' | 'wrap_up' | 'complete'
+  type: 'assign_task' | 'cancel_task' | 'send_member_message' | 'request_member_status' | 'broadcast' | 'add_constraint' | 'wrap_up' | 'complete' | 'reply' | 'add_member' | 'remove_member'
   taskId?: string
   memberId?: string
   message?: string
   intent?: string
   constraint?: string
   summary?: string
+  spec?: { role: string; agentType?: string; modelId?: string }
+  force?: boolean
 }
 
 export interface TeamManagerOptions {
@@ -39,10 +41,11 @@ export class TeamManager {
   private lastActivityAt: number = Date.now()
 
   private tasks = new Map<string, TeamTask>()
+  private titleToId = new Map<string, string>()
   private constraints: string[] = []
   private wrapUpRequested = false
 
-  constructor(private opts: TeamManagerOptions) {
+  constructor(protected opts: TeamManagerOptions) {
     this.id = opts.managerId ?? `pm_${uuid().slice(0, 8)}`
     for (const t of opts.initialTasks) {
       const task: TeamTask = {
@@ -58,7 +61,14 @@ export class TeamManager {
         updatedAt: Date.now(),
       }
       this.tasks.set(task.id, task)
+      this.titleToId.set(task.title.toLowerCase(), task.id)
       this.opts.onEvent?.({ type: 'task_created', taskId: task.id, title: task.title, timestamp: Date.now() })
+    }
+    // Resolve dependsOn references (support both ID and title)
+    for (const task of this.tasks.values()) {
+      if (task.dependsOn) {
+        task.dependsOn = task.dependsOn.map(dep => this.resolveTaskRef(dep))
+      }
     }
   }
 
@@ -85,11 +95,19 @@ export class TeamManager {
     return [...this.tasks.values()].filter(t => {
       if (t.status !== 'todo') return false
       if (!t.dependsOn || t.dependsOn.length === 0) return true
-      return t.dependsOn.every(depId => {
+      return t.dependsOn.every(depRef => {
+        const depId = this.resolveTaskRef(depRef)
         const dep = this.tasks.get(depId)
         return dep?.status === 'completed'
       })
     })
+  }
+
+  private resolveTaskRef(ref: string): string {
+    if (this.tasks.has(ref)) return ref
+    const byTitle = this.titleToId.get(ref.toLowerCase())
+    if (byTitle) return byTitle
+    return ref
   }
 
   markTaskAssigned(taskId: string, memberId: string): void {
@@ -129,6 +147,25 @@ export class TeamManager {
     if (!task) return
     task.status = 'failed'
     task.updatedAt = Date.now()
+  }
+
+  addTask(opts: { title: string; description: string; priority?: Priority; riskLevel?: RiskLevel; dependsOn?: string[] }): string {
+    const task: TeamTask = {
+      id: `task_${uuid().slice(0, 6)}`,
+      title: opts.title,
+      description: opts.description,
+      status: 'todo',
+      priority: opts.priority ?? 'normal',
+      riskLevel: opts.riskLevel ?? 'low',
+      dependsOn: opts.dependsOn?.map(dep => this.resolveTaskRef(dep)),
+      createdBy: 'manager',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+    this.tasks.set(task.id, task)
+    this.titleToId.set(task.title.toLowerCase(), task.id)
+    this.opts.onEvent?.({ type: 'task_created', taskId: task.id, title: task.title, timestamp: Date.now() })
+    return task.id
   }
 
   cancelTask(taskId: string, reason: string): void {
@@ -240,6 +277,11 @@ export class TeamManager {
         if (msg.content) this.addConstraint(msg.content)
         actions.push({ type: 'broadcast', message: msg.content, intent: msg.intent })
         break
+      case 'assign':
+      case 'schedule':
+        // Trigger immediate task assignment for available members
+        actions.push(...this.forceAssign(msg.content))
+        break
       case 'message':
       default:
         // Direct message: forward
@@ -264,6 +306,38 @@ export class TeamManager {
       timestamp: Date.now(),
     })
 
+    return actions
+  }
+
+  /**
+   * Force-assign runnable tasks to available members.
+   * Called when user sends 'assign' or 'schedule' intent.
+   * Resets failed tasks to 'todo' so they can be re-assigned by decideTick.
+   */
+  private forceAssign(_hint?: string): ManagerAction[] {
+    const actions: ManagerAction[] = []
+    // Reset failed tasks back to todo so they can be retried
+    for (const task of this.tasks.values()) {
+      if (task.status === 'failed') {
+        task.status = 'todo'
+        task.assigneeId = undefined
+        task.updatedAt = Date.now()
+      }
+    }
+    const runnable = this.getRunnableTasks()
+    if (runnable.length === 0) {
+      this.opts.onEvent?.({
+        type: 'manager_decision',
+        text: 'No runnable tasks available to assign (all tasks are completed, running, or blocked by dependencies).',
+        timestamp: Date.now(),
+      })
+    } else {
+      this.opts.onEvent?.({
+        type: 'manager_decision',
+        text: `Force-schedule triggered: ${runnable.length} task(s) ready for assignment.`,
+        timestamp: Date.now(),
+      })
+    }
     return actions
   }
 

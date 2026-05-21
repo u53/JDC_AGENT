@@ -6,7 +6,10 @@ const formatEvent = (e: any): string => {
   switch (e.type) {
     case 'team_started': return `[${ts}] team_started ${e.teamId}`
     case 'manager_decision': return `[${ts}] PM: ${e.text}`
+    case 'manager_reply': return `[${ts}] PM (reply): ${e.text}`
     case 'member_created': return `[${ts}] member_created ${e.memberId} (${e.role})`
+    case 'member_added': return `[${ts}] member_added ${e.memberId} (${e.role}, ${e.agentType})${e.reason ? ` — ${e.reason}` : ''}`
+    case 'member_removed': return `[${ts}] member_removed ${e.memberId} (${e.role})${e.reason ? ` — ${e.reason}` : ''}`
     case 'task_created': return `[${ts}] task_created "${e.title}"`
     case 'task_assigned': return `[${ts}] task_assigned ${e.taskId} -> ${e.memberId}`
     case 'task_completed': return `[${ts}] task_completed ${e.taskId} by ${e.memberId}`
@@ -26,6 +29,7 @@ const formatEvent = (e: any): string => {
 export function useTeamPolling(sessionId: string | null, taskId: string | null, intervalMs = 1000) {
   const setTeamStatus = useTeamStore(s => s.setTeamStatus)
   const setTeamEvents = useTeamStore(s => s.setTeamEvents)
+  const appendConversationIfNew = useTeamStore(s => s.appendConversationIfNew)
   const stopRef = useRef(false)
 
   useEffect(() => {
@@ -41,7 +45,41 @@ export function useTeamPolling(sessionId: string | null, taskId: string | null, 
           api.teamGetEvents(sessionId, taskId, 200),
         ])
         if (status) setTeamStatus(taskId, status)
-        if (events) setTeamEvents(taskId, events.map(formatEvent))
+        if (events) {
+          setTeamEvents(taskId, events.map(formatEvent))
+          // Map PM-originated events to conversation entries
+          for (const e of events) {
+            // Only AI-generated replies should appear in conversation,
+            // not mechanical state-machine logs like "Received... Actions:..."
+            if (e.type === 'manager_reply' && e.text) {
+              const dedupKey = `pm_reply:${e.timestamp}:${e.text.slice(0, 60)}`
+              appendConversationIfNew(taskId, {
+                id: dedupKey,
+                direction: 'received',
+                from: 'pm',
+                intent: 'message',
+                content: e.text,
+                timestamp: e.timestamp,
+                status: 'delivered',
+              }, dedupKey)
+            } else if (e.type === 'member_progress' && e.text) {
+              // Surface high-signal worker progress (skip frequent tool noise)
+              const text: string = e.text
+              if (text.startsWith('[FINDING]') || text.startsWith('[QUESTION]') || text.startsWith('[BLOCKER]')) {
+                const dedupKey = `m:${e.memberId}:${e.timestamp}:${text.slice(0, 60)}`
+                appendConversationIfNew(taskId, {
+                  id: dedupKey,
+                  direction: 'received',
+                  from: `member:${e.memberId}`,
+                  intent: text.startsWith('[QUESTION]') ? 'question' : 'finding',
+                  content: text,
+                  timestamp: e.timestamp,
+                  status: 'delivered',
+                }, dedupKey)
+              }
+            }
+          }
+        }
         if (status?.status === 'completed' || status?.status === 'failed' || status?.finished) {
           stopRef.current = true
           return
@@ -56,5 +94,5 @@ export function useTeamPolling(sessionId: string | null, taskId: string | null, 
       stopRef.current = true
       clearInterval(handle)
     }
-  }, [sessionId, taskId, intervalMs, setTeamStatus, setTeamEvents])
+  }, [sessionId, taskId, intervalMs, setTeamStatus, setTeamEvents, appendConversationIfNew])
 }

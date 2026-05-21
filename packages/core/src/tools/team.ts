@@ -4,11 +4,15 @@ import { TeamRegistry } from '../team/team-registry.js'
 import type { BackgroundTaskManager } from '../background-tasks.js'
 import type { TeamMemberSpec, TeamEvent } from '../team/team-types.js'
 import type { SubSessionOptions } from '../sub-session.js'
+import type { ModelProvider } from '../model-provider.js'
+import type { ModelConfig } from '../types.js'
 
 export interface TeamToolDeps {
   teamRegistry: TeamRegistry
   backgroundTasks: BackgroundTaskManager
   buildSubSessionDeps: () => Omit<SubSessionOptions, 'prompt' | 'agentType' | 'signal' | 'onAgentProgress' | 'onAgentText' | 'mailbox' | 'onToolEvent'>
+  provider?: ModelProvider
+  modelConfig?: ModelConfig
   onTeamEvent?: (teamId: string, event: TeamEvent) => void
 }
 
@@ -90,6 +94,7 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
         objective,
         plan,
         subSessionDeps: deps.buildSubSessionDeps(),
+        aiPM: deps.provider && deps.modelConfig ? { provider: deps.provider, modelConfig: deps.modelConfig } : undefined,
         onEvent: (e) => {
           deps.backgroundTasks.emitEvent(bgTask.id, e)
           deps.onTeamEvent?.(bgTask.id, e)

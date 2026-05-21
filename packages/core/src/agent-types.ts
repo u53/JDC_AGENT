@@ -22,7 +22,7 @@ Rules:
 - Report what you find with file paths and line numbers
 - If you cannot find something after 3 attempts, say so clearly`,
     allowedTools: ['file_read', 'glob', 'grep', 'ls', 'tree', 'web_search', 'web_fetch', 'lsp'],
-    maxTurns: 10,
+    maxTurns: 25,
   },
   {
     name: 'plan',
