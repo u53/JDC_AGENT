@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useTeamStore, type TeamConversationEntry } from '../stores/team-store'
-import { useTeamPolling } from '../hooks/useTeamPolling'
 import { useToastStore } from '../stores/toast-store'
 
 export interface TeamDetailPanelProps {
@@ -17,7 +16,7 @@ const QUICK_ACTIONS = [
 ]
 
 export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelProps) {
-  useTeamPolling(sessionId, taskId, 1000)
+  // Polling is now handled globally by GlobalTeamPoller — no per-panel polling needed
   const team = useTeamStore((s) => s.teams[taskId])
   const eventsMap = useTeamStore((s) => s.events)
   const events = useMemo(() => eventsMap[taskId] ?? [], [eventsMap, taskId])

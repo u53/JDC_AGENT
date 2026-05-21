@@ -8,6 +8,7 @@ import { AskUserDialog } from './components/AskUserDialog'
 import { Inspector } from './components/Inspector'
 import { TerminalPanel } from './components/TerminalPanel'
 import { ToastContainer } from './components/Toast'
+import { GlobalTeamPoller } from './components/GlobalTeamPoller'
 import { useSessionStore } from './stores/session-store'
 import { useModelStore } from './stores/model-store'
 import { useSettingsStore } from './stores/settings-store'
@@ -118,6 +119,7 @@ export function App() {
       <SettingsOverlay />
       <AskUserDialog />
       <ToastContainer />
+      <GlobalTeamPoller />
     </div>
   )
 }

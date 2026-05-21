@@ -305,7 +305,8 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   const turns = groupIntoTurns(messages)
   const lastTurn = turns[turns.length - 1]
   const isLastTurnActive = isStreaming && lastTurn && lastTurn.assistantMessages.length === 0
-  const showRightPanel = activeAgentId || activeTeamId
+  // Team panel now lives in Inspector, not here. Only AgentDetailPanel uses the right panel slot.
+  const showRightPanel = activeAgentId
 
   return (
     <div className="flex flex-1 overflow-hidden relative">
@@ -398,17 +399,8 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         <HelpDialog visible={showHelp} onClose={() => setShowHelp(false)} />
       </div>
 
-      {/* Right: agent or team detail panel */}
-      {activeTeamId && activeSessionId && (
-        <div className="w-[40%]">
-          <TeamDetailPanel
-            sessionId={activeSessionId}
-            taskId={activeTeamId}
-            onClose={() => setActiveTeam(null)}
-          />
-        </div>
-      )}
-      {!activeTeamId && activeAgentId && (
+      {/* Right: agent detail panel only — team panel moved to Inspector */}
+      {activeAgentId && (
         <div className="w-[40%]">
           <AgentDetailPanel />
         </div>

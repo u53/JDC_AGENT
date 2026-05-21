@@ -95,6 +95,7 @@ export class TeamRuntime {
         modelConfig: opts.aiPM.modelConfig,
         memberStates: () => this.getMembers(),
         objective: opts.objective,
+        onActionsReady: () => this.scheduleTick(),
       })
       this.manager = aiManager
     }
@@ -150,7 +151,18 @@ export class TeamRuntime {
 
   addTask(task: { title: string; description: string; priority?: Priority; dependsOn?: string[] }): void {
     this.manager.addTask(task)
+    this.triggerProactive('task_added')
     this.scheduleTick()
+  }
+
+  /**
+   * Trigger AI PM to proactively re-evaluate team state.
+   * No-op if PM isn't AI-powered. Throttled internally by TeamManagerAI.
+   */
+  private triggerProactive(reason: string): void {
+    if ('triggerProactiveCheck' in this.manager && typeof (this.manager as any).triggerProactiveCheck === 'function') {
+      (this.manager as TeamManagerAI).triggerProactiveCheck(reason)
+    }
   }
 
   /**
@@ -185,6 +197,10 @@ export class TeamRuntime {
       reason,
       timestamp: Date.now(),
     })
+    // Notify AI PM so it can assign tasks intelligently (instead of base round-robin)
+    if ('notifyStaffingChange' in this.manager) {
+      (this.manager as TeamManagerAI).notifyStaffingChange('added', member.id, member.role, member.agentType)
+    }
     this.scheduleTick()
     return member.id
   }
@@ -219,6 +235,9 @@ export class TeamRuntime {
       reason: opts.reason,
       timestamp: Date.now(),
     })
+    if ('notifyStaffingChange' in this.manager) {
+      (this.manager as TeamManagerAI).notifyStaffingChange('removed', memberId, member.role)
+    }
     this.scheduleTick()
     return true
   }
@@ -312,6 +331,17 @@ export class TeamRuntime {
     const activeCount = this.concurrency.getActiveCount()
     const actions = this.manager.decideTick(activeCount, availableIds)
     this.executeActions(actions)
+
+    // Check idle workers — if any have been queued > 30s with no work to give them,
+    // ask AI PM whether to remove or whether the team needs more capacity elsewhere.
+    const now = Date.now()
+    const IDLE_THRESHOLD_MS = 30_000
+    const hasIdleStale = this.members.some(
+      m => m.getStatus() === 'queued' && (now - m.getState().lastActivityAt) > IDLE_THRESHOLD_MS
+    )
+    if (hasIdleStale) {
+      this.triggerProactive('worker_idle_timeout')
+    }
   }
 
   private executeActions(actions: ManagerAction[]): void {
@@ -381,6 +411,7 @@ export class TeamRuntime {
         this.manager.markTaskCompleted(taskId, result)
         this.concurrency.markDone(memberId)
         this.recycleMember(memberId, memberSpec)
+        this.triggerProactive('task_completed')
         this.scheduleTick()
       },
       onFail: (_mId, error) => {
@@ -388,6 +419,7 @@ export class TeamRuntime {
         this.manager.markTaskFailed(taskId, error)
         this.concurrency.markDone(memberId)
         this.recycleMember(memberId, memberSpec)
+        this.triggerProactive('task_failed')
         this.scheduleTick()
       },
     })

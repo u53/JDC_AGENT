@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSessionStore } from '../stores/session-store'
 import { useBackgroundTaskStore, type BackgroundTaskItem } from '../stores/background-task-store'
 import { useTeamStore } from '../stores/team-store'
 import { ipc } from '../lib/ipc-client'
-import { IconTasks, IconQueue, IconUsage, IconFiles, IconSession, IconX } from './icons'
+import { IconTasks, IconQueue, IconUsage, IconFiles, IconSession, IconX, IconTeam } from './icons'
+import { TeamDetailPanel } from './TeamDetailPanel'
 
 interface FileChange {
   filePath: string
@@ -11,13 +12,29 @@ interface FileChange {
   snapshotCount: number
 }
 
-type SectionId = 'session' | 'usage' | 'tasks' | 'queue' | 'files'
+type SectionId = 'session' | 'usage' | 'tasks' | 'queue' | 'files' | 'team'
 
 interface RailItem {
   id: SectionId
   Icon: React.ComponentType<{ size?: number; className?: string }>
   badge: string | number | null
   badgeColor?: string
+}
+
+const INSPECTOR_WIDTH_KEY = 'jdcagnet.inspector.width'
+const MIN_WIDTH = 280
+const MAX_WIDTH = 700
+const DEFAULT_WIDTH = 320
+
+function loadInspectorWidth(): number {
+  try {
+    const v = localStorage.getItem(INSPECTOR_WIDTH_KEY)
+    const n = v ? parseInt(v, 10) : NaN
+    if (!Number.isFinite(n)) return DEFAULT_WIDTH
+    return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, n))
+  } catch {
+    return DEFAULT_WIDTH
+  }
 }
 
 function formatTokens(n: number): string {
@@ -32,6 +49,8 @@ export function Inspector() {
   const [activeSection, setActiveSection] = useState<SectionId | null>(null)
   const [fileChanges, setFileChanges] = useState<FileChange[]>([])
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
+  const [width, setWidth] = useState<number>(loadInspectorWidth)
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
   useEffect(() => {
     const handler = () => setWindowWidth(window.innerWidth)
@@ -45,6 +64,9 @@ export function Inspector() {
   const messageQueue = useSessionStore((s) => s.messageQueue)
   const removeFromQueue = useSessionStore((s) => s.removeFromQueue)
   const backgroundTasks = useBackgroundTaskStore((s) => s.tasks)
+  const teams = useTeamStore((s) => s.teams)
+  const activeTeamId = useTeamStore((s) => s.activeTeamId)
+  const setActiveTeam = useTeamStore((s) => s.setActiveTeam)
 
   const currentState = activeSessionId ? sessionStates[activeSessionId] : undefined
   const usage = currentState?.usage
@@ -87,6 +109,40 @@ export function Inspector() {
   // Hide entirely on very narrow windows
   if (windowWidth < 700) return null
 
+  const startDrag = (e: React.MouseEvent) => {
+    e.preventDefault()
+    dragRef.current = { startX: e.clientX, startWidth: width }
+    const onMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return
+      // Inspector is on the right; dragging left = wider
+      const delta = dragRef.current.startX - ev.clientX
+      const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, dragRef.current.startWidth + delta))
+      setWidth(next)
+    }
+    const onUp = () => {
+      if (dragRef.current) {
+        try { localStorage.setItem(INSPECTOR_WIDTH_KEY, String(width)) } catch {}
+      }
+      dragRef.current = null
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }
+
+  // Persist final width on every change while not dragging (debounced via effect would be ideal,
+  // but onUp handles drag completion; this catches programmatic changes if any)
+  useEffect(() => {
+    if (!dragRef.current) {
+      try { localStorage.setItem(INSPECTOR_WIDTH_KEY, String(width)) } catch {}
+    }
+  }, [width])
+
   const toggleSection = (section: SectionId) => {
     if (!expanded) {
       // Disable expand on narrow windows
@@ -104,15 +160,20 @@ export function Inspector() {
   const completedCount = tasks.filter((t) => t.status === 'completed').length
   const pendingCount = tasks.length - completedCount
   const bgRunning = backgroundTasks.filter(t => t.status === 'running').length
+  const bgTeams = backgroundTasks.filter(t => t.type === 'team')
+  const teamRunning = bgTeams.filter(t => t.status === 'running').length
   const taskBadge = (tasks.length > 0 || bgRunning > 0)
     ? (pendingCount + bgRunning > 0 ? pendingCount + bgRunning : null)
     : null
   const taskBadgeColor = tasks.length > 0 && pendingCount === 0 && bgRunning === 0 ? 'var(--good)' : undefined
+  const teamBadge = bgTeams.length > 0 ? bgTeams.length : null
+  const teamBadgeColor = teamRunning > 0 ? 'var(--accent)' : 'var(--good)'
 
   const railItems: RailItem[] = [
     { id: 'session', Icon: IconSession, badge: null },
     { id: 'usage', Icon: IconUsage, badge: null },
     { id: 'tasks', Icon: IconTasks, badge: taskBadge, badgeColor: taskBadgeColor },
+    { id: 'team', Icon: IconTeam, badge: teamBadge, badgeColor: teamBadgeColor },
     { id: 'queue', Icon: IconQueue, badge: messageQueue.length || null },
     { id: 'files', Icon: IconFiles, badge: fileChanges.length || null },
   ]
@@ -139,8 +200,24 @@ export function Inspector() {
     )
   }
 
+  // Pick effective team to display: explicitly active, else first running, else first
+  const effectiveTeamId = activeTeamId
+    ?? bgTeams.find(t => t.status === 'running')?.id
+    ?? bgTeams[0]?.id
+    ?? null
+
   return (
-    <div className="w-[300px] border-l border-[var(--border)] bg-[var(--surface)] overflow-y-auto flex flex-col">
+    <div
+      className="border-l border-[var(--border)] bg-[var(--surface)] flex flex-col relative"
+      style={{ width: `${width}px` }}
+    >
+      {/* Drag handle on the left edge */}
+      <div
+        onMouseDown={startDrag}
+        className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[var(--accent)]/40 z-10"
+        title="Drag to resize"
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border)]">
         <span className="text-[12px] font-medium text-[var(--text)]">Inspector</span>
@@ -176,14 +253,36 @@ export function Inspector() {
         ))}
       </div>
 
-      {/* Section content */}
-      <div className="flex-1 overflow-y-auto p-3">
-        {activeSection === 'session' && <SessionSection sessionId={activeSessionId} />}
-        {activeSection === 'usage' && <UsageSection usage={usage} />}
-        {activeSection === 'tasks' && <TasksSection tasks={tasks} backgroundTasks={backgroundTasks} />}
-        {activeSection === 'queue' && <QueueSection queue={messageQueue} removeFromQueue={removeFromQueue} />}
-        {activeSection === 'files' && <FilesSection files={fileChanges} />}
-      </div>
+      {/* Section content — Team section uses full panel without inner padding */}
+      {activeSection === 'team' ? (
+        <div className="flex-1 overflow-hidden">
+          {effectiveTeamId && activeSessionId ? (
+            <TeamDetailPanel
+              sessionId={activeSessionId}
+              taskId={effectiveTeamId}
+              onClose={() => setActiveTeam(null)}
+            />
+          ) : (
+            <div className="p-3">
+              <p className="text-[12px] text-[var(--muted)]">No active team. Create one with the Team tool.</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto p-3">
+          {activeSection === 'session' && <SessionSection sessionId={activeSessionId} />}
+          {activeSection === 'usage' && <UsageSection usage={usage} />}
+          {activeSection === 'tasks' && (
+            <TasksSection
+              tasks={tasks}
+              backgroundTasks={backgroundTasks}
+              onOpenTeam={(id) => { setActiveTeam(id); setActiveSection('team') }}
+            />
+          )}
+          {activeSection === 'queue' && <QueueSection queue={messageQueue} removeFromQueue={removeFromQueue} />}
+          {activeSection === 'files' && <FilesSection files={fileChanges} />}
+        </div>
+      )}
     </div>
   )
 }
@@ -248,12 +347,12 @@ function UsageSection({ usage }: { usage?: { totalTokens: number; cacheHitRate: 
   )
 }
 
-function TasksSection({ tasks, backgroundTasks }: {
+function TasksSection({ tasks, backgroundTasks, onOpenTeam }: {
   tasks: Array<{ id: string; subject: string; status: string }>
   backgroundTasks: BackgroundTaskItem[]
+  onOpenTeam: (id: string) => void
 }) {
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
-  const setActiveTeam = useTeamStore((s) => s.setActiveTeam)
   const runningBg = backgroundTasks.filter(t => t.status === 'running')
 
   const handleStop = (taskId: string) => {
@@ -264,7 +363,7 @@ function TasksSection({ tasks, backgroundTasks }: {
 
   const handleOpen = (task: BackgroundTaskItem) => {
     if (task.type === 'team') {
-      setActiveTeam(task.id)
+      onOpenTeam(task.id)
     }
   }
 
