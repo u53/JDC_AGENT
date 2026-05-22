@@ -1,4 +1,4 @@
-import type { Message, ModelConfig, StreamChunk } from './types.js'
+import type { Message, ContentBlock, ModelConfig, StreamChunk } from './types.js'
 import type { ModelProvider } from './model-provider.js'
 import { v4 as uuid } from 'uuid'
 
@@ -105,16 +105,24 @@ Output format:
 [{"name": "kebab-case-slug", "type": "feedback|project", "description": "one-line summary for index", "content": "Full memory content. For feedback: include the rule, why, and when to apply it."}]
 </memories>`
 
-const KEEP_RECENT = 6
+export const KEEP_RECENT = 6
+export const MIN_COMPACT_LENGTH = KEEP_RECENT + 2
+
+export type CompactStatus = 'compacted' | 'skipped' | 'failed'
+export type CompactSkipReason = 'too_short'
+export type CompactFailReason = 'aborted' | 'empty_response' | 'stream_error'
 
 export interface CompactResult {
+  status: CompactStatus
   messages: Message[]
   originalCount: number
   keptCount: number
+  summarizedCount: number
   rawOutput: string
+  skipReason?: CompactSkipReason
+  failReason?: CompactFailReason
+  errorMessage?: string
 }
-
-// PLACEHOLDER_COMPACT_MORE
 
 export async function compactMessages(
   messages: Message[],
@@ -123,17 +131,39 @@ export async function compactMessages(
   onChunk?: (chunk: StreamChunk) => void,
   signal?: AbortSignal
 ): Promise<CompactResult> {
-  if (messages.length <= KEEP_RECENT) {
-    return { messages, originalCount: messages.length, keptCount: messages.length, rawOutput: '' }
+  const originalCount = messages.length
+
+  if (originalCount < MIN_COMPACT_LENGTH) {
+    return {
+      status: 'skipped',
+      messages,
+      originalCount,
+      keptCount: originalCount,
+      summarizedCount: 0,
+      rawOutput: '',
+      skipReason: 'too_short',
+    }
   }
 
-  const originalCount = messages.length
-  const toCompress = messages.slice(0, messages.length - KEEP_RECENT)
-  const toKeep = messages.slice(messages.length - KEEP_RECENT)
+  const cutIndex = pickCutIndex(messages, originalCount - KEEP_RECENT)
+  if (cutIndex <= 0) {
+    return {
+      status: 'skipped',
+      messages,
+      originalCount,
+      keptCount: originalCount,
+      summarizedCount: 0,
+      rawOutput: '',
+      skipReason: 'too_short',
+    }
+  }
+
+  const toCompress = messages.slice(0, cutIndex)
+  const toKeep = messages.slice(cutIndex)
 
   const compactConfig: ModelConfig = { ...config, systemPrompt: COMPACT_PROMPT, maxTokens: 16384 }
   const compactMsgs: Message[] = [
-    ...toCompress,
+    ...sanitizeForSummaryPrompt(toCompress),
     {
       id: uuid(),
       role: 'user',
@@ -146,38 +176,128 @@ export async function compactMessages(
   ]
 
   let summaryText = ''
-  for await (const chunk of provider.stream(compactMsgs, [], compactConfig, signal)) {
-    if (signal?.aborted) break
-    if (chunk.type === 'text_delta' && chunk.text) {
-      summaryText += chunk.text
-      onChunk?.(chunk)
+  try {
+    for await (const chunk of provider.stream(compactMsgs, [], compactConfig, signal)) {
+      if (signal?.aborted) {
+        return {
+          status: 'failed',
+          messages,
+          originalCount,
+          keptCount: originalCount,
+          summarizedCount: 0,
+          rawOutput: summaryText,
+          failReason: 'aborted',
+        }
+      }
+      if (chunk.type === 'text_delta' && chunk.text) {
+        summaryText += chunk.text
+        onChunk?.({ type: 'compact_progress', text: chunk.text })
+      }
+    }
+  } catch (err: any) {
+    if (signal?.aborted) {
+      return {
+        status: 'failed',
+        messages,
+        originalCount,
+        keptCount: originalCount,
+        summarizedCount: 0,
+        rawOutput: summaryText,
+        failReason: 'aborted',
+      }
+    }
+    return {
+      status: 'failed',
+      messages,
+      originalCount,
+      keptCount: originalCount,
+      summarizedCount: 0,
+      rawOutput: summaryText,
+      failReason: 'stream_error',
+      errorMessage: err?.message || String(err),
     }
   }
 
   const formatted = formatCompactSummary(summaryText)
+  if (!formatted.trim()) {
+    return {
+      status: 'failed',
+      messages,
+      originalCount,
+      keptCount: originalCount,
+      summarizedCount: 0,
+      rawOutput: summaryText,
+      failReason: 'empty_response',
+    }
+  }
 
   const summaryMessage: Message = {
     id: uuid(),
     role: 'user',
-    content: [{ type: 'text', text: `[Context from prior conversation — this summary replaces earlier messages that have been compressed]\n\n${formatted}` }],
+    content: [{
+      type: 'text',
+      text: `[Context from prior conversation — this summary replaces earlier messages that have been compressed]\n\n${formatted}`,
+    }],
     timestamp: Date.now(),
   }
 
   return {
+    status: 'compacted',
     messages: [summaryMessage, ...toKeep],
     originalCount,
-    keptCount: KEEP_RECENT + 1,
+    keptCount: toKeep.length + 1,
+    summarizedCount: toCompress.length,
     rawOutput: summaryText,
   }
 }
 
+function pickCutIndex(messages: Message[], desired: number): number {
+  if (desired <= 0) return 0
+  const max = messages.length
+
+  const isToolUse = (msg: Message) => msg.content.some(b => b.type === 'tool_use')
+  const isToolResult = (msg: Message) => msg.content.some(b => b.type === 'tool_result')
+
+  // Slide the cut backward until messages[cut] is NOT a dangling tool_result
+  // (i.e. the assistant tool_use immediately preceding stays attached to it).
+  let cut = Math.min(desired, max)
+  while (cut > 0 && cut < max && isToolResult(messages[cut]) && isToolUse(messages[cut - 1])) {
+    cut--
+  }
+  return cut
+}
+
+function sanitizeForSummaryPrompt(messages: Message[]): Message[] {
+  // The summarizer model only needs textual content; passing tool_use without
+  // its matching tool_result (or vice versa) confuses providers and may be
+  // rejected. Replace tool blocks with concise text descriptors.
+  return messages.map(msg => {
+    const newContent: ContentBlock[] = msg.content.map(block => {
+      if (block.type === 'tool_use') {
+        const inputPreview = JSON.stringify(block.input ?? {}).slice(0, 500)
+        return { type: 'text', text: `[tool call: ${block.name}(${inputPreview})]` }
+      }
+      if (block.type === 'tool_result') {
+        const preview = typeof block.content === 'string' ? block.content.slice(0, 500) : ''
+        const errMark = block.is_error ? ' (error)' : ''
+        return { type: 'text', text: `[tool result${errMark}: ${preview}]` }
+      }
+      return block
+    })
+    return { ...msg, content: newContent }
+  })
+}
+
 function formatCompactSummary(raw: string): string {
-  // Remove the analysis (thinking) section — only keep the summary
+  const summaryMatch = raw.match(/<summary>([\s\S]*?)<\/summary>/)
+  if (summaryMatch) {
+    // Trust the model's own summary boundaries; if it tagged an empty summary,
+    // treat that as an empty summary (caller will mark failed).
+    return summaryMatch[1].trim()
+  }
+  // No <summary> tag at all — fall back to stripping known wrapper tags so the
+  // user still gets readable content.
   let result = raw.replace(/<analysis>[\s\S]*?<\/analysis>/g, '')
-  // Extract content from summary tags if present
-  const match = result.match(/<summary>([\s\S]*?)<\/summary>/)
-  if (match) result = match[1].trim()
-  // Strip memories tags from the summary output (processed separately)
   result = result.replace(/<memories>[\s\S]*?<\/memories>/g, '').trim()
-  return result || raw
+  return result
 }

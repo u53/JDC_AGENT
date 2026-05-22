@@ -9,7 +9,7 @@ export interface SlashCommand {
 
 const COMMANDS: SlashCommand[] = [
   { name: 'init', description: '生成项目 JDCAGNET.md 配置文件', icon: '◈', section: 'command' },
-  { name: 'compact', description: '压缩当前对话上下文', icon: '⊡', section: 'command' },
+  { name: 'compact', description: '将早期消息压缩为摘要（长对话适用）', icon: '⊡', section: 'command' },
   { name: 'mcp', description: 'MCP 服务器管理', icon: '⊕', section: 'command' },
   { name: 'stats', description: '显示 token 统计信息', icon: '◧', section: 'command' },
   { name: 'help', description: '显示帮助信息', icon: '◇', section: 'command' },

@@ -11,7 +11,7 @@ import { loadAppConfig, getConfigDir } from './config.js'
 import { PermissionChecker } from './permissions.js'
 import { TaskStore } from './task-store.js'
 import { estimateTokens } from './token-estimation.js'
-import { compactMessages } from './compact.js'
+import { compactMessages, MIN_COMPACT_LENGTH } from './compact.js'
 import { parseMemories, saveMemories } from './memory-extractor.js'
 import { createTaskCreateTool } from './tools/task-create.js'
 import { createTaskGetTool } from './tools/task-get.js'
@@ -68,6 +68,7 @@ export class Session {
   private history: ConversationHistory
   private taskStore!: TaskStore
   private abortController: AbortController | null = null
+  private isCompacting = false
   private mcpManager?: McpManager
   private hookEngine?: HookEngine
   private hooksReady: Promise<void>
@@ -344,6 +345,10 @@ export class Session {
     this.config.modelConfig = { ...this.config.modelConfig, ...modelConfig }
     if (modelConfig.contextWindow) {
       this.usageTracker.setContextWindow(modelConfig.contextWindow)
+      // Bridge lastInputTokens to a model-aware estimate so swapping context
+      // windows does not flip the gauge to 100% (large→small) or 0%
+      // (small→large) until the next API turn arrives.
+      this.usageTracker.resetLastTurn(estimateTokens(this.messages))
     }
   }
 
@@ -357,12 +362,32 @@ export class Session {
   }
 
   async compactNow(events: SessionEvents): Promise<void> {
-    if (this.messages.length < 4) return
-    this.abortController = new AbortController()
+    if (this.messages.length < MIN_COMPACT_LENGTH) {
+      events.onStreamChunk({
+        type: 'compact_skipped',
+        compactSkipped: { reason: 'too_short', messageCount: this.messages.length },
+      })
+      return
+    }
+    if (this.isCompacting) {
+      events.onStreamChunk({
+        type: 'compact_skipped',
+        compactSkipped: { reason: 'in_progress', messageCount: this.messages.length },
+      })
+      return
+    }
+    const ownAbort = new AbortController()
+    const previousAbort = this.abortController
+    this.abortController = ownAbort
+    this.isCompacting = true
     try {
       await this.compact(events)
     } finally {
-      this.abortController = null
+      this.isCompacting = false
+      // Only restore previous controller if no new runLoop replaced it.
+      if (this.abortController === ownAbort) {
+        this.abortController = previousAbort
+      }
     }
   }
 
@@ -494,6 +519,7 @@ export class Session {
 
   private microCompact(): void {
     const snapshot = this.usageTracker.getSnapshot()
+    let mutated = false
 
     // Phase 1: At 50%+ context, clear old tool results entirely (keep last 8)
     // This is the most impactful optimization — old grep/read results are rarely needed
@@ -518,11 +544,13 @@ export class Session {
               if (originalLength > 200) {
                 msg.content[j] = { ...block, content: `[Tool result cleared — ${originalLength} chars. Recent results are kept.]` }
                 cleared++
+                mutated = true
               }
             }
           }
         }
       }
+      if (mutated) this.history.replaceMessages(this.id, this.messages)
       return
     }
 
@@ -536,20 +564,47 @@ export class Session {
           if (block.type === 'tool_result' && !block.is_error && block.content.length > 500) {
             const removed = block.content.length - 200
             msg.content[j] = { ...block, content: block.content.slice(0, 200) + `\n[...truncated, ${removed} chars removed]` }
+            mutated = true
           }
         }
       }
+      if (mutated) this.history.replaceMessages(this.id, this.messages)
     }
   }
 
   private async compact(events: SessionEvents): Promise<void> {
-    events.onStreamChunk({ type: 'text_delta', text: '\n[Compressing context...]\n' })
-    const result = await compactMessages(this.messages, this.provider, this.config.modelConfig, events.onStreamChunk, this.abortController?.signal)
-    if (this.abortController?.signal.aborted) return
+    events.onStreamChunk({ type: 'compact_start' })
+    const result = await compactMessages(
+      this.messages,
+      this.provider,
+      this.config.modelConfig,
+      events.onStreamChunk,
+      this.abortController?.signal
+    )
+
+    if (result.status === 'skipped') {
+      events.onStreamChunk({
+        type: 'compact_skipped',
+        compactSkipped: { reason: 'too_short', messageCount: result.originalCount },
+      })
+      return
+    }
+
+    if (result.status === 'failed') {
+      events.onStreamChunk({
+        type: 'compact_failed',
+        compactFailed: {
+          reason: result.failReason || 'stream_error',
+          message: result.errorMessage,
+        },
+      })
+      return
+    }
+
+    // status === 'compacted' — actually replace messages
     this.messages = result.messages
     this.history.replaceMessages(this.id, this.messages)
 
-    // Extract and save memories
     let memoriesExtracted = 0
     if (result.rawOutput) {
       const memories = parseMemories(result.rawOutput)
@@ -559,16 +614,17 @@ export class Session {
       }
     }
 
-    // Reset usage after compaction — will be recalculated on next API response
-    this.usageTracker.resetLastTurn(0)
+    // Bridge usage to a realistic estimate so the gauge does not flash to 0%.
+    const estimated = estimateTokens(this.messages)
+    this.usageTracker.resetLastTurn(estimated)
     events.onUsage?.(this.usageTracker.getSnapshot())
 
-    // Emit compact_complete
     events.onStreamChunk({
       type: 'compact_complete',
       compactInfo: {
         originalCount: result.originalCount,
         keptCount: result.keptCount,
+        summarizedCount: result.summarizedCount,
         memoriesExtracted,
       },
     })
@@ -680,8 +736,14 @@ export class Session {
 
           if (category === 'prompt_too_long') {
             await this.compactNow(events)
-            streamSuccess = true // will re-enter outer while loop with compacted messages
-            break
+            if (this.abortController?.signal.aborted) break
+            // Re-run this turn against the compacted message list.
+            // Drop any partial chunks accumulated before the error so we don't
+            // duplicate content into the final assistantMessage.
+            assistantContent.length = 0
+            hasToolUse = false
+            retryCount = 0
+            continue
           }
 
           const maxForCategory = getMaxRetries(category)
@@ -689,6 +751,8 @@ export class Session {
             if (!compactedOnError && (category === 'gateway' || category === 'overloaded') && this.messages.length > 20) {
               console.log('[RUNLOOP] Gateway error after retries, attempting compact')
               await this.compact(events)
+              assistantContent.length = 0
+              hasToolUse = false
               retryCount = 0
               compactedOnError = true
               continue
@@ -701,6 +765,10 @@ export class Session {
           const delay = getRetryDelay(retryCount, category, streamErr)
           events.onRetrying?.(retryCount + 1, streamErr, delay, category)
           retryCount++
+          // Drop partial chunks before retrying — provider will replay from the
+          // start of the assistant turn.
+          assistantContent.length = 0
+          hasToolUse = false
 
           await new Promise<void>((resolve, reject) => {
             const timer = setTimeout(resolve, delay)
@@ -708,6 +776,16 @@ export class Session {
             this.abortController?.signal.addEventListener('abort', onAbort, { once: true })
           }).catch(() => { /* aborted during wait */ })
         }
+      }
+
+      // If the inner loop exited without producing any content (abort or
+      // unrecoverable error already reported), don't persist an empty
+      // assistant turn — it pollutes history and the UI.
+      if (assistantContent.length === 0) {
+        if (this.abortController?.signal.aborted) break
+        // Stream ended cleanly with zero content: log and bail without push.
+        console.warn('[SESSION] Empty assistant response — skipping persistence')
+        break
       }
 
       // Reorder content blocks: thinking → merged text → tool_uses
@@ -722,9 +800,6 @@ export class Session {
         timestamp: Date.now(),
       }
 
-      if (reorderedContent.length === 0) {
-        console.warn('[SESSION] Empty assistant response')
-      }
       this.messages.push(assistantMessage)
       this.history.addMessage(this.id, assistantMessage)
       events.onMessageComplete(assistantMessage)

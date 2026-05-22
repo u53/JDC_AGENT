@@ -52,7 +52,19 @@ export interface ToolDefinition {
 }
 
 export interface StreamChunk {
-  type: 'text_delta' | 'thinking_delta' | 'thinking_end' | 'tool_use_start' | 'tool_use_delta' | 'tool_use_end' | 'message_end' | 'compact_complete'
+  type:
+    | 'text_delta'
+    | 'thinking_delta'
+    | 'thinking_end'
+    | 'tool_use_start'
+    | 'tool_use_delta'
+    | 'tool_use_end'
+    | 'message_end'
+    | 'compact_start'
+    | 'compact_progress'
+    | 'compact_complete'
+    | 'compact_skipped'
+    | 'compact_failed'
   text?: string
   signature?: string
   toolUse?: { id: string; name: string; input: string }
@@ -65,7 +77,16 @@ export interface StreamChunk {
   compactInfo?: {
     originalCount: number
     keptCount: number
+    summarizedCount: number
     memoriesExtracted: number
+  }
+  compactSkipped?: {
+    reason: 'too_short' | 'no_session' | 'in_progress'
+    messageCount: number
+  }
+  compactFailed?: {
+    reason: 'aborted' | 'empty_response' | 'stream_error'
+    message?: string
   }
 }
 

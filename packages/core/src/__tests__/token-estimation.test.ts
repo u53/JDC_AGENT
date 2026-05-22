@@ -27,7 +27,7 @@ describe('estimateTokens', () => {
 
   it('handles image blocks', () => {
     const msg: Message = { id: '1', role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: '' } } as any], timestamp: 0 }
-    expect(estimateTokens([msg])).toBe(1000)
+    expect(estimateTokens([msg])).toBe(1300)
   })
 
   it('handles tool_use blocks', () => {

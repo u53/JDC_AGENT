@@ -526,10 +526,27 @@ export class SessionManager {
 
   async compactSession(sessionId: string): Promise<void> {
     const session = this.sessions.get(sessionId)
-    if (!session) return
+    if (!session) {
+      this.window?.webContents.send('query:error', { sessionId, error: 'Session not active' })
+      this.window?.webContents.send('query:finished', { sessionId })
+      return
+    }
+
+    // Defer terminal compact_* events until AFTER session:messages-updated so
+    // any UI-side reaction (e.g. inserting a "[Context compressed]" marker)
+    // is not clobbered by the subsequent full-messages replacement.
+    const deferredChunks: StreamChunk[] = []
+    const isTerminalCompactChunk = (chunk: StreamChunk) =>
+      chunk.type === 'compact_complete' ||
+      chunk.type === 'compact_skipped' ||
+      chunk.type === 'compact_failed'
 
     const events: SessionEvents = {
       onStreamChunk: (chunk: StreamChunk) => {
+        if (isTerminalCompactChunk(chunk)) {
+          deferredChunks.push(chunk)
+          return
+        }
         this.window?.webContents.send('query:stream', { sessionId, chunk })
       },
       onToolEvent: () => {},
@@ -545,6 +562,9 @@ export class SessionManager {
       await session.compactNow(events)
       const messages = session.getMessages()
       this.window?.webContents.send('session:messages-updated', { sessionId, messages })
+      for (const chunk of deferredChunks) {
+        this.window?.webContents.send('query:stream', { sessionId, chunk })
+      }
     } catch (err: any) {
       this.window?.webContents.send('query:error', { sessionId, error: err.message })
     }
