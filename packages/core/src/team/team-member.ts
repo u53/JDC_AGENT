@@ -53,9 +53,17 @@ export class TeamMember {
   private currentTaskId?: string
   private toolCount = 0
   private lastActivityAt: number = Date.now()
+  private lastStreamHeartbeatAt = 0
+  private static readonly STREAM_HEARTBEAT_MIN_INTERVAL_MS = 5_000
   private textBuffer = ''
   private result?: TeamTaskResult
   private capabilities: TeamCapability[]
+  /**
+   * Set by team-artifact's onSelfComplete/onSelfFail when the worker declares
+   * its own task done via update_status. run()'s catch block reads this to
+   * route the abort to onComplete (success) instead of onFail.
+   */
+  private pendingSelfCompletion?: { kind: 'completed' | 'failed'; summary: string }
 
   private mailbox = new Mailbox()
   private abortController = new AbortController()
@@ -176,6 +184,17 @@ export class TeamMember {
           taskId: this.opts.taskId,
           workspace: this.opts.workspace,
           teamMailbox: this.opts.teamMailbox,
+          onSelfComplete: (summary) => {
+            // Worker just declared its own task complete via update_status.
+            // Capture the summary for run()'s catch block to forward to onComplete,
+            // then abort the sub-session so the model stops streaming filler text.
+            this.pendingSelfCompletion = { kind: 'completed', summary }
+            this.abortController.abort()
+          },
+          onSelfFail: (reason) => {
+            this.pendingSelfCompletion = { kind: 'failed', summary: reason }
+            this.abortController.abort()
+          },
         })
         extraTools.push({
           definition: artifactTool.definition as any,
@@ -250,6 +269,16 @@ export class TeamMember {
             })
           }
         },
+        onStreamHeartbeat: () => {
+          // Refresh heartbeat during long streaming responses (synthesis reports,
+          // long final summaries) so the per-task idle timeout doesn't kill an
+          // actively-generating worker. Throttled to avoid hot-loop overhead.
+          const now = Date.now()
+          if (now - this.lastStreamHeartbeatAt >= TeamMember.STREAM_HEARTBEAT_MIN_INTERVAL_MS) {
+            this.lastActivityAt = now
+            this.lastStreamHeartbeatAt = now
+          }
+        },
         onAgentText: (text) => {
           this.textBuffer += text
           this.lastActivityAt = Date.now()
@@ -264,6 +293,26 @@ export class TeamMember {
 
       const result: SubSessionResult = await runSubSession(subOpts)
 
+      // If worker self-completed via update_status, the sub-session was aborted —
+      // we still treat that as success and forward the explicit summary.
+      if (this.pendingSelfCompletion?.kind === 'completed') {
+        const taskResult: TeamTaskResult = {
+          summary: this.pendingSelfCompletion.summary,
+          findings: [],
+        }
+        this.result = taskResult
+        this.status = 'completed'
+        this.lastActivityAt = Date.now()
+        this.opts.onComplete?.(this.id, taskResult)
+        return
+      }
+      if (this.pendingSelfCompletion?.kind === 'failed') {
+        this.status = 'failed'
+        this.lastActivityAt = Date.now()
+        this.opts.onFail?.(this.id, this.pendingSelfCompletion.summary)
+        return
+      }
+
       const taskResult: TeamTaskResult = {
         summary: result.content,
         findings: [],
@@ -273,6 +322,24 @@ export class TeamMember {
       this.lastActivityAt = Date.now()
       this.opts.onComplete?.(this.id, taskResult)
     } catch (err) {
+      // Self-completion path: abort was triggered by update_status, not a real failure.
+      if (this.pendingSelfCompletion?.kind === 'completed') {
+        const taskResult: TeamTaskResult = {
+          summary: this.pendingSelfCompletion.summary,
+          findings: [],
+        }
+        this.result = taskResult
+        this.status = 'completed'
+        this.lastActivityAt = Date.now()
+        this.opts.onComplete?.(this.id, taskResult)
+        return
+      }
+      if (this.pendingSelfCompletion?.kind === 'failed') {
+        this.status = 'failed'
+        this.lastActivityAt = Date.now()
+        this.opts.onFail?.(this.id, this.pendingSelfCompletion.summary)
+        return
+      }
       const errorMsg = err instanceof Error ? err.message : String(err)
       this.status = 'failed'
       this.lastActivityAt = Date.now()

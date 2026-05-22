@@ -99,17 +99,15 @@ export class IdeManager {
   }
 
   private async connectToIde(port: number, authToken: string, ideName: string, workspaceFolders: string[]): Promise<void> {
-    let wasConnected = false
     const client = new IdeClient(port, authToken, {
       onStatusChanged: (status) => {
         this.connections.set(port, { port, ideName, workspaceFolders, status })
         this.callbacks.onConnectionChanged(this.getConnections())
 
         if (status === 'connected') {
-          wasConnected = true
           this.reconnectAttempts.delete(port)
         }
-        if ((status === 'disconnected' || status === 'error') && wasConnected) {
+        if (status === 'disconnected' || status === 'error') {
           this.scheduleReconnect(port, authToken, ideName, workspaceFolders)
         }
       },
@@ -123,10 +121,12 @@ export class IdeManager {
 
     try {
       await client.connect()
-    } catch {
-      this.clients.delete(port)
-      this.connections.delete(port)
-      this.callbacks.onConnectionChanged(this.getConnections())
+    } catch (err) {
+      console.error(`[ide] connect failed port=${port} ide=${ideName}:`, err)
+      // Note: do NOT delete this.clients[port] here. scheduleReconnect (triggered
+      // by the 'error' status above) needs the client instance to retry. The
+      // entry is removed by removeConnection() when scan() detects the lockfile
+      // is gone, or by RECONNECT_DELAYS exhaustion via stale-cleanup downstream.
     }
   }
 
@@ -143,8 +143,8 @@ export class IdeManager {
       if (!client) return
       try {
         await client.connect()
-      } catch {
-        // Will retry again via onStatusChanged callback
+      } catch (err) {
+        console.error(`[ide] reconnect failed port=${port} attempt=${attempts + 1}:`, err)
       }
     }, delay)
     this.reconnectTimers.set(port, timer)

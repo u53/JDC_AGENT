@@ -53,6 +53,34 @@ describe('isLockfileValid', () => {
   it('returns false for dead pid', () => {
     expect(isLockfileValid({ pid: 999999999, workspaceFolders: ['/p'], ideName: 'VS Code', authToken: 'a', version: '0.1.0', timestamp: 0 })).toBe(false)
   })
+
+  it('returns true when process.kill throws EPERM (process exists, no permission)', () => {
+    const original = process.kill
+    ;(process as any).kill = () => {
+      const err: any = new Error('operation not permitted')
+      err.code = 'EPERM'
+      throw err
+    }
+    try {
+      expect(isLockfileValid({ pid: 1, workspaceFolders: ['/p'], ideName: 'IDEA', authToken: 'a', version: '0.1.0', timestamp: 0 })).toBe(true)
+    } finally {
+      ;(process as any).kill = original
+    }
+  })
+
+  it('returns false when process.kill throws ESRCH (process truly dead)', () => {
+    const original = process.kill
+    ;(process as any).kill = () => {
+      const err: any = new Error('no such process')
+      err.code = 'ESRCH'
+      throw err
+    }
+    try {
+      expect(isLockfileValid({ pid: 1, workspaceFolders: ['/p'], ideName: 'IDEA', authToken: 'a', version: '0.1.0', timestamp: 0 })).toBe(false)
+    } finally {
+      ;(process as any).kill = original
+    }
+  })
 })
 
 describe('matchesWorkspace', () => {

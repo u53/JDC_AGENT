@@ -41,17 +41,17 @@ export function createMainWindow(): BrowserWindow {
     })
   }
 
-  if (process.env.NODE_ENV === 'development') {
-    mainWindow.webContents.on('before-input-event', (_event, input) => {
-      if (
-        input.type === 'keyDown' &&
-        ((input.meta && input.shift && input.key === 'i') ||
-          (input.control && input.shift && input.key === 'I'))
-      ) {
-        mainWindow?.webContents.toggleDevTools()
-      }
-    })
-  }
+  // Allow opening DevTools in any build (Cmd/Ctrl+Shift+I) so end users can
+  // capture renderer-side errors. Main-process logs go to the file logger.
+  mainWindow.webContents.on('before-input-event', (_event, input) => {
+    if (
+      input.type === 'keyDown' &&
+      ((input.meta && input.shift && input.key === 'i') ||
+        (input.control && input.shift && input.key === 'I'))
+    ) {
+      mainWindow?.webContents.toggleDevTools()
+    }
+  })
 
   mainWindow.on('closed', () => {
     mainWindow = null

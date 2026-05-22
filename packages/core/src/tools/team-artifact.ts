@@ -16,6 +16,16 @@ export interface TeamArtifactDeps {
   workspace: TeamWorkspace
   /** Optional team mailbox; if set, create_issue will notify the PM. */
   teamMailbox?: { push(msg: any): void }
+  /**
+   * Called when update_status declares THIS member's own task completed.
+   * The runtime uses it to wake the manager state machine, abort the worker's
+   * sub-session (so it doesn't keep streaming filler text after declaring done),
+   * and pass the summary forward to onComplete without the runtime double-marking
+   * the task.
+   */
+  onSelfComplete?: (summary: string) => void
+  /** Same as onSelfComplete but for new_status=failed on the worker's own task. */
+  onSelfFail?: (reason: string) => void
 }
 
 export function createTeamArtifactTool(deps: TeamArtifactDeps): ToolHandler {
@@ -166,6 +176,15 @@ export function createTeamArtifactTool(deps: TeamArtifactDeps): ToolHandler {
                 resultFm,
                 `## Result\n\n${summary}\n`,
               )
+              // If the worker is declaring its OWN task done, signal the runtime so
+              // it can mark the manager state, abort the sub-session, and stop the
+              // model from streaming filler text after the work is logically done.
+              if (target === deps.taskId && deps.onSelfComplete) {
+                deps.onSelfComplete(summary)
+              }
+            } else if (taskStatus === 'failed' && target === deps.taskId && deps.onSelfFail) {
+              const reason = ((input.summary as string) ?? '').trim() || 'Task self-reported as failed.'
+              deps.onSelfFail(reason)
             }
             await deps.workspace.appendLog(
               `status ${target} -> ${taskStatus} by ${deps.memberId}`,

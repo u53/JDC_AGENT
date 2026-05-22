@@ -1,7 +1,7 @@
 import { app, BrowserWindow, nativeImage, ipcMain } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import path from 'node:path'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync, createWriteStream } from 'node:fs'
 import { createMainWindow } from './window.js'
 import { SessionManager } from './session-manager.js'
 import { registerIpcHandlers } from './ipc-handlers.js'
@@ -9,6 +9,34 @@ import { registerMcpIpcHandlers } from './mcp-ipc.js'
 import { GitService } from './git-service.js'
 import { AppLauncher } from './app-launcher.js'
 import { TerminalService } from './terminal-service.js'
+
+// Mirror console output to a file so production users can ship logs back.
+// Path: %APPDATA%\JDC Code\logs\main.log on Windows, ~/Library/Logs/JDC Code/main.log on macOS.
+function setupFileLogger(): void {
+  try {
+    const logDir = app.getPath('logs')
+    mkdirSync(logDir, { recursive: true })
+    const logPath = path.join(logDir, 'main.log')
+    const stream = createWriteStream(logPath, { flags: 'a' })
+    const ts = () => new Date().toISOString()
+    const wrap = (orig: (...args: any[]) => void, level: string) => (...args: any[]) => {
+      orig(...args)
+      try {
+        const line = `[${ts()}] [${level}] ${args.map(a => typeof a === 'string' ? a : (a instanceof Error ? `${a.message}\n${a.stack}` : JSON.stringify(a))).join(' ')}\n`
+        stream.write(line)
+      } catch {}
+    }
+    console.log   = wrap(console.log.bind(console),   'log')
+    console.info  = wrap(console.info.bind(console),  'info')
+    console.warn  = wrap(console.warn.bind(console),  'warn')
+    console.error = wrap(console.error.bind(console), 'error')
+    console.log(`[JDC Code] log file: ${logPath}`)
+  } catch (err) {
+    // Logger setup must never crash the app.
+    process.stderr.write(`[JDC Code] failed to set up file logger: ${err}\n`)
+  }
+}
+setupFileLogger()
 
 process.on('uncaughtException', (err) => {
   console.error('[JDC Code] Uncaught exception:', err.message)

@@ -1050,6 +1050,11 @@ and changes the task's status to completed/failed. Required parameters:
 - new_status: usually "completed". Use "failed" only if you truly cannot finish (logic bug, missing tool).
 - summary: one sentence — this is what the PM and downstream tasks see most prominently. Be precise.
 
+⚠️ AFTER you call update_status with new_status=completed/failed for YOUR OWN task,
+STOP. Do not write more text. Do not call more tools. The runtime will end your sub-session
+the moment update_status returns — anything you generate after that is wasted tokens that
+never reach anyone. The summary you passed to update_status IS your final report.
+
 # When to call team_report
 Use it for COMMUNICATION, not for persistence. It does NOT save anything to .team/.
 Persistence goes through team_artifact / create_issue. team_report = "ping the PM".

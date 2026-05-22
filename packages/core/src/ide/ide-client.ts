@@ -40,7 +40,7 @@ export class IdeClient {
         ws.terminate()
         this.setStatus('error')
         reject(new Error('Connection timeout'))
-      }, 5000)
+      }, 15000)
 
       ws.on('open', async () => {
         clearTimeout(timeout)

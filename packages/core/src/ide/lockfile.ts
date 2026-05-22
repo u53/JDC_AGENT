@@ -35,8 +35,8 @@ export function isLockfileValid(lockfile: IdeLockfile): boolean {
   try {
     process.kill(lockfile.pid, 0)
     return true
-  } catch {
-    return false
+  } catch (e: any) {
+    return e?.code === 'EPERM'
   }
 }
 

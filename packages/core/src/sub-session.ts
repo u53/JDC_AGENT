@@ -26,6 +26,12 @@ export interface SubSessionOptions {
   permissionMode?: 'standard' | 'relaxed' | 'strict'
   onAgentProgress?: (event: { toolName: string; toolStatus: 'start' | 'complete' | 'error'; toolInput?: Record<string, unknown>; toolResult?: { content: string; isError?: boolean }; toolCount: number }) => void
   onAgentText?: (text: string) => void
+  /**
+   * Lightweight heartbeat fired during streaming (per text/thinking delta).
+   * Use ONLY to refresh wall-clock activity timestamps — do NOT push events
+   * or render anything from this. Caller should throttle internally.
+   */
+  onStreamHeartbeat?: () => void
   mailbox?: { drain(): Array<{ id: string; from: string; content: string; intent?: string; priority: string; createdAt: number }> }
   extraTools?: Array<{ definition: ToolDefinition; execute: (input: Record<string, unknown>, ctx: any) => Promise<{ content: string; isError?: boolean }> }>
 }
@@ -57,6 +63,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
     onPermissionRequest,
     onAgentProgress,
     onAgentText,
+    onStreamHeartbeat,
   } = opts
 
   const agentDef = opts.agentType ? getAgentType(opts.agentType) : undefined
@@ -150,9 +157,13 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
     const stream = provider.stream(messages, toolDefs, config, signal)
 
     for await (const chunk of stream) {
-      if (chunk.type === 'thinking_delta') thinkingContent += chunk.text || ''
-      else if (chunk.type === 'text_delta') textContent += chunk.text || ''
-      else if (chunk.type === 'tool_use_start' && chunk.toolUse) {
+      if (chunk.type === 'thinking_delta') {
+        thinkingContent += chunk.text || ''
+        onStreamHeartbeat?.()
+      } else if (chunk.type === 'text_delta') {
+        textContent += chunk.text || ''
+        onStreamHeartbeat?.()
+      } else if (chunk.type === 'tool_use_start' && chunk.toolUse) {
         currentToolUse = { id: chunk.toolUse.id, name: chunk.toolUse.name, input: '' }
       } else if (chunk.type === 'tool_use_delta' && currentToolUse) {
         currentToolUse.input += chunk.toolUse?.input || chunk.text || ''
