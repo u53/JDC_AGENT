@@ -26,7 +26,14 @@ export function createBackgroundEventsTool(deps: BackgroundEventsDeps): ToolHand
       if (!task) return { content: `Error: task ${taskId} not found`, isError: true }
 
       const events = deps.backgroundTasks.getEvents(taskId, tail)
-      if (events.length === 0) return { content: '(no events recorded)' }
+      const isTerminal = task.status === 'completed' || task.status === 'failed'
+      if (events.length === 0) {
+        return {
+          content: isTerminal
+            ? `(no events recorded; task is ${task.status} — do not poll background_events on this id again)`
+            : '(no events recorded)',
+        }
+      }
 
       const lines = events.map(e => {
         const ts = new Date(e.timestamp).toISOString().slice(11, 19)
@@ -52,7 +59,11 @@ export function createBackgroundEventsTool(deps: BackgroundEventsDeps): ToolHand
           default: return `[${ts}] ${(e as any).type}`
         }
       })
-      return { content: lines.join('\n') }
+      const body = lines.join('\n')
+      const footer = isTerminal
+        ? `\n\n[Task is ${task.status}. Do NOT call background_events on this id again — the team is done.]`
+        : ''
+      return { content: body + footer }
     },
   }
 }

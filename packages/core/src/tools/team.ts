@@ -27,7 +27,10 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
         'IMPORTANT: Only ONE running team is allowed per session. If a team is already active, this tool will return an error — wrap_up the existing team first (use background_send with intent="wrap_up"), then create a new one. ' +
         'The team has a PM that assigns tasks, coordinates members, and synthesizes results. ' +
         'Use background_send to message the team, background_status to check progress, ' +
-        'background_events to view detailed events, team_list to see all teams. The team runs as a background task.',
+        'background_events to view detailed events, team_list to see all teams. The team runs as a background task. ' +
+        'IMPORTANT: After creating the team, DO NOT poll background_status / background_events in a loop. ' +
+        'The session pushes team_progress notifications for major events and a final team_complete notification when the team finishes — wait for those instead of polling. ' +
+        'Only call background_status / background_events when the user explicitly asks for current state or when you have a concrete reason (e.g., user pressed wrap_up and asked you to confirm).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -153,7 +156,9 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
           `Members:`,
           memberLines,
           ``,
-          `Use background_status, background_events, or background_send with this team ID to interact.`,
+          `The team runs in the background. The session will push team_progress notifications for major events and a final team_complete notification when it finishes.`,
+          `DO NOT poll background_status / background_events on this team id — wait for the notifications. Only query if the user explicitly asks for current state.`,
+          `Use background_send <id> to message the team (e.g., wrap_up, hurry, or any text intent).`,
         ].join('\n'),
       }
     },

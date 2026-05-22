@@ -89,7 +89,7 @@ export class Session {
   resolveModel?: (modelId: string) => { provider: ModelProvider; modelConfig: ModelConfig } | null
   ideContext?: { filePath?: string; text?: string; selection?: { start: { line: number }; end: { line: number } } | null }
   private pendingNotifications: Array<{
-    type: 'shell_complete' | 'agent_complete' | 'team_progress'
+    type: 'shell_complete' | 'agent_complete' | 'team_progress' | 'team_complete'
     taskId: string
     status: 'completed' | 'failed' | 'running'
     command?: string
@@ -175,17 +175,26 @@ export class Session {
           'task_cancelled',
           'intervention_received',
           'team_synthesizing',
+          'team_completed',
+          'team_failed',
         ])
         if (notifyTypes.has(event.type)) {
+          const isTerminal = event.type === 'team_completed' || event.type === 'team_failed'
+          const status: 'completed' | 'failed' | 'running' =
+            event.type === 'team_completed' ? 'completed'
+            : event.type === 'team_failed' ? 'failed'
+            : 'running'
           const text = event.type === 'manager_decision' ? (event as any).text
             : event.type === 'task_completed' ? `Task ${(event as any).taskId} completed by ${(event as any).memberId}`
             : event.type === 'task_cancelled' ? `Task ${(event as any).taskId} cancelled: ${(event as any).reason}`
             : event.type === 'intervention_received' ? `Intervention "${(event as any).intent}" received from ${(event as any).from}`
+            : event.type === 'team_completed' ? `Team finished. Final summary:\n${(event as any).summary ?? ''}\n\nDo NOT call background_status / background_events on this team again — it is done.`
+            : event.type === 'team_failed' ? `Team failed: ${(event as any).error ?? 'unknown error'}\n\nDo NOT call background_status / background_events on this team again — it is done.`
             : 'Team synthesizing results...'
           this.pendingNotifications.push({
-            type: 'team_progress',
+            type: isTerminal ? 'team_complete' : 'team_progress',
             taskId: teamId,
-            status: 'running',
+            status,
             teamEvent: text,
           })
         }
@@ -639,6 +648,9 @@ export class Session {
       }
       if (n.type === 'team_progress') {
         return `<task-notification>\n<task-id>${n.taskId}</task-id>\n<type>team_progress</type>\n<status>${n.status}</status>\n<event>${n.teamEvent || ''}</event>\n</task-notification>`
+      }
+      if (n.type === 'team_complete') {
+        return `<task-notification>\n<task-id>${n.taskId}</task-id>\n<type>team_complete</type>\n<status>${n.status}</status>\n<event>${n.teamEvent || ''}</event>\n</task-notification>`
       }
       return `<task-notification>\n<task-id>${n.taskId}</task-id>\n<type>agent_complete</type>\n<status>${n.status}</status>\n<agent-prompt>${n.prompt || ''}</agent-prompt>\n<result>${n.result || '(no result)'}</result>\n<turns>${n.turns ?? 0}</turns>\n<tools-used>${(n.toolsUsed || []).join(', ')}</tools-used>\n</task-notification>`
     })

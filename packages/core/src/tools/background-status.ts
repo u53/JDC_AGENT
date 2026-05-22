@@ -44,7 +44,8 @@ export function createBackgroundStatusTool(deps: BackgroundStatusDeps): ToolHand
             type: 'team',
             id: task.id,
             status: task.status,
-            note: 'Team has finished or is not active in registry',
+            terminal: true,
+            note: 'Team has finished. Do NOT call background_status or background_events on this id again — final result was already delivered via the team_complete notification.',
           }, null, 2),
         }
       }
