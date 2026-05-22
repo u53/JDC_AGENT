@@ -70,6 +70,54 @@ describe('matchesWorkspace', () => {
     const lockfile = { workspaceFolders: ['/Users/user/project'], pid: 1, ideName: 'VS Code', authToken: 'a', version: '0.1.0', timestamp: 0 }
     expect(matchesWorkspace(lockfile, '/Users/user/other')).toBe(false)
   })
+
+  it('does not match a sibling whose name shares a prefix', () => {
+    const lockfile = { workspaceFolders: ['/Users/user/project'], pid: 1, ideName: 'VS Code', authToken: 'a', version: '0.1.0', timestamp: 0 }
+    expect(matchesWorkspace(lockfile, '/Users/user/project-sibling')).toBe(false)
+  })
+
+  it('tolerates trailing separators', () => {
+    const lockfile = { workspaceFolders: ['/Users/user/project/'], pid: 1, ideName: 'VS Code', authToken: 'a', version: '0.1.0', timestamp: 0 }
+    expect(matchesWorkspace(lockfile, '/Users/user/project/src')).toBe(true)
+  })
+
+  describe('on Windows', () => {
+    const win = 'win32' as NodeJS.Platform
+
+    it('matches when folder uses forward slashes (JetBrains) and cwd uses backslashes', () => {
+      const lockfile = { workspaceFolders: ['C:/Users/foo/proj'], pid: 1, ideName: 'IDEA', authToken: 'a', version: '0.1.0', timestamp: 0 }
+      expect(matchesWorkspace(lockfile, 'C:\\Users\\foo\\proj\\src', win)).toBe(true)
+    })
+
+    it('matches when folder uses backslashes (VS Code Uri.fsPath) and cwd uses backslashes', () => {
+      const lockfile = { workspaceFolders: ['C:\\Users\\foo\\proj'], pid: 1, ideName: 'VS Code', authToken: 'a', version: '0.1.0', timestamp: 0 }
+      expect(matchesWorkspace(lockfile, 'C:\\Users\\foo\\proj\\src', win)).toBe(true)
+    })
+
+    it('is case-insensitive on the drive letter', () => {
+      const lockfile = { workspaceFolders: ['C:\\Users\\foo\\proj'], pid: 1, ideName: 'VS Code', authToken: 'a', version: '0.1.0', timestamp: 0 }
+      expect(matchesWorkspace(lockfile, 'c:\\users\\foo\\proj', win)).toBe(true)
+    })
+
+    it('does not match an unrelated path', () => {
+      const lockfile = { workspaceFolders: ['C:/Users/foo/proj'], pid: 1, ideName: 'IDEA', authToken: 'a', version: '0.1.0', timestamp: 0 }
+      expect(matchesWorkspace(lockfile, 'C:\\Users\\foo\\other', win)).toBe(false)
+    })
+
+    it('does not match a sibling whose name shares a prefix', () => {
+      const lockfile = { workspaceFolders: ['C:/Users/foo/proj'], pid: 1, ideName: 'IDEA', authToken: 'a', version: '0.1.0', timestamp: 0 }
+      expect(matchesWorkspace(lockfile, 'C:\\Users\\foo\\proj-sibling', win)).toBe(false)
+    })
+  })
+
+  describe('on POSIX', () => {
+    const posix = 'linux' as NodeJS.Platform
+
+    it('is case-sensitive', () => {
+      const lockfile = { workspaceFolders: ['/Users/user/Project'], pid: 1, ideName: 'VS Code', authToken: 'a', version: '0.1.0', timestamp: 0 }
+      expect(matchesWorkspace(lockfile, '/Users/user/project', posix)).toBe(false)
+    })
+  })
 })
 
 describe('removeStaleLockfile', () => {

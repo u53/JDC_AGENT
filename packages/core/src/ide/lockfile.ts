@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, unlinkSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, posix, win32 } from 'node:path'
 import type { IdeLockfile } from './types.js'
 
 export interface ScannedLockfile {
@@ -40,12 +40,29 @@ export function isLockfileValid(lockfile: IdeLockfile): boolean {
   }
 }
 
-export function matchesWorkspace(lockfile: IdeLockfile, cwd: string): boolean {
-  const normalizedCwd = cwd.replace(/\/+$/, '')
-  return lockfile.workspaceFolders.some(folder => {
-    const normalizedFolder = folder.replace(/\/+$/, '')
-    return normalizedCwd === normalizedFolder || normalizedCwd.startsWith(normalizedFolder + '/')
-  })
+export function matchesWorkspace(
+  lockfile: IdeLockfile,
+  cwd: string,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  return lockfile.workspaceFolders.some(folder => isSubpath(folder, cwd, platform))
+}
+
+function isSubpath(parent: string, child: string, platform: NodeJS.Platform): boolean {
+  const isWin = platform === 'win32'
+  const p = isWin ? win32 : posix
+  const norm = (raw: string): string => {
+    let s = raw
+    if (isWin) s = s.replace(/\//g, '\\')
+    s = p.resolve(s)
+    if (isWin) s = s.toLowerCase()
+    return s
+  }
+  const a = norm(parent)
+  const b = norm(child)
+  if (a === b) return true
+  const rel = p.relative(a, b)
+  return rel.length > 0 && !rel.startsWith('..' + p.sep) && rel !== '..' && !p.isAbsolute(rel)
 }
 
 export function removeStaleLockfile(filePath: string): void {
