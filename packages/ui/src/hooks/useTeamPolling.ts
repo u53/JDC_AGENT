@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react'
 import { useTeamStore } from '../stores/team-store'
 
 const formatEvent = (e: any): string => {
-  const ts = new Date(e.timestamp).toISOString().slice(11, 19)
+  const d = new Date(e.timestamp)
+  const ts = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
   switch (e.type) {
     case 'team_started': return `[${ts}] team_started ${e.teamId}`
     case 'manager_decision': return `[${ts}] PM: ${e.text}`
