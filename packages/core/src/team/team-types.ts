@@ -152,6 +152,7 @@ export type TeamEvent =
   | { type: 'member_progress'; memberId: string; text: string; timestamp: number }
   | { type: 'tool_start'; memberId: string; toolName: string; timestamp: number }
   | { type: 'tool_complete'; memberId: string; toolName: string; timestamp: number }
+  | { type: 'tool_error'; memberId: string; toolName: string; reason?: string; timestamp: number }
   | { type: 'finding_added'; memberId: string; findingId: string; summary: string; timestamp: number }
   | { type: 'message_sent'; from: string; to: string; intent: string; timestamp: number }
   | { type: 'intervention_received'; from: 'user' | 'main_session'; intent: string; timestamp: number }

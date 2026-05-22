@@ -51,6 +51,7 @@ export function createBackgroundEventsTool(deps: BackgroundEventsDeps): ToolHand
           case 'member_progress': return `[${ts}] [${e.memberId}] ${e.text}`
           case 'tool_start': return `[${ts}] [${e.memberId}] tool_start: ${e.toolName}`
           case 'tool_complete': return `[${ts}] [${e.memberId}] tool_complete: ${e.toolName}`
+          case 'tool_error': return `[${ts}] [${e.memberId}] tool_error: ${e.toolName}${e.reason ? ` — ${e.reason}` : ''}`
           case 'message_sent': return `[${ts}] msg: ${e.from} -> ${e.to} (${e.intent})`
           case 'intervention_received': return `[${ts}] intervention from ${e.from}: ${e.intent}`
           case 'team_synthesizing': return `[${ts}] team_synthesizing`

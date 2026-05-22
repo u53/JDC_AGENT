@@ -111,26 +111,40 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
     //   1. Inherited base from main session (modelConfig.systemPrompt) — environment, project rules,
     //      CLAUDE.md, memory, language preferences, etc. May be a string or array of segments.
     //   2. Sub-agent overlay — agentType-specific or default `SUB_AGENT_SYSTEM`.
+    //   3. Tool whitelist — explicit list of tools actually available to this worker. Without this,
+    //      the inherited prompt's mentions of bash/Edit/Write etc. confuse restricted agents
+    //      (explore/plan) into calling tools that have been filtered out, causing infinite
+    //      "Unknown tool" loops until team-level timeout.
     //
     // We append rather than replace so the worker shares the same project context and conventions
     // as the main session.
+    const availableToolNames = toolDefs.map(t => t.name).sort()
+    const TOOL_WHITELIST_OVERRIDE =
+      `\n\n# ⚠️ Tools available to YOU (overrides any tool list in the parent prompt)\n\n` +
+      `You can ONLY use these tools — anything mentioned earlier (bash, file_edit, file_write, etc.) ` +
+      `that is NOT in this list is NOT available to you and will fail with "Unknown tool":\n\n` +
+      availableToolNames.map(n => `- ${n}`).join('\n') +
+      `\n\nIf your task seems to require a tool not in this list, do NOT try to call it. Either ` +
+      `accomplish the goal with the tools above, or — if truly impossible — call team_report (if available) ` +
+      `with intent="blocker" or finish with a plain-text explanation. Do NOT call non-listed tools.`
     const SUB_AGENT_HEADER =
       `\n\n---\n\n# Sub-agent context\n\n` +
       `You are running as a sub-agent inside the main session above. The instructions, environment,\n` +
       `and project rules above ALL apply to you. The text below is your specific role overlay.\n\n`
+    const overlayBody = systemPrompt + TOOL_WHITELIST_OVERRIDE
     const inherited = modelConfig.systemPrompt
     let composedSystem: ModelConfig['systemPrompt']
     if (typeof inherited === 'string' && inherited.length > 0) {
-      composedSystem = inherited + SUB_AGENT_HEADER + systemPrompt
+      composedSystem = inherited + SUB_AGENT_HEADER + overlayBody
     } else if (Array.isArray(inherited) && inherited.length > 0) {
-      // Cache-friendly array form — keep inherited segments cacheable, and the agent overlay is
-      // also fixed per agentType so it can be cached too.
+      // Cache-friendly array form — keep inherited segments cacheable. The whitelist depends on
+      // the concrete tool set so it isn't cacheable across agents that have different tools.
       composedSystem = [
         ...inherited,
-        { content: SUB_AGENT_HEADER + systemPrompt, cacheable: true },
+        { content: SUB_AGENT_HEADER + overlayBody, cacheable: false },
       ]
     } else {
-      composedSystem = systemPrompt
+      composedSystem = overlayBody
     }
     const config: ModelConfig = { ...modelConfig, systemPrompt: composedSystem }
     const stream = provider.stream(messages, toolDefs, config, signal)
@@ -173,6 +187,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
 
     // Execute tools and collect results
     const toolResults: ContentBlock[] = []
+    const allowedToolNames = new Set(toolDefs.map(t => t.name))
     for (const tu of toolUses) {
       let parsedInput: Record<string, unknown> = {}
       try { parsedInput = JSON.parse(tu.input) } catch { /* empty */ }
@@ -180,6 +195,27 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
       totalToolCount++
 
       onAgentProgress?.({ toolName: tu.name, toolStatus: 'start', toolInput: parsedInput, toolCount: totalToolCount })
+
+      // Pre-check: tool exists in this agent's whitelist?
+      if (!allowedToolNames.has(tu.name) && !extraToolMap.has(tu.name)) {
+        const available = [...allowedToolNames].sort().join(', ')
+        const restrictResult = {
+          content:
+            `Tool "${tu.name}" is not available to this ${opts.agentType ?? 'sub'} agent. ` +
+            `Available tools: ${available}. ` +
+            `Do NOT call "${tu.name}" again — pick from the list above, or finish with plain text.`,
+          isError: true,
+        }
+        onAgentProgress?.({
+          toolName: tu.name,
+          toolStatus: 'error',
+          toolInput: parsedInput,
+          toolResult: restrictResult,
+          toolCount: totalToolCount,
+        })
+        toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: restrictResult.content, is_error: true })
+        continue
+      }
 
       // Handle extra tools (e.g., team_report) directly
       if (extraToolMap.has(tu.name)) {

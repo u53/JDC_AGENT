@@ -188,12 +188,32 @@ export class TeamMember {
         onAgentProgress: (event) => {
           this.toolCount = event.toolCount
           this.lastActivityAt = Date.now()
-          this.opts.onEvent?.({
-            type: event.toolStatus === 'start' ? 'tool_start' : 'tool_complete',
-            memberId: this.id,
-            toolName: event.toolName,
-            timestamp: Date.now(),
-          })
+          if (event.toolStatus === 'start') {
+            this.opts.onEvent?.({
+              type: 'tool_start',
+              memberId: this.id,
+              toolName: event.toolName,
+              timestamp: Date.now(),
+            })
+          } else if (event.toolStatus === 'error') {
+            const reason = event.toolResult?.content
+              ? String(event.toolResult.content).slice(0, 160)
+              : undefined
+            this.opts.onEvent?.({
+              type: 'tool_error',
+              memberId: this.id,
+              toolName: event.toolName,
+              reason,
+              timestamp: Date.now(),
+            })
+          } else {
+            this.opts.onEvent?.({
+              type: 'tool_complete',
+              memberId: this.id,
+              toolName: event.toolName,
+              timestamp: Date.now(),
+            })
+          }
         },
         onAgentText: (text) => {
           this.textBuffer += text
