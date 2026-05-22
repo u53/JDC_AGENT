@@ -488,7 +488,7 @@ function ModelGroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddMo
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
               onBlur={() => { onUpdate({ name: editName }); setEditingName(false) }}
-              onKeyDown={(e) => { if (e.key === 'Enter') { onUpdate({ name: editName }); setEditingName(false) } }}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { onUpdate({ name: editName }); setEditingName(false) } }}
               onClick={(e) => e.stopPropagation()}
               autoFocus
               className="text-[13px] text-[var(--text)] font-medium bg-[var(--surface-2)] border border-[var(--border)] rounded px-1.5 py-0.5 outline-none w-32"

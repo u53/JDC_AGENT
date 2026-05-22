@@ -29,6 +29,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
   const showToast = useToastStore((s) => s.showToast)
 
   const [message, setMessage] = useState('')
+  const isComposingRef = useRef(false)
   const [tab, setTab] = useState<'overview' | 'events'>('overview')
   const [sending, setSending] = useState(false)
   const [justSent, setJustSent] = useState(false)
@@ -241,7 +242,14 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
             placeholder={isFinished ? 'Team finished' : 'Message PM…'}
             disabled={isFinished}
             onChange={(e) => setMessage(e.target.value)}
+            onCompositionStart={() => {
+              isComposingRef.current = true
+            }}
+            onCompositionEnd={() => {
+              isComposingRef.current = false
+            }}
             onKeyDown={(e) => {
+              if (isComposingRef.current || e.nativeEvent.isComposing) return
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
                 handleSend()

@@ -204,7 +204,10 @@ export function BranchSwitcher({ cwd }: Props) {
                   type="text"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && createBranch()}
+                  onKeyDown={(e) => {
+                    if (e.nativeEvent.isComposing) return
+                    if (e.key === 'Enter') createBranch()
+                  }}
                   placeholder="新分支名..."
                   className="flex-1 px-2 py-1 text-[12px] bg-[var(--surface-2)] border border-[var(--border)] rounded-[4px] text-[var(--text)] outline-none"
                   autoFocus

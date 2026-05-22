@@ -83,6 +83,7 @@ export function Sidebar() {
                       onChange={(e) => setEditValue(e.target.value)}
                       onBlur={() => handleRenameSubmit(session.id)}
                       onKeyDown={(e) => {
+                        if (e.nativeEvent.isComposing) return
                         if (e.key === 'Enter') handleRenameSubmit(session.id)
                         if (e.key === 'Escape') setEditingId(null)
                       }}
