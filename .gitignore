@@ -10,3 +10,16 @@ packages/electron/ui
 tmp
 output
 docs
+
+# Build outputs
+.gradle/
+build/
+*.vsix
+
+# Local state (per-machine, regenerated)
+.jdcagnet/
+.team/
+.team-archive/
+
+# Lockfiles for sub-packages we don't ship as standalone npm pkgs
+packages/vscode-extension/package-lock.json
