@@ -24,6 +24,7 @@ export interface SessionStreamState {
   thinkingText: string
   isThinking: boolean
   toolEvents: ToolExecutionEvent[]
+  compacting?: boolean
   error?: { message: string; category: string; retrying: boolean; retryAttempt?: number; retryIn?: number }
   finished?: boolean
   usage?: { inputTokens: number; outputTokens: number; cacheCreationTokens: number; cacheReadTokens: number; totalTokens: number; cacheHitRate: number; contextUsedPercent: number; turnCount: number }
@@ -45,9 +46,14 @@ interface SessionState {
   sessionStates: Record<string, SessionStreamState>
   tasks: Array<{ id: string; subject: string; description: string; status: string }>
   messageQueue: string[]
+  drafts: Record<string, ComposerDraft>
   enqueueMessage: (text: string) => void
   dequeueMessage: () => string | undefined
   removeFromQueue: (index: number) => void
+  setDraftText: (sessionId: string, text: string) => void
+  setDraftImages: (sessionId: string, images: { data: string; mediaType: string }[]) => void
+  clearDraft: (sessionId: string) => void
+  getDraft: (sessionId: string) => ComposerDraft
   loadProjects: () => Promise<void>
   createSession: (cwd: string) => Promise<void>
   switchSession: (sessionId: string) => Promise<void>
@@ -58,6 +64,7 @@ interface SessionState {
   updateSessionState: (sessionId: string, update: Partial<SessionStreamState>) => void
   appendStreamText: (sessionId: string, text: string) => void
   appendThinkingText: (sessionId: string, text: string) => void
+  setCompactState: (sessionId: string, state: { active: boolean }) => void
   addToolEvent: (sessionId: string, event: ToolExecutionEvent) => void
   markStreaming: (sessionId: string, streaming: boolean) => void
   setError: (sessionId: string, error: { message: string; category: string; retrying: boolean; retryAttempt?: number; retryIn?: number } | null) => void
@@ -68,6 +75,13 @@ interface SessionState {
   loadTasks: (sessionId: string) => Promise<void>
 }
 
+export interface ComposerDraft {
+  text: string
+  images: { data: string; mediaType: string }[]
+}
+
+const EMPTY_DRAFT: ComposerDraft = { text: '', images: [] }
+
 export const useSessionStore = create<SessionState>((set, get) => ({
   projects: [],
   activeSessionId: null,
@@ -76,6 +90,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   sessionStates: {},
   tasks: [],
   messageQueue: [],
+  drafts: {},
   enqueueMessage: (text: string) => {
     set((s) => ({ messageQueue: [...s.messageQueue, text] }))
   },
@@ -88,6 +103,35 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
   removeFromQueue: (index: number) => {
     set((s) => ({ messageQueue: s.messageQueue.filter((_, i) => i !== index) }))
+  },
+
+  getDraft: (sessionId: string) => get().drafts[sessionId] ?? EMPTY_DRAFT,
+  setDraftText: (sessionId: string, text: string) => {
+    set((s) => {
+      const current = s.drafts[sessionId] ?? EMPTY_DRAFT
+      if (text.length === 0 && current.images.length === 0) {
+        const { [sessionId]: _, ...rest } = s.drafts
+        return { drafts: rest }
+      }
+      return { drafts: { ...s.drafts, [sessionId]: { ...current, text } } }
+    })
+  },
+  setDraftImages: (sessionId: string, images: { data: string; mediaType: string }[]) => {
+    set((s) => {
+      const current = s.drafts[sessionId] ?? EMPTY_DRAFT
+      if (images.length === 0 && current.text.length === 0) {
+        const { [sessionId]: _, ...rest } = s.drafts
+        return { drafts: rest }
+      }
+      return { drafts: { ...s.drafts, [sessionId]: { ...current, images } } }
+    })
+  },
+  clearDraft: (sessionId: string) => {
+    set((s) => {
+      if (!s.drafts[sessionId]) return s
+      const { [sessionId]: _, ...rest } = s.drafts
+      return { drafts: rest }
+    })
   },
 
   loadProjects: async () => {
@@ -138,6 +182,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       useBackgroundTaskStore.getState().reset()
       set({ activeSessionId: null, messages: [] })
     }
+    get().clearDraft(sessionId)
     await get().loadProjects()
   },
 
@@ -192,6 +237,18 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         sessionStates: {
           ...s.sessionStates,
           [sessionId]: { ...current, thinkingText: current.thinkingText + text, isThinking: true },
+        },
+      }
+    })
+  },
+
+  setCompactState: (sessionId: string, state: { active: boolean }) => {
+    set((s) => {
+      const current = s.sessionStates[sessionId] || EMPTY_STREAM_STATE
+      return {
+        sessionStates: {
+          ...s.sessionStates,
+          [sessionId]: { ...current, compacting: state.active },
         },
       }
     })

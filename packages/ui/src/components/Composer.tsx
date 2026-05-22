@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, type KeyboardEvent, type ClipboardEvent, type DragEvent } from 'react'
+import { useRef, useCallback, useEffect, useState, type KeyboardEvent, type ClipboardEvent, type DragEvent } from 'react'
 import { ImagePreview } from './ImagePreview'
 import { SlashCommandMenu, type SlashCommand } from './SlashCommandMenu'
 import { BranchSwitcher } from './BranchSwitcher'
@@ -43,8 +43,6 @@ export function Composer({
   onModelClick,
   skills,
 }: Props) {
-  const [text, setText] = useState('')
-  const [images, setImages] = useState<{ data: string; mediaType: string }[]>([])
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashFilter, setSlashFilter] = useState('')
   const [showPermMenu, setShowPermMenu] = useState(false)
@@ -58,6 +56,30 @@ export function Composer({
   const removeFromQueue = useSessionStore((s) => s.removeFromQueue)
   const projects = useSessionStore((s) => s.projects)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const draft = useSessionStore((s) => (activeSessionId ? s.drafts[activeSessionId] : undefined))
+  const setDraftText = useSessionStore((s) => s.setDraftText)
+  const setDraftImages = useSessionStore((s) => s.setDraftImages)
+  const clearDraft = useSessionStore((s) => s.clearDraft)
+  const text = draft?.text ?? ''
+  const images = draft?.images ?? []
+  const setText = useCallback(
+    (next: string) => {
+      if (activeSessionId) setDraftText(activeSessionId, next)
+    },
+    [activeSessionId, setDraftText],
+  )
+  const setImages = useCallback(
+    (updater: { data: string; mediaType: string }[] | ((prev: { data: string; mediaType: string }[]) => { data: string; mediaType: string }[])) => {
+      if (!activeSessionId) return
+      const current = useSessionStore.getState().drafts[activeSessionId]?.images ?? []
+      const next = typeof updater === 'function' ? updater(current) : updater
+      setDraftImages(activeSessionId, next)
+    },
+    [activeSessionId, setDraftImages],
+  )
+  const resetDraft = useCallback(() => {
+    if (activeSessionId) clearDraft(activeSessionId)
+  }, [activeSessionId, clearDraft])
 
   const activeProject = projects.find((p) => p.sessions.some((s) => s.id === activeSessionId))
   const cwd = activeProject?.cwd || ''
@@ -127,7 +149,7 @@ export function Composer({
       setText(`/${cmd.name} `)
       textareaRef.current?.focus()
     } else {
-      setText('')
+      resetDraft()
       onSlashCommand?.(`/${cmd.name}`)
     }
   }
@@ -143,7 +165,7 @@ export function Composer({
       e.preventDefault()
       if (text.startsWith('/') && !text.includes(' ')) {
         onSlashCommand?.(text)
-        setText('')
+        resetDraft()
         setShowSlashMenu(false)
         return
       }
@@ -153,8 +175,7 @@ export function Composer({
         } else {
           onSend(text.trim(), images.length > 0 ? images : undefined)
         }
-        setText('')
-        setImages([])
+        resetDraft()
         if (textareaRef.current) textareaRef.current.style.height = 'auto'
       }
     }
@@ -174,6 +195,12 @@ export function Composer({
       }
     }
   }
+
+  // Resize textarea whenever the active session (and thus the draft) changes,
+  // so switching back to a session with a long draft restores the right height.
+  useEffect(() => {
+    handleInput()
+  }, [activeSessionId])
 
   const handleClearQueue = () => {
     const len = messageQueue.length
@@ -274,8 +301,7 @@ export function Composer({
                   <button
                     onClick={() => {
                       enqueueMessage(text.trim())
-                      setText('')
-                      setImages([])
+                      resetDraft()
                     }}
                     className="flex items-center gap-1.5 rounded-[8px] bg-[var(--accent)] px-3 py-2 text-[12px] text-[var(--accent-ink)] transition-colors hover:opacity-90"
                   >
@@ -296,8 +322,7 @@ export function Composer({
                 onClick={() => {
                   if (text.trim() || images.length > 0) {
                     onSend(text.trim(), images.length > 0 ? images : undefined)
-                    setText('')
-                    setImages([])
+                    resetDraft()
                   }
                 }}
                 disabled={!text.trim() && images.length === 0}

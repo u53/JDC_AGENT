@@ -49,14 +49,18 @@ export class TeamManager {
   constructor(protected opts: TeamManagerOptions) {
     this.id = opts.managerId ?? `pm_${uuid().slice(0, 8)}`
     for (const t of opts.initialTasks) {
+      const title = typeof t.title === 'string' && t.title.trim().length > 0
+        ? t.title.trim()
+        : '(untitled task)'
+      const description = typeof t.description === 'string' ? t.description : ''
       const task: TeamTask = {
         id: `task_${uuid().slice(0, 6)}`,
-        title: t.title,
-        description: t.description,
+        title,
+        description,
         status: 'todo',
         priority: t.priority ?? 'normal',
         riskLevel: t.riskLevel ?? 'low',
-        dependsOn: t.dependsOn,
+        dependsOn: Array.isArray(t.dependsOn) ? t.dependsOn.filter(d => typeof d === 'string' && d.length > 0) : undefined,
         createdBy: 'manager',
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -105,6 +109,7 @@ export class TeamManager {
   }
 
   private resolveTaskRef(ref: string): string {
+    if (typeof ref !== 'string' || ref.length === 0) return ''
     if (this.tasks.has(ref)) return ref
     const byTitle = this.titleToId.get(ref.toLowerCase())
     if (byTitle) return byTitle
@@ -151,14 +156,21 @@ export class TeamManager {
   }
 
   addTask(opts: { title: string; description: string; priority?: Priority; riskLevel?: RiskLevel; dependsOn?: string[] }): string {
+    const title = typeof opts.title === 'string' && opts.title.trim().length > 0
+      ? opts.title.trim()
+      : '(untitled task)'
+    const description = typeof opts.description === 'string' ? opts.description : ''
+    const deps = Array.isArray(opts.dependsOn)
+      ? opts.dependsOn.filter(d => typeof d === 'string' && d.length > 0).map(dep => this.resolveTaskRef(dep))
+      : undefined
     const task: TeamTask = {
       id: `task_${uuid().slice(0, 6)}`,
-      title: opts.title,
-      description: opts.description,
+      title,
+      description,
       status: 'todo',
       priority: opts.priority ?? 'normal',
       riskLevel: opts.riskLevel ?? 'low',
-      dependsOn: opts.dependsOn?.map(dep => this.resolveTaskRef(dep)),
+      dependsOn: deps,
       createdBy: 'manager',
       createdAt: Date.now(),
       updatedAt: Date.now(),

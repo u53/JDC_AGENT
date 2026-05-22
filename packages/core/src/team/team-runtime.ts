@@ -621,19 +621,37 @@ export class TeamRuntime {
     const idx = this.members.findIndex(m => m.id === memberId)
     if (idx >= 0) this.members[idx] = taskMember
 
-    // Start task timeout (default: 10 minutes per task)
+    // Heartbeat-based task timeout: only kill the task if the worker has been
+    // idle (no tool/text activity) for taskTimeoutMs. A long-running but actively
+    // reporting worker (synthesis, audits, multi-step refactors) keeps refreshing
+    // its heartbeat via lastActivityAt and won't be killed.
     const taskTimeoutMs = this.opts.taskTimeoutMs ?? 10 * 60 * 1000
-    const timeout = setTimeout(() => {
-      if (taskMember.getStatus() === 'running') {
+    const checkHeartbeat = () => {
+      if (this.completed) return
+      if (taskMember.getStatus() !== 'running') return
+      const idleMs = Date.now() - taskMember.getState().lastActivityAt
+      if (idleMs >= taskTimeoutMs) {
         taskMember.abort()
-        this.manager.markTaskFailed(taskId, `Task timed out after ${taskTimeoutMs / 1000}s`)
+        this.manager.markTaskFailed(taskId, `Task idle for ${Math.floor(idleMs / 1000)}s (no progress)`)
         this.concurrency.markDone(memberId)
         this.workspace.updateTaskStatus(taskId, 'failed').catch(() => {})
         this.recycleMember(memberId, memberSpec)
-        this.recordEvent({ type: 'task_cancelled', taskId, reason: 'timeout', timestamp: Date.now() })
+        this.recordEvent({
+          type: 'task_cancelled',
+          taskId,
+          reason: `idle_timeout (no activity for ${Math.floor(idleMs / 1000)}s)`,
+          timestamp: Date.now(),
+        })
+        this.taskTimeouts.delete(taskId)
         this.scheduleTick()
+        return
       }
-    }, taskTimeoutMs)
+      // Worker is still active — reschedule check for when idle would actually expire.
+      const remaining = taskTimeoutMs - idleMs
+      const next = setTimeout(checkHeartbeat, Math.max(remaining, 5_000))
+      this.taskTimeouts.set(taskId, next)
+    }
+    const timeout = setTimeout(checkHeartbeat, taskTimeoutMs)
     this.taskTimeouts.set(taskId, timeout)
 
     taskMember.start().catch(() => {
