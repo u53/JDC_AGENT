@@ -64,6 +64,10 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
             },
           },
           maxWorkers: { type: 'number', description: 'Maximum worker count (hard cap: 10, default: 5)' },
+          timeoutMinutes: {
+            type: 'number',
+            description: 'Idle timeout in minutes — team is killed if NO member has activity for this long. Heartbeat-based, so active teams are never killed. Default: 60.',
+          },
           archive_path: {
             type: 'string',
             description: 'Optional: where to put archived workspaces (default: <cwd>/.team-archive)',
@@ -103,6 +107,7 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
       const requestedMembers = (input.members as TeamMemberSpec[] | undefined) ?? []
       const requestedTasks = (input.tasks as any[] | undefined) ?? []
       const maxWorkers = Math.min((input.maxWorkers as number | undefined) ?? 5, 10)
+      const timeoutMinutes = input.timeoutMinutes as number | undefined
 
       const members: TeamMemberSpec[] = requestedMembers.length > 0
         ? requestedMembers
@@ -128,6 +133,7 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
         objective,
         plan,
         archivePath: input.archive_path as string | undefined,
+        teamTimeoutMs: typeof timeoutMinutes === 'number' && timeoutMinutes > 0 ? timeoutMinutes * 60_000 : undefined,
         subSessionDeps: deps.buildSubSessionDeps(),
         aiPM: deps.provider && deps.modelConfig ? { provider: deps.provider, modelConfig: deps.modelConfig } : undefined,
         onEvent: (e) => {

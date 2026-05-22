@@ -170,6 +170,16 @@ Release a worker. Default targets only 'queued' (idle) members; running members 
 DO NOT use force=true unless user explicitly asked OR a worker is hopelessly stuck.
 { "type": "remove_member", "memberId": "<existing>", "force": false, "message": "<reason>" }
 
+## Action: kick_member
+Force-restart a stuck worker on its CURRENT task. Aborts the current sub-session and restarts the SAME
+member on the SAME task with your hint prepended to its prompt. Different from remove_member (which kills
+the worker) and reopen_task (post-completion rework). Use kick_member when:
+  - A worker has gone silent or is looping on the same failing tool call.
+  - You sent a send_member_message minutes ago and there's still no progress event.
+  - You want to give it ONE more shot with a course correction before giving up.
+The runtime caps each task at 2 kicks total; after that the task fails normally.
+{ "type": "kick_member", "memberId": "<existing>", "message": "<one-line course correction, e.g. '不要再 grep app.asar 了，直接看 packages/electron/build.mjs 里的 files 配置'>" }
+
 ## Action: send_member_message
 Send a back-channel message to one specific worker. The worker reads it on its next mailbox check
 (non-blocking). Use this for: answering a worker's blocker question; nudging a wrap_up to a stuck worker;
@@ -862,7 +872,7 @@ export class TeamManagerAI extends TeamManager {
 
       const validTypes = new Set([
         'assign_task', 'cancel_task', 'send_member_message', 'broadcast', 'add_constraint',
-        'complete', 'reply', 'add_member', 'remove_member', 'add_task', 'reopen_task',
+        'complete', 'reply', 'add_member', 'remove_member', 'add_task', 'reopen_task', 'kick_member',
       ])
       return parsed
         .filter((a: any) => a && validTypes.has(a.type))

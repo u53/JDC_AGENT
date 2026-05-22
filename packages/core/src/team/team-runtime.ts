@@ -68,6 +68,11 @@ export class TeamRuntime {
   private completed = false
   private taskTimeouts = new Map<string, NodeJS.Timeout>()
   private teamTimeout?: NodeJS.Timeout
+  private lastTeamActivity: number = Date.now()
+  // Tracks how many times a task has been kicked (PM forced restart of stuck worker).
+  // Cleared when the task completes or fails terminally. Cap at 2 to avoid infinite kicks.
+  private kickCounts = new Map<string, number>()
+  private static readonly MAX_KICKS_PER_TASK = 2
 
   constructor(opts: TeamRuntimeOptions) {
     this.opts = opts
@@ -269,6 +274,101 @@ export class TeamRuntime {
     return true
   }
 
+  /**
+   * PM-driven rescue for a worker that appears stuck.
+   * Aborts the current sub-session, increments kickCount, and reassigns the SAME task
+   * to the SAME member with a PM hint prepended. After MAX_KICKS_PER_TASK, the kick
+   * is rejected — the runtime lets the normal failure path take over instead of
+   * thrashing forever.
+   *
+   * Distinct from cancel_task (kills task) and reopen_task (post-completion rework).
+   * kick_member is the only PM action that interrupts and restarts a still-running task.
+   */
+  private kickMember(memberId: string, hint: string): void {
+    const member = this.memberById.get(memberId)
+    if (!member) {
+      this.recordEvent({
+        type: 'manager_decision',
+        text: `kick_member: no such member ${memberId}`,
+        timestamp: Date.now(),
+      })
+      return
+    }
+    if (member.getStatus() !== 'running') {
+      this.recordEvent({
+        type: 'manager_decision',
+        text: `kick_member: ${memberId} is not running (status=${member.getStatus()}); ignoring`,
+        timestamp: Date.now(),
+      })
+      return
+    }
+    const taskId = member.getState().currentTaskId
+    if (!taskId) {
+      this.recordEvent({
+        type: 'manager_decision',
+        text: `kick_member: ${memberId} has no current task; ignoring`,
+        timestamp: Date.now(),
+      })
+      return
+    }
+
+    const prevKicks = this.kickCounts.get(taskId) ?? 0
+    if (prevKicks >= TeamRuntime.MAX_KICKS_PER_TASK) {
+      this.recordEvent({
+        type: 'manager_decision',
+        text: `kick_member: task ${taskId} already kicked ${prevKicks} times — letting it fail naturally`,
+        timestamp: Date.now(),
+      })
+      return
+    }
+    this.kickCounts.set(taskId, prevKicks + 1)
+
+    this.recordEvent({
+      type: 'manager_decision',
+      text: `kicking ${member.role} (${memberId}) on task ${taskId} (kick #${prevKicks + 1}): ${hint}`,
+      timestamp: Date.now(),
+    })
+
+    // Clear the heartbeat so it doesn't fire on the new instance with a stale lastActivityAt.
+    this.clearTaskTimeout(taskId)
+
+    // Abort the old sub-session. Its onFail will fire async, but the stale-callback
+    // guard in assignTask() will discard it once memberById no longer points to the
+    // old TeamMember instance.
+    member.abort()
+    this.concurrency.markDone(memberId)
+
+    // Re-assign on next microtask so any sync teardown can settle.
+    queueMicrotask(() => {
+      // Reset the task back to assigned/running so assignTask can take it
+      this.manager.markTaskAssigned(taskId, memberId)
+      const memberSpec = { role: member.role, agentType: member.agentType, modelId: member.modelId }
+      // Build a fresh queued TeamMember in place — assignTask will create another fresh
+      // instance with the proper task prompt, so we just need a placeholder that
+      // memberById can return for the assignTask lookup.
+      const placeholder = new TeamMember({
+        spec: memberSpec,
+        taskPrompt: '',
+        id: memberId,
+        subSessionDeps: this.opts.subSessionDeps,
+        onEvent: (e) => this.recordEvent(e),
+        onComplete: (mId, result) => this.handleMemberComplete(mId, result),
+        onFail: (mId, error) => this.handleMemberFail(mId, error),
+      })
+      this.memberById.set(memberId, placeholder)
+      const idx = this.members.findIndex(m => m.id === memberId)
+      if (idx >= 0) this.members[idx] = placeholder
+
+      this.assignTask(taskId, memberId, hint).catch(err => {
+        this.recordEvent({
+          type: 'manager_decision',
+          text: `kick reassign failed for ${taskId}: ${err instanceof Error ? err.message : String(err)}`,
+          timestamp: Date.now(),
+        })
+      })
+    })
+  }
+
   async start(): Promise<void> {
     await this.workspace.init(this.objective)
     // Seed task.md for each initial task so worker prompts can reference them
@@ -291,15 +391,60 @@ export class TeamRuntime {
     this.status = 'running'
     this.recordEvent({ type: 'team_started', teamId: this.id, timestamp: Date.now() })
 
-    // Team-level timeout (default: 30 minutes)
-    const teamTimeoutMs = this.opts.teamTimeoutMs ?? 30 * 60 * 1000
-    this.teamTimeout = setTimeout(() => {
-      if (!this.completed) {
-        this.recordEvent({ type: 'team_failed', error: `Team timed out after ${teamTimeoutMs / 1000}s`, timestamp: Date.now() })
-        this.stop()
-        this.opts.onFail?.(`Team timed out after ${teamTimeoutMs / 1000}s`)
+    // Team-level idle timeout (default: 60 minutes).
+    // Unlike the old fixed deadline, this is heartbeat-based: we only kill the team
+    // if ALL members have been idle (no activity) for teamTimeoutMs. If anyone is
+    // actively working, the team lives on indefinitely — the user can always disband
+    // manually via the main session.
+    const teamTimeoutMs = this.opts.teamTimeoutMs ?? 60 * 60 * 1000
+    this.lastTeamActivity = Date.now()
+    const checkTeamIdle = () => {
+      if (this.completed) return
+      // Refresh from member heartbeats
+      let latestActivity = this.lastTeamActivity
+      for (const m of this.members) {
+        const memberActivity = m.getState().lastActivityAt
+        if (memberActivity > latestActivity) latestActivity = memberActivity
       }
-    }, teamTimeoutMs)
+      const idleMs = Date.now() - latestActivity
+      if (idleMs >= teamTimeoutMs) {
+        // Team is truly idle — try to salvage completed work before failing.
+        // Set completed FIRST so any in-flight member onFail callbacks bail out
+        // and don't trigger a ghost completeTeam() down the line.
+        this.completed = true
+        const completedTasks = this.manager.getTasks().filter(t => t.status === 'completed')
+        if (completedTasks.length > 0) {
+          const partialSummary = this.manager.synthesize()
+          this.recordEvent({
+            type: 'team_completed',
+            summary: `(partial — idle timeout after ${Math.floor(idleMs / 1000)}s) ${partialSummary}`,
+            timestamp: Date.now(),
+          })
+          this.status = 'completed'
+          this.manager.setStatus('completed')
+          this.stop()
+          this.workspace.archive().then(archivePath => {
+            const finalSummary = archivePath
+              ? `(partial) ${partialSummary}\n\nArchived to: ${archivePath}`
+              : `(partial) ${partialSummary}`
+            this.opts.onComplete?.(finalSummary)
+          }).catch(() => {
+            this.opts.onComplete?.(`(partial) ${partialSummary}`)
+          })
+        } else {
+          this.recordEvent({ type: 'team_failed', error: `Team idle for ${Math.floor(idleMs / 1000)}s with no completed tasks`, timestamp: Date.now() })
+          this.status = 'failed'
+          this.manager.setStatus('failed')
+          this.stop()
+          this.opts.onFail?.(`Team idle for ${Math.floor(idleMs / 1000)}s with no completed tasks`)
+        }
+        return
+      }
+      // Reschedule check
+      const remaining = teamTimeoutMs - idleMs
+      this.teamTimeout = setTimeout(checkTeamIdle, Math.max(remaining, 30_000))
+    }
+    this.teamTimeout = setTimeout(checkTeamIdle, teamTimeoutMs)
 
     this.scheduleTick()
     // Give PM a chance to review the initial plan: split coarse tasks, add deps,
@@ -330,10 +475,20 @@ export class TeamRuntime {
     for (const member of this.members) {
       member.abort()
     }
-    this.status = 'stopped'
+    // Mark completed so no async callbacks (member onFail → PM proactive → complete action)
+    // can trigger completeTeam() after the team is already dead. Without this, a "team_failed"
+    // followed by late member onFail callbacks would cause a ghost "team_completed" minutes later.
+    this.completed = true
+    // Only flip to 'stopped' if caller hasn't already set a terminal state
+    // (completed / failed). This lets partial-salvage paths declare success
+    // before stopping members, without stop() overwriting it.
+    if (this.status !== 'completed' && this.status !== 'failed') {
+      this.status = 'stopped'
+    }
   }
 
   private recordEvent(event: TeamEvent): void {
+    this.lastTeamActivity = Date.now()
     this.events.push(event)
     this.opts.onEvent?.(event)
   }
@@ -463,11 +618,16 @@ export class TeamRuntime {
         case 'complete':
           this.completeTeam(action.summary ?? this.manager.synthesize())
           break
+        case 'kick_member':
+          if (action.memberId) {
+            this.kickMember(action.memberId, action.message ?? 'PM 觉得你似乎卡住了，换个思路重试。')
+          }
+          break
       }
     }
   }
 
-  private async assignTask(taskId: string, memberId: string): Promise<void> {
+  private async assignTask(taskId: string, memberId: string, kickHint?: string): Promise<void> {
     const task = this.manager.getTask(taskId)
     const member = this.memberById.get(memberId)
     if (!task || !member) return
@@ -583,6 +743,7 @@ export class TeamRuntime {
       upstream,
       member: { role: member.role, agentType: member.agentType },
       objective: this.objective,
+      kickHint,
     })
 
     // Build new member instance for this task, preserving ID and mailbox
@@ -597,17 +758,20 @@ export class TeamRuntime {
       subSessionDeps: this.opts.subSessionDeps,
       onEvent: (e) => this.recordEvent(e),
       onComplete: (_mId, result) => {
+        if (this.memberById.get(memberId) !== taskMember) return
         this.clearTaskTimeout(taskId)
+        this.kickCounts.delete(taskId)
         this.manager.markTaskCompleted(taskId, result)
         this.concurrency.markDone(memberId)
-        // Fallback: write result.md if the worker forgot to call update_status
         this.fallbackWriteResult(taskId, memberId, result.summary).catch(() => {})
         this.recycleMember(memberId, memberSpec)
         this.triggerProactive({ kind: 'task_completed', taskId })
         this.scheduleTick()
       },
       onFail: (_mId, error) => {
+        if (this.memberById.get(memberId) !== taskMember) return
         this.clearTaskTimeout(taskId)
+        this.kickCounts.delete(taskId)
         this.manager.markTaskFailed(taskId, error)
         this.concurrency.markDone(memberId)
         this.workspace.updateTaskStatus(taskId, 'failed').catch(() => {})
@@ -761,6 +925,7 @@ export class TeamRuntime {
     for (const [, timeout] of this.taskTimeouts) clearTimeout(timeout)
     this.taskTimeouts.clear()
     this.status = 'completed'
+    this.manager.setStatus('completed')
     this.recordEvent({ type: 'team_synthesizing', timestamp: Date.now() })
     // Archive workspace; don't block completion if archive fails
     this.workspace.archive()
@@ -914,10 +1079,11 @@ interface WorkerTaskPromptArgs {
   upstream: Array<{ filePath: string; summary: string }>
   member: { role: string; agentType: string }
   objective: string
+  kickHint?: string             // PM intervention message when restarting a stuck worker
 }
 
 function buildWorkerTaskPrompt(args: WorkerTaskPromptArgs): string {
-  const { task, isReopened, contractsBlock, issueBlock, upstream, member, objective } = args
+  const { task, isReopened, contractsBlock, issueBlock, upstream, member, objective, kickHint } = args
 
   const sections: string[] = []
   sections.push(WORKER_IDENTITY)
@@ -926,7 +1092,20 @@ function buildWorkerTaskPrompt(args: WorkerTaskPromptArgs): string {
   sections.push(`# Team objective\n\n${objective}`)
   sections.push(`# You are\n\n- Role: ${member.role}\n- agentType: ${member.agentType}`)
 
-  // Reopen takes precedence: lead with the issue block so worker sees what's wrong first
+  // PM intervention takes precedence over everything else: a stuck worker is being restarted
+  // on the same task with a hint. Surface this first so it's the dominant signal.
+  if (kickHint) {
+    sections.push(
+      `# ⚠️ PM INTERVENTION — RESTART\n\n` +
+      `You are being restarted on this task because PM judged you to be stuck.\n` +
+      `PM's hint: ${kickHint}\n\n` +
+      `Do NOT repeat whatever you were doing in the previous attempt. Try a different approach. ` +
+      `If you still don't know how to proceed, finish with a plain-text explanation of what you tried ` +
+      `and why you're blocked — don't keep retrying the same failing tool calls.`
+    )
+  }
+
+  // Reopen takes precedence over normal flow: lead with the issue block so worker sees what's wrong first
   if (isReopened && issueBlock) {
     sections.push(
       `# ⚠️ THIS TASK IS REOPENED\n\n` +

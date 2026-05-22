@@ -113,7 +113,9 @@ export class TeamMember {
     this.mailbox.push(mb)
     this.lastActivityAt = Date.now()
 
-    // Interrupt current execution for wrap_up (hard stop)
+    // Interrupt current execution for wrap_up (hard stop).
+    // hurry is intentionally NOT here — abort would kill mid-stream and fail the task.
+    // For "stuck worker" rescue, PM should use kick_member instead.
     if (msg.intent === 'wrap_up') {
       this.interruptCurrentExecution()
     }

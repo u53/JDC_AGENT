@@ -10,7 +10,7 @@ import type {
 } from './team-types.js'
 
 export interface ManagerAction {
-  type: 'assign_task' | 'cancel_task' | 'send_member_message' | 'request_member_status' | 'broadcast' | 'add_constraint' | 'wrap_up' | 'complete' | 'reply' | 'add_member' | 'remove_member' | 'add_task' | 'reopen_task'
+  type: 'assign_task' | 'cancel_task' | 'send_member_message' | 'request_member_status' | 'broadcast' | 'add_constraint' | 'wrap_up' | 'complete' | 'reply' | 'add_member' | 'remove_member' | 'add_task' | 'reopen_task' | 'kick_member'
   taskId?: string
   memberId?: string
   message?: string
@@ -86,6 +86,11 @@ export class TeamManager {
       currentDecision: this.currentDecision,
       lastActivityAt: this.lastActivityAt,
     }
+  }
+
+  setStatus(status: TeamManagerState['status']): void {
+    this.status = status
+    this.lastActivityAt = Date.now()
   }
 
   getTasks(): TeamTask[] {
