@@ -45,6 +45,7 @@ export interface TeamRuntimeOptions {
   teamTimeoutMs?: number
   archivePath?: string
   aiPM?: { provider: ModelProvider; modelConfig: ModelConfig }
+  resolveModel?: (modelId: string) => { provider: ModelProvider; modelConfig: ModelConfig } | null
   onEvent?: (event: TeamEvent) => void
   onComplete?: (summary: string) => void
   onFail?: (error: string) => void
@@ -126,6 +127,7 @@ export class TeamRuntime {
           spec,
           taskPrompt: '', // assigned later
           subSessionDeps: opts.subSessionDeps,
+          resolveModel: opts.resolveModel,
           onEvent: (e) => this.recordEvent(e),
           onComplete: (memberId, result) => this.handleMemberComplete(memberId, result),
           onFail: (memberId, error) => this.handleMemberFail(memberId, error),
@@ -215,6 +217,7 @@ export class TeamRuntime {
       spec,
       taskPrompt: '',
       subSessionDeps: this.opts.subSessionDeps,
+      resolveModel: this.opts.resolveModel,
       onEvent: (e) => this.recordEvent(e),
       onComplete: (memberId, result) => this.handleMemberComplete(memberId, result),
       onFail: (memberId, error) => this.handleMemberFail(memberId, error),
@@ -351,6 +354,7 @@ export class TeamRuntime {
         taskPrompt: '',
         id: memberId,
         subSessionDeps: this.opts.subSessionDeps,
+        resolveModel: this.opts.resolveModel,
         onEvent: (e) => this.recordEvent(e),
         onComplete: (mId, result) => this.handleMemberComplete(mId, result),
         onFail: (mId, error) => this.handleMemberFail(mId, error),
@@ -756,6 +760,7 @@ export class TeamRuntime {
       teamMailbox: { push: (msg: any) => this.sendMessage(msg) },
       workspace: this.workspace,
       subSessionDeps: this.opts.subSessionDeps,
+      resolveModel: this.opts.resolveModel,
       onEvent: (e) => this.recordEvent(e),
       onComplete: (_mId, result) => {
         if (this.memberById.get(memberId) !== taskMember) return
@@ -878,6 +883,7 @@ export class TeamRuntime {
       taskPrompt: '',
       id: memberId,
       subSessionDeps: this.opts.subSessionDeps,
+      resolveModel: this.opts.resolveModel,
       onEvent: (e) => this.recordEvent(e),
       onComplete: (mId, result) => this.handleMemberComplete(mId, result),
       onFail: (mId, error) => this.handleMemberFail(mId, error),

@@ -4,6 +4,8 @@ import { Mailbox, type MailboxMessage } from './team-mailbox.js'
 import { createTeamReportTool } from '../tools/team-report.js'
 import { createTeamArtifactTool } from '../tools/team-artifact.js'
 import type { TeamWorkspace } from './team-workspace.js'
+import type { ModelProvider } from '../model-provider.js'
+import type { ModelConfig } from '../types.js'
 import type {
   TeamMemberState,
   TeamMemberSpec,
@@ -34,6 +36,7 @@ export interface TeamMemberOptions {
   teamMailbox?: { push(msg: any): void }
   workspace?: TeamWorkspace
   subSessionDeps: Omit<SubSessionOptions, 'prompt' | 'agentType' | 'signal' | 'onAgentProgress' | 'onAgentText' | 'mailbox' | 'onToolEvent'>
+  resolveModel?: (modelId: string) => { provider: ModelProvider; modelConfig: ModelConfig } | null
   onEvent?: (event: TeamEvent) => void
   onComplete?: (memberId: string, result: TeamTaskResult) => void
   onFail?: (memberId: string, error: string) => void
@@ -180,8 +183,38 @@ export class TeamMember {
         })
       }
 
+      // Resolve modelId override: if the member spec specifies a modelId AND the runtime
+      // gave us a resolveModel callback, swap in that model's provider + config. Otherwise
+      // fall back to whatever the main session passed in subSessionDeps. A bad / unknown
+      // modelId is logged via member_progress and silently falls back — the worker still
+      // gets to run, just on the default model.
+      let effectiveProvider = this.opts.subSessionDeps.provider
+      let effectiveModelConfig = this.opts.subSessionDeps.modelConfig
+      if (this.modelId && this.opts.resolveModel) {
+        const resolved = this.opts.resolveModel(this.modelId)
+        if (resolved) {
+          effectiveProvider = resolved.provider
+          effectiveModelConfig = resolved.modelConfig
+          this.opts.onEvent?.({
+            type: 'member_progress',
+            memberId: this.id,
+            text: `[modelId] using "${this.modelId}"`,
+            timestamp: Date.now(),
+          })
+        } else {
+          this.opts.onEvent?.({
+            type: 'member_progress',
+            memberId: this.id,
+            text: `[modelId resolve] requested "${this.modelId}" not found — falling back to main session model`,
+            timestamp: Date.now(),
+          })
+        }
+      }
+
       const subOpts: SubSessionOptions = {
         ...this.opts.subSessionDeps,
+        provider: effectiveProvider,
+        modelConfig: effectiveModelConfig,
         prompt: this.opts.taskPrompt,
         agentType: this.agentType,
         signal: this.abortController.signal,

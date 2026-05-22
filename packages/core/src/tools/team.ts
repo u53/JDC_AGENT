@@ -13,6 +13,7 @@ export interface TeamToolDeps {
   buildSubSessionDeps: () => Omit<SubSessionOptions, 'prompt' | 'agentType' | 'signal' | 'onAgentProgress' | 'onAgentText' | 'mailbox' | 'onToolEvent'>
   provider?: ModelProvider
   modelConfig?: ModelConfig
+  resolveModel?: (modelId: string) => { provider: ModelProvider; modelConfig: ModelConfig } | null
   onTeamEvent?: (teamId: string, event: TeamEvent) => void
 }
 
@@ -44,7 +45,10 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
                 role: { type: 'string', description: 'Display role name (e.g., "Code Explorer")' },
                 count: { type: 'number', description: 'Number of members with this role (default: 1)' },
                 agentType: { type: 'string', enum: ['explore', 'plan', 'refactor', 'security-auditor', 'frontend-designer', 'general'] },
-                modelId: { type: 'string' },
+                modelId: {
+                  type: 'string',
+                  description: 'Optional model override for this member. Use a configured model ID. If omitted, the member uses the main session model. Useful when you want a specific worker on a stronger or cheaper model.',
+                },
               },
               required: ['role'],
             },
@@ -135,6 +139,7 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
         archivePath: input.archive_path as string | undefined,
         teamTimeoutMs: typeof timeoutMinutes === 'number' && timeoutMinutes > 0 ? timeoutMinutes * 60_000 : undefined,
         subSessionDeps: deps.buildSubSessionDeps(),
+        resolveModel: deps.resolveModel,
         aiPM: deps.provider && deps.modelConfig ? { provider: deps.provider, modelConfig: deps.modelConfig } : undefined,
         onEvent: (e) => {
           deps.backgroundTasks.emitEvent(bgTask.id, e)

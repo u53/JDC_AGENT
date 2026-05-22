@@ -168,6 +168,7 @@ export class Session {
       buildSubSessionDeps: buildTeamSubSessionDeps as any,
       provider: this.provider,
       modelConfig: this.config.modelConfig,
+      resolveModel: (modelId: string) => this.resolveModel?.(modelId) ?? null,
       onTeamEvent: (teamId, event) => {
         const notifyTypes = new Set([
           'manager_decision',
