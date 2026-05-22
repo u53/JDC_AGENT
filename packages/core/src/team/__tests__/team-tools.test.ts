@@ -21,8 +21,13 @@ import { createBackgroundSendTool } from '../../tools/background-send.js'
 import { createBackgroundStatusTool } from '../../tools/background-status.js'
 import { createBackgroundEventsTool } from '../../tools/background-events.js'
 
-const mockDeps: any = { provider: {}, toolRegistry: {}, modelConfig: {}, cwd: '/tmp' }
-const buildSubSessionDeps = () => mockDeps as any
+const mockDeps: any = { provider: {}, toolRegistry: {}, modelConfig: {} }
+const buildSubSessionDeps = () => {
+  // Each team gets its own cwd to avoid colliding on .team/ in /tmp
+  const cwd = path.join(os.tmpdir(), `team-tools-cwd-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  require('node:fs').mkdirSync(cwd, { recursive: true })
+  return { ...mockDeps, cwd } as any
+}
 
 describe('Team tools', () => {
   it('Team tool creates a team and registers it', async () => {

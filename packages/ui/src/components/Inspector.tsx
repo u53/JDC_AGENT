@@ -106,6 +106,29 @@ export function Inspector() {
     return () => clearInterval(interval)
   }, [activeSessionId])
 
+  // Auto-follow: when a NEW running team appears, switch the active team to it,
+  // unless the user is currently viewing another running team (respect user's pick).
+  const knownRunningTeamIdsRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const currentRunning = new Set(
+      backgroundTasks.filter(t => t.type === 'team' && t.status === 'running').map(t => t.id),
+    )
+    const known = knownRunningTeamIdsRef.current
+    const newlyRunning: string[] = []
+    for (const id of currentRunning) {
+      if (!known.has(id)) newlyRunning.push(id)
+    }
+    knownRunningTeamIdsRef.current = currentRunning
+
+    if (newlyRunning.length === 0) return
+    const activeId = useTeamStore.getState().activeTeamId
+    // If user is currently watching another *running* team, don't yank them away.
+    const userPinned = activeId != null && currentRunning.has(activeId) && !newlyRunning.includes(activeId)
+    if (userPinned) return
+    // Otherwise: jump to the newest running team
+    setActiveTeam(newlyRunning[newlyRunning.length - 1])
+  }, [backgroundTasks, setActiveTeam])
+
   // Hide entirely on very narrow windows
   if (windowWidth < 700) return null
 
@@ -200,10 +223,19 @@ export function Inspector() {
     )
   }
 
-  // Pick effective team to display: explicitly active, else first running, else first
-  const effectiveTeamId = activeTeamId
-    ?? bgTeams.find(t => t.status === 'running')?.id
-    ?? bgTeams[0]?.id
+  // Pick effective team to display.
+  // Policy:
+  //   1. If user explicitly picked a team AND it still exists in bgTeams → respect that pick.
+  //   2. Else: prefer the currently-running team (newest first) — this auto-switches when a new
+  //      team launches after an old one finished.
+  //   3. Else: fall back to most recent team (running or not).
+  // Note: bgTeams ordering follows backend insertion order; running new teams appear later.
+  const runningTeams = bgTeams.filter(t => t.status === 'running')
+  const userPickIsValid = activeTeamId != null && bgTeams.some(t => t.id === activeTeamId)
+  const effectiveTeamId =
+    (userPickIsValid ? activeTeamId : null)
+    ?? runningTeams[runningTeams.length - 1]?.id  // newest running team
+    ?? bgTeams[bgTeams.length - 1]?.id            // newest team overall (fallback)
     ?? null
 
   return (

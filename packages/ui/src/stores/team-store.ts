@@ -58,6 +58,7 @@ interface TeamStoreState {
   appendConversationIfNew: (taskId: string, entry: TeamConversationEntry, dedupKey: string) => boolean
   setActiveTeam: (id: string | null) => void
   setExpandedMember: (id: string | null) => void
+  reset: () => void
   removeTeam: (id: string) => void
 }
 
@@ -111,6 +112,16 @@ export const useTeamStore = create<TeamStoreState>((set, get) => ({
 
   setActiveTeam: (id) => set({ activeTeamId: id, expandedMemberId: null }),
   setExpandedMember: (id) => set({ expandedMemberId: id }),
+
+  reset: () =>
+    set({
+      teams: {},
+      events: {},
+      conversations: {},
+      conversationKeys: {},
+      activeTeamId: null,
+      expandedMemberId: null,
+    }),
 
   removeTeam: (taskId) =>
     set((s) => {

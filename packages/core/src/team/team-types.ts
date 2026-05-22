@@ -1,6 +1,8 @@
 export type TeamStatus = 'planning' | 'running' | 'waiting' | 'synthesizing' | 'completed' | 'failed' | 'stopped'
 export type MemberStatus = 'queued' | 'running' | 'waiting' | 'blocked' | 'completed' | 'failed' | 'stopped'
-export type TaskStatus = 'todo' | 'assigned' | 'running' | 'blocked' | 'completed' | 'failed' | 'cancelled'
+export type TaskStatus = 'todo' | 'assigned' | 'running' | 'blocked' | 'completed' | 'failed' | 'cancelled' | 'reopened'
+export type IssueStatus = 'open' | 'in_progress' | 'resolved' | 'wontfix'
+export type IssueSeverity = 'low' | 'medium' | 'high' | 'critical'
 export type Priority = 'low' | 'normal' | 'high' | 'urgent'
 export type RiskLevel = 'low' | 'medium' | 'high'
 export type Confidence = 'low' | 'medium' | 'high'
@@ -171,4 +173,73 @@ export const DEFAULT_CONCURRENCY_POLICY: TeamConcurrencyPolicy = {
   maxReadOnlyWorkers: 8,
   maxWriteWorkers: 3,
   maxShellWorkers: 3,
+}
+
+// ── Workspace frontmatter types ─────────────────────────────────────────
+
+export interface TaskFrontmatter {
+  id: string
+  title: string
+  status: TaskStatus
+  assignee?: string
+  depends_on?: string[]
+  contracts?: string[]            // Phase 2 — populated only by Phase 2 code
+  issues_open?: string[]          // Phase 3 — populated only by Phase 3 code
+  created_at: string              // ISO 8601
+  updated_at: string
+}
+
+export interface ResultFrontmatter {
+  task_id: string
+  completed_by: string
+  completed_at: string
+  summary: string
+  artifacts: string[]
+  contracts_produced?: string[]   // Phase 2
+}
+
+export interface ArtifactFrontmatter {
+  id: string
+  type: 'report' | 'code' | 'design' | 'decision' | 'data'
+  created_by: string              // memberId
+  on_task: string                 // taskId
+  summary: string                 // REQUIRED — must be one sentence
+  related_contracts?: string[]    // Phase 2
+  created_at: string
+}
+
+export interface ArtifactSummary {
+  id: string
+  taskId: string
+  type: string
+  summary: string
+  filePath: string                // relative to workspace root, e.g. tasks/T001/artifacts/M001-x.md
+}
+
+export interface ContractFrontmatter {
+  name: string
+  version: number
+  locked_by_task: string
+  related_tasks?: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface ContractSummary {
+  name: string
+  version: number
+  filePath: string                // tasks-relative path: contracts/<name>.md
+}
+
+export interface IssueFrontmatter {
+  id: string
+  title: string
+  status: IssueStatus
+  severity: IssueSeverity
+  opened_by: string               // memberId
+  on_task: string                 // taskId where the issue was discovered
+  related_contract?: string
+  assigned_to?: string | null
+  opened_at: string
+  resolved_at?: string | null
 }

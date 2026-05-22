@@ -2,6 +2,8 @@ import { v4 as uuid } from 'uuid'
 import { runSubSession, type SubSessionOptions, type SubSessionResult } from '../sub-session.js'
 import { Mailbox, type MailboxMessage } from './team-mailbox.js'
 import { createTeamReportTool } from '../tools/team-report.js'
+import { createTeamArtifactTool } from '../tools/team-artifact.js'
+import type { TeamWorkspace } from './team-workspace.js'
 import type {
   TeamMemberState,
   TeamMemberSpec,
@@ -30,6 +32,7 @@ export interface TeamMemberOptions {
   id?: string
   existingMailbox?: Mailbox
   teamMailbox?: { push(msg: any): void }
+  workspace?: TeamWorkspace
   subSessionDeps: Omit<SubSessionOptions, 'prompt' | 'agentType' | 'signal' | 'onAgentProgress' | 'onAgentText' | 'mailbox' | 'onToolEvent'>
   onEvent?: (event: TeamEvent) => void
   onComplete?: (memberId: string, result: TeamTaskResult) => void
@@ -159,6 +162,19 @@ export class TeamMember {
         extraTools.push({
           definition: reportTool.definition as any,
           execute: reportTool.execute as any,
+        })
+      }
+
+      if (this.opts.workspace && this.opts.taskId) {
+        const artifactTool = createTeamArtifactTool({
+          memberId: this.id,
+          taskId: this.opts.taskId,
+          workspace: this.opts.workspace,
+          teamMailbox: this.opts.teamMailbox,
+        })
+        extraTools.push({
+          definition: artifactTool.definition as any,
+          execute: artifactTool.execute as any,
         })
       }
 

@@ -107,7 +107,32 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
     const toolUses: { id: string; name: string; input: string }[] = []
     let currentToolUse: { id: string; name: string; input: string } | null = null
 
-    const config: ModelConfig = { ...modelConfig, systemPrompt: systemPrompt }
+    // Compose effective system prompt:
+    //   1. Inherited base from main session (modelConfig.systemPrompt) — environment, project rules,
+    //      CLAUDE.md, memory, language preferences, etc. May be a string or array of segments.
+    //   2. Sub-agent overlay — agentType-specific or default `SUB_AGENT_SYSTEM`.
+    //
+    // We append rather than replace so the worker shares the same project context and conventions
+    // as the main session.
+    const SUB_AGENT_HEADER =
+      `\n\n---\n\n# Sub-agent context\n\n` +
+      `You are running as a sub-agent inside the main session above. The instructions, environment,\n` +
+      `and project rules above ALL apply to you. The text below is your specific role overlay.\n\n`
+    const inherited = modelConfig.systemPrompt
+    let composedSystem: ModelConfig['systemPrompt']
+    if (typeof inherited === 'string' && inherited.length > 0) {
+      composedSystem = inherited + SUB_AGENT_HEADER + systemPrompt
+    } else if (Array.isArray(inherited) && inherited.length > 0) {
+      // Cache-friendly array form — keep inherited segments cacheable, and the agent overlay is
+      // also fixed per agentType so it can be cached too.
+      composedSystem = [
+        ...inherited,
+        { content: SUB_AGENT_HEADER + systemPrompt, cacheable: true },
+      ]
+    } else {
+      composedSystem = systemPrompt
+    }
+    const config: ModelConfig = { ...modelConfig, systemPrompt: composedSystem }
     const stream = provider.stream(messages, toolDefs, config, signal)
 
     for await (const chunk of stream) {

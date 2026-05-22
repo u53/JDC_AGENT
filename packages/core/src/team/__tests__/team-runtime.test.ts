@@ -1,4 +1,7 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mkdirSync, rmSync } from 'node:fs'
+import path from 'node:path'
+import os from 'node:os'
 import type { SubSessionOptions, SubSessionResult } from '../../sub-session.js'
 
 // Mock runSubSession to simulate quick member completion
@@ -16,12 +19,23 @@ vi.mock('../../sub-session.js', async () => {
 
 import { TeamRuntime } from '../team-runtime.js'
 
-const mockDeps: any = {
-  provider: {} as any,
-  toolRegistry: {} as any,
-  modelConfig: {} as any,
-  cwd: '/tmp',
-}
+let tmpDir: string
+let mockDeps: any
+
+beforeEach(() => {
+  tmpDir = path.join(os.tmpdir(), `team-runtime-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  mkdirSync(tmpDir, { recursive: true })
+  mockDeps = {
+    provider: {} as any,
+    toolRegistry: {} as any,
+    modelConfig: {} as any,
+    cwd: tmpDir,
+  }
+})
+
+afterEach(() => {
+  rmSync(tmpDir, { recursive: true, force: true })
+})
 
 describe('TeamRuntime', () => {
   it('initializes with correct status and members', () => {
@@ -71,7 +85,7 @@ describe('TeamRuntime', () => {
       },
       subSessionDeps: mockDeps,
     })
-    team.start()
+    await team.start()
     expect(team.getStatus()).toBe('running')
     const events = team.getEvents()
     expect(events.some(e => e.type === 'team_started')).toBe(true)
@@ -88,7 +102,7 @@ describe('TeamRuntime', () => {
       subSessionDeps: mockDeps,
       onComplete,
     })
-    team.start()
+    await team.start()
     // Wait for microtasks and async work to settle
     await new Promise(resolve => setTimeout(resolve, 50))
     expect(onComplete).toHaveBeenCalled()
@@ -110,7 +124,7 @@ describe('TeamRuntime', () => {
       subSessionDeps: mockDeps,
       onComplete,
     })
-    team.start()
+    await team.start()
     team.sendMessage({
       id: '1', from: 'user', to: 'manager', intent: 'wrap_up',
       content: 'wrap up', priority: 'high', createdAt: Date.now(),
@@ -131,7 +145,7 @@ describe('TeamRuntime', () => {
       },
       subSessionDeps: mockDeps,
     })
-    team.start()
+    await team.start()
     await new Promise(resolve => setTimeout(resolve, 50))
     const events = team.getEvents()
     expect(events.length).toBeGreaterThan(0)

@@ -10,7 +10,7 @@ import type {
 } from './team-types.js'
 
 export interface ManagerAction {
-  type: 'assign_task' | 'cancel_task' | 'send_member_message' | 'request_member_status' | 'broadcast' | 'add_constraint' | 'wrap_up' | 'complete' | 'reply' | 'add_member' | 'remove_member'
+  type: 'assign_task' | 'cancel_task' | 'send_member_message' | 'request_member_status' | 'broadcast' | 'add_constraint' | 'wrap_up' | 'complete' | 'reply' | 'add_member' | 'remove_member' | 'add_task' | 'reopen_task'
   taskId?: string
   memberId?: string
   message?: string
@@ -19,6 +19,7 @@ export interface ManagerAction {
   summary?: string
   spec?: { role: string; agentType?: string; modelId?: string }
   force?: boolean
+  taskInput?: { title: string; description: string; priority?: Priority; dependsOn?: string[] }
 }
 
 export interface TeamManagerOptions {
@@ -93,7 +94,7 @@ export class TeamManager {
 
   getRunnableTasks(): TeamTask[] {
     return [...this.tasks.values()].filter(t => {
-      if (t.status !== 'todo') return false
+      if (t.status !== 'todo' && t.status !== 'reopened') return false
       if (!t.dependsOn || t.dependsOn.length === 0) return true
       return t.dependsOn.every(depRef => {
         const depId = this.resolveTaskRef(depRef)
@@ -175,6 +176,24 @@ export class TeamManager {
     task.status = 'cancelled'
     task.updatedAt = Date.now()
     this.opts.onEvent?.({ type: 'task_cancelled', taskId, reason, timestamp: Date.now() })
+  }
+
+  /**
+   * Reopen a completed/failed task — used when QA finds issues that require rework.
+   * Resets status to 'reopened' and clears assignee so the runtime can re-assign.
+   */
+  reopenTask(taskId: string, reason?: string): boolean {
+    const task = this.tasks.get(taskId)
+    if (!task) return false
+    task.status = 'reopened'
+    task.assigneeId = undefined
+    task.updatedAt = Date.now()
+    this.opts.onEvent?.({
+      type: 'manager_decision',
+      text: `Reopened task ${taskId}${reason ? `: ${reason}` : ''}`,
+      timestamp: Date.now(),
+    })
+    return true
   }
 
   addConstraint(constraint: string): void {

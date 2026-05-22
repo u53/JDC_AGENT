@@ -21,11 +21,14 @@ function createMockProvider(response = 'Task completed successfully.') {
 }
 
 function createMockSubSessionDeps(responseText = 'Done.') {
+  // Each call gets its own isolated tmpdir so parallel tests don't collide on .team/
+  const cwd = path.join(os.tmpdir(), `team-mode-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  require('node:fs').mkdirSync(cwd, { recursive: true })
   return {
     provider: createMockProvider(responseText),
     toolRegistry: { getDefinitions: () => [], get: () => undefined } as any,
     modelConfig: { model: 'test', maxTokens: 1024 },
-    cwd: '/tmp',
+    cwd,
   }
 }
 
@@ -229,7 +232,7 @@ describe('TeamRuntime worker recycling', () => {
     const team = createTeamRuntime({
       onEvent: (e: any) => events.push(e),
     })
-    team.start()
+    await team.start()
 
     // Wait for microtask tick + sub-session execution
     await new Promise(r => setTimeout(r, 200))
@@ -246,7 +249,7 @@ describe('TeamRuntime worker recycling', () => {
 
   it('recycles workers after task completion', async () => {
     const team = createTeamRuntime()
-    team.start()
+    await team.start()
 
     // Wait for tasks to complete and workers to be recycled
     await new Promise(r => setTimeout(r, 1000))

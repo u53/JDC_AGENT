@@ -20,6 +20,7 @@ interface BackgroundTaskStoreState {
   setTasks: (tasks: BackgroundTaskItem[]) => void
   updateTask: (id: string, updates: Partial<BackgroundTaskItem>) => void
   removeTask: (id: string) => void
+  reset: () => void
 }
 
 export const useBackgroundTaskStore = create<BackgroundTaskStoreState>((set) => ({
@@ -31,4 +32,5 @@ export const useBackgroundTaskStore = create<BackgroundTaskStoreState>((set) => 
   removeTask: (id) => set((s) => ({
     tasks: s.tasks.filter(t => t.id !== id),
   })),
+  reset: () => set({ tasks: [] }),
 }))

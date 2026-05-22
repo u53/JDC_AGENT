@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { ipc } from '../lib/ipc-client'
 import { useIdeStore } from './ide-store'
+import { useTeamStore } from './team-store'
+import { useBackgroundTaskStore } from './background-task-store'
 import type { ToolExecutionEvent } from '@jdcagnet/core'
 
 interface Session {
@@ -102,6 +104,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   createSession: async (cwd: string) => {
     const projectName = cwd.split('/').filter(Boolean).pop() || 'untitled'
     const { sessionId } = await ipc.session.create(projectName, cwd)
+    useTeamStore.getState().reset()
+    useBackgroundTaskStore.getState().reset()
     set({ activeSessionId: sessionId, messages: [] })
     await get().loadProjects()
   },
@@ -111,6 +115,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // Clear IDE selection/atMentions from previous session
     useIdeStore.getState().setSelection(null)
     useIdeStore.getState().clearAtMentions()
+    // Clear team / background-task state from previous session — both are session-scoped
+    useTeamStore.getState().reset()
+    useBackgroundTaskStore.getState().reset()
     const { messages, usage } = await ipc.session.switch(sessionId)
     set((s) => ({
       activeSessionId: sessionId,
@@ -127,6 +134,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   deleteSession: async (sessionId: string) => {
     await ipc.session.delete(sessionId)
     if (get().activeSessionId === sessionId) {
+      useTeamStore.getState().reset()
+      useBackgroundTaskStore.getState().reset()
       set({ activeSessionId: null, messages: [] })
     }
     await get().loadProjects()

@@ -61,6 +61,10 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
             },
           },
           maxWorkers: { type: 'number', description: 'Maximum worker count (hard cap: 10, default: 5)' },
+          archive_path: {
+            type: 'string',
+            description: 'Optional: where to put archived workspaces (default: <cwd>/.team-archive)',
+          },
         },
         required: ['objective'],
       },
@@ -120,6 +124,7 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
         id: bgTask.id,
         objective,
         plan,
+        archivePath: input.archive_path as string | undefined,
         subSessionDeps: deps.buildSubSessionDeps(),
         aiPM: deps.provider && deps.modelConfig ? { provider: deps.provider, modelConfig: deps.modelConfig } : undefined,
         onEvent: (e) => {
@@ -137,7 +142,7 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
       })
 
       deps.teamRegistry.register(team)
-      team.start()
+      await team.start()
 
       const memberLines = team.getMembers().map(m => `  - ${m.role} (${m.agentType})`).join('\n')
       return {
