@@ -515,6 +515,16 @@ export class TeamManagerAI extends TeamManager {
    * to avoid round-robin claiming them before AI weighs in.
    */
   private pendingAssignment = new Map<string, NodeJS.Timeout>()
+  /**
+   * Coalesced queue of proactive triggers that arrived while PM was busy
+   * (aiProcessing=true) or throttled. Without this, a fast task_completed
+   * landing during a slow team_started call gets silently dropped, and PM
+   * never reconsiders the task list — team appears frozen even though all
+   * workers finished. We dedupe by reason kind+taskId and replay one queued
+   * trigger after the current cycle finishes.
+   */
+  private queuedProactive: Map<string, ProactiveReason> = new Map()
+  private queuedProactiveTimer?: NodeJS.Timeout
 
   constructor(opts: TeamManagerAIOptions) {
     super(opts)
@@ -570,8 +580,10 @@ export class TeamManagerAI extends TeamManager {
         this.pendingAIActions = [...this.pendingAIActions, ...actions]
         ;(this.opts as TeamManagerAIOptions).onActionsReady?.()
       }
+      this.drainQueuedProactive()
     }).catch(() => {
       this.aiProcessing = false
+      this.drainQueuedProactive()
     })
   }
 
@@ -608,9 +620,12 @@ export class TeamManagerAI extends TeamManager {
         this.pendingAssignment.delete(memberId)
       }
       if (actions.length > 0) {
-        this.pendingAIActions = [...this.pendingAIActions, ...actions]
+        // staffing follow-up is proactive — any reply here is PM narrative,
+        // not a user-facing answer, so don't wake the main session.
+        this.pendingAIActions = [...this.pendingAIActions, ...actions.map(a => ({ ...a, _proactive: true }))]
         ;(this.opts as TeamManagerAIOptions).onActionsReady?.()
       }
+      this.drainQueuedProactive()
     }).catch(() => {
       this.aiProcessing = false
       const t = this.pendingAssignment.get(memberId)
@@ -618,27 +633,84 @@ export class TeamManagerAI extends TeamManager {
         clearTimeout(t)
         this.pendingAssignment.delete(memberId)
       }
+      this.drainQueuedProactive()
     })
   }
 
   triggerProactiveCheck(reason: ProactiveReason): void {
     if (!this.aiEnabled) return
-    if (this.aiProcessing) return
+
+    // Coalesce by reason kind + (taskId | memberId), so a burst of identical
+    // triggers (e.g. several task_completed in the same tick) becomes one call.
+    const key = this.proactiveKey(reason)
+
+    if (this.aiProcessing) {
+      // PM is mid-flight on another trigger. Queue this one — it will be
+      // drained after the current call finishes.
+      this.queuedProactive.set(key, reason)
+      return
+    }
+
     const now = Date.now()
     // team_started bypasses throttle (fires once per team)
-    if (reason.kind !== 'team_started' && now - this.lastProactiveAt < TeamManagerAI.PROACTIVE_THROTTLE_MS) return
+    if (reason.kind !== 'team_started' && now - this.lastProactiveAt < TeamManagerAI.PROACTIVE_THROTTLE_MS) {
+      // Throttled. Queue and schedule a drain when the throttle window expires,
+      // so we don't lose the trigger silently.
+      this.queuedProactive.set(key, reason)
+      this.scheduleQueuedProactiveDrain()
+      return
+    }
+
     this.lastProactiveAt = now
     this.aiProcessing = true
 
     this.processProactive(reason).then(actions => {
       this.aiProcessing = false
       if (actions.length > 0) {
-        this.pendingAIActions = [...this.pendingAIActions, ...actions]
+        // proactive trigger — any reply here is internal PM narrative,
+        // not a user-facing answer. Tag so runtime can skip waking the
+        // main session.
+        this.pendingAIActions = [...this.pendingAIActions, ...actions.map(a => ({ ...a, _proactive: true }))]
         ;(this.opts as TeamManagerAIOptions).onActionsReady?.()
       }
+      this.drainQueuedProactive()
     }).catch(() => {
       this.aiProcessing = false
+      this.drainQueuedProactive()
     })
+  }
+
+  private proactiveKey(r: ProactiveReason): string {
+    switch (r.kind) {
+      case 'task_completed':
+      case 'task_failed':
+        return `${r.kind}:${r.taskId}`
+      default:
+        return r.kind
+    }
+  }
+
+  private drainQueuedProactive(): void {
+    if (this.queuedProactive.size === 0) return
+    if (this.aiProcessing) return
+    // Take the first queued trigger and re-run through triggerProactiveCheck,
+    // which will re-evaluate throttle / lock state. The remainder stay queued
+    // for subsequent drains.
+    const [firstKey, firstReason] = this.queuedProactive.entries().next().value!
+    this.queuedProactive.delete(firstKey)
+    this.triggerProactiveCheck(firstReason)
+  }
+
+  private scheduleQueuedProactiveDrain(): void {
+    if (this.queuedProactiveTimer) return
+    const wait = Math.max(
+      TeamManagerAI.PROACTIVE_THROTTLE_MS - (Date.now() - this.lastProactiveAt) + 50,
+      100,
+    )
+    this.queuedProactiveTimer = setTimeout(() => {
+      this.queuedProactiveTimer = undefined
+      this.drainQueuedProactive()
+    }, wait)
   }
 
   private pendingAIActions: ManagerAction[] = []

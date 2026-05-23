@@ -20,6 +20,14 @@ export interface ManagerAction {
   spec?: { role: string; responsibility?: string; agentType?: string; modelId?: string }
   force?: boolean
   taskInput?: { title: string; description: string; priority?: Priority; dependsOn?: string[] }
+  /**
+   * Runtime-only marker (not part of the JSON protocol). Set when the action
+   * was produced by a proactive PM trigger (task_completed, task_added, idle
+   * timeout, staffing follow-up) rather than by a direct user/main_session
+   * intervention. The runtime uses this to decide whether a 'reply' action
+   * should wake the main session or stay internal.
+   */
+  _proactive?: boolean
 }
 
 export interface TeamManagerOptions {

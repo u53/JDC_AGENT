@@ -170,48 +170,30 @@ export class Session {
       modelConfig: this.config.modelConfig,
       resolveModel: (modelId: string) => this.resolveModel?.(modelId) ?? null,
       onTeamEvent: (teamId, event) => {
-        const notifyTypes = new Set([
-          'manager_decision',
-          'manager_reply',
-          'task_completed',
-          'task_cancelled',
-          'intervention_received',
-          'team_synthesizing',
-          'team_completed',
-          'team_failed',
-        ])
-        if (notifyTypes.has(event.type)) {
-          const isTerminal = event.type === 'team_completed' || event.type === 'team_failed'
-          // manager_reply is the explicit user-facing PM reply — actionable, no passive prefix.
-          // Other progress events get a "[团队进度,无需行动]" prefix so the main session
-          // doesn't treat intermediate findings as a request to start coding work itself.
-          const isPassive =
-            event.type === 'manager_decision' ||
-            event.type === 'task_completed' ||
-            event.type === 'task_cancelled' ||
-            event.type === 'team_synthesizing' ||
-            event.type === 'intervention_received'
-          const passivePrefix = isPassive
-            ? '[团队进度,仅供你了解,不要据此自动开始任何编码/修改 — 等团队 team_complete 通知或用户指示] '
-            : ''
-          const status: 'completed' | 'failed' | 'running' =
-            event.type === 'team_completed' ? 'completed'
-            : event.type === 'team_failed' ? 'failed'
-            : 'running'
-          const text = event.type === 'manager_reply' ? `PM (reply): ${(event as any).text}`
-            : event.type === 'manager_decision' ? `${passivePrefix}PM 内部决策: ${(event as any).text}`
-            : event.type === 'task_completed' ? `${passivePrefix}Task ${(event as any).taskId} completed by ${(event as any).memberId}`
-            : event.type === 'task_cancelled' ? `${passivePrefix}Task ${(event as any).taskId} cancelled: ${(event as any).reason}`
-            : event.type === 'intervention_received' ? `${passivePrefix}Intervention "${(event as any).intent}" received from ${(event as any).from}`
-            : event.type === 'team_synthesizing' ? `${passivePrefix}Team synthesizing results...`
-            : event.type === 'team_completed' ? `Team finished. Final summary:\n${(event as any).summary ?? ''}\n\nDo NOT call background_status / background_events on this team again — it is done.`
-            : event.type === 'team_failed' ? `Team failed: ${(event as any).error ?? 'unknown error'}\n\nDo NOT call background_status / background_events on this team again — it is done.`
-            : 'Team event'
+        // Only notify the main session on terminal events (team_completed / team_failed)
+        // and explicit PM replies. Intermediate events (task_completed, manager_decision,
+        // etc.) fire before completeTeam() and would cause the main session to think
+        // the team is done prematurely — suppress them.
+        if (event.type === 'team_completed') {
           this.pendingNotifications.push({
-            type: isTerminal ? 'team_complete' : 'team_progress',
+            type: 'team_complete',
             taskId: teamId,
-            status,
-            teamEvent: text,
+            status: 'completed',
+            teamEvent: `Team finished. Final summary:\n${(event as any).summary ?? ''}\n\nDo NOT call background_status / background_events on this team again — it is done.`,
+          })
+        } else if (event.type === 'team_failed') {
+          this.pendingNotifications.push({
+            type: 'team_complete',
+            taskId: teamId,
+            status: 'failed',
+            teamEvent: `Team failed: ${(event as any).error ?? 'unknown error'}\n\nDo NOT call background_status / background_events on this team again — it is done.`,
+          })
+        } else if (event.type === 'manager_reply') {
+          this.pendingNotifications.push({
+            type: 'team_progress',
+            taskId: teamId,
+            status: 'running',
+            teamEvent: `PM (reply): ${(event as any).text}`,
           })
         }
       },

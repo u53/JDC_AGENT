@@ -364,11 +364,12 @@ export class TeamRuntime {
       if (idx >= 0) this.members[idx] = placeholder
 
       this.assignTask(taskId, memberId, hint).catch(err => {
-        this.recordEvent({
-          type: 'manager_decision',
-          text: `kick reassign failed for ${taskId}: ${err instanceof Error ? err.message : String(err)}`,
-          timestamp: Date.now(),
-        })
+        const reason = `kick reassign failed for ${taskId}: ${err instanceof Error ? err.message : String(err)}`
+        this.recordEvent({ type: 'manager_decision', text: reason, timestamp: Date.now() })
+        this.manager.markTaskFailed(taskId, reason)
+        this.concurrency.markDone(memberId)
+        this.workspace.updateTaskStatus(taskId, 'failed').catch(() => {})
+        this.scheduleTick()
       })
     })
   }
@@ -576,7 +577,21 @@ export class TeamRuntime {
           break
         case 'reply':
           if (action.message) {
-            this.recordEvent({ type: 'manager_reply', text: action.message, timestamp: Date.now() })
+            // manager_reply wakes the main session; manager_decision does not.
+            // Proactive triggers (task_completed, idle timeout, staffing follow-up)
+            // sometimes produce internal "narrative" replies that are useful in
+            // the events log but should NOT pull the main session back. Only
+            // route reply -> manager_reply when it came from a real intervention
+            // (user / main_session message).
+            if (action._proactive) {
+              this.recordEvent({
+                type: 'manager_decision',
+                text: `(internal reply) ${action.message}`,
+                timestamp: Date.now(),
+              })
+            } else {
+              this.recordEvent({ type: 'manager_reply', text: action.message, timestamp: Date.now() })
+            }
           }
           break
         case 'add_member':
@@ -802,7 +817,19 @@ export class TeamRuntime {
     const taskTimeoutMs = this.opts.taskTimeoutMs ?? 10 * 60 * 1000
     const checkHeartbeat = () => {
       if (this.completed) return
-      if (taskMember.getStatus() !== 'running') return
+      if (taskMember.getStatus() !== 'running') {
+        // Worker was aborted ("stopped") but its sub-session never threw
+        // (e.g., bash that doesn't check AbortSignal). Mark the task failed
+        // to prevent a permanent zombie worker.
+        if (taskMember.getStatus() === 'stopped') {
+          this.clearTaskTimeout(taskId)
+          this.manager.markTaskFailed(taskId, 'Worker aborted but sub-session did not exit')
+          this.concurrency.markDone(memberId)
+          this.workspace.updateTaskStatus(taskId, 'failed').catch(() => {})
+          this.scheduleTick()
+        }
+        return
+      }
       const idleMs = Date.now() - taskMember.getState().lastActivityAt
       if (idleMs >= taskTimeoutMs) {
         taskMember.abort()
@@ -942,6 +969,27 @@ export class TeamRuntime {
     this.taskTimeouts.clear()
     this.status = 'completed'
     this.manager.setStatus('completed')
+
+    // Abort all still-running workers so their sub-sessions don't hang
+    // indefinitely. This also prevents task statuses from being stuck in
+    // 'running'/'assigned' when the team has already completed.
+    const terminalTaskStates = new Set(['completed', 'failed', 'cancelled'])
+    for (const member of this.members) {
+      if (member.getStatus() === 'running') {
+        member.abort()
+      }
+    }
+    // Belt-and-suspenders: mark any remaining non-terminal tasks as failed,
+    // in case a worker sub-session didn't respond to abort (e.g., bash that
+    // doesn't check AbortSignal). Without this, the task would stay 'running'
+    // forever and team_list would show it as incomplete.
+    for (const t of this.manager.getTasks()) {
+      if (!terminalTaskStates.has(t.status)) {
+        this.manager.markTaskFailed(t.id, 'Team completed while task was still in progress')
+        this.workspace.updateTaskStatus(t.id, 'failed').catch(() => {})
+      }
+    }
+
     this.recordEvent({ type: 'team_synthesizing', timestamp: Date.now() })
     // Archive workspace; don't block completion if archive fails
     this.workspace.archive()
