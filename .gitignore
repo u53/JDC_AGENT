@@ -23,3 +23,6 @@ build/
 
 # Lockfiles for sub-packages we don't ship as standalone npm pkgs
 packages/vscode-extension/package-lock.json
+
+# Local diagnostic scripts (per-machine, not part of the product)
+jdc-diagnose.ps1
