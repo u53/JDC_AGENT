@@ -343,7 +343,7 @@ export function Composer({
             <div className="relative shrink-0">
               <button
                 onClick={() => setShowPermMenu(!showPermMenu)}
-                className="flex items-center gap-1 text-[var(--text)] hover:opacity-80 transition-opacity"
+                className="flex items-center gap-1 text-[var(--text)] hover:opacity-80 transition-opacity whitespace-nowrap"
               >
                 <span className={`inline-block h-1.5 w-1.5 rounded-full ${permDotColor}`} />
                 {permLabel} ▾
@@ -376,7 +376,7 @@ export function Composer({
             <div className="relative shrink-0">
               <button
                 onClick={() => setShowEffortMenu(!showEffortMenu)}
-                className={`flex items-center gap-1 transition-colors ${effort === 'off' ? 'text-[var(--muted)] hover:text-[var(--text)]' : 'text-[var(--good)]'}`}
+                className={`flex items-center gap-1 transition-colors whitespace-nowrap ${effort === 'off' ? 'text-[var(--muted)] hover:text-[var(--text)]' : 'text-[var(--good)]'}`}
               >
                 <span className={`inline-block h-1.5 w-1.5 rounded-full ${effort === 'off' ? 'bg-[var(--muted)]' : 'bg-[var(--good)]'}`} />
                 {(() => {
@@ -409,7 +409,7 @@ export function Composer({
             {/* Plan toggle */}
             <button
               onClick={onPlanToggle}
-              className={`flex items-center gap-1 transition-colors ${planMode ? 'text-[var(--plan)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
+              className={`flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${planMode ? 'text-[var(--plan)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
             >
               <span className={`inline-block h-1.5 w-1.5 rounded-full ${planMode ? 'bg-[var(--plan)]' : 'bg-[var(--muted)]'}`} />
               规划
@@ -434,13 +434,14 @@ export function Composer({
           </div>
 
           {/* Model dropdown */}
-          <div className="relative">
+          <div className="relative shrink-0 max-w-[40%]">
             <button
               onClick={() => {
                 if (models && models.length > 0) setShowModelMenu(!showModelMenu)
                 else onModelClick?.()
               }}
-              className="text-[var(--text)] hover:text-[var(--accent)] transition-colors"
+              className="text-[var(--text)] hover:text-[var(--accent)] transition-colors whitespace-nowrap truncate max-w-full block"
+              title={modelName || 'No Model'}
             >
               {modelName || 'No Model'} ▾
             </button>
