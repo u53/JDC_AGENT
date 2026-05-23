@@ -103,11 +103,6 @@ export function ConversationTurn({
 
       {/* Assistant section */}
       <div className="pl-4">
-        {/* Thinking indicator — live, expandable */}
-        {isActive && isThinking && thinkingText && (
-          <ThinkingBlock content={thinkingText} streaming />
-        )}
-
         {/* Completed assistant messages: render all pairs in order */}
         {assistantMessages.map((pair, pairIdx) => {
           const isLastPair = pairIdx === assistantMessages.length - 1
@@ -153,6 +148,12 @@ export function ConversationTurn({
               </div>
             ))}
           </div>
+        )}
+
+        {/* Live thinking — appears at the BOTTOM (after prior turns + their tools),
+            because the current thinking belongs to the in-flight turn. */}
+        {isActive && isThinking && thinkingText && (
+          <ThinkingBlock content={thinkingText} streaming />
         )}
 
         {/* Streaming text — below tools (it's the latest output) */}
