@@ -707,10 +707,15 @@ export class Session {
         if (this.abortController?.signal.aborted) break
 
         try {
+          const cfgWithCache: ModelConfig = {
+            ...this.config.modelConfig,
+            cacheKey: this.config.modelConfig.cacheKey ?? `main:${this.id}`,
+            cacheUser: this.config.modelConfig.cacheUser ?? this.id,
+          }
           const stream = this.provider.stream(
             this.messages,
             this.toolRegistry.getDefinitions(),
-            this.config.modelConfig,
+            cfgWithCache,
             this.abortController!.signal
           )
           for await (const chunk of stream) {

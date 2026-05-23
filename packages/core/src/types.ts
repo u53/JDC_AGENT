@@ -105,6 +105,20 @@ export interface ModelConfig {
   effort?: ReasoningEffort
   contextWindow?: number
   compressAt?: number
+  /**
+   * Stable identifier for cache routing. Same value across calls of the
+   * same role (main session / PM / specific worker role / skill router) so
+   * providers can route requests to the same prompt-cache shard.
+   *
+   * Anthropic ignores this (uses explicit cache_control); OpenAI Chat /
+   * Responses pass it as `prompt_cache_key`.
+   */
+  cacheKey?: string
+  /**
+   * End-user identifier for OpenAI's `user` field — improves cache routing
+   * and helps with abuse signals. Usually the session id.
+   */
+  cacheUser?: string
 }
 
 export interface SessionConfig {

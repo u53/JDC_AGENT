@@ -34,6 +34,9 @@ function buildBaseParams(config: ModelConfig, tools: ToolDefinition[], formatToo
     params.reasoning = { effort: effortToOpenAI(config.effort), summary: 'auto' }
   }
 
+  if (config.cacheKey) params.prompt_cache_key = config.cacheKey
+  if (config.cacheUser) params.user = config.cacheUser
+
   return params
 }
 

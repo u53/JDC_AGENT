@@ -34,6 +34,11 @@ function buildBaseParams(config: ModelConfig): Record<string, any> {
     params.reasoning_effort = effortToOpenAI(config.effort)
   }
 
+  // Prompt-cache routing. Same key → same cache shard, dramatically improves
+  // hit rate when many parallel sub-agents share a stable system prefix.
+  if (config.cacheKey) params.prompt_cache_key = config.cacheKey
+  if (config.cacheUser) params.user = config.cacheUser
+
   return params
 }
 

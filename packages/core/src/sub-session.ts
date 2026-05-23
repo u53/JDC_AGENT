@@ -148,20 +148,33 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
       `and project rules above ALL apply to you. The text below is your specific role overlay.\n\n`
     const overlayBody = systemPrompt + TOOL_WHITELIST_OVERRIDE
     const inherited = modelConfig.systemPrompt
+    // Always materialize as PromptSegment[] so the inherited (stable) parent
+    // prompt remains a cacheable prefix even when this sub-session's overlay
+    // body changes per worker. String form would force the provider into a
+    // single-block prefix that no two workers can share. The overlay itself
+    // is marked cacheable=false because it contains worker-specific role +
+    // tool whitelist that varies per agentType.
     let composedSystem: ModelConfig['systemPrompt']
+    const overlaySegment = { content: SUB_AGENT_HEADER + overlayBody, cacheable: false }
     if (typeof inherited === 'string' && inherited.length > 0) {
-      composedSystem = inherited + SUB_AGENT_HEADER + overlayBody
-    } else if (Array.isArray(inherited) && inherited.length > 0) {
-      // Cache-friendly array form — keep inherited segments cacheable. The whitelist depends on
-      // the concrete tool set so it isn't cacheable across agents that have different tools.
       composedSystem = [
-        ...inherited,
-        { content: SUB_AGENT_HEADER + overlayBody, cacheable: false },
+        { content: inherited, cacheable: true },
+        overlaySegment,
       ]
+    } else if (Array.isArray(inherited) && inherited.length > 0) {
+      composedSystem = [...inherited, overlaySegment]
     } else {
-      composedSystem = overlayBody
+      composedSystem = [overlaySegment]
     }
-    const config: ModelConfig = { ...modelConfig, systemPrompt: composedSystem }
+    // Stable cache key per agentType so the same role across workers shares
+    // a cache shard (OpenAI). Anthropic ignores it (uses cache_control).
+    const cacheKey = modelConfig.cacheKey
+      ?? `worker:${opts.agentType ?? 'general'}`
+    const config: ModelConfig = {
+      ...modelConfig,
+      systemPrompt: composedSystem,
+      cacheKey,
+    }
     const stream = provider.stream(messages, toolDefs, config, signal)
 
     for await (const chunk of stream) {

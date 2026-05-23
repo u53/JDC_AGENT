@@ -7,16 +7,38 @@ import { parseThinkTags } from './think-parser.js'
 function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): any {
   if (!systemPrompt) return undefined
   if (typeof systemPrompt === 'string') return [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }]
-  const blocks: any[] = []
-  let lastCacheableIdx = -1
+
+  // Anthropic allows up to 4 cache_control breakpoints PER REQUEST (across
+  // system + tools + messages). We reserve 1 for tools, 1 for the last user
+  // message — leaving up to 2 for system prompt segments. Place them at
+  // strategic boundaries so the maximum prefix is reused across calls:
+  //
+  //   1. End of the FIRST cacheable segment   → matches "anyone with the same
+  //      base preamble" (e.g. all team workers share the main session base).
+  //   2. End of the LAST cacheable segment    → matches "anyone with the full
+  //      stable prefix" (the heavy hitter for repeated turns of the same role).
+  //
+  // Leaving any non-cacheable tail un-marked is correct: it would invalidate
+  // every call anyway. resolveSystemPrompt only adds breakpoints to segments
+  // explicitly tagged cacheable.
+  const cacheableIdxs: number[] = []
   for (let i = 0; i < systemPrompt.length; i++) {
-    if (systemPrompt[i].cacheable) lastCacheableIdx = i
+    if (systemPrompt[i].cacheable) cacheableIdxs.push(i)
   }
+  const breakpointSet = new Set<number>()
+  if (cacheableIdxs.length > 0) {
+    breakpointSet.add(cacheableIdxs[cacheableIdxs.length - 1])
+  }
+  if (cacheableIdxs.length > 1) {
+    breakpointSet.add(cacheableIdxs[0])
+  }
+
+  const blocks: any[] = []
   for (let i = 0; i < systemPrompt.length; i++) {
     const seg = systemPrompt[i]
     if (!seg.content) continue
     const block: any = { type: 'text', text: seg.content }
-    if (i === lastCacheableIdx) {
+    if (breakpointSet.has(i)) {
       block.cache_control = { type: 'ephemeral' }
     }
     blocks.push(block)

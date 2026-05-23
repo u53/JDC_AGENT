@@ -94,7 +94,8 @@ export async function routeSkills(
 
   const config: ModelConfig = {
     ...deps.modelConfig,
-    systemPrompt: ROUTER_SYSTEM,
+    systemPrompt: [{ content: ROUTER_SYSTEM, cacheable: true }],
+    cacheKey: deps.modelConfig.cacheKey ?? 'skill-router',
     maxTokens: 256,
   }
 
