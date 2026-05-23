@@ -557,6 +557,22 @@ export class TeamRuntime {
     if (hasIdleStale) {
       this.triggerProactive({ kind: 'worker_idle_timeout' })
     }
+
+    // Wrap-up auto-finish: if user requested wrap_up and there's no active work
+    // left (no running/assigned/todo task, no running worker), don't wait for the
+    // PM to remember to send a complete action — close the team here. Without
+    // this, the team can stay 'running' indefinitely after a wrap_up because PM
+    // proactive cycles are throttled and may not output a complete action even
+    // when the team is functionally done.
+    if (this.manager.isWrapUpRequested() && !this.completed) {
+      const tasks = this.manager.getTasks()
+      const hasActiveTask = tasks.some(t => t.status === 'running' || t.status === 'assigned' || t.status === 'todo' || t.status === 'reopened')
+      const hasRunningWorker = this.members.some(m => m.getStatus() === 'running')
+      if (!hasActiveTask && !hasRunningWorker) {
+        this.recordEvent({ type: 'manager_decision', text: 'wrap_up auto-complete: no active tasks/workers remain', timestamp: Date.now() })
+        this.completeTeam(this.manager.synthesize())
+      }
+    }
   }
 
   private executeActions(actions: ManagerAction[]): void {
