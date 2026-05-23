@@ -191,11 +191,16 @@ useful workers.
   "spec": {
     "role": "<specific display name, e.g. 'Build Config Investigator' or 'Auth Flow QA' — NOT 'Code Explorer #2'>",
     "responsibility": "<one sentence: what this worker owns + how it differs from existing peers. Mention concrete files/area/question.>",
-    "agentType": "explore" | "plan" | "refactor" | "security-auditor" | "frontend-designer" | "general",
-    "modelId": "<optional override>"
+    "agentType": "explore" | "plan" | "refactor" | "security-auditor" | "frontend-designer" | "general"
   },
   "message": "<reason — appears in event log>"
 }
+
+DO NOT include a "modelId" field in spec unless the user EXPLICITLY asked for a specific model
+(e.g. "给这个 worker 用 sonnet"). When omitted, the worker inherits the main session's model and
+reasoning effort — which is what the user configured in the UI. Picking a model name from memory
+("claude-opus-4-7", "gpt-5", etc.) is wrong: that ID may not be configured locally, and even if it is,
+overriding silently subverts the user's chosen model. Default = omit modelId.
 
 ## Action: remove_member
 Release a worker. Default targets only 'queued' (idle) members; running members refuse unless force=true.

@@ -74,7 +74,7 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
                 agentType: { type: 'string', enum: ['explore', 'plan', 'refactor', 'security-auditor', 'frontend-designer', 'general'] },
                 modelId: {
                   type: 'string',
-                  description: 'Optional model override for this member. Use a configured model ID. If omitted, the member uses the main session model. Useful when you want a specific worker on a stronger or cheaper model.',
+                  description: 'Optional model override for this member. ONLY set this when the user explicitly asked for a different model. Omitting it (the default) makes the member inherit the main session model + reasoning effort — that is what the user configured. Do NOT guess a model name from training memory; if the ID is not configured locally the override is rejected and falls back anyway.',
                 },
               },
               required: ['role', 'responsibility'],
