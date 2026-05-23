@@ -105,8 +105,8 @@ export function registerIpcHandlers(sessionManager: SessionManager, services: De
     return { success: true }
   })
 
-  ipcMain.handle(IPC_CHANNELS.SESSION_SET_THINKING, async (_event, { sessionId, enabled, budget }) => {
-    sessionManager.setThinking(sessionId, enabled, budget)
+  ipcMain.handle(IPC_CHANNELS.SESSION_SET_EFFORT, async (_event, { sessionId, effort }) => {
+    sessionManager.setEffort(sessionId, effort)
     return { success: true }
   })
 

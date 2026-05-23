@@ -579,10 +579,10 @@ export class SessionManager {
     }
   }
 
-  setThinking(sessionId: string, enabled: boolean, budget?: number): void {
+  setEffort(sessionId: string, effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'): void {
     const session = this.sessions.get(sessionId)
     if (session) {
-      session.setThinking(enabled, budget)
+      session.setEffort(effort)
     }
   }
 

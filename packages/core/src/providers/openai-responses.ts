@@ -1,13 +1,40 @@
 import OpenAI from 'openai'
 import type { ModelProvider } from '../model-provider.js'
-import type { ContentBlock, Message, ModelConfig, PromptSegment, StreamChunk, ToolDefinition } from '../types.js'
+import type { ContentBlock, Message, ModelConfig, PromptSegment, ReasoningEffort, StreamChunk, ToolDefinition } from '../types.js'
 import { joinSegments } from '../context.js'
 import { parseThinkTags } from './think-parser.js'
+import { getModelTraits } from './model-traits.js'
 
 function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): string | undefined {
   if (!systemPrompt) return undefined
   if (typeof systemPrompt === 'string') return systemPrompt
   return joinSegments(systemPrompt)
+}
+
+function effortToOpenAI(effort: ReasoningEffort): 'low' | 'medium' | 'high' | 'xhigh' {
+  if (effort === 'max') return 'xhigh'
+  return effort
+}
+
+function buildBaseParams(config: ModelConfig, tools: ToolDefinition[], formatTools: (t: ToolDefinition[]) => any): Record<string, unknown> {
+  const traits = getModelTraits(config.model)
+  const params: Record<string, unknown> = {
+    model: config.model,
+    instructions: resolveSystemPrompt(config.systemPrompt),
+    store: true,
+    ...(tools.length > 0 ? { tools: formatTools(tools) } : {}),
+    ...(config.maxTokens ? { max_output_tokens: config.maxTokens } : {}),
+  }
+
+  if (!traits.rejectsTemperature && config.temperature !== undefined) {
+    params.temperature = config.temperature
+  }
+
+  if (config.effort && traits.isReasoning) {
+    params.reasoning = { effort: effortToOpenAI(config.effort), summary: 'auto' }
+  }
+
+  return params
 }
 
 interface ResponsesInput {
@@ -71,16 +98,9 @@ export class OpenAIResponsesProvider implements ModelProvider {
     config: ModelConfig,
     signal?: AbortSignal
   ) {
-    const maxOutput = config.maxTokens > 32768 ? 16384 : config.maxTokens
-    const systemPrompt = resolveSystemPrompt(config.systemPrompt)
-    const params: Record<string, unknown> = {
-      model: config.model,
-      instructions: systemPrompt,
+    const params = {
+      ...buildBaseParams(config, tools, this.formatTools.bind(this)),
       input: this.formatInput(messages),
-      store: true,
-      ...(tools.length > 0 ? { tools: this.formatTools(tools) } : {}),
-      ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
-      ...(maxOutput ? { max_output_tokens: maxOutput } : {}),
     }
 
     const response = (await (this.client as any).responses.create(params, { signal })) as ResponsesResult
@@ -133,17 +153,10 @@ export class OpenAIResponsesProvider implements ModelProvider {
     config: ModelConfig,
     signal?: AbortSignal
   ): AsyncIterable<StreamChunk> {
-    const maxOutput = config.maxTokens > 32768 ? 16384 : config.maxTokens
-    const systemPrompt = resolveSystemPrompt(config.systemPrompt)
-    const params: Record<string, unknown> = {
-      model: config.model,
-      instructions: systemPrompt,
+    const params = {
+      ...buildBaseParams(config, tools, this.formatTools.bind(this)),
       input: this.formatInput(messages),
       stream: true,
-      store: true,
-      ...(tools.length > 0 ? { tools: this.formatTools(tools) } : {}),
-      ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
-      ...(maxOutput ? { max_output_tokens: maxOutput } : {}),
     }
 
     const stream = await (this.client as any).responses.create(params, { signal })
@@ -170,6 +183,10 @@ export class OpenAIResponsesProvider implements ModelProvider {
         }
       } else if (event.type === 'response.output_item.done' && event.item?.type === 'function_call') {
         yield { type: 'tool_use_end' }
+      } else if (event.type === 'response.reasoning_summary_text.delta' || event.type === 'response.reasoning_text.delta') {
+        if (event.delta) {
+          yield { type: 'thinking_delta', text: event.delta }
+        }
       } else if (event.type === 'response.completed') {
         if (pendingText) {
           if (insideThink) {

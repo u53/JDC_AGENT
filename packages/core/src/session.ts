@@ -377,9 +377,8 @@ export class Session {
     }
   }
 
-  setThinking(enabled: boolean, budget?: number): void {
-    this.config.modelConfig.thinking = enabled
-    if (budget !== undefined) this.config.modelConfig.thinkingBudget = budget
+  setEffort(effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'): void {
+    this.config.modelConfig.effort = effort
   }
 
   clearMessages(): void {

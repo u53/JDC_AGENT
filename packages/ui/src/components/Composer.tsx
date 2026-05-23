@@ -13,8 +13,8 @@ interface Props {
   onSlashCommand?: (command: string) => void
   permissionMode?: string
   onPermissionChange?: (mode: string) => void
-  thinkingEnabled?: boolean
-  onThinkingToggle?: () => void
+  effort?: 'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+  onEffortChange?: (effort: 'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max') => void
   planMode?: boolean
   onPlanToggle?: () => void
   modelName?: string
@@ -32,8 +32,8 @@ export function Composer({
   onSlashCommand,
   permissionMode = 'standard',
   onPermissionChange,
-  thinkingEnabled,
-  onThinkingToggle,
+  effort = 'max',
+  onEffortChange,
   planMode,
   onPlanToggle,
   modelName,
@@ -46,6 +46,7 @@ export function Composer({
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashFilter, setSlashFilter] = useState('')
   const [showPermMenu, setShowPermMenu] = useState(false)
+  const [showEffortMenu, setShowEffortMenu] = useState(false)
   const [showModelMenu, setShowModelMenu] = useState(false)
   const [queueExpanded, setQueueExpanded] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -371,14 +372,39 @@ export function Composer({
               )}
             </div>
 
-            {/* Thinking toggle */}
-            <button
-              onClick={onThinkingToggle}
-              className={`flex items-center gap-1 transition-colors ${thinkingEnabled ? 'text-[var(--good)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
-            >
-              <span className={`inline-block h-1.5 w-1.5 rounded-full ${thinkingEnabled ? 'bg-[var(--good)]' : 'bg-[var(--muted)]'}`} />
-              推理
-            </button>
+            {/* Effort dropdown */}
+            <div className="relative shrink-0">
+              <button
+                onClick={() => setShowEffortMenu(!showEffortMenu)}
+                className={`flex items-center gap-1 transition-colors ${effort === 'off' ? 'text-[var(--muted)] hover:text-[var(--text)]' : 'text-[var(--good)]'}`}
+              >
+                <span className={`inline-block h-1.5 w-1.5 rounded-full ${effort === 'off' ? 'bg-[var(--muted)]' : 'bg-[var(--good)]'}`} />
+                {(() => {
+                  const labels: Record<string, string> = { off: '推理:关', low: '推理:低', medium: '推理:中', high: '推理:高', xhigh: '推理:超', max: '推理:最大' }
+                  return labels[effort]
+                })()} ▾
+              </button>
+              {showEffortMenu && (
+                <div className="absolute bottom-full left-0 mb-1 border border-[var(--border)] bg-[var(--surface)] rounded-[8px] z-50 min-w-[150px] shadow-[var(--shadow-soft)] overflow-hidden">
+                  <div className="px-3 py-1.5 text-[10px] text-[var(--muted)] flex items-center justify-between border-b border-[var(--border)]">
+                    <span>速度</span>
+                    <span>智能</span>
+                  </div>
+                  {(['off', 'low', 'medium', 'high', 'xhigh', 'max'] as const).map((lvl) => {
+                    const labels = { off: '关闭', low: '低', medium: '中', high: '高', xhigh: '超高', max: '最大' } as const
+                    return (
+                      <button
+                        key={lvl}
+                        onClick={() => { onEffortChange?.(lvl); setShowEffortMenu(false) }}
+                        className={`block w-full text-left px-3 py-1.5 text-[12px] hover:bg-[var(--surface-2)] ${effort === lvl ? 'text-[var(--good)]' : 'text-[var(--text)]'}`}
+                      >
+                        {labels[lvl]}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
 
             {/* Plan toggle */}
             <button

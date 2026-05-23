@@ -21,7 +21,7 @@ export const IPC_CHANNELS = {
   SESSION_SET_PERMISSION: 'session:set-permission-mode',
   SESSION_COMPACT: 'session:compact',
   SESSION_CLEAR: 'session:clear',
-  SESSION_SET_THINKING: 'session:set-thinking',
+  SESSION_SET_EFFORT: 'session:set-effort',
   SESSION_SET_PLAN_MODE: 'session:set-plan-mode',
   SESSION_GET_PLAN_MODE: 'session:get-plan-mode',
   AGENT_PROGRESS: 'agent:progress',

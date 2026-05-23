@@ -1,13 +1,40 @@
 import OpenAI from 'openai'
 import type { ModelProvider } from '../model-provider.js'
-import type { ContentBlock, Message, ModelConfig, PromptSegment, StreamChunk, ToolDefinition } from '../types.js'
+import type { ContentBlock, Message, ModelConfig, PromptSegment, ReasoningEffort, StreamChunk, ToolDefinition } from '../types.js'
 import { joinSegments } from '../context.js'
 import { parseThinkTags } from './think-parser.js'
+import { getModelTraits } from './model-traits.js'
 
 function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): string | undefined {
   if (!systemPrompt) return undefined
   if (typeof systemPrompt === 'string') return systemPrompt
   return joinSegments(systemPrompt)
+}
+
+function effortToOpenAI(effort: ReasoningEffort): 'low' | 'medium' | 'high' | 'xhigh' {
+  if (effort === 'max') return 'xhigh'
+  return effort
+}
+
+function buildBaseParams(config: ModelConfig): Record<string, any> {
+  const traits = getModelTraits(config.model)
+  const params: Record<string, any> = { model: config.model }
+
+  if (traits.useMaxCompletionTokens) {
+    params.max_completion_tokens = config.maxTokens
+  } else {
+    params.max_tokens = config.maxTokens
+  }
+
+  if (!traits.rejectsTemperature && config.temperature !== undefined) {
+    params.temperature = config.temperature
+  }
+
+  if (config.effort && traits.isReasoning) {
+    params.reasoning_effort = effortToOpenAI(config.effort)
+  }
+
+  return params
 }
 
 export class OpenAIChatProvider implements ModelProvider {
@@ -28,13 +55,11 @@ export class OpenAIChatProvider implements ModelProvider {
     config: ModelConfig,
     signal?: AbortSignal
   ) {
-    const params: OpenAI.ChatCompletionCreateParamsNonStreaming = {
-      model: config.model,
-      max_tokens: config.maxTokens,
+    const params = {
+      ...buildBaseParams(config),
       messages: this.formatMessages(messages, resolveSystemPrompt(config.systemPrompt)),
       ...(tools.length > 0 ? { tools: this.formatTools(tools) } : {}),
-      ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
-    }
+    } as OpenAI.ChatCompletionCreateParamsNonStreaming
 
     const response = await this.client.chat.completions.create(params, { signal })
 
@@ -87,15 +112,13 @@ export class OpenAIChatProvider implements ModelProvider {
     config: ModelConfig,
     signal?: AbortSignal
   ): AsyncIterable<StreamChunk> {
-    const params: OpenAI.ChatCompletionCreateParamsStreaming = {
-      model: config.model,
-      max_tokens: config.maxTokens,
+    const params = {
+      ...buildBaseParams(config),
       messages: this.formatMessages(messages, resolveSystemPrompt(config.systemPrompt)),
       stream: true,
       stream_options: { include_usage: true },
       ...(tools.length > 0 ? { tools: this.formatTools(tools) } : {}),
-      ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
-    }
+    } as OpenAI.ChatCompletionCreateParamsStreaming
 
     const stream = await this.client.chat.completions.create(params, { signal })
 

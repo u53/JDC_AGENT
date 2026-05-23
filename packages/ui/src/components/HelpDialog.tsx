@@ -45,7 +45,7 @@ export function HelpDialog({ visible, onClose }: Props) {
             <h3 className="text-[10px] uppercase tracking-[0.15em] text-[#666] mb-2">底部工具栏</h3>
             <div className="space-y-1.5">
               <HelpRow cmd="权限模式" desc="切换 标准/完全访问/严格 三种权限级别" />
-              <HelpRow cmd="推理" desc="开关推理模式（extended thinking）" />
+              <HelpRow cmd="推理" desc="选择推理强度 关/低/中/高/超高/最大" />
               <HelpRow cmd="规划" desc="开关规划模式（只读 + 写计划文件）" />
               <HelpRow cmd="模型" desc="切换当前使用的 AI 模型" />
             </div>

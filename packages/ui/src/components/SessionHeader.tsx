@@ -6,7 +6,7 @@ import { IconTerminal } from './icons'
 
 interface Props {
   permissionMode: string
-  thinkingEnabled: boolean
+  effort: 'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
   planMode: boolean
 }
 
@@ -16,7 +16,16 @@ const PERM_LABELS: Record<string, string> = {
   locked: '锁定',
 }
 
-export function SessionHeader({ permissionMode, thinkingEnabled, planMode }: Props) {
+const EFFORT_LABELS: Record<string, string> = {
+  off: '推理:关',
+  low: '推理:低',
+  medium: '推理:中',
+  high: '推理:高',
+  xhigh: '推理:超',
+  max: '推理:最大',
+}
+
+export function SessionHeader({ permissionMode, effort, planMode }: Props) {
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const projects = useSessionStore((s) => s.projects)
   const sessionStates = useSessionStore((s) => s.sessionStates)
@@ -83,10 +92,10 @@ export function SessionHeader({ permissionMode, thinkingEnabled, planMode }: Pro
 
         <span className="text-[var(--muted)]">{permLabel}</span>
 
-        {thinkingEnabled && (
+        {effort !== 'off' && (
           <span className="flex items-center gap-1 text-[var(--good)]">
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--good)]" />
-            推理
+            {EFFORT_LABELS[effort]}
           </span>
         )}
 

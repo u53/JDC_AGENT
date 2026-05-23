@@ -95,13 +95,14 @@ export interface PromptSegment {
   cacheable: boolean
 }
 
+export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
 export interface ModelConfig {
   model: string
   maxTokens: number
   temperature?: number
   systemPrompt?: string | PromptSegment[]
-  thinking?: boolean
-  thinkingBudget?: number
+  effort?: ReasoningEffort
   contextWindow?: number
   compressAt?: number
 }

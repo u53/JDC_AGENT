@@ -102,8 +102,10 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   const [permissionMode, setPermissionMode] = useState(() => {
     return localStorage.getItem('jdcagnet-permission-mode') || 'standard'
   })
-  const [thinkingEnabled, setThinkingEnabled] = useState(() => {
-    return localStorage.getItem('jdcagnet-thinking') !== 'false'
+  const [effort, setEffort] = useState<'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'>(() => {
+    const stored = localStorage.getItem('jdcagnet-effort')
+    if (stored === 'off' || stored === 'low' || stored === 'medium' || stored === 'high' || stored === 'xhigh' || stored === 'max') return stored
+    return 'max'
   })
   const [toast, setToast] = useState<string | null>(null)
   const [skills, setSkills] = useState<{ name: string; description: string }[]>([])
@@ -135,6 +137,10 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     // Sync permission mode to backend on session activation
     if (activeSessionId && (window as any).electronAPI?.setPermissionMode) {
       (window as any).electronAPI.setPermissionMode(activeSessionId, permissionMode)
+    }
+    // Sync effort to backend on session activation
+    if (activeSessionId && (window as any).electronAPI?.setEffort) {
+      (window as any).electronAPI.setEffort(activeSessionId, effort === 'off' ? undefined : effort)
     }
   }, [activeSessionId])
 
@@ -183,17 +189,15 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     setTimeout(() => setToast(null), 2500)
   }, [])
 
-  const handleThinkingToggle = useCallback(() => {
+  const handleEffortChange = useCallback((next: 'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max') => {
     const api = (window as any).electronAPI
-    setThinkingEnabled(prev => {
-      const next = !prev
-      localStorage.setItem('jdcagnet-thinking', String(next))
-      if (activeSessionId && api?.setThinking) {
-        api.setThinking(activeSessionId, next)
-      }
-      showToast(next ? '推理模式: 开启' : '推理模式: 关闭')
-      return next
-    })
+    setEffort(next)
+    localStorage.setItem('jdcagnet-effort', next)
+    if (activeSessionId && api?.setEffort) {
+      api.setEffort(activeSessionId, next === 'off' ? undefined : next)
+    }
+    const labels = { off: '关闭', low: '低', medium: '中', high: '高', xhigh: '超高', max: '最大' } as const
+    showToast(`推理: ${labels[next]}`)
   }, [activeSessionId, showToast])
 
   const handlePlanToggle = useCallback(() => {
@@ -235,9 +239,12 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
           showToast('对话已清空')
         }
         break
-      case '/thinking':
-        handleThinkingToggle()
+      case '/thinking': {
+        const order = ['off', 'low', 'medium', 'high', 'xhigh', 'max'] as const
+        const idx = order.indexOf(effort)
+        handleEffortChange(order[(idx + 1) % order.length])
         break
+      }
       case '/model':
         openSettings()
         break
@@ -254,7 +261,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         break
       }
       case '/status':
-        showToast(`Session: ${activeSessionId?.slice(0, 8)} | Msgs: ${messages.length} | Model: ${activeModel?.model.name || '-'} | Thinking: ${thinkingEnabled ? 'ON' : 'OFF'}`)
+        showToast(`Session: ${activeSessionId?.slice(0, 8)} | Msgs: ${messages.length} | Model: ${activeModel?.model.name || '-'} | Effort: ${effort}`)
         break
       case '/commit':
         if (activeSessionId && api?.invoke) {
@@ -312,7 +319,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     <div className="flex flex-1 overflow-hidden relative">
       {/* Left: main chat */}
       <div className={`flex flex-col overflow-hidden ${showRightPanel ? 'w-[60%]' : 'w-full'} transition-all`}>
-        <SessionHeader permissionMode={permissionMode} thinkingEnabled={thinkingEnabled} planMode={planMode} />
+        <SessionHeader permissionMode={permissionMode} effort={effort} planMode={planMode} />
 
         {/* Conversation Timeline */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4">
@@ -384,8 +391,8 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
           onSlashCommand={handleSlashCommand}
           permissionMode={permissionMode}
           onPermissionChange={handlePermissionChange}
-          thinkingEnabled={thinkingEnabled}
-          onThinkingToggle={handleThinkingToggle}
+          effort={effort}
+          onEffortChange={handleEffortChange}
           planMode={planMode}
           onPlanToggle={handlePlanToggle}
           modelName={activeModel?.model.name}

@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { ModelProvider } from '../model-provider.js'
-import type { ContentBlock, Message, ModelConfig, PromptSegment, StreamChunk, ToolDefinition } from '../types.js'
+import type { ContentBlock, Message, ModelConfig, PromptSegment, ReasoningEffort, StreamChunk, ToolDefinition } from '../types.js'
 import { joinSegments } from '../context.js'
 import { parseThinkTags } from './think-parser.js'
 
@@ -24,6 +24,28 @@ function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): any {
   return blocks
 }
 
+function effortToBudget(effort: ReasoningEffort, maxTokens: number): number {
+  const reserve = 4096
+  const ceiling = Math.max(1024, maxTokens - reserve)
+  const target = effort === 'low' ? 4_000
+    : effort === 'medium' ? 10_000
+    : effort === 'high' ? 16_000
+    : effort === 'xhigh' ? 24_000
+    : maxTokens - reserve
+  return Math.max(1024, Math.min(target, ceiling))
+}
+
+function applyEffort(params: any, config: ModelConfig): void {
+  if (!config.effort) return
+  params.thinking = {
+    type: 'enabled',
+    budget_tokens: effortToBudget(config.effort, config.maxTokens),
+  }
+  delete params.temperature
+  delete params.top_p
+  delete params.top_k
+}
+
 export class AnthropicProvider implements ModelProvider {
   name = 'anthropic'
   private client: Anthropic
@@ -45,7 +67,7 @@ export class AnthropicProvider implements ModelProvider {
     config: ModelConfig,
     signal?: AbortSignal
   ) {
-    const response = await this.client.messages.create({
+    const params: any = {
       model: config.model,
       max_tokens: config.maxTokens,
       system: resolveSystemPrompt(config.systemPrompt),
@@ -55,7 +77,10 @@ export class AnthropicProvider implements ModelProvider {
         description: t.description,
         input_schema: t.inputSchema as Anthropic.Tool['input_schema'],
       })),
-    }, { signal })
+      ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
+    }
+    applyEffort(params, config)
+    const response = await this.client.messages.create(params, { signal })
 
     return {
       content: response.content.map(block => this.mapContentBlock(block)),
@@ -94,15 +119,10 @@ export class AnthropicProvider implements ModelProvider {
         return tool
       }),
       stream: true,
+      ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
     }
 
-    if (config.thinking) {
-      params.thinking = {
-        type: 'enabled',
-        budget_tokens: config.thinkingBudget || Math.min(config.maxTokens * 0.8, 10000),
-      }
-      delete params.temperature
-    }
+    applyEffort(params, config)
 
     yield* this.streamRaw(params, signal)
   }

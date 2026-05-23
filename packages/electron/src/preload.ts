@@ -23,7 +23,7 @@ const api = {
   setPermissionMode: (sessionId: string, mode: string) => ipcRenderer.invoke('session:set-permission-mode', { sessionId, mode }),
   compactSession: (sessionId: string) => ipcRenderer.invoke('session:compact', { sessionId }),
   clearSession: (sessionId: string) => ipcRenderer.invoke('session:clear', { sessionId }),
-  setThinking: (sessionId: string, enabled: boolean, budget?: number) => ipcRenderer.invoke('session:set-thinking', { sessionId, enabled, budget }),
+  setEffort: (sessionId: string, effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max') => ipcRenderer.invoke('session:set-effort', { sessionId, effort }),
   agentAbort: (sessionId: string, agentToolUseId: string) =>
     ipcRenderer.invoke('agent:abort', { sessionId, agentToolUseId }),
   agentBackground: (sessionId: string, agentToolUseId: string) =>
