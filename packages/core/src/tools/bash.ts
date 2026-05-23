@@ -155,12 +155,43 @@ The shell runs in a non-interactive environment (CI=true, GIT_TERMINAL_PROMPT=0,
       shellCmd = 'cmd.exe'
       shellArgs = ['/V:ON', '/S', '/C', wrappedCommand]
     } else {
-      // Use login shell (-l) to source user's profile (.bash_profile, .zshrc, etc.)
-      // This ensures NVM, pyenv, rbenv, and custom PATH entries are available.
-      const userShell = process.env.SHELL || 'bash'
-      const wrappedCommand = `${command}; __jdcagnet_exit=$?; pwd -P > ${cwdFile} 2>/dev/null; exit $__jdcagnet_exit`
+      // Unix: spawn the user's login shell so PATH set up by tool managers (nvm, pyenv,
+      // rbenv, conda, asdf, brew shellenv, custom ~/.npm-global/bin etc.) is available.
+      //
+      // Different shells load rc files differently — getting this wrong is why `pnpm`,
+      // `node` (via nvm), `python` (via pyenv) etc. show up as "command not found" even
+      // though they work fine in the user's terminal. We use `-i -l` to be both an
+      // interactive AND login shell, then handle the bash gotcha explicitly.
+      //
+      //   zsh with `-i -l` covers everything — .zshenv (always), .zprofile (login),
+      //   .zshrc (interactive), .zlogin (login).
+      //
+      //   bash with `-i -l` is technically a login shell, so it loads /etc/profile and
+      //   the first of ~/.bash_profile / ~/.bash_login / ~/.profile — but does NOT
+      //   auto-load ~/.bashrc. Most users source .bashrc from .bash_profile manually,
+      //   but plenty don't, so we source it explicitly when the user shell is bash.
+      //
+      //   Other shells (fish, sh, dash, ksh) just use `-l` — their profile files
+      //   (~/.config/fish/config.fish, ~/.profile, etc.) cover the login path and
+      //   they don't have the same login-vs-interactive split as bash.
+      //
+      // Users whose rc files misbehave under non-tty stdin/stdout can set
+      // JDCAGNET_BASH_NO_INTERACTIVE=1 to fall back to login-only behavior.
+      const userShell = process.env.SHELL || '/bin/bash'
+      const shellName = userShell.split('/').pop() || 'bash'
+      const interactiveOptOut = process.env.JDCAGNET_BASH_NO_INTERACTIVE === '1'
+      const useInteractive = !interactiveOptOut && (shellName === 'zsh' || shellName === 'bash')
+      // bash gotcha: login shell skips .bashrc. Source it explicitly if it exists.
+      // Idempotent — if .bash_profile already sources .bashrc, re-sourcing is harmless
+      // (PATH may get duplicate entries but that doesn't break anything).
+      const bashrcPrelude = shellName === 'bash' && useInteractive
+        ? '[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc" 2>/dev/null; '
+        : ''
+      const wrappedCommand = `${bashrcPrelude}${command}; __jdcagnet_exit=$?; pwd -P > ${cwdFile} 2>/dev/null; exit $__jdcagnet_exit`
       shellCmd = userShell
-      shellArgs = ['-l', '-c', wrappedCommand]
+      shellArgs = useInteractive
+        ? ['-i', '-l', '-c', wrappedCommand]
+        : ['-l', '-c', wrappedCommand]
     }
 
     return new Promise((resolve) => {
