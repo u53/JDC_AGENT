@@ -14,6 +14,8 @@ await build({
   outdir: path.join(__dirname, 'dist'),
   external: ['electron', 'node-pty'],
   format: 'cjs',
+  minify: true,
+  keepNames: true,
   alias: {
     '@jdcagnet/core': path.join(rootDir, 'packages/core/src/index.ts'),
   },
@@ -27,6 +29,8 @@ await build({
   outdir: path.join(__dirname, 'dist'),
   external: ['electron'],
   format: 'cjs',
+  minify: true,
+  keepNames: true,
 })
 
 // Copy sql-wasm.wasm to dist
