@@ -610,6 +610,7 @@ export class TeamManagerAI extends TeamManager {
   private conversationHistory: Message[] = []
   private aiEnabled = true
   private aiProcessing = false
+  private queuedAIMessages: TeamMessage[] = []
   private lastProactiveAt = 0
   private static PROACTIVE_THROTTLE_MS = 8000
   private static URGENT_PROACTIVE_THROTTLE_MS = 2000
@@ -659,6 +660,28 @@ export class TeamManagerAI extends TeamManager {
       `<methodology>\n${this.skillContent}\n</methodology>\n\n`
   }
 
+  /**
+   * Build PM's system prompt as cacheable segments. Stable segments (skill,
+   * identity, toolbox, output protocol) are placed first and marked
+   * cacheable=true so repeated PM cycles share a long stable prefix in the
+   * provider's prompt cache. The trailing note (proactive / staffing /
+   * worker-report variant) is per-call and intentionally NOT cacheable.
+   */
+  private buildPMSystemSegments(extraNote?: string): import('../types.js').PromptSegment[] {
+    const segments: import('../types.js').PromptSegment[] = []
+    const preamble = this.skillPreamble()
+    if (preamble) {
+      segments.push({ content: preamble, cacheable: true })
+    }
+    segments.push({ content: PM_IDENTITY, cacheable: true })
+    segments.push({ content: PM_TOOLBOX, cacheable: true })
+    segments.push({ content: PM_OUTPUT_PROTOCOL, cacheable: true })
+    if (extraNote) {
+      segments.push({ content: extraNote, cacheable: false })
+    }
+    return segments
+  }
+
   setAIEnabled(enabled: boolean): void {
     this.aiEnabled = enabled
   }
@@ -688,7 +711,15 @@ export class TeamManagerAI extends TeamManager {
 
     const fastPathIntents = new Set(['wrap_up', 'hurry', 'request_status'])
     if (fastPathIntents.has(msg.intent) || !this.aiEnabled) {
-      return super.handleIntervention(msg)
+      const baseActions = super.handleIntervention(msg)
+      // For user / main_session origin: also kick off an AI cycle so PM can
+      // give a human-language acknowledgement on top of the mechanical
+      // broadcast. Skips for member-origin (no fast-path matches member intents
+      // anyway) and skips when AI is disabled.
+      if (this.aiEnabled && (msg.from === 'user' || msg.from === 'main_session')) {
+        this.queueAIDecision(msg)
+      }
+      return baseActions
     }
 
     if (msg.to.startsWith('member:')) {
@@ -712,7 +743,13 @@ export class TeamManagerAI extends TeamManager {
   }
 
   private queueAIDecision(msg: TeamMessage): void {
-    if (this.aiProcessing) return
+    if (this.aiProcessing) {
+      // PM is mid-flight on another decision. DO NOT drop the message — that
+      // is what made user replies sometimes vanish. Queue it; we drain after
+      // the current call finishes (FIFO so user messages keep their order).
+      this.queuedAIMessages.push(msg)
+      return
+    }
     this.aiProcessing = true
 
     this.processWithAI(msg).then(actions => {
@@ -721,11 +758,20 @@ export class TeamManagerAI extends TeamManager {
         this.pendingAIActions = [...this.pendingAIActions, ...actions]
         ;(this.opts as TeamManagerAIOptions).onActionsReady?.()
       }
+      this.drainQueuedAIMessages()
       this.drainQueuedProactive()
     }).catch(() => {
       this.aiProcessing = false
+      this.drainQueuedAIMessages()
       this.drainQueuedProactive()
     })
+  }
+
+  private drainQueuedAIMessages(): void {
+    if (this.queuedAIMessages.length === 0) return
+    if (this.aiProcessing) return
+    const next = this.queuedAIMessages.shift()!
+    this.queueAIDecision(next)
   }
 
   decideTick(activeMemberCount: number, availableMemberIds: string[]): ManagerAction[] {
@@ -1037,7 +1083,8 @@ export class TeamManagerAI extends TeamManager {
         : ''
       const config: ModelConfig = {
         ...this.modelConfig,
-        systemPrompt: `${this.skillPreamble()}${PM_IDENTITY}\n\n${PM_TOOLBOX}\n\n${PM_OUTPUT_PROTOCOL}${replySuppression}`,
+        systemPrompt: this.buildPMSystemSegments(replySuppression || undefined),
+        cacheKey: this.modelConfig.cacheKey ?? 'pm',
         maxTokens: 2048,
       }
 
@@ -1063,10 +1110,50 @@ export class TeamManagerAI extends TeamManager {
 
       const parsed = this.parseAIResponse(responseText)
       // Defensive: even with prompt suppression, strip reply if the model slips.
-      return fromMember ? parsed.filter(a => a.type !== 'reply') : parsed
+      if (fromMember) return parsed.filter(a => a.type !== 'reply')
+
+      // User-originated message: PM MUST answer the user. If the model emitted
+      // only operational actions and forgot to include a "reply", synthesize a
+      // brief one so the user isn't ghosted. Without this, sending "进度如何"
+      // to PM can result in dead air while PM silently ran assign_task etc.
+      const isUserOrMain = msg.from === 'user' || msg.from === 'main_session'
+      if (isUserOrMain && !parsed.some(a => a.type === 'reply' || a.type === 'escalate_to_user')) {
+        const summary = this.summarizeActionsForReply(parsed)
+        parsed.push({
+          type: 'reply',
+          message: summary || '已收到。我先继续推进当前进展,稍后再同步结果。',
+        } as ManagerAction)
+      }
+      return parsed
     } catch {
       return []
     }
+  }
+
+  /**
+   * Render a one-line user-facing summary of operational actions so we have
+   * something concrete to put in the fallback reply when PM forgets to speak.
+   */
+  private summarizeActionsForReply(actions: ManagerAction[]): string {
+    if (actions.length === 0) return ''
+    const parts: string[] = []
+    for (const a of actions) {
+      switch (a.type) {
+        case 'add_task': parts.push(`新增任务「${(a as any).taskInput?.title ?? a.message ?? '...'}」`); break
+        case 'assign_task': parts.push(`分派任务 ${a.taskId}`); break
+        case 'cancel_task': parts.push(`取消任务 ${a.taskId}`); break
+        case 'reopen_task': parts.push(`重开任务 ${a.taskId}`); break
+        case 'add_member': parts.push(`新增成员`); break
+        case 'remove_member': parts.push(`移除成员 ${a.memberId}`); break
+        case 'broadcast': parts.push(`广播 ${a.intent ?? 'message'}`); break
+        case 'send_member_message': parts.push(`点对点提示 ${a.memberId}`); break
+        case 'kick_member': parts.push(`重启 ${a.memberId}`); break
+        case 'add_constraint': parts.push(`加约束`); break
+        case 'complete': parts.push(`收尾`); break
+      }
+    }
+    if (parts.length === 0) return ''
+    return `已收到。我刚做了:${parts.join(',')}。`
   }
 
   private async processProactive(reason: ProactiveReason): Promise<ManagerAction[]> {
@@ -1077,7 +1164,10 @@ export class TeamManagerAI extends TeamManager {
     try {
       const config: ModelConfig = {
         ...this.modelConfig,
-        systemPrompt: `${this.skillPreamble()}${PM_IDENTITY}\n\n${PM_TOOLBOX}\n\n${PM_OUTPUT_PROTOCOL}\n\nNote: proactive cycle. NEVER use type="reply" — no user is asking. If you genuinely need user input (taste/preference question, destructive sign-off, real deadlock), use type="escalate_to_user" — it bypasses this restriction. Use it sparingly.`,
+        systemPrompt: this.buildPMSystemSegments(
+          `\n\nNote: proactive cycle. NEVER use type="reply" — no user is asking. If you genuinely need user input (taste/preference question, destructive sign-off, real deadlock), use type="escalate_to_user" — it bypasses this restriction. Use it sparingly.`
+        ),
+        cacheKey: this.modelConfig.cacheKey ?? 'pm',
         maxTokens: 2048,
       }
       const messages: Message[] = [
@@ -1112,7 +1202,10 @@ export class TeamManagerAI extends TeamManager {
     try {
       const config: ModelConfig = {
         ...this.modelConfig,
-        systemPrompt: `${this.skillPreamble()}${PM_IDENTITY}\n\n${PM_TOOLBOX}\n\n${PM_OUTPUT_PROTOCOL}\n\nNote: focused follow-up. Output ONLY assign_task or cancel_task. No other action types.`,
+        systemPrompt: this.buildPMSystemSegments(
+          `\n\nNote: focused follow-up. Output ONLY assign_task or cancel_task. No other action types.`
+        ),
+        cacheKey: this.modelConfig.cacheKey ?? 'pm',
         maxTokens: 1024,
       }
       const messages: Message[] = [
