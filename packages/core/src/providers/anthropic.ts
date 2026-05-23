@@ -227,8 +227,10 @@ export class AnthropicProvider implements ModelProvider {
       buffer = lines.pop() || ''
 
       for (const line of lines) {
-        if (!line.startsWith('data: ')) continue
-        const data = line.slice(6).trim()
+        // SSE spec allows both 'data: <value>' and 'data:<value>' — strip leading
+        // spaces from value (Anthropic official adds the space; some gateways don't)
+        if (!line.startsWith('data:')) continue
+        const data = line.slice(5).trimStart()
         if (!data || data === '[DONE]') continue
 
         let event: any
