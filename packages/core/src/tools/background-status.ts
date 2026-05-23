@@ -70,6 +70,7 @@ export function createBackgroundStatusTool(deps: BackgroundStatusDeps): ToolHand
         members: team.getMembers().map(m => ({
           id: m.id,
           role: m.role,
+          responsibility: m.responsibility,
           agentType: m.agentType,
           status: m.status,
           currentTaskId: m.currentTaskId,

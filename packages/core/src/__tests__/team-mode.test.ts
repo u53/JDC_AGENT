@@ -35,8 +35,10 @@ function createMockSubSessionDeps(responseText = 'Done.') {
 function createTeamRuntime(overrides?: any) {
   const plan: TeamRuntimePlan = {
     members: [
-      { role: 'Explorer', agentType: 'explore', count: 2 },
-      { role: 'Coder', agentType: 'general', count: 2 },
+      { role: 'Explorer A', responsibility: 'explore module A', agentType: 'explore' },
+      { role: 'Explorer B', responsibility: 'explore module B', agentType: 'explore' },
+      { role: 'Coder A', responsibility: 'implement feature A', agentType: 'general' },
+      { role: 'Coder B', responsibility: 'implement feature B', agentType: 'general' },
     ],
     tasks: [
       { title: 'Task A', description: 'Do task A', priority: 'high' },

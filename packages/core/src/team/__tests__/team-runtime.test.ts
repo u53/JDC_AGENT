@@ -64,11 +64,15 @@ describe('TeamRuntime', () => {
     expect(team.getMembers()).toHaveLength(10)
   })
 
-  it('expands count in member spec', () => {
+  it('creates one member per spec', () => {
     const team = new TeamRuntime({
       objective: 'Test',
       plan: {
-        members: [{ role: 'explorer', agentType: 'explore', count: 3 }],
+        members: [
+          { role: 'explorer A', responsibility: 'lane A', agentType: 'explore' },
+          { role: 'explorer B', responsibility: 'lane B', agentType: 'explore' },
+          { role: 'explorer C', responsibility: 'lane C', agentType: 'explore' },
+        ],
         tasks: [],
       },
       subSessionDeps: mockDeps,

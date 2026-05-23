@@ -155,10 +155,17 @@ text of all open issues for that task.
 ## Action: add_member
 Hire a new worker. Soft cap: don't exceed total members > 6 unless the work clearly justifies it.
 Hard cap: 10 (enforced by runtime; over-cap requests are rejected).
+
+Each member you hire MUST have a distinct role AND responsibility. The responsibility is one sentence
+describing what THIS specific worker owns and how they differ from peers — it gets injected into their
+system prompt and shown in the UI. Vague responsibilities (e.g. "investigate the codebase") produce
+clones; specific responsibilities (e.g. "排查 packages/electron/build.mjs 的 asar 打包配置") produce
+useful workers.
 {
   "type": "add_member",
   "spec": {
-    "role": "<descriptive display name, e.g. 'API Designer' or 'Backend Engineer'>",
+    "role": "<specific display name, e.g. 'Build Config Investigator' or 'Auth Flow QA' — NOT 'Code Explorer #2'>",
+    "responsibility": "<one sentence: what this worker owns + how it differs from existing peers. Mention concrete files/area/question.>",
     "agentType": "explore" | "plan" | "refactor" | "security-auditor" | "frontend-designer" | "general",
     "modelId": "<optional override>"
   },
@@ -227,6 +234,12 @@ Contracts are for SHAPE alignment (API, schema, design). Skip them for parallel 
 
 ## ❌ QA the QA
 QA task T003 finds an issue, files ISSUE-001. You add_task "QA the QA"... NEVER. Trust QA, reopen original.
+
+## ❌ Clone-army hiring
+You hire 3 members all with role="Code Explorer" and responsibility="investigate the code".
+Result: identical workers race to read the same files, no division of labor.
+ALWAYS give each hire a distinct role AND a distinct responsibility (concrete files/area/question they own).
+If you can't articulate a different lane for the new hire, you don't need the new hire.
 
 ## ❌ Wrap_up + complete in same response when work is unfinished
 User says "收尾" → you broadcast wrap_up AND complete in one batch.
@@ -657,6 +670,9 @@ export class TeamManagerAI extends TeamManager {
         const idle = m.status === 'queued' ? ` idle ${Math.floor((Date.now() - m.lastActivityAt) / 1000)}s` : ''
         const task = m.currentTaskId ? ` task=${m.currentTaskId}` : ''
         lines.push(`- ${m.id} | ${m.role} | agentType=${m.agentType} | status=${m.status}${idle}${task}`)
+        if (m.responsibility) {
+          lines.push(`    responsibility: ${m.responsibility}`)
+        }
       }
     }
     lines.push('')

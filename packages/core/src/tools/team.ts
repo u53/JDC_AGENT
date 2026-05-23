@@ -38,19 +38,36 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
           objective: { type: 'string', description: 'High-level goal for the team' },
           members: {
             type: 'array',
-            description: 'Member specifications. If omitted, default team is auto-generated.',
+            description:
+              'Member specifications. Each member MUST have a distinct role AND a distinct one-sentence responsibility — ' +
+              'do NOT submit clones (e.g. three "Code Explorer"s). The responsibility is injected into that member\'s system prompt ' +
+              'and shown in the UI, so use it to make each worker focus on a different angle of the objective ' +
+              '(different files, different layer, different question, different verification path). ' +
+              'If omitted, a small generic team is auto-generated, but you should almost always specify members yourself.',
             items: {
               type: 'object',
               properties: {
-                role: { type: 'string', description: 'Display role name (e.g., "Code Explorer")' },
-                count: { type: 'number', description: 'Number of members with this role (default: 1)' },
+                role: {
+                  type: 'string',
+                  description:
+                    'Display role name. Make it specific to what THIS member does, not a generic title. ' +
+                    'Good: "Build Config Investigator", "Frontend Layout Owner", "Auth Flow QA". ' +
+                    'Bad: "Code Explorer", "Researcher", "Worker 1".',
+                },
+                responsibility: {
+                  type: 'string',
+                  description:
+                    'One sentence describing what THIS member is responsible for and how they differ from peers. ' +
+                    'Mention the specific files/area/question they own. ' +
+                    'Example: "排查 packages/electron/build.mjs 的 asar 配置以及 electron-builder 输出, 不碰 UI 层".',
+                },
                 agentType: { type: 'string', enum: ['explore', 'plan', 'refactor', 'security-auditor', 'frontend-designer', 'general'] },
                 modelId: {
                   type: 'string',
                   description: 'Optional model override for this member. Use a configured model ID. If omitted, the member uses the main session model. Useful when you want a specific worker on a stronger or cheaper model.',
                 },
               },
-              required: ['role'],
+              required: ['role', 'responsibility'],
             },
           },
           tasks: {
@@ -116,9 +133,11 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
       const members: TeamMemberSpec[] = requestedMembers.length > 0
         ? requestedMembers
         : [
-            { role: 'Code Explorer', agentType: 'explore', count: 2 },
-            { role: 'Architect', agentType: 'plan' },
-            { role: 'Reviewer', agentType: 'security-auditor' },
+            {
+              role: 'Lead Investigator',
+              responsibility: `Lead the investigation into the objective end-to-end and produce a single coherent report. Objective: ${objective}`,
+              agentType: 'explore',
+            },
           ]
 
       const tasks = requestedTasks.length > 0

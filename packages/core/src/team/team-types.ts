@@ -16,7 +16,13 @@ export type TeamMessageIntent =
 
 export interface TeamMemberSpec {
   role: string
-  count?: number
+  /**
+   * One-sentence statement of what THIS specific member is responsible for and how
+   * they differ from peers. Injected into the worker's system prompt so behavior
+   * actually diverges, and shown in the UI so the user can tell members apart.
+   * Example: "深入排查 build.mjs 的 asar 打包配置, 验证 electron-builder 输出".
+   */
+  responsibility?: string
   agentType?: string
   modelId?: string
 }
@@ -128,6 +134,7 @@ export interface TeamMemberState {
   id: string
   name: string
   role: string
+  responsibility?: string
   agentType: string
   modelId?: string
   status: MemberStatus

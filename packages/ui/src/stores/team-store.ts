@@ -4,7 +4,9 @@ export interface TeamMemberUI {
   id: string
   name: string
   role: string
+  responsibility?: string
   agentType: string
+  modelId?: string
   status: string
   currentTaskId?: string
   toolCount: number

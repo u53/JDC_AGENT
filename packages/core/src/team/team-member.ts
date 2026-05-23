@@ -46,6 +46,7 @@ export class TeamMember {
   readonly id: string
   readonly name: string
   readonly role: string
+  readonly responsibility?: string
   readonly agentType: string
   readonly modelId?: string
 
@@ -75,6 +76,7 @@ export class TeamMember {
     this.id = opts.id ?? `member_${uuid().slice(0, 8)}`
     this.role = opts.spec.role
     this.name = opts.spec.role
+    this.responsibility = opts.spec.responsibility
     this.agentType = opts.spec.agentType ?? 'explore'
     this.modelId = opts.spec.modelId
     this.currentTaskId = opts.taskId
@@ -89,6 +91,7 @@ export class TeamMember {
       id: this.id,
       name: this.name,
       role: this.role,
+      responsibility: this.responsibility,
       agentType: this.agentType,
       modelId: this.modelId,
       status: this.status,

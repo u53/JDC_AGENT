@@ -17,7 +17,7 @@ export interface ManagerAction {
   intent?: string
   constraint?: string
   summary?: string
-  spec?: { role: string; agentType?: string; modelId?: string }
+  spec?: { role: string; responsibility?: string; agentType?: string; modelId?: string }
   force?: boolean
   taskInput?: { title: string; description: string; priority?: Priority; dependsOn?: string[] }
 }

@@ -107,6 +107,13 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
     )
   }
 
+  const expandedMember = expandedMemberId
+    ? (team.members ?? []).find((m: any) => m.id === expandedMemberId)
+    : null
+  const expandedMemberTask = expandedMember?.currentTaskId
+    ? (team.tasks ?? []).find((t: any) => t.id === expandedMember.currentTaskId) ?? null
+    : null
+
   return (
     <div className="flex flex-col h-full min-h-0 bg-[var(--panel)]">
       <Header
@@ -154,10 +161,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
                   <MemberRow
                     key={m.id}
                     member={m}
-                    expanded={expandedMemberId === m.id}
-                    onToggle={() =>
-                      setExpandedMember(expandedMemberId === m.id ? null : m.id)
-                    }
+                    onClick={() => setExpandedMember(m.id)}
                   />
                 ))}
               </ul>
@@ -270,6 +274,15 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
           </button>
         </div>
       </div>
+
+      {expandedMember && (
+        <MemberDetailModal
+          member={expandedMember}
+          task={expandedMemberTask}
+          events={events}
+          onClose={() => setExpandedMember(null)}
+        />
+      )}
     </div>
   )
 }
@@ -424,34 +437,172 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function MemberRow({
   member,
-  expanded,
-  onToggle,
+  onClick,
 }: {
   member: any
-  expanded: boolean
-  onToggle: () => void
+  onClick: () => void
 }) {
   return (
     <li
       className="rounded-md border border-[var(--border)] bg-[var(--bg)] overflow-hidden cursor-pointer hover:border-[var(--accent)]/40 transition-colors"
-      onClick={onToggle}
+      onClick={onClick}
     >
       <div className="flex items-center gap-2 px-3 py-2">
         <span className="text-[12px] w-3.5 flex-shrink-0">{statusIcon(member.status)}</span>
-        <span className="flex-1 text-[12px] text-[var(--text)] truncate">{member.role}</span>
-        <span className="text-[10px] text-[var(--muted)]">
+        <div className="flex-1 min-w-0">
+          <div className="text-[12px] text-[var(--text)] truncate">{member.role}</div>
+          {member.responsibility && (
+            <div className="text-[10px] text-[var(--muted)] truncate mt-0.5">
+              {member.responsibility}
+            </div>
+          )}
+        </div>
+        <span className="text-[10px] text-[var(--muted)] flex-shrink-0">
           {member.toolCount > 0 ? `${member.toolCount} tools` : ''}
         </span>
         <StatusBadge status={member.status} small />
       </div>
-      {expanded && (
-        <div className="border-t border-[var(--border)] px-3 py-2 text-[11px] text-[var(--muted)] space-y-0.5">
-          <div>Type: <span className="text-[var(--text)]">{member.agentType}</span></div>
-          <div>Task: <span className="text-[var(--text)]">{member.currentTaskId ?? '—'}</span></div>
-          <div>Last: <span className="text-[var(--text)]">{new Date(member.lastActivityAt).toLocaleTimeString()}</span></div>
-        </div>
-      )}
     </li>
+  )
+}
+
+function MemberDetailModal({
+  member,
+  task,
+  events,
+  onClose,
+}: {
+  member: any
+  task: { id: string; title: string; description: string; status: string } | null
+  events: string[]
+  onClose: () => void
+}) {
+  const memberEvents = useMemo(() => {
+    const tag = `[${member.id}]`
+    return events.filter((line) => line.includes(tag)).slice(-30)
+  }, [events, member.id])
+
+  // Close on Esc
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-[min(640px,90vw)] max-h-[85vh] flex flex-col rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between px-4 py-3 border-b border-[var(--border)]">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[14px]">{statusIcon(member.status)}</span>
+              <span className="text-[14px] font-medium text-[var(--text)] truncate">{member.role}</span>
+              <StatusBadge status={member.status} small />
+            </div>
+            <div className="mt-1 text-[11px] text-[var(--muted)] font-mono">{member.id}</div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-[var(--muted)] hover:text-[var(--text)] text-[16px] leading-none px-1"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="overflow-y-auto px-4 py-3 space-y-4">
+          {member.responsibility ? (
+            <ModalSection title="Responsibility">
+              <div className="text-[12px] text-[var(--text)] whitespace-pre-wrap">
+                {member.responsibility}
+              </div>
+            </ModalSection>
+          ) : (
+            <ModalSection title="Responsibility">
+              <div className="text-[11px] text-[var(--muted)] italic">
+                (no responsibility specified — this worker is generic)
+              </div>
+            </ModalSection>
+          )}
+
+          <ModalSection title="Current task">
+            {task ? (
+              <div>
+                <div className="text-[12px] text-[var(--text)]">
+                  <span className="font-mono text-[var(--muted)]">{task.id}</span>{' '}
+                  <span>{task.title}</span>
+                </div>
+                <div className="mt-1 text-[11px] text-[var(--muted)] whitespace-pre-wrap">
+                  {task.description.length > 400
+                    ? task.description.slice(0, 400) + '…'
+                    : task.description}
+                </div>
+                <div className="mt-1.5">
+                  <StatusBadge status={task.status} small />
+                </div>
+              </div>
+            ) : (
+              <div className="text-[11px] text-[var(--muted)] italic">
+                {member.currentTaskId
+                  ? `(task ${member.currentTaskId} not found in current snapshot)`
+                  : '(idle — not on any task)'}
+              </div>
+            )}
+          </ModalSection>
+
+          <ModalSection title={`Recent events (${memberEvents.length})`}>
+            {memberEvents.length === 0 ? (
+              <div className="text-[11px] text-[var(--muted)] italic">(no events for this member yet)</div>
+            ) : (
+              <pre className="text-[10.5px] leading-snug text-[var(--text)] whitespace-pre-wrap font-mono max-h-[240px] overflow-y-auto bg-[var(--bg)] rounded p-2 border border-[var(--border)]">
+                {memberEvents.join('\n')}
+              </pre>
+            )}
+          </ModalSection>
+
+          <ModalSection title="Metadata">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+              <MetaRow label="agentType" value={member.agentType} />
+              <MetaRow label="modelId" value={member.modelId ?? '(default)'} />
+              <MetaRow label="toolCount" value={String(member.toolCount ?? 0)} />
+              <MetaRow
+                label="lastActivity"
+                value={new Date(member.lastActivityAt).toLocaleTimeString()}
+              />
+            </div>
+          </ModalSection>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ModalSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-[var(--muted)] mb-1.5">
+        {title}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function MetaRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline gap-2 min-w-0">
+      <span className="text-[var(--muted)] flex-shrink-0">{label}:</span>
+      <span className="text-[var(--text)] font-mono truncate">{value}</span>
+    </div>
   )
 }
 

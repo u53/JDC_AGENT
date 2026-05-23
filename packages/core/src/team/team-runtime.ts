@@ -117,25 +117,25 @@ export class TeamRuntime {
       this.manager = aiManager
     }
 
-    // Create members from plan (cap at 10)
+    // Create members from plan (cap at 10). Each spec produces exactly one member —
+    // the legacy `count` clone-pattern was removed because identical clones can't
+    // collaborate (no division of labor). Callers that want N workers must submit
+    // N specs, each with a distinct role + responsibility.
     const memberSpecs = opts.plan.members.slice(0, 10)
     for (const spec of memberSpecs) {
-      const count = spec.count ?? 1
-      for (let i = 0; i < count; i++) {
-        if (this.members.length >= 10) break
-        const member = new TeamMember({
-          spec,
-          taskPrompt: '', // assigned later
-          subSessionDeps: opts.subSessionDeps,
-          resolveModel: opts.resolveModel,
-          onEvent: (e) => this.recordEvent(e),
-          onComplete: (memberId, result) => this.handleMemberComplete(memberId, result),
-          onFail: (memberId, error) => this.handleMemberFail(memberId, error),
-        })
-        this.members.push(member)
-        this.memberById.set(member.id, member)
-        this.recordEvent({ type: 'member_created', memberId: member.id, role: member.role, timestamp: Date.now() })
-      }
+      if (this.members.length >= 10) break
+      const member = new TeamMember({
+        spec,
+        taskPrompt: '', // assigned later
+        subSessionDeps: opts.subSessionDeps,
+        resolveModel: opts.resolveModel,
+        onEvent: (e) => this.recordEvent(e),
+        onComplete: (memberId, result) => this.handleMemberComplete(memberId, result),
+        onFail: (memberId, error) => this.handleMemberFail(memberId, error),
+      })
+      this.members.push(member)
+      this.memberById.set(member.id, member)
+      this.recordEvent({ type: 'member_created', memberId: member.id, role: member.role, timestamp: Date.now() })
     }
   }
 
@@ -738,14 +738,19 @@ export class TeamRuntime {
       } catch { /* tolerate */ }
     }
 
-    const memberSpec = { role: member.role, agentType: member.agentType, modelId: member.modelId }
+    const memberSpec = {
+      role: member.role,
+      responsibility: member.responsibility,
+      agentType: member.agentType,
+      modelId: member.modelId,
+    }
     const taskPrompt = buildWorkerTaskPrompt({
       task,
       isReopened,
       contractsBlock: contractBlocks,
       issueBlock,
       upstream,
-      member: { role: member.role, agentType: member.agentType },
+      member: { role: member.role, responsibility: member.responsibility, agentType: member.agentType },
       objective: this.objective,
       kickHint,
     })
@@ -863,7 +868,7 @@ export class TeamRuntime {
     }
   }
 
-  private recycleMember(memberId: string, originalSpec: { role: string; agentType: string; modelId?: string }): void {
+  private recycleMember(memberId: string, originalSpec: { role: string; responsibility?: string; agentType: string; modelId?: string }): void {
     if (this.completed) return
     // If no remaining work, don't recycle — the team is about to complete
     // and we'd just leave a ghost queued member behind.
@@ -879,7 +884,12 @@ export class TeamRuntime {
       return
     }
     const freshMember = new TeamMember({
-      spec: { role: originalSpec.role, agentType: originalSpec.agentType, modelId: originalSpec.modelId },
+      spec: {
+        role: originalSpec.role,
+        responsibility: originalSpec.responsibility,
+        agentType: originalSpec.agentType,
+        modelId: originalSpec.modelId,
+      },
       taskPrompt: '',
       id: memberId,
       subSessionDeps: this.opts.subSessionDeps,
@@ -1088,7 +1098,7 @@ interface WorkerTaskPromptArgs {
   contractsBlock: string[]      // each element is a "--- contracts/X.md ---\n…\n--- end ---" block
   issueBlock: string            // pre-rendered "⚠️ ISSUES TO FIX" section, or empty string
   upstream: Array<{ filePath: string; summary: string }>
-  member: { role: string; agentType: string }
+  member: { role: string; responsibility?: string; agentType: string }
   objective: string
   kickHint?: string             // PM intervention message when restarting a stuck worker
 }
@@ -1101,7 +1111,20 @@ function buildWorkerTaskPrompt(args: WorkerTaskPromptArgs): string {
   sections.push(WORKER_PROTOCOL)
 
   sections.push(`# Team objective\n\n${objective}`)
-  sections.push(`# You are\n\n- Role: ${member.role}\n- agentType: ${member.agentType}`)
+  const youAreLines = [
+    `- Role: ${member.role}`,
+    member.responsibility ? `- Responsibility: ${member.responsibility}` : null,
+    `- agentType: ${member.agentType}`,
+  ].filter(Boolean)
+  sections.push(
+    `# You are\n\n${youAreLines.join('\n')}` +
+    (member.responsibility
+      ? `\n\nThe responsibility above is YOUR specific lane on this team. Stay in it. ` +
+        `Your peers are working on different angles — do not duplicate their work, do not drift into theirs. ` +
+        `If your task description seems to require stepping outside your responsibility, team_report to the PM ` +
+        `with intent="question" before doing so.`
+      : '')
+  )
 
   // PM intervention takes precedence over everything else: a stuck worker is being restarted
   // on the same task with a hint. Surface this first so it's the dominant signal.
