@@ -28,6 +28,8 @@ export interface SkillRouterDecision {
 export interface SkillRouterDeps {
   provider: ModelProvider
   modelConfig: ModelConfig
+  /** Optional sink for the one LLM turn this router makes. */
+  onUsage?: (usage: { inputTokens: number; outputTokens: number; cacheCreationInputTokens?: number; cacheReadInputTokens?: number }) => void
 }
 
 const ROUTER_SYSTEM = `You are a skill router for a multi-agent coding assistant.
@@ -101,6 +103,7 @@ export async function routeSkills(
     const stream = deps.provider.stream(messages, [], config, signal)
     for await (const chunk of stream) {
       if (chunk.type === 'text_delta' && chunk.text) responseText += chunk.text
+      else if (chunk.type === 'message_end' && chunk.usage) deps.onUsage?.(chunk.usage)
     }
     return parseRouterOutput(responseText, valid)
   } catch {

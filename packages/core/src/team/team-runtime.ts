@@ -52,6 +52,8 @@ export interface TeamRuntimeOptions {
   // description (execution methodology). Workers cannot invoke skills —
   // forbidden by `filterToolsForAgent` — so this is a one-way text channel.
   skillInjection?: { pmContent?: string; workerContent?: string }
+  /** Sink for PM's own LLM consumption — bubble up to host session usage. */
+  onUsage?: (usage: { inputTokens: number; outputTokens: number; cacheCreationInputTokens?: number; cacheReadInputTokens?: number }) => void
   onEvent?: (event: TeamEvent) => void
   onComplete?: (summary: string) => void
   onFail?: (error: string) => void
@@ -120,6 +122,7 @@ export class TeamRuntime {
         recentEvents: (n) => this.events.tail(n),
         workspace: () => this.workspace,
         skillContent: opts.skillInjection?.pmContent,
+        onUsage: opts.onUsage,
       })
       this.manager = aiManager
     }

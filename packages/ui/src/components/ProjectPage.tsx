@@ -187,9 +187,21 @@ export function ProjectPage() {
             ) : (
               <div className="flex flex-col gap-2 text-[13px]">
                 <div className="flex justify-between">
-                  <span className="text-[var(--muted)]">Tokens</span>
+                  <span className="text-[var(--muted)]">Main session</span>
                   <span>{formatTokens(usage.totalTokens)}</span>
                 </div>
+                {(usage.subAgentTotalTokens ?? 0) > 0 && (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-[var(--muted)]" title="Sub-agents and team workers/PM. Counted toward billing, not toward context.">Sub-agents / team</span>
+                      <span>{formatTokens(usage.subAgentTotalTokens ?? 0)}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-[var(--border)] pt-2">
+                      <span>Grand total</span>
+                      <span className="font-semibold">{formatTokens(usage.grandTotalTokens ?? usage.totalTokens)}</span>
+                    </div>
+                  </>
+                )}
                 <div className="flex justify-between">
                   <span className="text-[var(--muted)]">Cache hit</span>
                   <span>{Math.round(usage.cacheHitRate)}%</span>

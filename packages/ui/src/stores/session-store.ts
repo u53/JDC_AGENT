@@ -28,7 +28,25 @@ export interface SessionStreamState {
   compacting?: boolean
   error?: { message: string; category: string; retrying: boolean; retryAttempt?: number; retryIn?: number }
   finished?: boolean
-  usage?: { inputTokens: number; outputTokens: number; cacheCreationTokens: number; cacheReadTokens: number; totalTokens: number; cacheHitRate: number; contextUsedPercent: number; turnCount: number }
+  usage?: {
+    inputTokens: number
+    outputTokens: number
+    cacheCreationTokens: number
+    cacheReadTokens: number
+    totalTokens: number
+    cacheHitRate: number
+    contextUsedPercent: number
+    turnCount: number
+    subAgentInputTokens?: number
+    subAgentOutputTokens?: number
+    subAgentCacheCreationTokens?: number
+    subAgentCacheReadTokens?: number
+    subAgentTotalTokens?: number
+    subAgentTurnCount?: number
+    grandInputTokens?: number
+    grandOutputTokens?: number
+    grandTotalTokens?: number
+  }
 }
 
 const EMPTY_STREAM_STATE: SessionStreamState = {

@@ -36,6 +36,11 @@ export interface TeamManagerAIOptions extends TeamManagerOptions {
    * JSON action protocol — the skill only changes HOW PM reasons.
    */
   skillContent?: string
+  /**
+   * Bubble PM's own LLM consumption (manager / proactive / staffing follow-up
+   * cycles) up to the host session so it can aggregate into sub-agent usage.
+   */
+  onUsage?: (usage: { inputTokens: number; outputTokens: number; cacheCreationInputTokens?: number; cacheReadInputTokens?: number }) => void
 }
 
 // =============================================================================
@@ -1035,6 +1040,9 @@ export class TeamManagerAI extends TeamManager {
       const stream = this.provider.stream(this.conversationHistory, [], config, undefined)
       for await (const chunk of stream) {
         if (chunk.type === 'text_delta') responseText += chunk.text || ''
+        else if (chunk.type === 'message_end' && chunk.usage) {
+          ;(this.opts as TeamManagerAIOptions).onUsage?.(chunk.usage)
+        }
       }
 
       // Persist a SHORT summary of what PM did, not the full response — keeps conversation focused
@@ -1074,6 +1082,9 @@ export class TeamManagerAI extends TeamManager {
       const stream = this.provider.stream(messages, [], config, undefined)
       for await (const chunk of stream) {
         if (chunk.type === 'text_delta') responseText += chunk.text || ''
+        else if (chunk.type === 'message_end' && chunk.usage) {
+          ;(this.opts as TeamManagerAIOptions).onUsage?.(chunk.usage)
+        }
       }
       return this.parseAIResponse(responseText).filter(a => a.type !== 'reply')
     } catch {
@@ -1106,6 +1117,9 @@ export class TeamManagerAI extends TeamManager {
       const stream = this.provider.stream(messages, [], config, undefined)
       for await (const chunk of stream) {
         if (chunk.type === 'text_delta') responseText += chunk.text || ''
+        else if (chunk.type === 'message_end' && chunk.usage) {
+          ;(this.opts as TeamManagerAIOptions).onUsage?.(chunk.usage)
+        }
       }
       return this.parseAIResponse(responseText).filter(a => a.type === 'assign_task' || a.type === 'cancel_task')
     } catch {

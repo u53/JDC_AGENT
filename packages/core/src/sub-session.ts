@@ -27,6 +27,13 @@ export interface SubSessionOptions {
   onAgentProgress?: (event: { toolName: string; toolStatus: 'start' | 'complete' | 'error'; toolInput?: Record<string, unknown>; toolResult?: { content: string; isError?: boolean }; toolCount: number }) => void
   onAgentText?: (text: string) => void
   /**
+   * Fired once per LLM turn when usage information is available. The host
+   * session aggregates this into its sub-agent / team usage bucket so users
+   * can see total token spend even though sub-sessions run in their own
+   * context windows.
+   */
+  onUsage?: (usage: { inputTokens: number; outputTokens: number; cacheCreationInputTokens?: number; cacheReadInputTokens?: number }) => void
+  /**
    * Lightweight heartbeat fired during streaming (per text/thinking delta).
    * Use ONLY to refresh wall-clock activity timestamps — do NOT push events
    * or render anything from this. Caller should throttle internally.
@@ -64,6 +71,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
     onAgentProgress,
     onAgentText,
     onStreamHeartbeat,
+    onUsage,
   } = opts
 
   const agentDef = opts.agentType ? getAgentType(opts.agentType) : undefined
@@ -170,6 +178,8 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
       } else if (chunk.type === 'tool_use_end' && currentToolUse) {
         toolUses.push(currentToolUse)
         currentToolUse = null
+      } else if (chunk.type === 'message_end' && chunk.usage) {
+        onUsage?.(chunk.usage)
       }
     }
 

@@ -338,7 +338,16 @@ function SessionSection({ sessionId }: { sessionId: string | null }) {
   )
 }
 
-function UsageSection({ usage }: { usage?: { totalTokens: number; cacheHitRate: number; contextUsedPercent: number } }) {
+function UsageSection({ usage }: {
+  usage?: {
+    totalTokens: number
+    cacheHitRate: number
+    contextUsedPercent: number
+    subAgentTotalTokens?: number
+    subAgentTurnCount?: number
+    grandTotalTokens?: number
+  }
+}) {
   if (!usage) {
     return (
       <div>
@@ -349,15 +358,33 @@ function UsageSection({ usage }: { usage?: { totalTokens: number; cacheHitRate: 
   }
 
   const contextColor = usage.contextUsedPercent > 80 ? 'var(--bad)' : 'var(--accent)'
+  const subTotal = usage.subAgentTotalTokens ?? 0
+  const grandTotal = usage.grandTotalTokens ?? usage.totalTokens
+  const hasSub = subTotal > 0
 
   return (
     <div className="space-y-3">
       <SectionHeader>Usage</SectionHeader>
       <div className="space-y-2 text-[12px]">
         <div className="flex justify-between">
-          <span className="text-[var(--muted)]">Tokens</span>
+          <span className="text-[var(--muted)]">Main session</span>
           <span className="text-[var(--text)] font-mono">{formatTokens(usage.totalTokens)}</span>
         </div>
+        {hasSub && (
+          <div className="flex justify-between">
+            <span className="text-[var(--muted)]" title="Sub-agents (Agent tool) and team workers/PM/skill router. Counted toward total billing but isolated from main context window.">Sub-agents / team</span>
+            <span className="text-[var(--text)] font-mono">
+              {formatTokens(subTotal)}
+              {usage.subAgentTurnCount ? <span className="text-[var(--muted)] ml-1">({usage.subAgentTurnCount} turns)</span> : null}
+            </span>
+          </div>
+        )}
+        {hasSub && (
+          <div className="flex justify-between border-t border-[var(--border)] pt-1.5">
+            <span className="text-[var(--text)]">Grand total</span>
+            <span className="text-[var(--text)] font-mono font-semibold">{formatTokens(grandTotal)}</span>
+          </div>
+        )}
         <div className="flex justify-between">
           <span className="text-[var(--muted)]">Cache hit</span>
           <span className="text-[var(--text)] font-mono">{Math.round(usage.cacheHitRate)}%</span>

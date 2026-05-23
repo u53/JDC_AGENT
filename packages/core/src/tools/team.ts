@@ -23,6 +23,8 @@ export interface TeamToolDeps {
    */
   getSkillLoader?: () => SkillLoader | undefined
   onTeamEvent?: (teamId: string, event: TeamEvent) => void
+  /** Bubble all team-side LLM consumption (PM + workers + skill router) up to host. */
+  onUsage?: (usage: { inputTokens: number; outputTokens: number; cacheCreationInputTokens?: number; cacheReadInputTokens?: number }) => void
 }
 
 export function createTeamTool(deps: TeamToolDeps): ToolHandler {
@@ -172,6 +174,7 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
           const decision = await routeSkills(objective, skills, {
             provider: deps.provider,
             modelConfig: deps.modelConfig,
+            onUsage: deps.onUsage,
           })
           if (decision.pmSkill) {
             const skill = skillLoader.get(decision.pmSkill)
@@ -197,6 +200,7 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
         resolveModel: deps.resolveModel,
         aiPM: deps.provider && deps.modelConfig ? { provider: deps.provider, modelConfig: deps.modelConfig } : undefined,
         skillInjection: { pmContent: pmSkillContent, workerContent: workerSkillContent },
+        onUsage: deps.onUsage,
         onEvent: (e) => {
           deps.backgroundTasks.emitEvent(bgTask.id, e)
           deps.onTeamEvent?.(bgTask.id, e)

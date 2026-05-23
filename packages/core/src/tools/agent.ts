@@ -20,6 +20,8 @@ export interface AgentToolDeps {
   agentAbortControllers?: Map<string, AbortController>
   backgroundTasks?: import('../background-tasks.js').BackgroundTaskManager
   registerBackgroundTrigger?: (toolUseId: string, resolve: () => void) => void
+  /** Bubble sub-agent token usage up to the host session for aggregation. */
+  onUsage?: (usage: { inputTokens: number; outputTokens: number; cacheCreationInputTokens?: number; cacheReadInputTokens?: number }) => void
 }
 
 export function createAgentTool(deps: AgentToolDeps): ToolHandler {
@@ -102,6 +104,7 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
             onPermissionRequest: deps.onPermissionRequest,
             onAgentProgress: (event) => deps.onAgentProgress?.(toolUseId, event),
             onAgentText: (text) => deps.onAgentText?.(toolUseId, text),
+            onUsage: (u) => deps.onUsage?.(u),
           })
         }).then(result => {
           deps.onAgentComplete?.(toolUseId, result)
@@ -140,6 +143,7 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
           onPermissionRequest: deps.onPermissionRequest,
           onAgentProgress: (event) => deps.onAgentProgress?.(toolUseId, event),
           onAgentText: (text) => deps.onAgentText?.(toolUseId, text),
+          onUsage: (u) => deps.onUsage?.(u),
         })
 
         const raceResult = await Promise.race([

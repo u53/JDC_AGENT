@@ -164,11 +164,16 @@ export class Session {
     this.toolRegistry.register(createTaskOutputTool(this.backgroundTasks))
     this.toolRegistry.register(monitorTool)
     // Team Mode tools
+    const onSubAgentUsage = (u: { inputTokens: number; outputTokens: number; cacheCreationInputTokens?: number; cacheReadInputTokens?: number }) => {
+      this.usageTracker.addSubAgentTurn(u)
+      this.history.saveUsage(this.id, this.usageTracker.serialize())
+    }
     const buildTeamSubSessionDeps = () => ({
       provider: this.provider,
       toolRegistry: this.toolRegistry,
       modelConfig: this.config.modelConfig,
       cwd: this.config.cwd,
+      onUsage: onSubAgentUsage,
     })
     this.toolRegistry.register(createTeamTool({
       teamRegistry: this.teamRegistry,
@@ -178,6 +183,7 @@ export class Session {
       modelConfig: this.config.modelConfig,
       resolveModel: (modelId: string) => this.resolveModel?.(modelId) ?? null,
       getSkillLoader: () => this.skillLoader,
+      onUsage: onSubAgentUsage,
       onTeamEvent: (teamId, event) => {
         // Only notify the main session on terminal events (team_completed / team_failed)
         // and explicit PM replies. Intermediate events (task_completed, manager_decision,
@@ -300,6 +306,7 @@ export class Session {
       registerBackgroundTrigger: (toolUseId: string, resolve: () => void) => {
         this.backgroundTriggers.set(toolUseId, resolve)
       },
+      onUsage: onSubAgentUsage,
     }))
   }
 
