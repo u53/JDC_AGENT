@@ -108,6 +108,8 @@ export interface TeamTask {
   createdAt: number
   updatedAt: number
   result?: TeamTaskResult
+  lastError?: string
+  failureCount?: number
 }
 
 export interface TeamSharedContext {
@@ -156,6 +158,7 @@ export type TeamEvent =
   | { type: 'task_assigned'; taskId: string; memberId: string; timestamp: number }
   | { type: 'task_completed'; taskId: string; memberId: string; timestamp: number }
   | { type: 'task_cancelled'; taskId: string; reason: string; timestamp: number }
+  | { type: 'task_failed'; taskId: string; error: string; failureCount: number; timestamp: number }
   | { type: 'member_progress'; memberId: string; text: string; timestamp: number }
   | { type: 'tool_start'; memberId: string; toolName: string; timestamp: number }
   | { type: 'tool_complete'; memberId: string; toolName: string; timestamp: number }

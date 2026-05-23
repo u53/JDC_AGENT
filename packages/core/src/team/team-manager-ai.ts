@@ -524,15 +524,25 @@ Read task done, T002 unblocked. Assign.
 
 const FRAME_TASK_FAILED = `# This invocation: TASK JUST FAILED
 
-A worker hit an unrecoverable error or timeout on task T<id>. result.md may not exist.
+A worker hit an unrecoverable error or timeout. The state dump above includes the failed task's
+\`lastError\` and \`failures\` count — READ THEM FIRST before deciding.
 
 ## Decision steps
-1. Was this a transient infra error? (LLM error, sandbox issue) → reopen_task with same memberId.
-2. Was this a logic / capability mismatch? (worker can't do it) → add_member with right agentType, OR re-add_task with clearer description, then assign to the new fit.
-3. Is this task no longer worth doing? (objective shifted, deps cancelled) → cancel_task.
-4. Is the failure cascading? (downstream tasks now stuck) → consider cancelling them too, or replacing.
+1. Read the lastError. Classify:
+   - Transient infra (LLM 5xx, sandbox glitch, "Worker aborted but sub-session did not exit") → reopen_task with same memberId IF failures ≤ 1.
+   - Idle / no-progress timeout ("Task idle for Ns") → the worker likely hung. reopen_task with a DIFFERENT memberId, or add_member with a different agentType.
+   - Logic / capability mismatch (worker said it can't do X, missing tool, scope mismatch) → DO NOT retry the same way. Either re-add_task with clearer description and assign to a fresh worker, or cancel_task if the task is no longer worth doing.
+   - Unknown / no error captured → reopen_task once, but only ONCE.
+2. Check failures count:
+   - failures ≥ 2 on the SAME task → STOP retrying blindly. Either rewrite the task description, swap to a different agentType, or cancel and replace. Mention the prior failures in the new task's description so the next worker knows what went wrong.
+   - failures ≥ 3 → cancel_task and either drop the goal or escalate_to_user.
+3. If failure is cascading (downstream deps now stuck) → consider cancelling them too, or replacing.
+4. ALWAYS include a brief reply / message field explaining what you decided and why. Silent retries are forbidden.
 
-DO NOT silently ignore failures. Either retry, replace, or cancel — and explain in the message field.
+## Anti-patterns
+- "瞬时错误,重试" without reading lastError. The lastError is right there in the dump — quote it.
+- Reopening a task that already has failures ≥ 2 with the same worker and same description.
+- Cancelling a task whose error is clearly transient.
 `
 
 const FRAME_TASK_ADDED = `# This invocation: NEW TASK ADDED TO THE PLAN
@@ -592,6 +602,7 @@ export class TeamManagerAI extends TeamManager {
   private aiProcessing = false
   private lastProactiveAt = 0
   private static PROACTIVE_THROTTLE_MS = 8000
+  private static URGENT_PROACTIVE_THROTTLE_MS = 2000
   private static PENDING_ASSIGNMENT_TIMEOUT_MS = 5000
   /**
    * Members that just changed (added/affected by staffing) and are awaiting
@@ -772,8 +783,14 @@ export class TeamManagerAI extends TeamManager {
     }
 
     const now = Date.now()
-    // team_started bypasses throttle (fires once per team)
-    if (reason.kind !== 'team_started' && now - this.lastProactiveAt < TeamManagerAI.PROACTIVE_THROTTLE_MS) {
+    // team_started bypasses throttle (fires once per team).
+    // task_failed / task_added are urgent: a worker is already idle waiting for orders,
+    // every second of throttle is wasted capacity. Use a shorter window for these.
+    const isUrgent = reason.kind === 'task_failed' || reason.kind === 'task_added'
+    const throttleMs = isUrgent
+      ? TeamManagerAI.URGENT_PROACTIVE_THROTTLE_MS
+      : TeamManagerAI.PROACTIVE_THROTTLE_MS
+    if (reason.kind !== 'team_started' && now - this.lastProactiveAt < throttleMs) {
       // Throttled. Queue and schedule a drain when the throttle window expires,
       // so we don't lose the trigger silently.
       this.queuedProactive.set(key, reason)
@@ -823,8 +840,17 @@ export class TeamManagerAI extends TeamManager {
 
   private scheduleQueuedProactiveDrain(): void {
     if (this.queuedProactiveTimer) return
+    // Use the minimum throttle that any queued reason needs. If an urgent
+    // (task_failed / task_added) is waiting, drain in 2s rather than 8s.
+    let throttleMs = TeamManagerAI.PROACTIVE_THROTTLE_MS
+    for (const r of this.queuedProactive.values()) {
+      if (r.kind === 'task_failed' || r.kind === 'task_added') {
+        throttleMs = TeamManagerAI.URGENT_PROACTIVE_THROTTLE_MS
+        break
+      }
+    }
     const wait = Math.max(
-      TeamManagerAI.PROACTIVE_THROTTLE_MS - (Date.now() - this.lastProactiveAt) + 50,
+      throttleMs - (Date.now() - this.lastProactiveAt) + 50,
       100,
     )
     this.queuedProactiveTimer = setTimeout(() => {
@@ -877,8 +903,13 @@ export class TeamManagerAI extends TeamManager {
         const desc = t.description.length > 120 ? t.description.slice(0, 120) + '…' : t.description
         const deps = t.dependsOn && t.dependsOn.length > 0 ? ` deps=${JSON.stringify(t.dependsOn)}` : ''
         const assignee = t.assigneeId ? ` assignee=${t.assigneeId}` : ''
-        lines.push(`- ${t.id} | "${t.title}" | status=${t.status} | priority=${t.priority}${deps}${assignee}`)
+        const fails = t.failureCount && t.failureCount > 0 ? ` failures=${t.failureCount}` : ''
+        lines.push(`- ${t.id} | "${t.title}" | status=${t.status} | priority=${t.priority}${deps}${assignee}${fails}`)
         lines.push(`    desc: ${desc}`)
+        if ((t.status === 'failed' || t.status === 'reopened') && t.lastError) {
+          const err = t.lastError.length > 240 ? t.lastError.slice(0, 240) + '…' : t.lastError
+          lines.push(`    lastError: ${err}`)
+        }
       }
     }
     lines.push('')
@@ -936,6 +967,11 @@ export class TeamManagerAI extends TeamManager {
       case 'task_assigned': return `[${t}] task ${anyE.taskId} → ${anyE.memberId}`
       case 'task_completed': return `[${t}] task ${anyE.taskId} done by ${anyE.memberId}`
       case 'task_cancelled': return `[${t}] task ${anyE.taskId} cancelled: ${anyE.reason}`
+      case 'task_failed': {
+        const err = (anyE.error ?? '').toString()
+        const errSnippet = err.length > 160 ? err.slice(0, 160) + '…' : err
+        return `[${t}] task ${anyE.taskId} FAILED (#${anyE.failureCount}): ${errSnippet}`
+      }
       case 'message_sent': return `[${t}] msg ${anyE.from}→${anyE.to} (${anyE.intent})`
       case 'team_completed': return `[${t}] team_completed`
       case 'team_failed': return `[${t}] team_failed: ${anyE.error}`

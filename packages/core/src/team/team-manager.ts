@@ -166,6 +166,15 @@ export class TeamManager {
     if (!task) return
     task.status = 'failed'
     task.updatedAt = Date.now()
+    task.lastError = error
+    task.failureCount = (task.failureCount ?? 0) + 1
+    this.opts.onEvent?.({
+      type: 'task_failed',
+      taskId,
+      error,
+      failureCount: task.failureCount,
+      timestamp: Date.now(),
+    })
   }
 
   addTask(opts: { title: string; description: string; priority?: Priority; riskLevel?: RiskLevel; dependsOn?: string[] }): string {
