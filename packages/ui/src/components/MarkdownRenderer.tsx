@@ -46,17 +46,27 @@ export function MarkdownRenderer({ content }: Props) {
       components={{
         code(props: ComponentPropsWithoutRef<'code'>) {
           const { className, children, ...rest } = props
-          const isBlock = className?.startsWith('language-') || (typeof children === 'string' && children.includes('\n'))
+          const text = typeof children === 'string' ? children : String(children ?? '')
+          const trimmed = text.trim()
+          const looksStructured = /^[{\[]/.test(trimmed) && /[}\]]\s*$/.test(trimmed)
+          const isBlock =
+            className?.startsWith('language-') ||
+            text.includes('\n') ||
+            text.length > 120 ||
+            (looksStructured && text.length > 60)
 
           if (isBlock) {
-            const text = String(children).replace(/\n$/, '')
-            return <CodeBlock className={className}>{text}</CodeBlock>
+            return <CodeBlock className={className}>{text.replace(/\n$/, '')}</CodeBlock>
           }
 
           return (
             <code
               className="bg-[var(--surface-2)] text-[var(--text)] px-1.5 py-0.5 text-[0.85em] border border-[var(--border)] rounded-[4px]"
-              style={{ fontFamily: 'var(--font-mono)' }}
+              style={{
+                fontFamily: 'var(--font-mono)',
+                boxDecorationBreak: 'clone',
+                WebkitBoxDecorationBreak: 'clone',
+              }}
               {...rest}
             >
               {children}
