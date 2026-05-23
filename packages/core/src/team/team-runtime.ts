@@ -46,6 +46,12 @@ export interface TeamRuntimeOptions {
   archivePath?: string
   aiPM?: { provider: ModelProvider; modelConfig: ModelConfig }
   resolveModel?: (modelId: string) => { provider: ModelProvider; modelConfig: ModelConfig } | null
+  // Skill content selected by SkillRouter at team start. Both fields are
+  // OPTIONAL plain text. The PM content is appended to PM's system prompt
+  // (dialogue methodology); the worker content is appended to each task
+  // description (execution methodology). Workers cannot invoke skills —
+  // forbidden by `filterToolsForAgent` — so this is a one-way text channel.
+  skillInjection?: { pmContent?: string; workerContent?: string }
   onEvent?: (event: TeamEvent) => void
   onComplete?: (summary: string) => void
   onFail?: (error: string) => void
@@ -113,6 +119,7 @@ export class TeamRuntime {
         onActionsReady: () => this.scheduleTick(),
         recentEvents: (n) => this.events.tail(n),
         workspace: () => this.workspace,
+        skillContent: opts.skillInjection?.pmContent,
       })
       this.manager = aiManager
     }
@@ -594,6 +601,20 @@ export class TeamRuntime {
             }
           }
           break
+        case 'escalate_to_user':
+          // Explicit user escalation. PM uses this when it genuinely cannot make
+          // the call alone (real preference question, ambiguous spec, destructive
+          // action that needs sign-off). Bypasses the _proactive suppression on
+          // 'reply' — the only path that reaches the human user from a proactive
+          // cycle. Use sparingly: every escalation interrupts the user.
+          if (action.message) {
+            this.recordEvent({
+              type: 'manager_reply',
+              text: `[ESCALATION] ${action.message}`,
+              timestamp: Date.now(),
+            })
+          }
+          break
         case 'add_member':
           if (action.spec) {
             this.addMember(action.spec, action.message)
@@ -768,6 +789,7 @@ export class TeamRuntime {
       member: { role: member.role, responsibility: member.responsibility, agentType: member.agentType },
       objective: this.objective,
       kickHint,
+      workerSkillContent: this.opts.skillInjection?.workerContent,
     })
 
     // Build new member instance for this task, preserving ID and mailbox
@@ -1149,10 +1171,12 @@ interface WorkerTaskPromptArgs {
   member: { role: string; responsibility?: string; agentType: string }
   objective: string
   kickHint?: string             // PM intervention message when restarting a stuck worker
+  /** Execution methodology selected by SkillRouter, plain text. */
+  workerSkillContent?: string
 }
 
 function buildWorkerTaskPrompt(args: WorkerTaskPromptArgs): string {
-  const { task, isReopened, contractsBlock, issueBlock, upstream, member, objective, kickHint } = args
+  const { task, isReopened, contractsBlock, issueBlock, upstream, member, objective, kickHint, workerSkillContent } = args
 
   const sections: string[] = []
   sections.push(WORKER_IDENTITY)
@@ -1222,6 +1246,15 @@ function buildWorkerTaskPrompt(args: WorkerTaskPromptArgs): string {
   // unless we already rendered it at top
   if (!isReopened && issueBlock) {
     sections.push(issueBlock.trim())
+  }
+
+  if (workerSkillContent) {
+    sections.push(
+      `# 🧭 Execution methodology (chosen by skill router)\n\n` +
+      `Apply the methodology below to HOW you do the work. It does not change WHAT to deliver — ` +
+      `the task above is still the source of truth. Treat this as guidance from a senior teammate.\n\n` +
+      `<methodology>\n${workerSkillContent}\n</methodology>`
+    )
   }
 
   sections.push(

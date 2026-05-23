@@ -133,6 +133,7 @@ export function useSession() {
 
     const unsubError = ipc.query.onError(({ sessionId, error }) => {
       store.clearSessionStreamState(sessionId)
+      store.updateSessionState(sessionId, { aborting: false })
       store.setError(sessionId, { message: error, category: 'unknown', retrying: false })
     })
 
@@ -153,6 +154,17 @@ export function useSession() {
       store.updateUsage(sessionId, usage)
     }) || (() => {})
 
+    // The main process will spin up a new runLoop whenever a background task
+    // (agent/team/bash) drops a notification while we are idle. Until that
+    // runLoop actually starts streaming, isStreaming is false — meaning the
+    // Composer hides its Stop button and the user cannot interrupt the
+    // resumed turn. Flip isStreaming on as soon as the main process tells us
+    // a notification is being drained.
+    const unsubBgNotification = ipc.background.onNotification(({ sessionId }) => {
+      useSessionStore.getState().markStreaming(sessionId, true)
+      useSessionStore.getState().updateSessionState(sessionId, { aborting: false })
+    })
+
     return () => {
       unsubStream()
       unsubTool()
@@ -162,6 +174,7 @@ export function useSession() {
       unsubRetrying()
       unsubMessagesUpdated()
       unsubUsage()
+      unsubBgNotification()
     }
   }, [])
 
@@ -193,7 +206,10 @@ export function useSession() {
   const abort = useCallback(() => {
     if (!activeSessionId) return
     ipc.query.abort(activeSessionId)
-    useSessionStore.getState().clearSessionStreamState(activeSessionId)
+    // Don't clear streaming state here — let query:finished / query:error fire
+    // when the main process actually exits the runloop. We just flip an
+    // 'aborting' flag so the Stop button can show "Stopping…" feedback.
+    useSessionStore.getState().updateSessionState(activeSessionId, { aborting: true })
   }, [activeSessionId])
 
   return {
@@ -201,6 +217,7 @@ export function useSession() {
     streamingText: currentState.streamingText,
     thinkingText: currentState.thinkingText,
     isStreaming: currentState.isStreaming,
+    aborting: currentState.aborting === true,
     isThinking: currentState.isThinking,
     toolEvents: currentState.toolEvents,
     error: currentState.error,

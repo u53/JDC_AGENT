@@ -87,7 +87,7 @@ interface ChatViewProps {
 }
 
 export function ChatView({ onOpenMcp }: ChatViewProps) {
-  const { messages, streamingText, thinkingText, isStreaming, isThinking, toolEvents, sendMessage, abort, error, retry, dismissError } = useSession()
+  const { messages, streamingText, thinkingText, isStreaming, aborting, isThinking, toolEvents, sendMessage, abort, error, retry, dismissError } = useSession()
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const getActiveModel = useModelStore((s) => s.getActiveModel)
   const groups = useModelStore((s) => s.groups)
@@ -388,6 +388,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
           onSend={sendMessage}
           onAbort={abort}
           isStreaming={isStreaming}
+          aborting={aborting}
           onSlashCommand={handleSlashCommand}
           permissionMode={permissionMode}
           onPermissionChange={handlePermissionChange}

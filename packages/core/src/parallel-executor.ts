@@ -51,6 +51,37 @@ class Semaphore {
 export class ParallelExecutor {
   constructor(private toolRunner: ToolRunner) {}
 
+  /**
+   * Execute a single tool, but abandon the promise if the signal aborts
+   * before the tool returns. The underlying tool keeps running (so it can
+   * shut down its own resources cleanly — e.g. bash kills its child) but
+   * the runloop is unblocked immediately so the user's Stop click is
+   * honored without waiting for slow tools (web_fetch, agent, etc.) to
+   * finish naturally.
+   */
+  private async raceWithAbort(
+    name: string,
+    id: string,
+    input: Record<string, unknown>,
+    onEvent: (event: ToolExecutionEvent) => void,
+    signal: AbortSignal,
+  ): Promise<{ tool_use_id: string; content: string; is_error: boolean; aborted?: boolean }> {
+    const tool = this.toolRunner.execute(name, id, input, onEvent, signal).then(r => ({
+      tool_use_id: id,
+      content: r.content,
+      is_error: r.isError || false,
+    }))
+    if (signal.aborted) {
+      return { tool_use_id: id, content: 'Cancelled by user (abort)', is_error: true, aborted: true }
+    }
+    const aborted = new Promise<{ tool_use_id: string; content: string; is_error: boolean; aborted: true }>((resolve) => {
+      signal.addEventListener('abort', () => {
+        resolve({ tool_use_id: id, content: 'Cancelled by user (abort)', is_error: true, aborted: true })
+      }, { once: true })
+    })
+    return Promise.race([tool, aborted])
+  }
+
   async executeBatch(
     blocks: ToolUseBlock[],
     onEvent: (event: ToolExecutionEvent) => void,
@@ -91,11 +122,11 @@ export class ParallelExecutor {
           const toolSignal = LONG_RUNNING_TOOLS.has(blocks[idx].name)
             ? combinedSignal
             : AbortSignal.any([combinedSignal, AbortSignal.timeout(120_000)])
-          const result = await this.toolRunner.execute(
+          const raced = await this.raceWithAbort(
             blocks[idx].name, blocks[idx].id, blocks[idx].input, onEvent, toolSignal
           )
-          results[idx] = { tool_use_id: blocks[idx].id, content: result.content, is_error: result.isError || false }
-          if (result.isError) {
+          results[idx] = { tool_use_id: raced.tool_use_id, content: raced.content, is_error: raced.is_error }
+          if (raced.is_error && !raced.aborted) {
             batchAbort.abort()
           }
         } finally {
@@ -114,11 +145,11 @@ export class ParallelExecutor {
       const toolSignal = LONG_RUNNING_TOOLS.has(blocks[idx].name)
         ? combinedSignal
         : AbortSignal.any([combinedSignal, AbortSignal.timeout(120_000)])
-      const result = await this.toolRunner.execute(
+      const raced = await this.raceWithAbort(
         blocks[idx].name, blocks[idx].id, blocks[idx].input, onEvent, toolSignal
       )
-      results[idx] = { tool_use_id: blocks[idx].id, content: result.content, is_error: result.isError || false }
-      if (result.isError) {
+      results[idx] = { tool_use_id: raced.tool_use_id, content: raced.content, is_error: raced.is_error }
+      if (raced.is_error && !raced.aborted) {
         batchAbort.abort()
       }
     }

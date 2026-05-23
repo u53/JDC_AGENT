@@ -177,6 +177,7 @@ export class Session {
       provider: this.provider,
       modelConfig: this.config.modelConfig,
       resolveModel: (modelId: string) => this.resolveModel?.(modelId) ?? null,
+      getSkillLoader: () => this.skillLoader,
       onTeamEvent: (teamId, event) => {
         // Only notify the main session on terminal events (team_completed / team_failed)
         // and explicit PM replies. Intermediate events (task_completed, manager_decision,

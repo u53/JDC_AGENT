@@ -195,13 +195,27 @@ export function getAgentType(name: string): AgentTypeDefinition | undefined {
 
 export function filterToolsForAgent(agentType: string, allTools: ToolDefinition[]): ToolDefinition[] {
   const typeDef = getAgentType(agentType)
-  if (!typeDef) return allTools.filter(t => t.name !== 'Agent')
+  // Tools that must NEVER be available to a sub-agent / team worker, regardless
+  // of agentType. These are dialogue/process tools that only make sense in the
+  // main session — letting a worker invoke them would either pop a dialog at
+  // the human user (out-of-band) or recurse into another agent loop.
+  // The Skill tool is here too: skill content is injected into worker prompts
+  // as text by the team runtime; workers must not bootstrap fresh skills mid-task.
+  const FORBIDDEN_FOR_SUBAGENT = new Set([
+    'Agent',
+    'Skill',
+    'ask_user',
+    'AskUserQuestion',
+    'EnterPlanMode',
+    'ExitPlanMode',
+  ])
+  if (!typeDef) return allTools.filter(t => !FORBIDDEN_FOR_SUBAGENT.has(t.name))
 
   if (typeDef.allowedTools.includes('*')) {
-    return allTools.filter(t => t.name !== 'Agent')
+    return allTools.filter(t => !FORBIDDEN_FOR_SUBAGENT.has(t.name))
   }
 
-  return allTools.filter(t => typeDef.allowedTools.includes(t.name))
+  return allTools.filter(t => typeDef.allowedTools.includes(t.name) && !FORBIDDEN_FOR_SUBAGENT.has(t.name))
 }
 
 export function isWriteAllowedForPlanAgent(filePath: string, cwd: string): boolean {

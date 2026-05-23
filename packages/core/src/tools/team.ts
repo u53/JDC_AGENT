@@ -6,6 +6,8 @@ import type { TeamMemberSpec, TeamEvent } from '../team/team-types.js'
 import type { SubSessionOptions } from '../sub-session.js'
 import type { ModelProvider } from '../model-provider.js'
 import type { ModelConfig } from '../types.js'
+import { routeSkills } from '../team/skill-router.js'
+import { renderSkill, type SkillLoader } from '../skills/index.js'
 
 export interface TeamToolDeps {
   teamRegistry: TeamRegistry
@@ -14,6 +16,12 @@ export interface TeamToolDeps {
   provider?: ModelProvider
   modelConfig?: ModelConfig
   resolveModel?: (modelId: string) => { provider: ModelProvider; modelConfig: ModelConfig } | null
+  /**
+   * Lazy accessor for the skill loader. The team tool is registered before
+   * the loader is ready, so the deps object holds a thunk that resolves the
+   * current loader at the moment a team is created.
+   */
+  getSkillLoader?: () => SkillLoader | undefined
   onTeamEvent?: (teamId: string, event: TeamEvent) => void
 }
 
@@ -151,6 +159,34 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
 
       const bgTask = deps.backgroundTasks.registerTeam(objective, plan.members)
 
+      // Route skills (best-effort, fails open). Two slots, at most one skill each:
+      //   - pmContent → injected into PM system prompt (dialogue/process methodology)
+      //   - workerContent → injected into each worker's task description (execution methodology)
+      let pmSkillContent: string | undefined
+      let workerSkillContent: string | undefined
+      let routerNote: string | undefined
+      const skillLoader = deps.getSkillLoader?.()
+      if (skillLoader && deps.provider && deps.modelConfig) {
+        const skills = skillLoader.getAll()
+        if (skills.length > 0) {
+          const decision = await routeSkills(objective, skills, {
+            provider: deps.provider,
+            modelConfig: deps.modelConfig,
+          })
+          if (decision.pmSkill) {
+            const skill = skillLoader.get(decision.pmSkill)
+            if (skill) pmSkillContent = renderSkill(skill)
+          }
+          if (decision.workerSkill) {
+            const skill = skillLoader.get(decision.workerSkill)
+            if (skill) workerSkillContent = renderSkill(skill)
+          }
+          if (decision.pmSkill || decision.workerSkill) {
+            routerNote = `Skill router: pm=${decision.pmSkill ?? '∅'}, workers=${decision.workerSkill ?? '∅'}${decision.reasoning ? ` — ${decision.reasoning}` : ''}`
+          }
+        }
+      }
+
       const team = new TeamRuntime({
         id: bgTask.id,
         objective,
@@ -160,6 +196,7 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
         subSessionDeps: deps.buildSubSessionDeps(),
         resolveModel: deps.resolveModel,
         aiPM: deps.provider && deps.modelConfig ? { provider: deps.provider, modelConfig: deps.modelConfig } : undefined,
+        skillInjection: { pmContent: pmSkillContent, workerContent: workerSkillContent },
         onEvent: (e) => {
           deps.backgroundTasks.emitEvent(bgTask.id, e)
           deps.onTeamEvent?.(bgTask.id, e)
@@ -185,11 +222,12 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
           `Objective: ${objective}`,
           `Members:`,
           memberLines,
+          routerNote ? `\n${routerNote}` : '',
           ``,
           `The team runs in the background. The session will push team_progress notifications for major events and a final team_complete notification when it finishes.`,
           `DO NOT poll background_status / background_events on this team id — wait for the notifications. Only query if the user explicitly asks for current state.`,
           `Use background_send <id> to message the team (e.g., wrap_up, hurry, or any text intent).`,
-        ].join('\n'),
+        ].filter(Boolean).join('\n'),
       }
     },
   }

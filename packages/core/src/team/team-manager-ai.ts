@@ -29,6 +29,13 @@ export interface TeamManagerAIOptions extends TeamManagerOptions {
   recentEvents?: (n: number) => TeamEvent[]
   /** Lazy accessor — returns the team's workspace once initialized. */
   workspace?: () => TeamWorkspace | undefined
+  /**
+   * Optional dialogue/process methodology selected by SkillRouter. When set,
+   * its markdown is appended to PM's system prompt across processManager /
+   * processIntervention / processProactive cycles. PM still emits the same
+   * JSON action protocol — the skill only changes HOW PM reasons.
+   */
+  skillContent?: string
 }
 
 // =============================================================================
@@ -114,6 +121,19 @@ You produce decisions as a JSON array of action objects. Each action has a "type
 ## Action: reply
 Send a natural-language response to the user. REQUIRED whenever a user message arrives.
 { "type": "reply", "content": "<text — match the user's language; concise; reference concrete state when possible>" }
+
+## Action: escalate_to_user
+Pull the user back into the loop when you genuinely cannot decide alone — even from inside a
+proactive cycle. Unlike "reply", this WILL wake the main session (push a notification) regardless
+of whether a user message triggered the current turn. Use VERY SPARINGLY — every escalation
+interrupts the user's other work. Legitimate cases:
+  - A worker reported a [QUESTION] that requires the user's preference / taste / domain knowledge,
+    and your team-wide context has no defensible default.
+  - A destructive or hard-to-reverse step (delete data, force-push, prod deploy) needs sign-off.
+  - The team is genuinely stuck and you would rather pause than guess wrong.
+DO NOT use this for: routine progress, answers you can derive from state, design choices you
+should just make. If you can decide, decide — that's your job.
+{ "type": "escalate_to_user", "message": "<the question you want answered, plus 1-2 sentences of context and your suggested default>" }
 
 ## Action: assign_task
 Assign an existing task to an existing queued worker. Both IDs must currently exist; check the state dump.
@@ -503,6 +523,7 @@ export class TeamManagerAI extends TeamManager {
   private objective: string
   private recentEvents?: (n: number) => TeamEvent[]
   private workspace?: () => TeamWorkspace | undefined
+  private skillContent?: string
   private conversationHistory: Message[] = []
   private aiEnabled = true
   private aiProcessing = false
@@ -534,6 +555,24 @@ export class TeamManagerAI extends TeamManager {
     this.objective = opts.objective
     this.recentEvents = opts.recentEvents
     this.workspace = opts.workspace
+    this.skillContent = opts.skillContent
+  }
+
+  /**
+   * Returns the skill methodology block to prepend to PM's system prompt, or
+   * an empty string when no skill was selected. The methodology is wrapped in
+   * a clear preamble so the model treats it as guidance, not as new input from
+   * the user, and is reminded that the JSON action protocol still applies.
+   */
+  private skillPreamble(): string {
+    if (!this.skillContent) return ''
+    return `# 🧭 Methodology guidance (selected by skill router)\n\n` +
+      `The following methodology was identified as relevant to this team's objective. ` +
+      `Apply it to HOW you reason, plan, ask, and decide. It does NOT change your output ` +
+      `protocol — you still output the same JSON action set defined later. If the methodology ` +
+      `conflicts with the action protocol or with the user's instructions, follow the protocol ` +
+      `and the user.\n\n` +
+      `<methodology>\n${this.skillContent}\n</methodology>\n\n`
   }
 
   setAIEnabled(enabled: boolean): void {
@@ -860,7 +899,7 @@ export class TeamManagerAI extends TeamManager {
     try {
       const config: ModelConfig = {
         ...this.modelConfig,
-        systemPrompt: `${PM_IDENTITY}\n\n${PM_TOOLBOX}\n\n${PM_OUTPUT_PROTOCOL}`,
+        systemPrompt: `${this.skillPreamble()}${PM_IDENTITY}\n\n${PM_TOOLBOX}\n\n${PM_OUTPUT_PROTOCOL}`,
         maxTokens: 2048,
       }
 
@@ -895,7 +934,7 @@ export class TeamManagerAI extends TeamManager {
     try {
       const config: ModelConfig = {
         ...this.modelConfig,
-        systemPrompt: `${PM_IDENTITY}\n\n${PM_TOOLBOX}\n\n${PM_OUTPUT_PROTOCOL}\n\nNote: proactive cycle. NEVER use type="reply" — no user is asking.`,
+        systemPrompt: `${this.skillPreamble()}${PM_IDENTITY}\n\n${PM_TOOLBOX}\n\n${PM_OUTPUT_PROTOCOL}\n\nNote: proactive cycle. NEVER use type="reply" — no user is asking. If you genuinely need user input (taste/preference question, destructive sign-off, real deadlock), use type="escalate_to_user" — it bypasses this restriction. Use it sparingly.`,
         maxTokens: 2048,
       }
       const messages: Message[] = [
@@ -927,7 +966,7 @@ export class TeamManagerAI extends TeamManager {
     try {
       const config: ModelConfig = {
         ...this.modelConfig,
-        systemPrompt: `${PM_IDENTITY}\n\n${PM_TOOLBOX}\n\n${PM_OUTPUT_PROTOCOL}\n\nNote: focused follow-up. Output ONLY assign_task or cancel_task. No other action types.`,
+        systemPrompt: `${this.skillPreamble()}${PM_IDENTITY}\n\n${PM_TOOLBOX}\n\n${PM_OUTPUT_PROTOCOL}\n\nNote: focused follow-up. Output ONLY assign_task or cancel_task. No other action types.`,
         maxTokens: 1024,
       }
       const messages: Message[] = [
@@ -960,7 +999,7 @@ export class TeamManagerAI extends TeamManager {
 
       const validTypes = new Set([
         'assign_task', 'cancel_task', 'send_member_message', 'broadcast', 'add_constraint',
-        'complete', 'reply', 'add_member', 'remove_member', 'add_task', 'reopen_task', 'kick_member',
+        'complete', 'reply', 'escalate_to_user', 'add_member', 'remove_member', 'add_task', 'reopen_task', 'kick_member',
       ])
       return parsed
         .filter((a: any) => a && validTypes.has(a.type))

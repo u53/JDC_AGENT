@@ -10,6 +10,7 @@ interface Props {
   onSend: (text: string, images?: { data: string; mediaType: string }[]) => void
   onAbort: () => void
   isStreaming: boolean
+  aborting?: boolean
   onSlashCommand?: (command: string) => void
   permissionMode?: string
   onPermissionChange?: (mode: string) => void
@@ -29,6 +30,7 @@ export function Composer({
   onSend,
   onAbort,
   isStreaming,
+  aborting = false,
   onSlashCommand,
   permissionMode = 'standard',
   onPermissionChange,
@@ -311,11 +313,12 @@ export function Composer({
                   </button>
                 )}
                 <button
-                  onClick={onAbort}
-                  className="flex items-center gap-1.5 rounded-[8px] border border-[var(--bad)] px-3 py-2 text-[12px] text-[var(--bad)] transition-colors hover:bg-[var(--bad)] hover:text-[var(--accent-ink)]"
+                  onClick={() => { if (!aborting) onAbort() }}
+                  disabled={aborting}
+                  className="flex items-center gap-1.5 rounded-[8px] border border-[var(--bad)] px-3 py-2 text-[12px] text-[var(--bad)] transition-colors hover:bg-[var(--bad)] hover:text-[var(--accent-ink)] disabled:opacity-60 disabled:cursor-wait disabled:hover:bg-transparent disabled:hover:text-[var(--bad)]"
                 >
                   <IconStop size={14} />
-                  Stop
+                  {aborting ? 'Stopping…' : 'Stop'}
                 </button>
               </div>
             ) : (

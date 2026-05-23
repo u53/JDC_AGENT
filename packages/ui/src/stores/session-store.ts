@@ -20,6 +20,7 @@ interface ProjectGroup {
 
 export interface SessionStreamState {
   isStreaming: boolean
+  aborting?: boolean
   streamingText: string
   thinkingText: string
   isThinking: boolean

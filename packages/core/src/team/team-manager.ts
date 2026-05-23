@@ -10,7 +10,7 @@ import type {
 } from './team-types.js'
 
 export interface ManagerAction {
-  type: 'assign_task' | 'cancel_task' | 'send_member_message' | 'request_member_status' | 'broadcast' | 'add_constraint' | 'wrap_up' | 'complete' | 'reply' | 'add_member' | 'remove_member' | 'add_task' | 'reopen_task' | 'kick_member'
+  type: 'assign_task' | 'cancel_task' | 'send_member_message' | 'request_member_status' | 'broadcast' | 'add_constraint' | 'wrap_up' | 'complete' | 'reply' | 'escalate_to_user' | 'add_member' | 'remove_member' | 'add_task' | 'reopen_task' | 'kick_member'
   taskId?: string
   memberId?: string
   message?: string
