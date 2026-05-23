@@ -45,6 +45,13 @@ const api = {
   gitStash: (cwd: string) => ipcRenderer.invoke('git:stash', { cwd }),
   gitStashPop: (cwd: string) => ipcRenderer.invoke('git:stash-pop', { cwd }),
   gitHasStash: (cwd: string) => ipcRenderer.invoke('git:has-stash', { cwd }),
+  gitWatchStart: (cwd: string) => ipcRenderer.invoke('git:watch-start', { cwd }),
+  gitWatchStop: (cwd: string) => ipcRenderer.invoke('git:watch-stop', { cwd }),
+  onGitBranchChanged: (callback: (data: { cwd: string; branches: string[]; current: string }) => void) => {
+    const listener = (_event: unknown, payload: { cwd: string; branches: string[]; current: string }) => callback(payload)
+    ipcRenderer.on('git:branch-changed', listener)
+    return () => { ipcRenderer.removeListener('git:branch-changed', listener) }
+  },
 
   // Apps
   appsDetect: () => ipcRenderer.invoke('apps:detect'),

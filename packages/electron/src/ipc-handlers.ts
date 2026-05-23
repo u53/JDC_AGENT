@@ -177,6 +177,44 @@ export function registerIpcHandlers(sessionManager: SessionManager, services: De
     return gitService.hasStash(cwd)
   })
 
+  // Per-sender branch watch subscriptions: senderId -> cwd -> dispose fn
+  const branchWatches = new Map<number, Map<string, () => void>>()
+
+  const stopWatchesForSender = (senderId: number) => {
+    const map = branchWatches.get(senderId)
+    if (!map) return
+    for (const dispose of map.values()) dispose()
+    branchWatches.delete(senderId)
+  }
+
+  ipcMain.handle(IPC_CHANNELS.GIT_WATCH_START, async (event, { cwd }: { cwd: string }) => {
+    const sender = event.sender
+    const senderId = sender.id
+    let map = branchWatches.get(senderId)
+    if (!map) {
+      map = new Map()
+      branchWatches.set(senderId, map)
+      sender.once('destroyed', () => stopWatchesForSender(senderId))
+    }
+    if (map.has(cwd)) return { success: true }
+    const dispose = gitService.watchBranches(cwd, (state) => {
+      if (sender.isDestroyed()) return
+      sender.send(IPC_CHANNELS.GIT_BRANCH_CHANGED, { cwd, ...state })
+    })
+    map.set(cwd, dispose)
+    return { success: true }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.GIT_WATCH_STOP, async (event, { cwd }: { cwd: string }) => {
+    const map = branchWatches.get(event.sender.id)
+    const dispose = map?.get(cwd)
+    if (dispose) {
+      dispose()
+      map!.delete(cwd)
+    }
+    return { success: true }
+  })
+
   // Apps
   ipcMain.handle(IPC_CHANNELS.APPS_DETECT, async () => {
     return { apps: appLauncher.detect() }

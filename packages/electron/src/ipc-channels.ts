@@ -48,6 +48,9 @@ export const IPC_CHANNELS = {
   GIT_STASH: 'git:stash',
   GIT_STASH_POP: 'git:stash-pop',
   GIT_HAS_STASH: 'git:has-stash',
+  GIT_WATCH_START: 'git:watch-start',
+  GIT_WATCH_STOP: 'git:watch-stop',
+  GIT_BRANCH_CHANGED: 'git:branch-changed',
 
   // App Launcher
   APPS_DETECT: 'apps:detect',

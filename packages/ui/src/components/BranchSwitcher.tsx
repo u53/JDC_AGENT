@@ -29,6 +29,17 @@ export function BranchSwitcher({ cwd }: Props) {
 
   useEffect(() => {
     load()
+    if (!cwd) return
+    window.electronAPI?.gitWatchStart?.(cwd)
+    const off = window.electronAPI?.onGitBranchChanged?.((payload) => {
+      if (payload.cwd !== cwd) return
+      setBranches(payload.branches)
+      setCurrent(payload.current)
+    })
+    return () => {
+      off?.()
+      window.electronAPI?.gitWatchStop?.(cwd)
+    }
   }, [cwd])
 
   useEffect(() => {

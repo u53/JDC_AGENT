@@ -1,9 +1,20 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { watch, type FSWatcher } from 'node:fs'
+import { join } from 'node:path'
 
 const exec = promisify(execFile)
 
+interface BranchSubscription {
+  watchers: FSWatcher[]
+  listeners: Set<(state: { branches: string[]; current: string }) => void>
+  debounce: NodeJS.Timeout | null
+  lastSerialized: string
+}
+
 export class GitService {
+  private subscriptions = new Map<string, BranchSubscription>()
+
   private async git(args: string[], cwd: string): Promise<string> {
     const { stdout } = await exec('git', args, { cwd, timeout: 30000 })
     return stdout.trim()
@@ -94,5 +105,77 @@ export class GitService {
   async hasStash(cwd: string): Promise<boolean> {
     const output = await this.git(['stash', 'list'], cwd)
     return output.includes('jdcagnet-auto-stash')
+  }
+
+  watchBranches(cwd: string, listener: (state: { branches: string[]; current: string }) => void): () => void {
+    let sub = this.subscriptions.get(cwd)
+    if (!sub) {
+      sub = {
+        watchers: [],
+        listeners: new Set(),
+        debounce: null,
+        lastSerialized: '',
+      }
+      this.subscriptions.set(cwd, sub)
+
+      const refresh = () => {
+        if (sub!.debounce) clearTimeout(sub!.debounce)
+        sub!.debounce = setTimeout(async () => {
+          sub!.debounce = null
+          try {
+            const state = await this.listBranches(cwd)
+            const serialized = `${state.current}|${state.branches.join(',')}`
+            if (serialized === sub!.lastSerialized) return
+            sub!.lastSerialized = serialized
+            for (const fn of sub!.listeners) fn(state)
+          } catch {
+            // ignore — repo may be in transient state (mid-rebase, etc.)
+          }
+        }, 200)
+      }
+
+      const headPath = join(cwd, '.git', 'HEAD')
+      const refsDir = join(cwd, '.git', 'refs', 'heads')
+      const packedRefs = join(cwd, '.git', 'packed-refs')
+
+      const safeWatch = (target: string, opts?: { recursive?: boolean }): FSWatcher | null => {
+        try {
+          return watch(target, opts ?? {}, refresh)
+        } catch {
+          return null
+        }
+      }
+
+      const w1 = safeWatch(headPath)
+      const w2 = safeWatch(refsDir, { recursive: true })
+      const w3 = safeWatch(packedRefs)
+      for (const w of [w1, w2, w3]) {
+        if (w) {
+          w.on('error', () => {})
+          sub.watchers.push(w)
+        }
+      }
+
+      this.listBranches(cwd)
+        .then(state => {
+          sub!.lastSerialized = `${state.current}|${state.branches.join(',')}`
+        })
+        .catch(() => {})
+    }
+
+    sub.listeners.add(listener)
+
+    return () => {
+      const current = this.subscriptions.get(cwd)
+      if (!current) return
+      current.listeners.delete(listener)
+      if (current.listeners.size === 0) {
+        if (current.debounce) clearTimeout(current.debounce)
+        for (const w of current.watchers) {
+          try { w.close() } catch {}
+        }
+        this.subscriptions.delete(cwd)
+      }
+    }
   }
 }
