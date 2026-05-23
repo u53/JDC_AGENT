@@ -83,6 +83,14 @@ export class Session {
   private fileReadState: FileReadStateCache
   private backgroundTasks: BackgroundTaskManager
   private teamRegistry: TeamRegistry
+  /**
+   * Final-state snapshots of teams keyed by taskId. Captured the moment a team
+   * transitions to completed/failed (when team is still in registry, all member
+   * and task data still resolvable). Read by getTeamStatus after the runtime
+   * has been removed from the registry, so the UI can still render the final
+   * frame instead of getting an empty placeholder. Process-only — not persisted.
+   */
+  private teamFinalSnapshots = new Map<string, any>()
   private turnIndex = 0
   private planMode: 'normal' | 'planning' | 'awaiting_approval' = 'normal'
   private onPlanReview?: (planFile: string, content: string) => Promise<{ approved: boolean; feedback?: string }>
@@ -175,6 +183,7 @@ export class Session {
         // etc.) fire before completeTeam() and would cause the main session to think
         // the team is done prematurely — suppress them.
         if (event.type === 'team_completed') {
+          this.captureTeamFinalSnapshot(teamId)
           this.pendingNotifications.push({
             type: 'team_complete',
             taskId: teamId,
@@ -182,6 +191,7 @@ export class Session {
             teamEvent: `Team finished. Final summary:\n${(event as any).summary ?? ''}\n\nDo NOT call background_status / background_events on this team again — it is done.`,
           })
         } else if (event.type === 'team_failed') {
+          this.captureTeamFinalSnapshot(teamId)
           this.pendingNotifications.push({
             type: 'team_complete',
             taskId: teamId,
@@ -912,6 +922,13 @@ export class Session {
     if (!task || task.type !== 'team') return null
     const team = this.teamRegistry.get(taskId)
     if (!team) {
+      // Team is no longer in registry (completed/failed and removed). Try the
+      // final snapshot we captured the moment it terminated — that way the UI
+      // still renders members/tasks/manager instead of going blank.
+      const snapshot = this.teamFinalSnapshots.get(taskId)
+      if (snapshot) {
+        return { ...snapshot, finished: true }
+      }
       return {
         type: 'team',
         id: task.id,
@@ -945,6 +962,43 @@ export class Session {
         failed: tasks.filter(t => t.status === 'failed').length,
       },
     }
+  }
+
+  /**
+   * Snapshot a team's full state so getTeamStatus can keep returning meaningful
+   * data after the runtime is removed from the registry. Called from onTeamEvent
+   * on team_completed / team_failed — at that point the runtime is still alive
+   * and getMembers/getTasks/getManagerState are still resolvable.
+   */
+  private captureTeamFinalSnapshot(taskId: string): void {
+    const team = this.teamRegistry.get(taskId)
+    if (!team) return
+    const tasks = team.getTasks()
+    this.teamFinalSnapshots.set(taskId, {
+      type: 'team',
+      id: team.id,
+      objective: team.objective,
+      status: team.getStatus(),
+      manager: team.getManagerState(),
+      members: team.getMembers(),
+      tasks: tasks.map(t => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        status: t.status,
+        assigneeId: t.assigneeId,
+        priority: t.priority,
+      })),
+      taskStats: {
+        total: tasks.length,
+        completed: tasks.filter(t => t.status === 'completed').length,
+        running: tasks.filter(t => t.status === 'running' || t.status === 'assigned').length,
+        blocked: tasks.filter(t => t.status === 'blocked').length,
+        cancelled: tasks.filter(t => t.status === 'cancelled').length,
+        todo: tasks.filter(t => t.status === 'todo').length,
+        failed: tasks.filter(t => t.status === 'failed').length,
+      },
+    })
   }
 
   getTeamEvents(taskId: string, tail?: number): any[] {

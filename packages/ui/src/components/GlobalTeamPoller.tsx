@@ -42,11 +42,24 @@ export function GlobalTeamPoller() {
   const setTeamEvents = useTeamStore((s) => s.setTeamEvents)
   const appendConversationIfNew = useTeamStore((s) => s.appendConversationIfNew)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  /**
+   * Teams we've fetched a final snapshot for after they transitioned to a
+   * terminal state. Once a team is here, the poller stops re-fetching it on
+   * each tick (no point — its state is frozen). Cleared with the session.
+   */
+  const finalizedRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (!activeSessionId) return
+    // Poll all running teams + any terminal teams we haven't yet snapshotted.
+    // The "haven't snapshotted" pass is what fixes:
+    //   - UI freezing on the pre-completion frame because the next poll cycle
+    //     skipped the team the moment it flipped to completed
+    //   - "Loading…" forever after a window reload, because the store had no
+    //     entry for the completed team and the old poller never touched it
     const teamIds = backgroundTasks
-      .filter(t => t.type === 'team' && t.status === 'running')
+      .filter(t => t.type === 'team')
+      .filter(t => t.status === 'running' || !finalizedRef.current.has(t.id))
       .map(t => t.id)
     if (teamIds.length === 0) {
       if (intervalRef.current) {
@@ -65,7 +78,14 @@ export function GlobalTeamPoller() {
             api.teamGetStatus(activeSessionId, taskId),
             api.teamGetEvents(activeSessionId, taskId, 200),
           ])
-          if (status) setTeamStatus(taskId, status)
+          if (status) {
+            setTeamStatus(taskId, status)
+            // If this team is now in a terminal state, this is the LAST poll
+            // we need — mark so we don't keep hitting the IPC every tick.
+            if (status.finished || status.status === 'completed' || status.status === 'failed' || status.status === 'stopped') {
+              finalizedRef.current.add(taskId)
+            }
+          }
           if (!events) continue
           setTeamEvents(taskId, events.map(formatEvent))
 
