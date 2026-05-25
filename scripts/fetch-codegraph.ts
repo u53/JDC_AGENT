@@ -95,7 +95,7 @@ function extract(file: string, dir: string, p: Platform): void {
       execSync(`unzip -o "${file}" -d "${dir}"`, { stdio: 'inherit' })
     }
   } else {
-    execSync(`tar -xzf "${file}" -C "${dir}"`, { stdio: 'inherit' })
+    execSync(`tar -xzf "${file}" -C "${dir}" --strip-components=1`, { stdio: 'inherit' })
   }
 }
 

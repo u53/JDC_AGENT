@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 
 function platformKey(): string | null {
@@ -22,6 +22,20 @@ function findInResourceTree(root: string): string | null {
     path.join(root, key, 'bin', binaryName()),
     path.join(root, key, binaryName()),
   ]
+  // Also search one level deeper for archives with a top-level directory
+  const dirPath = path.join(root, key)
+  if (existsSync(dirPath)) {
+    try {
+      for (const entry of readdirSync(dirPath, { withFileTypes: true })) {
+        if (entry.isDirectory()) {
+          candidates.push(
+            path.join(dirPath, entry.name, 'bin', binaryName()),
+            path.join(dirPath, entry.name, binaryName()),
+          )
+        }
+      }
+    } catch { /* ignore readdir errors */ }
+  }
   return candidates.find(p => existsSync(p)) ?? null
 }
 

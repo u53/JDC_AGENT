@@ -758,13 +758,23 @@ export class TeamManagerAI extends TeamManager {
         this.pendingAIActions = [...this.pendingAIActions, ...actions]
         ;(this.opts as TeamManagerAIOptions).onActionsReady?.()
       }
-      this.drainQueuedAIMessages()
-      this.drainQueuedProactive()
+      this.drainQueuedAIWork()
     }).catch(() => {
       this.aiProcessing = false
-      this.drainQueuedAIMessages()
-      this.drainQueuedProactive()
+      this.drainQueuedAIWork()
     })
+  }
+
+  private drainQueuedAIWork(): void {
+    // User/main-session messages are interactive and must win over background
+    // PM housekeeping. This is the contract queueAIDecision's busy path promises:
+    // if a user speaks while PM is in a proactive/staffing cycle, process that
+    // message as soon as the current cycle yields, before draining more proactive
+    // triggers.
+    this.drainQueuedAIMessages()
+    if (!this.aiProcessing) {
+      this.drainQueuedProactive()
+    }
   }
 
   private drainQueuedAIMessages(): void {
@@ -812,7 +822,7 @@ export class TeamManagerAI extends TeamManager {
         this.pendingAIActions = [...this.pendingAIActions, ...actions.map(a => ({ ...a, _proactive: true }))]
         ;(this.opts as TeamManagerAIOptions).onActionsReady?.()
       }
-      this.drainQueuedProactive()
+      this.drainQueuedAIWork()
     }).catch(() => {
       this.aiProcessing = false
       const t = this.pendingAssignment.get(memberId)
@@ -820,7 +830,7 @@ export class TeamManagerAI extends TeamManager {
         clearTimeout(t)
         this.pendingAssignment.delete(memberId)
       }
-      this.drainQueuedProactive()
+      this.drainQueuedAIWork()
     })
   }
 
@@ -866,10 +876,10 @@ export class TeamManagerAI extends TeamManager {
         this.pendingAIActions = [...this.pendingAIActions, ...actions.map(a => ({ ...a, _proactive: true }))]
         ;(this.opts as TeamManagerAIOptions).onActionsReady?.()
       }
-      this.drainQueuedProactive()
+      this.drainQueuedAIWork()
     }).catch(() => {
       this.aiProcessing = false
-      this.drainQueuedProactive()
+      this.drainQueuedAIWork()
     })
   }
 
