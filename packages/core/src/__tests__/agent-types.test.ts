@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { AGENT_TYPES, getAgentType, filterToolsForAgent, isWriteAllowedForPlanAgent, isBashAllowedForAuditor } from '../agent-types.js'
+import type { ToolDefinition } from '../types.js'
 
 describe('agent-types', () => {
   it('has 6 defined types', () => {
@@ -37,6 +38,48 @@ describe('agent-types', () => {
     ]
     const filtered = filterToolsForAgent('general', allTools)
     expect(filtered.map(t => t.name)).toEqual(['file_read', 'bash'])
+  })
+
+  const mcpTools: ToolDefinition[] = [
+    { name: 'file_read', description: '', inputSchema: {} },
+    { name: 'grep', description: '', inputSchema: {} },
+    { name: 'mcp__codegraph__codegraph_search', description: '', inputSchema: {} },
+    { name: 'mcp__codegraph__codegraph_context', description: '', inputSchema: {} },
+    { name: 'mcp__other__do_thing', description: '', inputSchema: {} },
+    { name: 'Agent', description: '', inputSchema: {} },
+    { name: 'Skill', description: '', inputSchema: {} },
+  ]
+
+  describe('filterToolsForAgent — MCP whitelisting', () => {
+    it('explore allows mcp__codegraph__* but not mcp__other__*', () => {
+      const out = filterToolsForAgent('explore', mcpTools).map(t => t.name)
+      expect(out).toContain('mcp__codegraph__codegraph_search')
+      expect(out).toContain('mcp__codegraph__codegraph_context')
+      expect(out).not.toContain('mcp__other__do_thing')
+    })
+
+    it('frontend-designer denies all mcp__* tools', () => {
+      const out = filterToolsForAgent('frontend-designer', mcpTools).map(t => t.name)
+      expect(out.some(n => n.startsWith('mcp__'))).toBe(false)
+    })
+
+    it('general allows all mcp__* tools', () => {
+      const out = filterToolsForAgent('general', mcpTools).map(t => t.name)
+      expect(out).toContain('mcp__codegraph__codegraph_search')
+      expect(out).toContain('mcp__other__do_thing')
+    })
+
+    it('FORBIDDEN_FOR_SUBAGENT still applies regardless of MCP whitelist', () => {
+      const out = filterToolsForAgent('general', mcpTools).map(t => t.name)
+      expect(out).not.toContain('Agent')
+      expect(out).not.toContain('Skill')
+    })
+
+    it('every AGENT_TYPES entry declares allowedMcpServers explicitly', () => {
+      for (const t of AGENT_TYPES) {
+        expect(Array.isArray(t.allowedMcpServers)).toBe(true)
+      }
+    })
   })
 
   it('each type has systemPrompt and maxTurns', () => {

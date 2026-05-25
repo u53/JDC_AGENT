@@ -6,6 +6,7 @@ export interface AgentTypeDefinition {
   description: string
   systemPrompt: string
   allowedTools: string[]
+  allowedMcpServers: string[]
   maxTurns: number
 }
 
@@ -36,6 +37,7 @@ export const AGENT_TYPES: AgentTypeDefinition[] = [
 - Read-only. Do NOT modify any files.
 - Do NOT run state-changing commands.`,
     allowedTools: ['file_read', 'glob', 'grep', 'ls', 'tree', 'web_search', 'web_fetch', 'lsp'],
+    allowedMcpServers: ['codegraph'],
     maxTurns: 25,
   },
   {
@@ -62,6 +64,7 @@ export const AGENT_TYPES: AgentTypeDefinition[] = [
 - Do NOT write outside .jdcagnet/plans/.
 - A plan that says "refactor X" without naming files is rejected — be specific.`,
     allowedTools: ['file_read', 'glob', 'grep', 'ls', 'tree', 'file_write'],
+    allowedMcpServers: ['codegraph'],
     maxTurns: 20,
   },
   {
@@ -89,6 +92,7 @@ export const AGENT_TYPES: AgentTypeDefinition[] = [
 - Do NOT add features.
 - Do NOT change formatting that's already consistent — only change what makes the code clearer.`,
     allowedTools: ['file_read', 'file_edit', 'file_write', 'grep', 'glob', 'ls'],
+    allowedMcpServers: ['codegraph'],
     maxTurns: 30,
   },
   {
@@ -130,6 +134,7 @@ Order by severity: critical > high > medium > low. End with a one-paragraph summ
 - Bash is restricted to read-only commands (grep, find, cat, git log, npm audit, etc.).
 - Do not file findings you cannot pinpoint to a file:line. "The codebase might have XSS" is not a finding.`,
     allowedTools: ['file_read', 'grep', 'glob', 'ls', 'tree', 'bash'],
+    allowedMcpServers: ['codegraph'],
     maxTurns: 20,
   },
   {
@@ -161,6 +166,7 @@ Order by severity: critical > high > medium > low. End with a one-paragraph summ
 - Do NOT introduce new design primitives when the codebase already has equivalents.
 - Match the project's component file naming convention exactly.`,
     allowedTools: ['file_read', 'file_write', 'file_edit', 'glob', 'ls', 'web_fetch'],
+    allowedMcpServers: [],
     maxTurns: 30,
   },
   {
@@ -185,12 +191,27 @@ Order by severity: critical > high > medium > low. End with a one-paragraph summ
 - Do NOT skip verification because "it should work".
 - If the task is ambiguous, work with the most likely interpretation and call out the assumption — do NOT ask clarifying questions, you don't have a user to answer them.`,
     allowedTools: ['*'],
+    allowedMcpServers: ['*'],
     maxTurns: 150,
   },
 ]
 
 export function getAgentType(name: string): AgentTypeDefinition | undefined {
   return AGENT_TYPES.find(t => t.name === name)
+}
+
+function isMcpTool(name: string): boolean {
+  return name.startsWith('mcp__')
+}
+
+function mcpServerOf(name: string): string {
+  return name.split('__')[1] ?? ''
+}
+
+function isMcpAllowed(toolName: string, allowed: string[]): boolean {
+  if (!isMcpTool(toolName)) return true
+  if (allowed.includes('*')) return true
+  return allowed.includes(mcpServerOf(toolName))
 }
 
 export function filterToolsForAgent(agentType: string, allTools: ToolDefinition[]): ToolDefinition[] {
@@ -209,13 +230,30 @@ export function filterToolsForAgent(agentType: string, allTools: ToolDefinition[
     'EnterPlanMode',
     'ExitPlanMode',
   ])
-  if (!typeDef) return allTools.filter(t => !FORBIDDEN_FOR_SUBAGENT.has(t.name))
 
-  if (typeDef.allowedTools.includes('*')) {
-    return allTools.filter(t => !FORBIDDEN_FOR_SUBAGENT.has(t.name))
+  const mcpAllowed = typeDef?.allowedMcpServers ?? []
+
+  if (!typeDef) {
+    return allTools.filter(t =>
+      !FORBIDDEN_FOR_SUBAGENT.has(t.name) &&
+      isMcpAllowed(t.name, mcpAllowed)
+    )
   }
 
-  return allTools.filter(t => typeDef.allowedTools.includes(t.name) && !FORBIDDEN_FOR_SUBAGENT.has(t.name))
+  if (typeDef.allowedTools.includes('*')) {
+    return allTools.filter(t =>
+      !FORBIDDEN_FOR_SUBAGENT.has(t.name) &&
+      isMcpAllowed(t.name, mcpAllowed)
+    )
+  }
+
+  return allTools.filter(t =>
+    !FORBIDDEN_FOR_SUBAGENT.has(t.name) &&
+    (
+      typeDef.allowedTools.includes(t.name) ||
+      (isMcpTool(t.name) && isMcpAllowed(t.name, mcpAllowed))
+    )
+  )
 }
 
 export function isWriteAllowedForPlanAgent(filePath: string, cwd: string): boolean {
