@@ -55,10 +55,10 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-[240px] border-r border-[var(--border)] bg-[var(--surface)] overflow-y-auto flex flex-col" style={{ fontFamily: 'var(--font-sans)' }}>
+    <aside className="w-[240px] border-r border-[var(--border)] bg-[var(--surface)] flex flex-col overflow-hidden" style={{ fontFamily: 'var(--font-sans)' }}>
       <div className="h-2 flex-shrink-0" />
 
-      <div className="flex-1 px-3 pb-3 space-y-4">
+      <div className="flex-1 px-3 pb-3 space-y-4 overflow-y-auto">
         {projects.map((project) => (
           <div key={project.cwd}>
             <h3 className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] font-medium mb-1.5 px-2">
@@ -150,7 +150,7 @@ export function Sidebar() {
         ))}
       </div>
 
-      <div className="px-3 pb-3 space-y-2">
+      <div className="px-3 py-3 space-y-2 border-t border-[var(--border)] flex-shrink-0">
         <button
           onClick={addProject}
           className="w-full border border-[var(--border)] text-[var(--text)] text-[12px] py-2.5 rounded-[8px] hover:bg-[var(--surface-2)] transition-colors"
