@@ -12,6 +12,9 @@ files:
   - ui/**/*
   - package.json
   - node_modules/node-pty/**/*
+extraResources:
+  - from: packages/electron/resources/codegraph
+    to: codegraph
 publish:
   provider: github
   owner: u53

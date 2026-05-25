@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSettingsStore, type SettingsTab } from '../stores/settings-store'
 import { useModelStore, type ApiProtocol, type ModelGroup } from '../stores/model-store'
+import { useSessionStore } from '../stores/session-store'
 import { ThemeSegmented } from './ThemeSegmented'
 import { IconX } from './icons'
 import type { McpServerState } from '../lib/ipc-client'
@@ -595,6 +596,22 @@ function McpTab() {
   const [servers, setServers] = useState<McpServerState[]>([])
   const [expanded, setExpanded] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [reindexing, setReindexing] = useState(false)
+  const projects = useSessionStore((s) => s.projects)
+  const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const activeProject = projects.find((p) => p.sessions.some((s) => s.id === activeSessionId))
+  const cwd = activeProject?.cwd || ''
+
+  const handleReindex = useCallback(async () => {
+    if (!cwd) return
+    setReindexing(true)
+    try {
+      await window.electronAPI?.codegraphApi?.reindex(cwd)
+    } catch {
+      // error handled by banner
+    }
+    setReindexing(false)
+  }, [cwd])
 
   useEffect(() => {
     setLoading(true)
@@ -629,10 +646,26 @@ function McpTab() {
   }
 
   if (loading) return <p className="text-[13px] text-[var(--muted)] animate-pulse">加载中...</p>
-  if (servers.length === 0) return <p className="text-[13px] text-[var(--muted)] text-center py-8">暂无 MCP 服务器配置</p>
 
   return (
     <div className="space-y-2">
+      {/* CodeGraph reindex */}
+      {cwd && (
+        <div className="flex items-center justify-between px-3 py-2.5 border border-[var(--border)] rounded-[6px]">
+          <div>
+            <span className="text-[13px] text-[var(--text)]">CodeGraph 索引</span>
+            <span className="text-[11px] text-[var(--muted)] ml-2">重建当前项目的代码索引</span>
+          </div>
+          <button
+            onClick={handleReindex}
+            disabled={reindexing}
+            className="px-3 py-1 text-[12px] rounded-[6px] border border-[var(--border)] text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors disabled:opacity-50"
+          >
+            {reindexing ? '索引中...' : '重建索引'}
+          </button>
+        </div>
+      )}
+      {servers.length === 0 && <p className="text-[13px] text-[var(--muted)] text-center py-4">暂无 MCP 服务器配置</p>}
       {servers.map((server) => (
         <div key={server.name} className="border border-[var(--border)] rounded-[6px] overflow-hidden">
           <div
