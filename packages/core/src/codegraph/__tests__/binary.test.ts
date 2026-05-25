@@ -17,9 +17,23 @@ describe('resolveCodegraphBinary', () => {
     vi.resetModules()
   })
 
-  it('returns the dev resources path when binary exists there', async () => {
+  it('finds binary under packages/electron/resources/codegraph (project root cwd)', async () => {
     const hostKey = `${process.platform === 'win32' ? 'win32' : process.platform}-${process.arch}`
     const dir = path.join(tmp, 'packages', 'electron', 'resources', 'codegraph', hostKey, 'bin')
+    mkdirSync(dir, { recursive: true })
+    const binName = process.platform === 'win32' ? 'codegraph.exe' : 'codegraph'
+    const file = path.join(dir, binName)
+    writeFileSync(file, '#!/bin/sh\necho 0\n')
+    if (process.platform !== 'win32') chmodSync(file, 0o755)
+
+    process.env.JDC_CODEGRAPH_DEV_ROOT = tmp
+    const { resolveCodegraphBinary } = await import('../binary.js')
+    expect(resolveCodegraphBinary()).toBe(file)
+  })
+
+  it('finds binary under resources/codegraph (Electron main process cwd)', async () => {
+    const hostKey = `${process.platform === 'win32' ? 'win32' : process.platform}-${process.arch}`
+    const dir = path.join(tmp, 'resources', 'codegraph', hostKey, 'bin')
     mkdirSync(dir, { recursive: true })
     const binName = process.platform === 'win32' ? 'codegraph.exe' : 'codegraph'
     const file = path.join(dir, binName)

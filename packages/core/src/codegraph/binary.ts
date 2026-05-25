@@ -52,21 +52,20 @@ function findOnPath(): string | null {
 }
 
 export function resolveCodegraphBinary(): string | null {
-  const isPackaged =
-    typeof (process as any).resourcesPath === 'string' &&
-    (process as any).resourcesPath.length > 0 &&
-    !((process as any).defaultApp)
+  const devRoot = process.env.JDC_CODEGRAPH_DEV_ROOT ?? process.cwd()
 
-  if (isPackaged) {
-    const root = path.join((process as any).resourcesPath, 'codegraph')
-    const found = findInResourceTree(root)
+  // In dev/test: cwd may be project root or packages/electron/ — try both
+  const prefixes = ['packages/electron/resources/codegraph', 'resources/codegraph']
+  for (const prefix of prefixes) {
+    const found = findInResourceTree(path.join(devRoot, prefix))
     if (found) return found
   }
 
-  const devRoot = process.env.JDC_CODEGRAPH_DEV_ROOT ?? process.cwd()
-  const devTree = path.join(devRoot, 'packages', 'electron', 'resources', 'codegraph')
-  const devFound = findInResourceTree(devTree)
-  if (devFound) return devFound
+  // In packaged: binary lives in process.resourcesPath/codegraph/
+  if (typeof (process as any).resourcesPath === 'string') {
+    const found = findInResourceTree(path.join((process as any).resourcesPath, 'codegraph'))
+    if (found) return found
+  }
 
   return findOnPath()
 }
