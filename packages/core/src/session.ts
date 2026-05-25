@@ -7,6 +7,7 @@ import { ToolRunner, type ToolExecutionEvent, type PermissionCallback } from './
 import { registerBuiltinTools } from './tools/index.js'
 import { ConversationHistory } from './history.js'
 import { assembleSystemPrompt, getMemoryDir } from './context.js'
+import { getCodegraphPromptSegment } from './codegraph/index.js'
 import { loadAppConfig, getConfigDir } from './config.js'
 import { PermissionChecker } from './permissions.js'
 import { TaskStore } from './task-store.js'
@@ -499,6 +500,15 @@ export class Session {
           cacheable: false,
         })
       }
+    }
+
+    // Inject codegraph prompt segment when project has .codegraph/
+    const codegraphSegment = getCodegraphPromptSegment(this.config.cwd)
+    if (codegraphSegment.segment && Array.isArray(this.config.modelConfig.systemPrompt)) {
+      this.config.modelConfig.systemPrompt.push({
+        content: codegraphSegment.segment,
+        cacheable: codegraphSegment.cacheable,
+      })
     }
 
     const content: import('./types.js').ContentBlock[] = [{ type: 'text', text }]
