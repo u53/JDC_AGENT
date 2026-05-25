@@ -1,8 +1,25 @@
-import { useState, type ComponentPropsWithoutRef } from 'react'
+import { useState, isValidElement, type ComponentPropsWithoutRef, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import { copyToClipboard } from '../lib/clipboard'
+
+/**
+ * react-markdown sometimes hands `code` an array of children (raw text mixed
+ * with already-parsed React elements from rehype-highlight). String(arr)
+ * collapses that into a comma-joined "[object Object]" mess. Walk the tree
+ * and concatenate only the textual leaves.
+ */
+function extractText(node: ReactNode): string {
+  if (node == null || typeof node === 'boolean') return ''
+  if (typeof node === 'string') return node
+  if (typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(extractText).join('')
+  if (isValidElement(node)) {
+    return extractText((node.props as { children?: ReactNode }).children)
+  }
+  return ''
+}
 
 interface Props {
   content: string
@@ -46,7 +63,7 @@ export function MarkdownRenderer({ content }: Props) {
       components={{
         code(props: ComponentPropsWithoutRef<'code'>) {
           const { className, children, ...rest } = props
-          const text = typeof children === 'string' ? children : String(children ?? '')
+          const text = extractText(children)
           const trimmed = text.trim()
           const looksStructured = /^[{\[]/.test(trimmed) && /[}\]]\s*$/.test(trimmed)
           const isBlock =
