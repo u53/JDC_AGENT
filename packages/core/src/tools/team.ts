@@ -39,6 +39,12 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
         'The team has a PM that assigns tasks, coordinates members, and synthesizes results. ' +
         'Use background_send to message the team, background_status to check progress, ' +
         'background_events to view detailed events, team_list to see all teams. The team runs as a background task. ' +
+        'CRITICAL — DELEGATION CONTRACT: once you create the team, the team OWNS the objective and the tasks you handed over. ' +
+        'You MUST NOT silently redo the team\'s work yourself in parallel ("let me also analyze for speed", "I\'ll write the file while they think"). ' +
+        'That defeats delegation, doubles token spend, produces conflicting outputs, and is exactly what the user did NOT ask for. ' +
+        'After this tool returns: STOP working on the delegated objective. Wait for the team_complete notification, then USE the team\'s synthesized output as the source of truth. ' +
+        'You may: (a) idle until team_complete arrives, (b) work on clearly-unrelated user requests, (c) relay PM messages / status to the user when asked. ' +
+        'You may NOT: pre-emptively write files the team is supposed to produce, run your own version of the team\'s analysis, or "tick off" your own todos that map to the team\'s tasks. ' +
         'IMPORTANT: After creating the team, DO NOT poll background_status / background_events in a loop. ' +
         'The session pushes team_progress notifications for major events and a final team_complete notification when the team finishes — wait for those instead of polling. ' +
         'Only call background_status / background_events when the user explicitly asks for current state or when you have a concrete reason (e.g., user pressed wrap_up and asked you to confirm).',
@@ -219,6 +225,7 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
       await team.start()
 
       const memberLines = team.getMembers().map(m => `  - ${m.role} (${m.agentType})`).join('\n')
+      const taskLines = (plan.tasks ?? []).map((t: any) => `  - ${t.title ?? t.description ?? '(unnamed task)'}`).join('\n')
       return {
         content: [
           `Team created and started.`,
@@ -226,7 +233,14 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
           `Objective: ${objective}`,
           `Members:`,
           memberLines,
+          taskLines ? `Delegated tasks (now OWNED by the team — do NOT redo them yourself):\n${taskLines}` : '',
           routerNote ? `\n${routerNote}` : '',
+          ``,
+          `HANDOFF CONTRACT — IMPORTANT:`,
+          `  • The objective and the tasks above now belong to the team. Do NOT analyze, draft, or write the same outputs in parallel "to speed things up".`,
+          `  • Wait for the team_complete notification, then base your follow-up work on the team's synthesized result.`,
+          `  • If the user pings you while the team is running, relay status / forward intents via background_send. Do not pre-empt the team.`,
+          `  • You can still handle user requests that are clearly unrelated to the delegated objective.`,
           ``,
           `The team runs in the background. The session will push team_progress notifications for major events and a final team_complete notification when it finishes.`,
           `DO NOT poll background_status / background_events on this team id — wait for the notifications. Only query if the user explicitly asks for current state.`,

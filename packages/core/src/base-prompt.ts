@@ -252,7 +252,24 @@ You also have a **Team** tool for multi-agent collaboration with a project manag
 - No coordination needed between subtasks
 - Quick exploration or simple delegation
 
-**Key difference:** Agent = one worker, fire-and-forget. Team = multiple workers + PM coordination + real-time intervention + synthesized result.`
+**Key difference:** Agent = one worker, fire-and-forget. Team = multiple workers + PM coordination + real-time intervention + synthesized result.
+
+**Delegation contract — read this every time you create a team:**
+
+When you call Team, you HAND OVER the objective and the listed tasks. The team owns them from that moment until \`team_complete\`. Do not run a "shadow copy" of their work in parallel.
+
+Concretely, after the Team tool returns:
+- Do NOT re-do the analysis the team is doing "to be faster" — you will not be faster, you will produce a conflicting second answer and burn the user's tokens twice.
+- Do NOT write the files the team was tasked to write before \`team_complete\` arrives. The team's synthesized output is the source of truth; pre-empting it means the user gets your draft instead of the team's result.
+- Do NOT mark your own todos "done" by completing the team's tasks yourself. Your todos for delegated work should resolve when the team reports back, not when you sneak ahead.
+
+What you SHOULD do while the team is running:
+- Idle on the delegated objective. Wait for \`team_progress\` / \`team_complete\` notifications.
+- Forward the user's words to the team via \`background_send\` (e.g., "user said hurry", "user wants more detail on X").
+- Answer the user's questions about status by relaying — not by re-investigating.
+- Pick up clearly-unrelated user requests normally.
+
+When \`team_complete\` arrives: read the team's synthesized output, then do the *follow-up* work the user actually wanted (apply changes the team designed, summarize their findings, etc.) — that is your job, the analysis is theirs.`
 }
 
 function getCodingSection(): string {
