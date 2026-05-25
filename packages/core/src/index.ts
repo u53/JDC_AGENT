@@ -38,3 +38,4 @@ export { createEnterPlanModeTool, isPlanModeToolAllowed, PLAN_MODE_ALLOWED_TOOLS
 export { createExitPlanModeTool, type PlanReviewCallback } from './tools/exit-plan-mode.js'
 export { IdeManager } from './ide/index.js'
 export type { IdeConnection, IdeConnectionStatus, SelectionData, AtMentionData, OpenDiffParams, OpenDiffResult, DiagnosticFile, IdeCallbacks } from './ide/index.js'
+export * as codegraph from './codegraph/index.js'
