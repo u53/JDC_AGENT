@@ -41,7 +41,7 @@ function runCodegraph(args: string[], onProgress?: (line: string) => void): RunR
 }
 
 export function init(cwd: string, onProgress?: (line: string) => void): Promise<void> & { cancel: () => void } {
-  const { child, done } = runCodegraph(['index', cwd], onProgress)
+  const { child, done } = runCodegraph(['init', cwd, '--index'], onProgress)
   const promise = done as Promise<void> & { cancel: () => void }
   promise.cancel = () => { try { child.kill('SIGTERM') } catch { /* ignore */ } }
   return promise

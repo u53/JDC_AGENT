@@ -620,11 +620,29 @@ export class SessionManager {
   }
 
   async runCodegraphInit(cwd: string): Promise<void> {
+    // Ensure .codegraph is in .gitignore before indexing
+    this.ensureGitignore(cwd)
     const onLine = (line: string) => {
       this.window?.webContents.send('codegraph:init-progress', { cwd, line })
     }
     await codegraph.init(cwd, onLine)
     this.evaluateCodegraphState(cwd)
+  }
+
+  private ensureGitignore(cwd: string): void {
+    const fs = require('node:fs')
+    const path = require('node:path')
+    const gitignorePath = path.join(cwd, '.gitignore')
+    const entry = '.codegraph'
+    try {
+      if (!fs.existsSync(gitignorePath)) return
+      const content: string = fs.readFileSync(gitignorePath, 'utf-8')
+      const lines = content.split('\n').map((l: string) => l.trim())
+      if (!lines.includes(entry) && !lines.includes(entry + '/')) {
+        const suffix = content.endsWith('\n') ? '' : '\n'
+        fs.appendFileSync(gitignorePath, `${suffix}${entry}\n`)
+      }
+    } catch { /* non-critical, don't block init */ }
   }
 
   async runCodegraphReindex(cwd: string): Promise<void> {

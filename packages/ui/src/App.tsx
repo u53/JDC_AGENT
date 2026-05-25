@@ -9,7 +9,6 @@ import { Inspector } from './components/Inspector'
 import { TerminalPanel } from './components/TerminalPanel'
 import { ToastContainer } from './components/Toast'
 import { GlobalTeamPoller } from './components/GlobalTeamPoller'
-import { CodegraphBanner } from './components/CodegraphBanner'
 import { useSessionStore } from './stores/session-store'
 import { useModelStore } from './stores/model-store'
 import { useSettingsStore } from './stores/settings-store'
@@ -101,7 +100,6 @@ export function App() {
   return (
     <div className="h-screen w-screen flex flex-col bg-[var(--bg)] text-[var(--text)]">
       <Topbar />
-      <CodegraphBanner cwd={activeProject?.cwd || ''} />
       <div className="flex-1 grid grid-cols-[240px_1fr_auto] overflow-hidden">
         <Sidebar />
         <div className="flex-1 flex flex-col overflow-hidden border-l border-[var(--border)]">

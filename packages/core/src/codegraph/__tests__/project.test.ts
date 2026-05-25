@@ -55,7 +55,7 @@ describe('codegraph/project', () => {
     expect(spawnMock).toHaveBeenCalledTimes(1)
     const [cmd, args] = spawnMock.mock.calls[0]
     expect(cmd).toBe('/fake/codegraph')
-    expect(args).toEqual(['index', tmp])
+    expect(args).toEqual(['init', tmp, '--index'])
     expect(lines.some(l => l.includes('progress'))).toBe(true)
   })
 
