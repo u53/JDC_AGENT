@@ -46,6 +46,8 @@ export function Composer({
   skills,
 }: Props) {
   const [showSlashMenu, setShowSlashMenu] = useState(false)
+  const [slashOnlySkills, setSlashOnlySkills] = useState(false)
+  const [slashInsertPos, setSlashInsertPos] = useState(0)
   const [slashFilter, setSlashFilter] = useState('')
   const [showPermMenu, setShowPermMenu] = useState(false)
   const [showEffortMenu, setShowEffortMenu] = useState(false)
@@ -166,21 +168,33 @@ export function Composer({
 
   const handleTextChange = (value: string) => {
     setText(value)
-    if (value === '/') {
-      setShowSlashMenu(true)
-      setSlashFilter('')
-    } else if (value.startsWith('/') && !value.includes(' ')) {
+    // Check for / at start (commands + skills)
+    if (value === '/' || (value.startsWith('/') && !value.includes(' '))) {
       setShowSlashMenu(true)
       setSlashFilter(value.slice(1))
+      setSlashOnlySkills(false)
+      setSlashInsertPos(0)
     } else {
-      setShowSlashMenu(false)
+      // Check for / typed mid-text (skills only)
+      const lastSlash = value.lastIndexOf('/')
+      const afterSlash = lastSlash >= 0 ? value.slice(lastSlash + 1) : ''
+      if (lastSlash > 0 && !afterSlash.includes(' ')) {
+        setShowSlashMenu(true)
+        setSlashFilter(afterSlash)
+        setSlashOnlySkills(true)
+        setSlashInsertPos(lastSlash)
+      } else {
+        setShowSlashMenu(false)
+      }
     }
   }
 
   const handleSlashSelect = (cmd: SlashCommand) => {
     setShowSlashMenu(false)
     if (cmd.section === 'skill') {
-      setText(`/${cmd.name} `)
+      // Insert skill name at the slash position, keep text before it
+      const prefix = text.slice(0, slashInsertPos)
+      setText(`${prefix}/${cmd.name} `)
       textareaRef.current?.focus()
     } else {
       resetDraft()
@@ -307,6 +321,7 @@ export function Composer({
             onSelect={handleSlashSelect}
             onClose={() => setShowSlashMenu(false)}
             skills={skills}
+            skillsOnly={slashOnlySkills}
           />
           <div className="flex items-end gap-3">
             {/* CodeGraph indicator — left of input */}

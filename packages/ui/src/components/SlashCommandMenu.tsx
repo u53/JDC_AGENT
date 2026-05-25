@@ -21,9 +21,10 @@ interface Props {
   onSelect: (command: SlashCommand) => void
   onClose: () => void
   skills?: { name: string; description: string }[]
+  skillsOnly?: boolean
 }
 
-export function SlashCommandMenu({ filter, visible, onSelect, onClose, skills = [] }: Props) {
+export function SlashCommandMenu({ filter, visible, onSelect, onClose, skills = [], skillsOnly = false }: Props) {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const menuRef = useRef<HTMLDivElement>(null)
   const selectedRef = useRef<HTMLDivElement>(null)
@@ -42,7 +43,7 @@ export function SlashCommandMenu({ filter, visible, onSelect, onClose, skills = 
     cmd.description.toLowerCase().includes(filter.toLowerCase())
   )
 
-  const commandItems = filtered.filter(c => c.section === 'command')
+  const commandItems = skillsOnly ? [] : filtered.filter(c => c.section === 'command')
   const skillItems = filtered.filter(c => c.section === 'skill')
   const flatList = [...commandItems, ...skillItems]
 
@@ -67,6 +68,7 @@ export function SlashCommandMenu({ filter, visible, onSelect, onClose, skills = 
         setSelectedIndex(i => Math.max(i - 1, 0))
       } else if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault()
+        e.stopPropagation()
         if (flatList[selectedIndex]) onSelect(flatList[selectedIndex])
       } else if (e.key === 'Escape') {
         e.preventDefault()
