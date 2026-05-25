@@ -9,7 +9,7 @@ const IGNORE = new Set(['node_modules', '.git', 'dist', '.next', '__pycache__'])
 export const treeTool: ToolHandler = {
   definition: {
     name: 'tree',
-    description: 'Show recursive directory structure. Limited to 4 levels deep and 200 entries.',
+    description: 'Show recursive directory structure to understand project layout. Auto-ignores node_modules/.git/dist. Limited to 4 levels deep and 200 entries. For single-directory listing, use ls; for finding specific files by pattern, use glob.',
     inputSchema: {
       type: 'object',
       properties: {

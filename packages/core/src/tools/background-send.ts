@@ -14,9 +14,10 @@ export function createBackgroundSendTool(deps: BackgroundSendDeps): ToolHandler 
     definition: {
       name: 'background_send',
       description:
-        'Send a message to a background team. The message goes to the team mailbox ' +
-        'and is consumed by the PM at the next scheduling tick. ' +
-        'Use intent like "hurry", "wrap_up", "request_status", "narrow_scope" for control. ' +
+        'Send a message to a running team. Goes to the PM mailbox by default. ' +
+        'Typical uses: "hurry" when deadline approaches, "narrow_scope" to reduce work, ' +
+        '"request_status" for a PM-generated summary, "wrap_up" to signal time to finish. ' +
+        'Do NOT use for routine monitoring — use background_status/events instead. ' +
         'Use target to direct messages: "manager" (default), "team" (broadcast), or "member:<id>".',
       inputSchema: {
         type: 'object',

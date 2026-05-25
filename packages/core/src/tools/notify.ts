@@ -6,7 +6,12 @@ export function createNotifyTool(onNotify: NotifyCallback): ToolHandler {
   return {
     definition: {
       name: 'notify',
-      description: 'Send a desktop notification to get the user\'s attention. Use sparingly — only when a long task completes or you need user input while they may be away.',
+      description:
+        'Send a desktop notification to get the user\'s attention. ' +
+        'Do NOT notify for routine progress or when the user is clearly watching the conversation. ' +
+        'Notify only when: (1) a long task completes while they may be away, (2) they explicitly asked to be notified. ' +
+        'Keep message under 200 chars, no markdown. Lead with what they would act on — ' +
+        '"build failed: 2 auth tests" is better than "task done".',
       inputSchema: {
         type: 'object',
         properties: {

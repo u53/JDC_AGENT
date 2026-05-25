@@ -12,8 +12,10 @@ Usage notes:
 - If the file already exists, you MUST read it with file_read first to understand what you're replacing.
 - Prefer file_edit for modifying existing files — it only sends the diff and is easier to review.
 - Only use file_write for creating new files or complete rewrites.
+- NEVER create documentation files (*.md) or README files unless the user explicitly requests it.
 - If the content exceeds 150 lines, write the first 50 lines with this tool, then use file_edit to append the rest in chunks.
-- Do NOT re-read a file after writing — the write was successful if no error was returned.`,
+- Do NOT re-read a file after writing — the write was successful if no error was returned.
+- Only use emojis in file content if the user explicitly requests it.`,
     inputSchema: {
       type: 'object',
       properties: {

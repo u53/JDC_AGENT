@@ -5,7 +5,9 @@ export function createTaskListTool(store: TaskStore): ToolHandler {
   return {
     definition: {
       name: 'task_list',
-      description: 'List all tasks for this session with their current status.',
+      description:
+        'List all tasks with current status. Use after completing a task to find the next pending work. ' +
+        'Prefer working on tasks in ID order (lowest first). Also use to check overall progress or find blocked tasks.',
       inputSchema: {
         type: 'object',
         properties: {},

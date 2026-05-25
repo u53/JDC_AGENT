@@ -5,7 +5,10 @@ export function createTaskOutputTool(mgr: BackgroundTaskManager): ToolHandler {
   return {
     definition: {
       name: 'task_output',
-      description: 'Get the output of a background task by its ID.',
+      description:
+        'Get raw stdout/stderr output of a shell or agent background task. ' +
+        'NOT for team tasks — use background_events instead for teams. ' +
+        'Use tail param to avoid flooding context with large outputs.',
       inputSchema: {
         type: 'object',
         properties: {

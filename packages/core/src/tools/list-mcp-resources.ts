@@ -5,7 +5,10 @@ export function createListMcpResourcesTool(manager: McpManager): ToolHandler {
   return {
     definition: {
       name: 'list_mcp_resources',
-      description: 'List available resources from connected MCP servers. Optionally filter by server name.',
+      description:
+        'List available resources from connected MCP servers. Use this to discover remote resources ' +
+        '(database schemas, API specs, documentation) that are not available as local files. ' +
+        'Optionally filter by server name.',
       inputSchema: {
         type: 'object',
         properties: {

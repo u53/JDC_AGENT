@@ -5,7 +5,7 @@ import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 export const lsTool: ToolHandler = {
   definition: {
     name: 'ls',
-    description: 'List directory contents with file types and sizes.',
+    description: 'List a single directory\'s contents with file types and sizes. Non-recursive. For recursive structure, use tree; for finding files by pattern, use glob.',
     inputSchema: {
       type: 'object',
       properties: {

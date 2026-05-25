@@ -39,8 +39,13 @@ export function createEnterPlanModeTool(onEnter: PlanModeCallback): ToolHandler 
       name: 'enter_plan_mode',
       description:
         'Enter plan mode to design an implementation approach before writing code. ' +
-        'In plan mode, you can only read files, write plan files to .jdcagnet/plans/, and dispatch explore agents. ' +
-        'Use this for non-trivial tasks where getting alignment first prevents wasted effort.',
+        'Use proactively when: (1) new feature implementation, (2) multiple valid approaches exist, ' +
+        '(3) changes affect existing behavior/structure, (4) architectural decisions, (5) multi-file changes (>2-3 files), ' +
+        '(6) unclear requirements needing exploration first. ' +
+        'Do NOT use for: single-line fixes, adding a single function with clear requirements, ' +
+        'user gave very specific instructions, pure research (use Agent explore instead). ' +
+        'In plan mode you can read files, write plans to .jdcagnet/plans/, and dispatch explore agents. ' +
+        'Call exit_plan_mode when ready for user review.',
       inputSchema: { type: 'object', properties: {}, required: [] },
     },
     async execute(_input: Record<string, unknown>, _context: ToolContext): Promise<ToolResult> {

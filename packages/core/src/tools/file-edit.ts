@@ -10,11 +10,13 @@ export const fileEditTool: ToolHandler = {
 
 Usage notes:
 - You MUST read the file with file_read before editing. Never edit a file you haven't read in this conversation.
+- ALWAYS prefer editing existing files over creating new ones. NEVER write new files unless explicitly required.
 - The old_string must be UNIQUE in the file. If it appears multiple times, the edit will fail — provide more surrounding context to make it unique, or use replace_all: true.
 - Preserve exact indentation (tabs/spaces) from the file. Match what you saw in file_read output (after the line number prefix).
 - If your replacement exceeds 50 lines, split into multiple file_edit calls.
 - Use replace_all: true when renaming a variable or string across the entire file.
-- old_string and new_string must be different.`,
+- old_string and new_string must be different.
+- Only use emojis in content if the user explicitly requests it.`,
     inputSchema: {
       type: 'object',
       properties: {

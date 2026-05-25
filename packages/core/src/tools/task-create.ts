@@ -5,7 +5,14 @@ export function createTaskCreateTool(store: TaskStore): ToolHandler {
   return {
     definition: {
       name: 'task_create',
-      description: 'Create a new task to track work. The task appears in the user\'s task panel. Use todo_write for batch creation.',
+      description:
+        'Create a new task to track work progress. The task appears in the user\'s task panel. ' +
+        'Use for complex multi-step tasks (3+ steps), when the user provides multiple things to do, or when starting plan mode. ' +
+        'Do NOT use for single trivial operations completable in 1-2 steps. ' +
+        'Set subject in imperative form (e.g., "Fix auth bug", "Add pagination"). ' +
+        'After creating, use task_update to set in_progress BEFORE starting work. ' +
+        'Mark each task completed as soon as it\'s done — don\'t batch updates. ' +
+        'Use todo_write for batch creation of multiple tasks at once.',
       inputSchema: {
         type: 'object',
         properties: {

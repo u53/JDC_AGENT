@@ -53,6 +53,7 @@ export class SkillLoader {
         description: data.description || '',
         content: content.trim(),
         userInvocable: data['user-invocable'] !== false,
+        trigger: data.trigger,
         arguments: data.arguments || [],
         argumentHint: data['argument-hint'],
         allowedTools: data['allowed-tools'],

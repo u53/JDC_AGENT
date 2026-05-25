@@ -5,7 +5,12 @@ import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 export const notebookEditTool: ToolHandler = {
   definition: {
     name: 'notebook_edit',
-    description: 'Edit a Jupyter notebook cell. Supports replace, insert, and delete operations.',
+    description:
+      'Edit a cell in a Jupyter notebook (.ipynb). notebook_path must be an absolute path. ' +
+      'cell_number is 0-indexed. Three edit modes: replace (default) overwrites cell content; ' +
+      'insert adds a new cell at the given index and requires cell_type (code or markdown); ' +
+      'delete removes the cell at the given index (new_source can be empty). ' +
+      'Always read the notebook first to confirm cell indices and content before editing.',
     inputSchema: {
       type: 'object',
       properties: {

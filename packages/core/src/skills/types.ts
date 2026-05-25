@@ -3,6 +3,7 @@ export interface SkillDefinition {
   description: string
   content: string
   userInvocable: boolean
+  trigger?: string
   arguments: string[]
   argumentHint?: string
   allowedTools?: string[]

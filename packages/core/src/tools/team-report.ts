@@ -12,8 +12,10 @@ export function createTeamReportTool(deps: TeamReportDeps): ToolHandler {
     definition: {
       name: 'team_report',
       description:
-        'Report findings, ask questions, or send status updates to the team PM. ' +
-        'Use this to communicate important discoveries, blockers, or questions during your task.',
+        'Send a real-time message to the PM (findings, questions, blockers, progress). ' +
+        'Use for ephemeral communication that needs PM attention NOW. ' +
+        'For persistent deliverables, use team_artifact instead. ' +
+        'For bugs found during QA, use team_artifact create_issue (not this tool).',
       inputSchema: {
         type: 'object',
         properties: {

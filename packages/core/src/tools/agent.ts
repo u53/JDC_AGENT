@@ -36,7 +36,11 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
         '- security-auditor: Analyze code for vulnerabilities\n' +
         '- frontend-designer: Convert designs into components\n' +
         '- general: Full tool access for complex multi-step tasks (default)' +
-        '\n\nSet run_in_background: true for long-running tasks. The agent runs independently and you receive a <task-notification> when it completes.',
+        '\n\nWhen to use: open-ended questions spanning the codebase, tasks matching a specialized agent type, genuinely independent parallel work.' +
+        '\nWhen NOT to use: target file already known (use file_read directly), specific symbol lookup (use grep), single-file edits.' +
+        '\nWriting the prompt: brief like a smart colleague who just walked in — explain what you\'re accomplishing and why, what you\'ve already learned/ruled out, give enough context for judgment calls. Never delegate understanding.' +
+        '\nIMPORTANT: Agent result is NOT visible to the user. You must relay a summary of findings or changes.' +
+        '\nSet run_in_background: true for long-running tasks. The agent runs independently and you receive a <task-notification> when it completes.',
       inputSchema: {
         type: 'object',
         properties: {

@@ -4,7 +4,18 @@ import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 export const monitorTool: ToolHandler = {
   definition: {
     name: 'monitor',
-    description: 'Run a command and stream each stdout line as a progress event. Use for watching logs, waiting for conditions, or monitoring long processes.',
+    description:
+      'Start a background monitor that streams events. Each stdout line is a progress event.\n\n' +
+      'Choose the right tool:\n' +
+      '- Need ONE notification when done → use bash with run_in_background\n' +
+      '- Need ongoing events (log tail, file watch) → use this tool\n\n' +
+      'Script best practices:\n' +
+      '- Always use grep --line-buffered in pipes — without it, pipe buffering delays events by minutes\n' +
+      '- In poll loops, handle transient failures (|| true) — one failed request should not kill the monitor\n' +
+      '- Poll intervals: 30s+ for remote APIs (rate limits), 0.5-1s for local checks\n' +
+      '- Only stdout is the event stream\n\n' +
+      'Coverage — silence is not success: your filter must match failure states too (Traceback, Error, FAILED, Killed, OOM), not just the happy path. ' +
+      'If the process crashes, would your filter emit anything? If not, widen it.',
     inputSchema: {
       type: 'object',
       properties: {

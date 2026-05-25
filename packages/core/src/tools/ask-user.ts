@@ -15,7 +15,8 @@ export function createAskUserTool(onAskUser: AskUserCallback): ToolHandler {
         'Only use this when you cannot figure out the answer yourself using tools (file_read, grep, glob). ' +
         'Prefer discovering answers through code exploration over asking. ' +
         'Good uses: choosing between valid approaches, confirming destructive actions, getting preferences. ' +
-        'Bad uses: asking what a file contains (just read it), asking where something is defined (just grep for it).',
+        'Bad uses: asking what a file contains (just read it), asking where something is defined (just grep for it).\n' +
+        'If you recommend a specific option, place it first in the list and append "(Recommended)" to its label.',
       inputSchema: {
         type: 'object',
         properties: {

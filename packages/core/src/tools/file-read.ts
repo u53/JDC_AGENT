@@ -11,12 +11,12 @@ export const fileReadTool: ToolHandler = {
     description: `Read a file from the filesystem. Results are returned with line numbers (1-based).
 
 Usage notes:
-- Use offset and limit for large files. By default reads the entire file.
+- By default reads up to 2000 lines. Use offset and limit for large files.
 - Do NOT re-read a file you just edited — the edit was successful if no error was returned.
 - If you re-read an unchanged file, you'll get a stub message pointing you to the earlier result.
+- When you already know which part of the file you need, only read that part — important for larger files.
 - This tool can read text files of any type. For binary files, it returns an error.
-- When you need to understand code before modifying it, always read the relevant file first.
-- If you only need a specific section, use offset/limit to avoid loading unnecessary content.`,
+- When you need to understand code before modifying it, always read the relevant file first.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -38,7 +38,7 @@ Usage notes:
       : path.resolve(context.cwd, filePathInput)
 
     const offset = (input.offset as number) || 0
-    const limit = (input.limit as number) || Infinity
+    const limit = (input.limit as number) || 2000
 
     // Dedup: if we've already read this exact range and the file hasn't changed, return stub
     if (context.fileReadState?.canDedup(filePath, offset, limit)) {

@@ -16,7 +16,7 @@ export interface ContextOptions {
   toolNames: string[]
   mcpServers?: { name: string; toolCount: number; tools?: string[]; instructions?: string }[]
   permissionMode?: string
-  skills?: { name: string; description: string; argumentHint?: string }[]
+  skills?: { name: string; description: string; argumentHint?: string; trigger?: string }[]
   language?: string
   customInstructions?: string
 }
@@ -147,7 +147,8 @@ export async function assembleSystemPrompt(opts: ContextOptions): Promise<Prompt
   if (opts.skills && opts.skills.length > 0) {
     const skillList = opts.skills.map(s => {
       const hint = s.argumentHint ? ` — usage: /${s.name} ${s.argumentHint}` : ''
-      return `- /${s.name}: ${s.description}${hint}`
+      const trigger = s.trigger ? `\n  TRIGGER: ${s.trigger}` : ''
+      return `- /${s.name}: ${s.description}${hint}${trigger}`
     }).join('\n')
     segments.push({
       content: `# Available Skills\n\nThe following skills can be invoked using the Skill tool:\n\n${skillList}\n\nWhen the user types \`/<skill-name>\` or their request matches a skill, invoke it using the Skill tool with the skill name. If the skill has an argument hint, the user may provide arguments after the skill name.`,

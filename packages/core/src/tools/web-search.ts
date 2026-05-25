@@ -8,9 +8,10 @@ export const webSearchTool: ToolHandler = {
 
 Usage notes:
 - Use for information beyond your training data: current events, recent documentation, API references.
-- When using search results in your response, include a "Sources:" section with relevant URLs.
+- You MUST always include a "Sources:" section at the end of your response with relevant URLs as markdown links.
 - Use specific, descriptive queries rather than single keywords.
-- The current year is important for finding recent docs — include it when searching for latest versions.`,
+- The current year is important for finding recent docs — include it when searching for latest versions.
+- Use allowed_domains/blocked_domains to filter results by site when you know the authoritative source.`,
     inputSchema: {
       type: 'object',
       properties: {

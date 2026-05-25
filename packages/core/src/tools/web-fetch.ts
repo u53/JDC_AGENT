@@ -10,7 +10,12 @@ export const webFetchTool: ToolHandler = {
   definition: {
     name: 'web_fetch',
     description:
-      'Fetch a URL and extract its content as markdown. Use the prompt to specify what information to extract.',
+      'Fetch a URL and extract its content as markdown. Use the prompt to specify what information to extract.\n\n' +
+      'IMPORTANT: Will FAIL for authenticated/private URLs (Google Docs, Jira, Confluence, private repos). ' +
+      'Check if the URL requires login before using.\n' +
+      '- For GitHub URLs, prefer gh CLI via bash instead (e.g., gh pr view, gh issue view)\n' +
+      '- HTTP URLs are auto-upgraded to HTTPS\n' +
+      '- Content is truncated at 50000 chars',
     inputSchema: {
       type: 'object',
       properties: {

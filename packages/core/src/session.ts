@@ -20,6 +20,7 @@ import { createTaskListTool } from './tools/task-list.js'
 import { createTaskUpdateTool } from './tools/task-update.js'
 import { createTaskStopTool } from './tools/task-stop.js'
 import { createTodoWriteTool } from './tools/todo-write.js'
+import { saveMemoryTool } from './tools/save-memory.js'
 import { McpManager } from './mcp/manager.js'
 import { createMcpToolHandler } from './mcp/mcp-tool-handler.js'
 import { createListMcpResourcesTool } from './tools/list-mcp-resources.js'
@@ -93,6 +94,7 @@ export class Session {
    */
   private teamFinalSnapshots = new Map<string, any>()
   private turnIndex = 0
+  private turnsSinceTaskTool = 0
   private planMode: 'normal' | 'planning' | 'awaiting_approval' = 'normal'
   private onPlanReview?: (planFile: string, content: string) => Promise<{ approved: boolean; feedback?: string }>
   resolveModel?: (modelId: string) => { provider: ModelProvider; modelConfig: ModelConfig } | null
@@ -162,6 +164,7 @@ export class Session {
     this.toolRegistry.register(createTaskUpdateTool(this.taskStore))
     this.toolRegistry.register(createTaskStopTool(this.taskStore))
     this.toolRegistry.register(createTodoWriteTool(this.taskStore))
+    this.toolRegistry.register(saveMemoryTool)
     this.toolRegistry.register(createTaskOutputTool(this.backgroundTasks))
     this.toolRegistry.register(monitorTool)
     // Team Mode tools
@@ -855,6 +858,15 @@ export class Session {
         this.abortController!.signal
       )
       if (this.abortController?.signal.aborted) break
+
+      const TASK_TOOL_NAMES = new Set(['task_create', 'task_update', 'task_list', 'task_get', 'task_stop', 'todo_write'])
+      const usedTaskTool = toolUseBlocks.some((b: any) => TASK_TOOL_NAMES.has(b.name))
+      if (usedTaskTool) {
+        this.turnsSinceTaskTool = 0
+      } else {
+        this.turnsSinceTaskTool++
+      }
+
       const reminder = this.getSystemReminder()
       const toolResults = batchResults.map(r => ({
         type: 'tool_result' as const,
@@ -911,8 +923,38 @@ export class Session {
     if (appConfig.customInstructions) {
       parts.push(appConfig.customInstructions)
     }
+
+    const taskReminder = this.getTaskReminder()
+    if (taskReminder) parts.push(taskReminder)
+
     if (parts.length <= 1) return null  // only date, no user config — skip
     return `\n\n<system-reminder>\n${parts.join('\n')}\n</system-reminder>`
+  }
+
+  private getTaskReminder(): string | null {
+    if (this.turnsSinceTaskTool < 3) return null
+    const tasks = this.taskStore.list()
+    const openTasks = tasks.filter(t => t.status === 'pending' || t.status === 'in_progress')
+    if (openTasks.length === 0 && tasks.length === 0) return null
+
+    const lines: string[] = []
+    lines.push(
+      'The task tools haven\'t been used recently. If you\'re working on tasks that would benefit ' +
+      'from tracking progress, consider using task_create to add new tasks and task_update to ' +
+      'update task status (set to in_progress when starting, completed when done). Also consider ' +
+      'cleaning up the task list if it has become stale. Only use these if relevant to the current ' +
+      'work. This is just a gentle reminder - ignore if not applicable.'
+    )
+
+    if (tasks.length > 0) {
+      lines.push('')
+      lines.push('Here are the existing tasks:')
+      for (const t of tasks) {
+        lines.push(`#${t.id}. [${t.status}] ${t.subject}`)
+      }
+    }
+
+    return lines.join('\n')
   }
 
   async processNotifications(events: SessionEvents): Promise<void> {

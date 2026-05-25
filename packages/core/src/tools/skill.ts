@@ -6,7 +6,14 @@ export function createSkillTool(loader: SkillLoader): ToolHandler {
   return {
     definition: {
       name: 'Skill',
-      description: 'Invoke a skill by name. Skills are reusable instruction templates loaded from .jdcagnet/skills/. Use this to activate specialized workflows.',
+      description:
+        'Execute a skill within the current conversation. Skills provide specialized workflows and domain knowledge.\n\n' +
+        'Rules:\n' +
+        '- Only invoke skills listed in the "Available Skills" system prompt section\n' +
+        '- Never guess or invent a skill name — if unsure, the error message will list available skills\n' +
+        '- When a user types /<name> or their request clearly matches a skill\'s purpose, invoke it BEFORE generating other responses\n' +
+        '- Do not re-invoke a skill that is already active in this turn\n' +
+        '- Set args to pass user-provided arguments after the skill name',
       inputSchema: {
         type: 'object',
         properties: {

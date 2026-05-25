@@ -8,7 +8,9 @@ export function createExitPlanModeTool(onExit: PlanReviewCallback): ToolHandler 
   return {
     definition: {
       name: 'exit_plan_mode',
-      description: 'Submit your plan for user approval. The plan file will be shown to the user for review.',
+      description:
+        'Submit your plan for user approval. Only use when planning implementation steps that require writing code — ' +
+        'NOT for research tasks. Do NOT use ask_user to ask "is this plan okay?" — that is what THIS tool does.',
       inputSchema: {
         type: 'object',
         properties: {

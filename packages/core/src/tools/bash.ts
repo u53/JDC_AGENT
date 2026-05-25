@@ -158,40 +158,32 @@ The shell runs in a non-interactive environment (CI=true, GIT_TERMINAL_PROMPT=0,
       // Unix: spawn the user's login shell so PATH set up by tool managers (nvm, pyenv,
       // rbenv, conda, asdf, brew shellenv, custom ~/.npm-global/bin etc.) is available.
       //
-      // Different shells load rc files differently — getting this wrong is why `pnpm`,
-      // `node` (via nvm), `python` (via pyenv) etc. show up as "command not found" even
-      // though they work fine in the user's terminal. We use `-i -l` to be both an
-      // interactive AND login shell, then handle the bash gotcha explicitly.
+      // We use `-l` (login shell) and explicitly source rc files to get the user's full
+      // PATH without the side effects of `-i` (interactive mode), which can cause:
+      //   - Extra prompts/banners written to stderr
+      //   - zsh prompt-related code emitting control characters without a tty
+      //   - bash job control messages polluting output
       //
-      //   zsh with `-i -l` covers everything — .zshenv (always), .zprofile (login),
-      //   .zshrc (interactive), .zlogin (login).
+      //   zsh with `-l` loads .zshenv + .zprofile + .zlogin but NOT .zshrc.
+      //   We source .zshrc explicitly for PATH additions from tool managers.
       //
-      //   bash with `-i -l` is technically a login shell, so it loads /etc/profile and
-      //   the first of ~/.bash_profile / ~/.bash_login / ~/.profile — but does NOT
-      //   auto-load ~/.bashrc. Most users source .bashrc from .bash_profile manually,
-      //   but plenty don't, so we source it explicitly when the user shell is bash.
+      //   bash with `-l` loads /etc/profile and the first of ~/.bash_profile /
+      //   ~/.bash_login / ~/.profile — but NOT ~/.bashrc. We source it explicitly.
       //
       //   Other shells (fish, sh, dash, ksh) just use `-l` — their profile files
-      //   (~/.config/fish/config.fish, ~/.profile, etc.) cover the login path and
-      //   they don't have the same login-vs-interactive split as bash.
-      //
-      // Users whose rc files misbehave under non-tty stdin/stdout can set
-      // JDCAGNET_BASH_NO_INTERACTIVE=1 to fall back to login-only behavior.
+      //   (~/.config/fish/config.fish, ~/.profile, etc.) cover the login path.
       const userShell = process.env.SHELL || '/bin/bash'
       const shellName = userShell.split('/').pop() || 'bash'
-      const interactiveOptOut = process.env.JDCAGNET_BASH_NO_INTERACTIVE === '1'
-      const useInteractive = !interactiveOptOut && (shellName === 'zsh' || shellName === 'bash')
-      // bash gotcha: login shell skips .bashrc. Source it explicitly if it exists.
-      // Idempotent — if .bash_profile already sources .bashrc, re-sourcing is harmless
-      // (PATH may get duplicate entries but that doesn't break anything).
-      const bashrcPrelude = shellName === 'bash' && useInteractive
+      const bashrcPrelude = shellName === 'bash'
         ? '[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc" 2>/dev/null; '
         : ''
-      const wrappedCommand = `${bashrcPrelude}${command}; __jdcagnet_exit=$?; pwd -P > ${cwdFile} 2>/dev/null; exit $__jdcagnet_exit`
+      const zshrcPrelude = shellName === 'zsh'
+        ? '[ -f "$HOME/.zshrc" ] && . "$HOME/.zshrc" 2>/dev/null; '
+        : ''
+      const rcPrelude = bashrcPrelude || zshrcPrelude
+      const wrappedCommand = `${rcPrelude}${command}; __jdcagnet_exit=$?; pwd -P > ${cwdFile} 2>/dev/null; exit $__jdcagnet_exit`
       shellCmd = userShell
-      shellArgs = useInteractive
-        ? ['-i', '-l', '-c', wrappedCommand]
-        : ['-l', '-c', wrappedCommand]
+      shellArgs = ['-l', '-c', wrappedCommand]
     }
 
     return new Promise((resolve) => {
@@ -227,7 +219,13 @@ The shell runs in a non-interactive environment (CI=true, GIT_TERMINAL_PROMPT=0,
         try { unlinkSync(cwdFile) } catch {}
 
         const output = stdout + (stderr ? `\nSTDERR:\n${stderr}` : '')
-        resolve({ content: output || '(no output)', isError: code !== 0 })
+
+        const MAX_OUTPUT = 100000
+        const truncated = output.length > MAX_OUTPUT
+          ? output.slice(0, 50000) + `\n\n... [${output.length - 100000} bytes truncated] ...\n\n` + output.slice(-50000)
+          : output
+
+        resolve({ content: truncated || '(no output)', isError: code !== 0 })
       })
 
       proc.on('error', (err) => {

@@ -11,7 +11,11 @@ export function createBackgroundStatusTool(deps: BackgroundStatusDeps): ToolHand
   return {
     definition: {
       name: 'background_status',
-      description: 'Get structured status of a background task (shell/agent/team). For teams, includes manager state, member statuses, and task progress.',
+      description:
+        'Get a point-in-time snapshot of a background task. ' +
+        'For teams: returns manager state, member statuses, and task progress counts. ' +
+        'Use this FIRST to check overall health; use background_events for detailed timeline. ' +
+        'Do NOT poll after task reaches terminal state (completed/failed/stopped).',
       inputSchema: {
         type: 'object',
         properties: {
