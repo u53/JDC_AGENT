@@ -15,7 +15,14 @@ interface RunResult {
 function runCodegraph(args: string[], onProgress?: (line: string) => void): RunResult {
   const bin = resolveCodegraphBinary()
   if (!bin) throw new Error('CodeGraph binary not available on this host')
-  const child = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+  // On Windows, .cmd/.bat files cannot be spawned directly — must go through shell
+  const isWindowsBatch = process.platform === 'win32' && /\.(cmd|bat)$/i.test(bin)
+  const child = isWindowsBatch
+    ? spawn(`"${bin}" ${args.map(a => `"${a.replace(/"/g, '\\"')}"`).join(' ')}`, [], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: true,
+      })
+    : spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] })
   const errChunks: Buffer[] = []
   const forwardLines = (buf: Buffer) => {
     if (!onProgress) return
