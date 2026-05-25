@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process'
-import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, createWriteStream } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, createWriteStream, readdirSync, statSync, renameSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { Readable } from 'node:stream'
@@ -93,6 +93,17 @@ function extract(file: string, dir: string, p: Platform): void {
       execSync(`powershell -Command "Expand-Archive -Force -Path '${file}' -DestinationPath '${dir}'"`, { stdio: 'inherit' })
     } else {
       execSync(`unzip -o "${file}" -d "${dir}"`, { stdio: 'inherit' })
+    }
+    // Strip top-level directory if the zip contains a single folder
+    const entries = readdirSync(dir)
+    if (entries.length === 1) {
+      const nested = path.join(dir, entries[0])
+      if (statSync(nested).isDirectory()) {
+        for (const item of readdirSync(nested)) {
+          renameSync(path.join(nested, item), path.join(dir, item))
+        }
+        rmSync(nested, { recursive: true, force: true })
+      }
     }
   } else {
     execSync(`tar -xzf "${file}" -C "${dir}" --strip-components=1`, { stdio: 'inherit' })
