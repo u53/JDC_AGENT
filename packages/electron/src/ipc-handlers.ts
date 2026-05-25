@@ -276,6 +276,22 @@ export function registerIpcHandlers(sessionManager: SessionManager, services: De
     }
   })
 
+  ipcMain.handle(IPC_CHANNELS.CODEGRAPH_INIT, async (_evt, cwd: string) => {
+    return sessionManager.runCodegraphInit(cwd)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CODEGRAPH_REINDEX, async (_evt, cwd: string) => {
+    return sessionManager.runCodegraphReindex(cwd)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CODEGRAPH_DISMISS, async (_evt, cwd: string) => {
+    sessionManager.dismissCodegraphForCwd(cwd)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CODEGRAPH_STATE, async (_evt, cwd: string) => {
+    sessionManager.evaluateCodegraphState(cwd)
+  })
+
   ipcMain.handle(IPC_CHANNELS.MODEL_TEST, async (_event, { protocol, baseUrl, apiKey, modelId }) => {
     try {
       const provider = (() => {

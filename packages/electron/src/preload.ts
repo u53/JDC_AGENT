@@ -161,6 +161,24 @@ const api = {
   },
 
   getVersion: () => ipcRenderer.invoke('app:version'),
+
+  // CodeGraph
+  codegraphApi: {
+    init: (cwd: string) => ipcRenderer.invoke('codegraph:init', cwd),
+    reindex: (cwd: string) => ipcRenderer.invoke('codegraph:reindex', cwd),
+    dismiss: (cwd: string) => ipcRenderer.invoke('codegraph:dismiss', cwd),
+    refreshState: (cwd: string) => ipcRenderer.invoke('codegraph:state', cwd),
+    onState: (cb: (s: { cwd: string; initialized: boolean; dismissed: boolean }) => void) => {
+      const handler = (_e: any, s: any) => cb(s)
+      ipcRenderer.on('codegraph:project-state', handler)
+      return () => ipcRenderer.removeListener('codegraph:project-state', handler)
+    },
+    onInitProgress: (cb: (e: { cwd: string; line: string }) => void) => {
+      const handler = (_e: any, p: any) => cb(p)
+      ipcRenderer.on('codegraph:init-progress', handler)
+      return () => ipcRenderer.removeListener('codegraph:init-progress', handler)
+    },
+  },
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)
