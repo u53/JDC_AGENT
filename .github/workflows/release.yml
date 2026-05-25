@@ -33,6 +33,11 @@ jobs:
 
       - run: pnpm build
 
+      - name: Fetch CodeGraph binaries
+        run: pnpm fetch-codegraph
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Import signing certificate
         run: |
           echo "$CSC_LINK" | base64 --decode > cert.p12
@@ -88,6 +93,11 @@ jobs:
       - run: pnpm install
 
       - run: pnpm build
+
+      - name: Fetch CodeGraph binaries
+        run: pnpm fetch-codegraph
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Package
         run: pnpm package
