@@ -11,27 +11,29 @@ function platformKey(): string | null {
   return null
 }
 
-function binaryName(): string {
-  return process.platform === 'win32' ? 'codegraph.exe' : 'codegraph'
+function binaryNames(): string[] {
+  return process.platform === 'win32' ? ['codegraph.exe', 'codegraph.cmd'] : ['codegraph']
 }
 
 function findInResourceTree(root: string): string | null {
   const key = platformKey()
   if (!key) return null
-  const candidates = [
-    path.join(root, key, 'bin', binaryName()),
-    path.join(root, key, binaryName()),
-  ]
+  const names = binaryNames()
+  const candidates: string[] = []
+  for (const name of names) {
+    candidates.push(path.join(root, key, 'bin', name))
+    candidates.push(path.join(root, key, name))
+  }
   // Also search one level deeper for archives with a top-level directory
   const dirPath = path.join(root, key)
   if (existsSync(dirPath)) {
     try {
       for (const entry of readdirSync(dirPath, { withFileTypes: true })) {
         if (entry.isDirectory()) {
-          candidates.push(
-            path.join(dirPath, entry.name, 'bin', binaryName()),
-            path.join(dirPath, entry.name, binaryName()),
-          )
+          for (const name of names) {
+            candidates.push(path.join(dirPath, entry.name, 'bin', name))
+            candidates.push(path.join(dirPath, entry.name, name))
+          }
         }
       }
     } catch { /* ignore readdir errors */ }
@@ -45,8 +47,10 @@ function findOnPath(): string | null {
   const sep = process.platform === 'win32' ? ';' : ':'
   for (const dir of PATH.split(sep)) {
     if (!dir) continue
-    const candidate = path.join(dir, binaryName())
-    if (existsSync(candidate)) return candidate
+    for (const name of binaryNames()) {
+      const candidate = path.join(dir, name)
+      if (existsSync(candidate)) return candidate
+    }
   }
   return null
 }

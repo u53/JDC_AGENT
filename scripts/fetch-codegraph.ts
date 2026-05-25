@@ -162,11 +162,17 @@ async function main() {
     : process.platform === 'win32' && process.arch === 'arm64' ? 'win32-arm64'
     : null
   if (hostP && platforms.includes(hostP)) {
-    const binName = hostP.startsWith('win32') ? 'codegraph.exe' : 'codegraph'
-    const candidates = [
-      path.join(RES_DIR, hostP, 'bin', binName),
-      path.join(RES_DIR, hostP, binName),
-    ]
+    const candidates = hostP.startsWith('win32')
+      ? [
+          path.join(RES_DIR, hostP, 'bin', 'codegraph.exe'),
+          path.join(RES_DIR, hostP, 'bin', 'codegraph.cmd'),
+          path.join(RES_DIR, hostP, 'codegraph.exe'),
+          path.join(RES_DIR, hostP, 'codegraph.cmd'),
+        ]
+      : [
+          path.join(RES_DIR, hostP, 'bin', 'codegraph'),
+          path.join(RES_DIR, hostP, 'codegraph'),
+        ]
     const bin = candidates.find(c => existsSync(c))
     if (!bin) throw new Error(`smoke test: binary not found in ${candidates.join(' | ')}`)
     console.log(`[fetch-codegraph] smoke test: ${bin} --version`)
