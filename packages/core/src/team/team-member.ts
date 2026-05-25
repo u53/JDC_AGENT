@@ -49,6 +49,7 @@ export class TeamMember {
   readonly responsibility?: string
   readonly agentType: string
   readonly modelId?: string
+  readonly expertPrompt?: string
 
   private status: MemberStatus = 'queued'
   private currentTaskId?: string
@@ -79,6 +80,7 @@ export class TeamMember {
     this.responsibility = opts.spec.responsibility
     this.agentType = opts.spec.agentType ?? 'explore'
     this.modelId = opts.spec.modelId
+    this.expertPrompt = opts.spec.expertPrompt
     this.currentTaskId = opts.taskId
     this.capabilities = deriveCapabilities(this.agentType)
     if (opts.existingMailbox) {

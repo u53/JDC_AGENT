@@ -3,6 +3,7 @@ import { TeamRuntime, type TeamRuntimePlan } from '../team/team-runtime.js'
 import { TeamRegistry } from '../team/team-registry.js'
 import type { BackgroundTaskManager } from '../background-tasks.js'
 import type { TeamMemberSpec, TeamEvent } from '../team/team-types.js'
+import { resolveExpertPrompt } from '../team/expert-prompts.js'
 import type { SubSessionOptions } from '../sub-session.js'
 import type { ModelProvider } from '../model-provider.js'
 import type { ModelConfig } from '../types.js'
@@ -82,6 +83,14 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
                   type: 'string',
                   description: 'Optional model override for this member. ONLY set this when the user explicitly asked for a different model. Omitting it (the default) makes the member inherit the main session model + reasoning effort — that is what the user configured. Do NOT guess a model name from training memory; if the ID is not configured locally the override is rejected and falls back anyway.',
                 },
+                expertPrompt: {
+                  type: 'string',
+                  description:
+                    'Domain-specific expert identity injected into the worker\'s system prompt. ' +
+                    'Use a preset key (java-backend, react-frontend, vue-frontend, qa-engineer, devops, database, security-audit, architect) ' +
+                    'or write custom text describing technical expertise, working style, and quality standards. ' +
+                    'Example: "技术栈：Java 17+, Spring Boot 3.x. 工作方式：严格分层..."',
+                },
               },
               required: ['role', 'responsibility'],
             },
@@ -141,7 +150,10 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
         }
       }
 
-      const requestedMembers = (input.members as TeamMemberSpec[] | undefined) ?? []
+      const requestedMembers = ((input.members as TeamMemberSpec[] | undefined) ?? []).map(m => ({
+        ...m,
+        expertPrompt: resolveExpertPrompt(m.expertPrompt),
+      }))
       const requestedTasks = (input.tasks as any[] | undefined) ?? []
       const maxWorkers = Math.min((input.maxWorkers as number | undefined) ?? 5, 10)
       const timeoutMinutes = input.timeoutMinutes as number | undefined

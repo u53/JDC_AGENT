@@ -60,8 +60,9 @@ describe('Team tools', () => {
       tasks: Array.from({ length: 30 }, (_, i) => ({ title: `T${i}`, description: `t${i}` })),
     } as any, {} as any)
     expect(result.isError).toBeFalsy()
-    // Members count should be visible from result content (one line per member)
-    const memberLineCount = (result.content.match(/^  - /gm) || []).length
+    // Members count: lines between "Members:" and "Delegated tasks" that start with "  - "
+    const membersSection = result.content.split('Delegated tasks')[0]
+    const memberLineCount = (membersSection.match(/^  - /gm) || []).length
     expect(memberLineCount).toBeLessThanOrEqual(10)
     expect(memberLineCount).toBeGreaterThan(0)
   })

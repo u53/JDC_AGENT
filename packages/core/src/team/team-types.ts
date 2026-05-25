@@ -25,6 +25,13 @@ export interface TeamMemberSpec {
   responsibility?: string
   agentType?: string
   modelId?: string
+  /**
+   * Domain-specific expert identity prompt injected into the worker's task prompt.
+   * Describes technical expertise, working style, and quality standards.
+   * Example: "技术栈：Java 17+, Spring Boot 3.x, MyBatis-Plus. 工作方式：严格分层..."
+   * Can reference a preset key from expert-prompts.ts (e.g., "java-backend") or be custom text.
+   */
+  expertPrompt?: string
 }
 
 export interface TeamMessage {
@@ -182,8 +189,8 @@ export const DEFAULT_CONCURRENCY_POLICY: TeamConcurrencyPolicy = {
   maxWorkersPerTeam: 10,
   maxActiveWorkers: 8,
   maxReadOnlyWorkers: 8,
-  maxWriteWorkers: 3,
-  maxShellWorkers: 3,
+  maxWriteWorkers: 1,
+  maxShellWorkers: 2,
 }
 
 // ── Workspace frontmatter types ─────────────────────────────────────────
