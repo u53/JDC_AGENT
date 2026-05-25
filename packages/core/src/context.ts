@@ -66,17 +66,30 @@ export async function loadMemoryIndex(cwd: string): Promise<string | null> {
   } catch { return null }
 }
 
-export async function loadActivePlan(cwd: string): Promise<{ fileName: string; content: string } | null> {
+export async function loadActivePlan(cwd: string): Promise<{ fileName: string; content: string; ageMs: number } | null> {
   const planDir = path.join(cwd, '.jdcagnet', 'plans')
+  const RECENCY_WINDOW_MS = 24 * 60 * 60 * 1000
   try {
     const files = await readdir(planDir)
-    const mdFiles = files.filter(f => f.endsWith('.md')).sort()
-    for (let i = mdFiles.length - 1; i >= 0; i--) {
-      const content = await readFile(path.join(planDir, mdFiles[i]), 'utf-8')
+    const mdFiles = files.filter(f => f.endsWith('.md'))
+    // Pick the most-recently-modified non-COMPLETED plan, but only if it
+    // was touched within the recency window. Older plans are stale — the
+    // user has likely moved on, so we don't shove them back into context.
+    const stat = await import('node:fs/promises').then(m => m.stat)
+    let best: { fileName: string; content: string; mtimeMs: number } | null = null
+    for (const f of mdFiles) {
+      const full = path.join(planDir, f)
+      const s = await stat(full)
+      const content = await readFile(full, 'utf-8')
       if (content.trimStart().startsWith('<!-- COMPLETED -->')) continue
-      return { fileName: mdFiles[i], content }
+      if (!best || s.mtimeMs > best.mtimeMs) {
+        best = { fileName: f, content, mtimeMs: s.mtimeMs }
+      }
     }
-    return null
+    if (!best) return null
+    const ageMs = Date.now() - best.mtimeMs
+    if (ageMs > RECENCY_WINDOW_MS) return null
+    return { fileName: best.fileName, content: best.content, ageMs }
   } catch { return null }
 }
 
@@ -172,11 +185,16 @@ You can check running tasks with \`task_output\` tool, or wait for the notificat
   const memDir = getMemoryDir(opts.cwd)
   segments.push({ content: getMemoryPrompt(memDir, memoryIndex), cacheable: true })
 
-  // Active plan
+  // Active plan — recently-touched, not-yet-marked-complete plan from
+  // .jdcagnet/plans/. We attach it as REFERENCE ONLY: the model must not
+  // resume work on it unless the user's CURRENT message clearly asks for
+  // that plan (by name or "continue last plan" / "继续上次的方案"). A new
+  // unrelated request must be answered as a new request.
   const activePlan = await loadActivePlan(opts.cwd)
   if (activePlan) {
+    const ageHours = Math.max(1, Math.round(activePlan.ageMs / (60 * 60 * 1000)))
     segments.push({
-      content: `<plan>\nPlan file: .jdcagnet/plans/${activePlan.fileName}\n\n${activePlan.content}\n\nIf this plan is relevant to the current work and not already complete, continue working on it.\n</plan>`,
+      content: `<recent-plan>\nA plan file was edited in this project ~${ageHours}h ago. It is attached for context only.\n\nFile: .jdcagnet/plans/${activePlan.fileName}\n\n${activePlan.content}\n\n</recent-plan>\n\n# How to use <recent-plan>\n\n- This plan is REFERENCE ONLY. It is NOT an open task list for the current conversation.\n- Do NOT continue, resume, or execute steps from this plan unless the user's current message clearly references it (e.g. "continue the plan", "继续上次那个方案", names the plan / topic, or asks "where were we").\n- For any new, unrelated request from the user, ignore this plan entirely and treat the request on its own merits — do not "remember" it, do not propose it, do not surface it.\n- If you're unsure whether the user's request relates to this plan, ASK rather than assume. Pre-emptively jumping back into an old plan is worse than asking one clarifying question.`,
       cacheable: true,
     })
   }
