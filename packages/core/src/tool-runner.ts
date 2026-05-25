@@ -52,6 +52,16 @@ export class ToolRunner {
     onEvent: (event: ToolExecutionEvent) => void,
     signal?: AbortSignal
   ): Promise<ToolResult> {
+    // codegraph: auto-inject projectPath when caller omitted it.
+    // Without this, the codegraph MCP server falls back to its own process.cwd
+    // (the JDC startup dir), which is wrong for multi-project sessions.
+    if (
+      toolName.startsWith('mcp__codegraph__') &&
+      (input == null || (input as Record<string, unknown>).projectPath == null)
+    ) {
+      input = { ...(input ?? {}), projectPath: this.cwd }
+    }
+
     const handler = this.registry.get(toolName)
     if (!handler) {
       const result: ToolResult = { content: `Unknown tool: ${toolName}`, isError: true }
