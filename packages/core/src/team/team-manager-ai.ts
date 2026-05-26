@@ -131,6 +131,28 @@ When two workers produce contradictory findings or outputs:
 
 # Concurrency Decision Rules
 
+## PARALLEL BY DEFAULT — serial is the exception
+
+The whole point of a team is parallelism. If tasks CAN run at the same time, they MUST.
+
+When to use dependsOn (SERIAL):
+- Task B literally reads the OUTPUT of Task A (e.g., QA reads the code that was just written)
+- Task B implements a contract that Task A defines
+- Task B modifies the SAME file that Task A is writing
+
+When to NOT use dependsOn (PARALLEL):
+- Tasks work on DIFFERENT files/modules (even if same objective)
+- Tasks investigate DIFFERENT aspects of the same question
+- Tasks are independent research/analysis from different angles
+- Frontend and backend implementation (unless they share an undefined contract)
+
+WRONG: "分析安全" dependsOn "分析性能" — these are independent investigations, run them in parallel!
+WRONG: "实现用户模块" dependsOn "实现订单模块" — different modules, no shared state, parallel!
+RIGHT: "QA验证用户模块" dependsOn "实现用户模块" — QA needs the code to exist first.
+RIGHT: "实现后端" dependsOn "设计API契约" — backend needs the contract to implement against.
+
+Rule of thumb: if you cannot explain WHY task B needs task A's output, do NOT add dependsOn.
+
 ## Critical path awareness
 
 When multiple runnable tasks compete for assignment, prefer the task that:
@@ -500,12 +522,13 @@ Your job NOW: review the plan with fresh eyes. Decide if it needs reshaping BEFO
 1. Look at the objective. Mentally enumerate what it implies (1 step? 3 steps? 10 steps?).
 2. Look at the initial task list:
    - If there is exactly 1 generic task like "Investigate <objective>" but the objective implies multiple steps,
-     SPLIT it: add_task each real step, with proper dependsOn chain. Then cancel the placeholder.
+     SPLIT it: add_task for each real step. Only add dependsOn where one task NEEDS the output of another.
+     Independent tasks (different modules, different angles) should have NO dependsOn — they run in parallel.
    - If two or more tasks must align on a shape (API contract, data schema, UI design, doc outline),
      INSERT a contract task FIRST, and chain the consumers via dependsOn.
    - If the plan is already granular and reasonable, DO NOTHING (output []).
-   - If tasks describe sequential phases (analysis → design → implementation) but have NO dependsOn
-     between them, ADD the dependency chain. Granular ≠ correct — a plan can be well-split but missing deps.
+   - If tasks describe truly sequential phases (output of A is input to B) but have NO dependsOn, ADD deps.
+     But if tasks are just "different aspects of the same goal", do NOT chain them — parallel is faster.
    - After restructuring tasks, verify worker-task fit: do existing workers' agentTypes match the new tasks?
      If you added specialized tasks but only have "general" workers, add_member with the right expertise.
 3. Look at the workforce. If the work clearly needs more diverse skills (e.g. mix of investigation + writing + QA),
@@ -550,6 +573,21 @@ Initial: [ T001 "Investigate" ]
 Single-shot research. T001 is fine as-is. Skip.
 </scratch>
 []
+
+## Example: multi-angle analysis (PARALLEL, no deps)
+Objective: "从安全、性能、架构三个角度分析这个项目"
+Initial: [ T001 "Investigate" ]
+
+<scratch>
+Three independent investigations. They don't need each other's output. NO dependsOn — run all in parallel.
+</scratch>
+[
+  { "type": "cancel_task", "taskId": "T001" },
+  { "type": "add_task", "task": { "title": "安全审计", "description": "审计项目的安全漏洞...", "priority": "normal" } },
+  { "type": "add_task", "task": { "title": "性能分析", "description": "分析性能瓶颈...", "priority": "normal" } },
+  { "type": "add_task", "task": { "title": "架构评审", "description": "评审架构设计...", "priority": "normal" } }
+]
+(NOTE: NO dependsOn between them — they are independent and run simultaneously.)
 `
 
 const FRAME_TASK_COMPLETED = `# This invocation: TASK JUST COMPLETED
