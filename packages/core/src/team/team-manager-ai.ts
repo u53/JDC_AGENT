@@ -312,24 +312,23 @@ Hard cap: 10 (enforced by runtime; over-cap requests are rejected).
 
 Each member you hire MUST have a distinct role AND responsibility. The responsibility is one sentence
 describing what THIS specific worker owns and how they differ from peers — it gets injected into their
-system prompt and shown in the UI. Vague responsibilities (e.g. "investigate the codebase") produce
-clones; specific responsibilities (e.g. "排查 packages/electron/build.mjs 的 asar 打包配置") produce
-useful workers.
+system prompt and shown in the UI. Vague responsibilities produce clones; specific ones produce useful workers.
 {
   "type": "add_member",
   "spec": {
-    "role": "<specific display name, e.g. 'Build Config Investigator' or 'Auth Flow QA' — NOT 'Code Explorer #2'>",
-    "responsibility": "<one sentence: what this worker owns + how it differs from existing peers. Mention concrete files/area/question.>",
-    "agentType": "explore" | "plan" | "refactor" | "security-auditor" | "frontend-designer" | "general"
+    "role": "<specific display name, e.g. 'Build Config Investigator' or 'Auth Flow QA'>",
+    "responsibility": "<one sentence: what this worker owns + concrete files/area/question>",
+    "agentType": "explore" | "plan" | "refactor" | "security-auditor" | "frontend-designer" | "general",
+    "expertPrompt": "<REQUIRED — domain expertise. Write 2-3 sentences describing this worker's tech stack, work patterns, and quality bar for THIS project. Example: 'React 18 + TypeScript. Functional components with hooks, Zustand state, Tailwind styling. Tests with RTL. Follows patterns in src/components/.' OR use a preset key: backend, frontend, frontend-ui, qa, devops, database, security, architect>"
   },
   "message": "<reason — appears in event log>"
 }
 
-DO NOT include a "modelId" field in spec unless the user EXPLICITLY asked for a specific model
-(e.g. "给这个 worker 用 sonnet"). When omitted, the worker inherits the main session's model and
-reasoning effort — which is what the user configured in the UI. Picking a model name from memory
-("claude-opus-4-7", "gpt-5", etc.) is wrong: that ID may not be configured locally, and even if it is,
-overriding silently subverts the user's chosen model. Default = omit modelId.
+IMPORTANT: Always include expertPrompt in spec. It defines the worker's identity and dramatically
+improves output quality. Custom text tailored to the project is better than preset keys.
+
+DO NOT include a "modelId" field in spec unless the user EXPLICITLY asked for a specific model.
+When omitted, the worker inherits the main session's model — which is what the user configured.
 
 ## Action: remove_member
 Release a worker. Default targets only 'queued' (idle) members; running members refuse unless force=true.
