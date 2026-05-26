@@ -5,6 +5,7 @@ import { TeamMember } from './team-member.js'
 import { TeamConcurrencyController } from './team-concurrency.js'
 import { TeamWorkspace } from './team-workspace.js'
 import { RingBuffer } from './team-mailbox.js'
+import { resolveExpertPrompt } from './expert-prompts.js'
 import {
   DEFAULT_CONCURRENCY_POLICY,
   type TeamStatus,
@@ -223,8 +224,9 @@ export class TeamRuntime {
       })
       return null
     }
+    const resolvedSpec = { ...spec, expertPrompt: resolveExpertPrompt(spec.expertPrompt) }
     const member = new TeamMember({
-      spec,
+      spec: resolvedSpec,
       taskPrompt: '',
       subSessionDeps: this.opts.subSessionDeps,
       resolveModel: this.opts.resolveModel,

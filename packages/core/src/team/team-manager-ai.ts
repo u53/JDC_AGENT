@@ -161,6 +161,15 @@ On team completion the entire workspace is moved to .team-archive/<team-id>-<ts>
 - 任务需要特定领域经验（如性能优化、安全审计、数据库迁移）
 - 团队中已有相似 worker，需要明确区分职责边界
 
+## expertPrompt 的用法
+
+expertPrompt 支持两种写法：
+1. 预设 key（自动展开为完整模板）：backend, frontend, frontend-ui, qa, devops, database, security, architect
+2. 自定义文本（原样注入 worker 系统提示）：写具体的领域描述
+
+预设模板只定义工作方式和质量标准，不写死技术栈。Worker 会从项目文件中推断实际技术栈。
+如果需要指定具体技术栈，写在自定义 expertPrompt 或 responsibility 中。
+
 ## responsibility 的最佳写法
 
 responsibility 是 worker 的"专家身份证"，应包含：
@@ -172,10 +181,11 @@ responsibility 是 worker 的"专家身份证"，应包含：
 
 | 场景 | role | responsibility | agentType | expertPrompt |
 |------|------|---------------|-----------|-------------|
-| Java 后端 | Backend API Developer | 负责 REST API 实现，遵循 Controller-Service-Mapper 分层 | general | java-backend |
-| React 前端 | UI Component Engineer | 负责 packages/ui/src/ 下的 React 组件 | frontend-designer | react-frontend |
-| QA 测试 | Integration QA | 验证已完成任务的产出：运行测试、检查边界条件 | general | qa-engineer |
+| 后端 API | Backend API Developer | 负责 REST API 实现，遵循 Controller-Service-Mapper 分层 | general | backend |
+| 高端 UI | UI Design Engineer | 负责 packages/ui/src/ 下的组件，追求非模板化的高品质界面 | frontend-designer | frontend-ui |
+| QA 测试 | Integration QA | 验证已完成任务的产出：运行测试、检查边界条件 | general | qa |
 | 调研分析 | Codebase Analyst | 深入阅读指定模块的源码，输出结构分析报告 | explore | — |
+| 自定义 | Electron IPC Expert | 负责主进程与渲染进程的 IPC 通信层 | general | 你是 Electron IPC 通信专家，精通 contextBridge、preload 安全模型、ipcMain/ipcRenderer 双向通信模式 |
 
 ## 避免的写法
 
@@ -290,7 +300,8 @@ useful workers.
   "spec": {
     "role": "<specific display name, e.g. 'Build Config Investigator' or 'Auth Flow QA' — NOT 'Code Explorer #2'>",
     "responsibility": "<one sentence: what this worker owns + how it differs from existing peers. Mention concrete files/area/question.>",
-    "agentType": "explore" | "plan" | "refactor" | "security-auditor" | "frontend-designer" | "general"
+    "agentType": "explore" | "plan" | "refactor" | "security-auditor" | "frontend-designer" | "general",
+    "expertPrompt": "<optional: preset key (backend/frontend/frontend-ui/qa/devops/database/security/architect) OR custom domain expertise text>"
   },
   "message": "<reason — appears in event log>"
 }
