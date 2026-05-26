@@ -36,7 +36,7 @@ describe('Team tools', () => {
     const tool = createTeamTool({ teamRegistry: registry, backgroundTasks: bg, buildSubSessionDeps })
 
     const result = await tool.execute({
-      objective: 'test team',
+      objective: 'test team creation and registration flow',
       members: [{ role: 'explorer', agentType: 'explore' }],
       tasks: [{ title: 'A', description: 'a' }],
     } as any, {} as any)
@@ -72,7 +72,7 @@ describe('Team tools', () => {
     const registry = new TeamRegistry()
     const teamTool = createTeamTool({ teamRegistry: registry, backgroundTasks: bg, buildSubSessionDeps })
     await teamTool.execute({
-      objective: 'test',
+      objective: 'test background send message to a team',
       members: [{ role: 'r', agentType: 'explore' }],
       tasks: [{ title: 'A', description: 'a' }, { title: 'B', description: 'b' }, { title: 'C', description: 'c' }],
     } as any, {} as any)
@@ -101,7 +101,7 @@ describe('Team tools', () => {
     const registry = new TeamRegistry()
     const teamTool = createTeamTool({ teamRegistry: registry, backgroundTasks: bg, buildSubSessionDeps })
     await teamTool.execute({
-      objective: 'analyze',
+      objective: 'analyze the project structure and dependencies',
       members: [{ role: 'explorer', agentType: 'explore' }],
       tasks: [{ title: 'A', description: 'a' }],
     } as any, {} as any)
@@ -121,7 +121,7 @@ describe('Team tools', () => {
     const registry = new TeamRegistry()
     const teamTool = createTeamTool({ teamRegistry: registry, backgroundTasks: bg, buildSubSessionDeps })
     await teamTool.execute({
-      objective: 'analyze',
+      objective: 'analyze the project structure and dependencies',
       members: [{ role: 'explorer', agentType: 'explore' }],
       tasks: [{ title: 'A', description: 'a' }],
     } as any, {} as any)

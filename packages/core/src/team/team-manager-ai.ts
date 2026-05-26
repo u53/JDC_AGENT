@@ -142,6 +142,45 @@ A "normal" priority task that unblocks 3 others is more urgent than a "high" pri
 
 When assigning a task, prefer a worker who just completed a RELATED task (same module, same domain) over a fresh idle worker. The completed worker already has file context loaded and will be faster.
 Exception: QA tasks should NOT go to the implementation author (conflict of interest).
+
+# Escalation Protocol
+
+You escalate to the user ONLY when:
+1. The question requires the user's TASTE or PREFERENCE (not a technical decision you can make)
+2. A destructive or irreversible action needs sign-off
+3. The team is genuinely deadlocked and you've exhausted all self-recovery options (3+ failures on critical-path task)
+
+When you escalate:
+- Use type="escalate_to_user"
+- State the specific question in one sentence
+- Provide your suggested default: "If no response, I will proceed with [X]"
+- Continue working on non-blocked tasks — do NOT pause the entire team
+
+You NEVER escalate for:
+- Worker failures (retry/reassign yourself)
+- Technical design choices (make the call)
+- Task ordering decisions (you're the PM, decide)
+- "Should I continue?" (yes, always continue)
+
+# Self-Recovery Protocol
+
+When a task fails:
+1. Read lastError. Classify: transient infra? capability mismatch? logic error?
+2. failures < 2: reopen_task (same member if transient, different member if capability mismatch)
+3. failures == 2: rewrite task description with more specificity, assign fresh member
+4. failures >= 3: cancel_task. If critical path, escalate_to_user. Otherwise note in summary.
+
+When a worker appears stuck:
+1. send_member_message intent="hurry" with specific guidance
+2. If no progress: kick_member with course correction hint
+3. If kick fails: let task fail naturally, then apply failure protocol above
+
+When a worker asks a question:
+1. Can you answer from objective/constraints/contracts/common sense? → answer immediately
+2. Is it a taste/preference question only user can answer? → escalate_to_user with default
+3. Otherwise: make your best judgment call
+
+NEVER let the team sit idle because you're "waiting for guidance."
 `
 
 const PM_TOOLBOX = `# Action toolbox
@@ -642,6 +681,8 @@ export class TeamManagerAI extends TeamManager {
   private conversationHistory: Message[] = []
   private aiEnabled = true
   private aiProcessing = false
+  private pmConsecutiveFailures = 0
+  private consecutiveEmptyResponses = 0
   private queuedAIMessages: TeamMessage[] = []
   private lastProactiveAt = 0
   private static PROACTIVE_THROTTLE_MS = 8000
@@ -1177,8 +1218,25 @@ export class TeamManagerAI extends TeamManager {
           message: summary || '已收到。我先继续推进当前进展,稍后再同步结果。',
         } as ManagerAction)
       }
+      if (parsed.length > 0) {
+        this.pmConsecutiveFailures = 0
+      }
       return parsed
-    } catch {
+    } catch (err) {
+      this.pmConsecutiveFailures++
+      this.opts.onEvent?.({
+        type: 'manager_decision',
+        text: `PM AI error (#${this.pmConsecutiveFailures}): ${err instanceof Error ? err.message : String(err)}`,
+        timestamp: Date.now(),
+      })
+      if (this.pmConsecutiveFailures >= 3) {
+        this.aiEnabled = false
+        this.opts.onEvent?.({
+          type: 'manager_decision',
+          text: 'PM AI disabled after 3 consecutive failures — falling back to round-robin assignment',
+          timestamp: Date.now(),
+        })
+      }
       return []
     }
   }
@@ -1234,8 +1292,26 @@ export class TeamManagerAI extends TeamManager {
           ;(this.opts as TeamManagerAIOptions).onUsage?.(chunk.usage)
         }
       }
-      return this.parseAIResponse(responseText).filter(a => a.type !== 'reply')
-    } catch {
+      const actions = this.parseAIResponse(responseText).filter(a => a.type !== 'reply')
+      if (actions.length > 0) {
+        this.pmConsecutiveFailures = 0
+      }
+      return actions
+    } catch (err) {
+      this.pmConsecutiveFailures++
+      this.opts.onEvent?.({
+        type: 'manager_decision',
+        text: `PM AI error (#${this.pmConsecutiveFailures}): ${err instanceof Error ? err.message : String(err)}`,
+        timestamp: Date.now(),
+      })
+      if (this.pmConsecutiveFailures >= 3) {
+        this.aiEnabled = false
+        this.opts.onEvent?.({
+          type: 'manager_decision',
+          text: 'PM AI disabled after 3 consecutive failures — falling back to round-robin assignment',
+          timestamp: Date.now(),
+        })
+      }
       return []
     }
   }
@@ -1272,8 +1348,26 @@ export class TeamManagerAI extends TeamManager {
           ;(this.opts as TeamManagerAIOptions).onUsage?.(chunk.usage)
         }
       }
-      return this.parseAIResponse(responseText).filter(a => a.type === 'assign_task' || a.type === 'cancel_task')
-    } catch {
+      const actions = this.parseAIResponse(responseText).filter(a => a.type === 'assign_task' || a.type === 'cancel_task')
+      if (actions.length > 0) {
+        this.pmConsecutiveFailures = 0
+      }
+      return actions
+    } catch (err) {
+      this.pmConsecutiveFailures++
+      this.opts.onEvent?.({
+        type: 'manager_decision',
+        text: `PM AI error (#${this.pmConsecutiveFailures}): ${err instanceof Error ? err.message : String(err)}`,
+        timestamp: Date.now(),
+      })
+      if (this.pmConsecutiveFailures >= 3) {
+        this.aiEnabled = false
+        this.opts.onEvent?.({
+          type: 'manager_decision',
+          text: 'PM AI disabled after 3 consecutive failures — falling back to round-robin assignment',
+          timestamp: Date.now(),
+        })
+      }
       return []
     }
   }

@@ -3,6 +3,7 @@ import { ipc } from '../lib/ipc-client'
 import { useIdeStore } from './ide-store'
 import { useTeamStore } from './team-store'
 import { useBackgroundTaskStore } from './background-task-store'
+import { useModelStore } from './model-store'
 import type { ToolExecutionEvent } from '@jdcagnet/core'
 
 interface Session {
@@ -167,6 +168,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   createSession: async (cwd: string) => {
     const projectName = cwd.split('/').filter(Boolean).pop() || 'untitled'
     const { sessionId } = await ipc.session.create(projectName, cwd)
+    const activeModelId = useModelStore.getState().activeModelId
+    if (activeModelId) {
+      ipc.session.setModel(sessionId, activeModelId)
+    }
     useTeamStore.getState().reset()
     useBackgroundTaskStore.getState().reset()
     set({ activeSessionId: sessionId, messages: [] })
@@ -181,7 +186,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // Clear team / background-task state from previous session — both are session-scoped
     useTeamStore.getState().reset()
     useBackgroundTaskStore.getState().reset()
-    const { messages, usage } = await ipc.session.switch(sessionId)
+    const { messages, usage, modelId } = await ipc.session.switch(sessionId)
+    if (modelId) {
+      useModelStore.setState({ activeModelId: modelId })
+    }
     set((s) => ({
       activeSessionId: sessionId,
       messages,

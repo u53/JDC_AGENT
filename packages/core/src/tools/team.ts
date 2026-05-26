@@ -32,6 +32,9 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
     definition: {
       name: 'Team',
       description:
+        'IMPORTANT: Before calling this tool, you MUST have completed the Pre-Team Intake Protocol ' +
+        '(clarify objective → present brief plan → get user confirmation — or meet skip conditions). ' +
+        'If you have not done this, STOP and go back to the user first. ' +
         'Create a multi-agent team to work on a complex objective collaboratively. ' +
         'Use this when the user says "开个团队", "team", "组个团队", "多人协作", or when a task benefits from multiple agents working in parallel with coordination. ' +
         'Prefer Team over multiple Agent calls when: (1) the user explicitly asks for a team, (2) the task has 3+ subtasks that benefit from parallel execution, or (3) the task needs coordination between workers. ' +
@@ -115,6 +118,14 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
     },
     async execute(input: Record<string, unknown>, _ctx: ToolContext): Promise<ToolResult> {
       const objective = input.objective as string
+
+      const objectiveText = (input.objective as string || '').trim()
+      if (objectiveText.length < 15) {
+        return {
+          content: `Error: objective is too vague (${objectiveText.length} chars). The Pre-Team Intake Protocol requires you to clarify the objective with the user before calling this tool. A good objective is 1-2 sentences describing the concrete deliverable.`,
+          isError: true,
+        }
+      }
 
       // One running team per session: reject if there's already a running team.
       // Archived (completed/failed) teams don't count.

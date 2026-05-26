@@ -79,6 +79,13 @@ export class ConversationHistory {
       // Column already exists
     }
 
+    // Migration: add model_id column (per-session model binding)
+    try {
+      this.db!.run(`ALTER TABLE sessions ADD COLUMN model_id TEXT`)
+    } catch {
+      // Column already exists
+    }
+
     // Migration: recreate tasks table with composite primary key
     try {
       const tableInfo = this.db!.exec("SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'")
@@ -208,6 +215,23 @@ export class ConversationHistory {
     if (stmt.step()) {
       const row = stmt.getAsObject()
       result = (row.usage_data as string) || null
+    }
+    stmt.free()
+    return result
+  }
+
+  setSessionModel(sessionId: string, modelId: string): void {
+    this.db!.run('UPDATE sessions SET model_id = ?, updated_at = ? WHERE id = ?', [modelId, Date.now(), sessionId])
+    this.save()
+  }
+
+  getSessionModel(sessionId: string): string | null {
+    const stmt = this.db!.prepare('SELECT model_id FROM sessions WHERE id = ?')
+    stmt.bind([sessionId])
+    let result: string | null = null
+    if (stmt.step()) {
+      const row = stmt.getAsObject()
+      result = (row.model_id as string) || null
     }
     stmt.free()
     return result

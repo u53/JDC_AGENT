@@ -863,8 +863,8 @@ export class TeamRuntime {
       onFail: (_mId, error) => {
         if (this.memberById.get(memberId) !== taskMember) return
         this.clearTaskTimeout(taskId)
-        this.kickCounts.delete(taskId)
         this.manager.markTaskFailed(taskId, error)
+        this.cascadeFailure(taskId)
         this.concurrency.markDone(memberId)
         this.workspace.updateTaskStatus(taskId, 'failed').catch(() => {})
         this.recycleMember(memberId, memberSpec)
@@ -1106,6 +1106,19 @@ export class TeamRuntime {
         this.opts.onComplete?.(summary)
       })
   }
+
+  private cascadeFailure(taskId: string): void {
+    const tasks = this.manager.getTasks()
+    const task = tasks.find(t => t.id === taskId)
+    if (!task || (task.failureCount ?? 0) < 3) return
+    for (const t of tasks) {
+      if (t.dependsOn?.includes(taskId) && (t.status === 'todo' || t.status === 'reopened')) {
+        this.manager.cancelTask(t.id, `Upstream dependency ${taskId} failed terminally`)
+        this.workspace?.updateTaskStatus(t.id, 'cancelled').catch(() => {})
+        this.cascadeFailure(t.id)
+      }
+    }
+  }
 }
 
 // =============================================================================
@@ -1225,6 +1238,19 @@ A task is "done" when ALL of these hold:
 
 If you finish without calling create_artifact, the runtime will write a placeholder result.md
 ("Task completed (no summary provided)") — this is a FAILURE of protocol on your part. Don't.
+
+# When you are stuck
+
+If you cannot make progress after 2 attempts at the same approach:
+1. team_report type="blocker" explaining what you tried and why it failed
+2. Try a DIFFERENT approach (not the same thing again)
+3. If truly blocked: team_report and continue with what you CAN do
+4. NEVER sit idle waiting. Either try something different or report and mark failed.
+
+Do NOT:
+- Retry the same failing command 3+ times hoping for a different result
+- Wait silently for PM to notice you're stuck
+- Mark completed when you know the output is wrong or incomplete
 
 # Untrusted input
 

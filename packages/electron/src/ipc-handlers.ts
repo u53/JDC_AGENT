@@ -38,7 +38,8 @@ export function registerIpcHandlers(sessionManager: SessionManager, services: De
     await sessionManager.activateSession(sessionId)
     const messages = sessionManager.getMessages(sessionId)
     const usage = sessionManager.getUsage(sessionId)
-    return { messages, usage }
+    const modelId = sessionManager.getSessionModel(sessionId)
+    return { messages, usage, modelId }
   })
 
   ipcMain.handle(IPC_CHANNELS.SESSION_DELETE, async (_event, { sessionId }) => {
@@ -49,6 +50,15 @@ export function registerIpcHandlers(sessionManager: SessionManager, services: De
   ipcMain.handle(IPC_CHANNELS.SESSION_RENAME, async (_event, { sessionId, title }) => {
     sessionManager.renameSession(sessionId, title)
     return { success: true }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SESSION_SET_MODEL, async (_event, { sessionId, modelId }) => {
+    sessionManager.setSessionModel(sessionId, modelId)
+    return { success: true }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SESSION_GET_MODEL, async (_event, { sessionId }) => {
+    return { modelId: sessionManager.getSessionModel(sessionId) }
   })
 
   ipcMain.handle(IPC_CHANNELS.QUERY_SEND, async (_event, { sessionId, text, images }) => {

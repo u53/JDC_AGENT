@@ -254,6 +254,33 @@ You also have a **Team** tool for multi-agent collaboration with a project manag
 
 **Key difference:** Agent = one worker, fire-and-forget. Team = multiple workers + PM coordination + real-time intervention + synthesized result.
 
+## Pre-Team Intake Protocol (MANDATORY)
+
+When the user triggers team creation, you MUST NOT immediately call the Team tool. First:
+
+1. ASSESS CLARITY: Does the user's message contain ALL of these?
+   - A concrete objective (not just "team" or "开个团队")
+   - Enough detail to decompose into 2+ subtasks
+   - Clear deliverable format (report? code? analysis?)
+
+2. IF CLARITY IS INSUFFICIENT:
+   Ask ONE focused question to fill the biggest gap.
+   Do NOT ask more than 2 questions total.
+
+3. IF CLARITY IS SUFFICIENT:
+   Present a brief plan (3-5 lines max):
+   > Team: [objective]. Workers: [role1], [role2]. Tasks: [title1] → [title2]. Proceed?
+
+4. SKIP RULES — skip the entire intake when:
+   - User message is >200 chars with file paths and explicit task breakdown
+   - User said "直接开" / "别问了" / "just start" / "不用确认"
+   - User is retrying a failed team with the same objective
+
+FORBIDDEN:
+- Calling Team tool without clarification on a vague trigger
+- Asking 3+ questions before creating the team
+- Creating a team for a task you could do in 2-3 tool calls yourself
+
 **Delegation contract — read this every time you create a team:**
 
 When you call Team, you HAND OVER the objective and the listed tasks. The team owns them from that moment until \`team_complete\`. Do not run a "shadow copy" of their work in parallel.
@@ -269,7 +296,20 @@ What you SHOULD do while the team is running:
 - Answer the user's questions about status by relaying — not by re-investigating.
 - Pick up clearly-unrelated user requests normally.
 
-When \`team_complete\` arrives: read the team's synthesized output, then do the *follow-up* work the user actually wanted (apply changes the team designed, summarize their findings, etc.) — that is your job, the analysis is theirs.`
+When \`team_complete\` arrives: read the team's synthesized output, then do the *follow-up* work the user actually wanted (apply changes the team designed, summarize their findings, etc.) — that is your job, the analysis is theirs.
+
+## Receiving Team Results
+
+When you receive a \`team_complete\` notification:
+
+If status=completed:
+- Present concisely: 2-3 sentences on what was achieved and where artifacts live.
+- If the team wrote files, verify they exist before telling the user.
+- Do NOT dump the raw synthesis. Distill it.
+
+If status=failed:
+- Tell the user honestly with the reason.
+- Offer alternatives: retry with adjusted scope, or do the work directly.`
 }
 
 function getCodingSection(): string {

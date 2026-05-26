@@ -130,6 +130,49 @@ export class SessionManager {
     }
   }
 
+  private resolveModelById(modelId: string): { provider: any; modelConfig: ModelConfig; protocol: string } | null {
+    const config = loadAppConfig()
+    const data = config.modelGroups
+    if (!data?.groups) return null
+    for (const group of data.groups) {
+      const model = group.models?.find((m: any) => m.id === modelId)
+      if (model) {
+        const provider = this.createProvider(group)
+        const modelConfig: ModelConfig = {
+          model: model.modelId,
+          maxTokens: model.maxTokens || 32000,
+          contextWindow: model.contextWindow || 200000,
+          compressAt: model.compressAt || 0.9,
+        }
+        return { provider, modelConfig, protocol: group.protocol || 'anthropic' }
+      }
+    }
+    return null
+  }
+
+  setSessionModel(sessionId: string, modelId: string): void {
+    this.history.setSessionModel(sessionId, modelId)
+    // Also update global config as "last used" for new sessions
+    const config = loadAppConfig()
+    if (config.modelGroups) {
+      config.modelGroups.activeModelId = modelId
+      saveAppConfig(config)
+    }
+    // If session is already active, hot-swap the provider
+    const session = this.sessions.get(sessionId)
+    if (session) {
+      const resolved = this.resolveModelById(modelId)
+      if (resolved) {
+        session.updateProvider(resolved.provider, resolved.modelConfig)
+        ;(session as any)._protocol = resolved.protocol
+      }
+    }
+  }
+
+  getSessionModel(sessionId: string): string | null {
+    return this.history.getSessionModel(sessionId)
+  }
+
   async activateSession(sessionId: string): Promise<void> {
     const meta = this.history.listSessions().find(s => s.id === sessionId)
     if (!meta) throw new Error(`Session ${sessionId} not found`)
@@ -137,19 +180,39 @@ export class SessionManager {
     this.ideManager.startDiscovery(meta.cwd)
     if (this.sessions.has(sessionId)) return
 
-    const active = getActiveModelConfig()
-    if (!active) throw new Error('No active model selected. Please configure a model in settings.')
+    const sessionModelId = this.history.getSessionModel(sessionId)
+    let modelConfig: ModelConfig
+    let provider: any
+    let protocol: string
 
-    const modelConfig: ModelConfig = {
-      model: active.model.modelId,
-      maxTokens: active.model.maxTokens || 32000,
-      contextWindow: active.model.contextWindow || 200000,
-      compressAt: active.model.compressAt || 0.9,
+    if (sessionModelId) {
+      const resolved = this.resolveModelById(sessionModelId)
+      if (resolved) {
+        modelConfig = resolved.modelConfig
+        provider = resolved.provider
+        protocol = resolved.protocol
+      } else {
+        // Stored model no longer exists, fall back to global
+        const active = getActiveModelConfig()
+        if (!active) throw new Error('No active model selected. Please configure a model in settings.')
+        provider = this.createProvider(active.group)
+        modelConfig = { model: active.model.modelId, maxTokens: active.model.maxTokens || 32000, contextWindow: active.model.contextWindow || 200000, compressAt: active.model.compressAt || 0.9 }
+        protocol = active.group.protocol || 'anthropic'
+        this.history.setSessionModel(sessionId, active.model.id)
+      }
+    } else {
+      // New session, no model stored yet — use global default
+      const active = getActiveModelConfig()
+      if (!active) throw new Error('No active model selected. Please configure a model in settings.')
+      provider = this.createProvider(active.group)
+      modelConfig = { model: active.model.modelId, maxTokens: active.model.maxTokens || 32000, contextWindow: active.model.contextWindow || 200000, compressAt: active.model.compressAt || 0.9 }
+      protocol = active.group.protocol || 'anthropic'
+      this.history.setSessionModel(sessionId, active.model.id)
     }
+
     const sessionConfig: SessionConfig = {
       id: sessionId, projectName: meta.projectName, cwd: meta.cwd, modelConfig,
     }
-    const provider = this.createProvider(active.group)
     const permissionCallback: PermissionCallback = (request) => {
       return new Promise<boolean>((resolve) => {
         const id = uuid()
@@ -199,7 +262,7 @@ export class SessionManager {
     }
     session.registerTool(createNotifyTool(onNotify))
     session.loadHistory()
-    ;(session as any)._protocol = active.group.protocol
+    ;(session as any)._protocol = protocol
     session.onNotificationReady = () => {
       this.window?.webContents.send('background:state-changed', { sessionId })
       if ((session as any).abortController) return
@@ -240,7 +303,6 @@ export class SessionManager {
       })
     }
     this.sessions.set(sessionId, session)
-    ;(session as any)._protocol = active.group.protocol
     this.evaluateCodegraphState(meta.cwd)
   }
 
@@ -257,31 +319,20 @@ export class SessionManager {
       session.setPermissionMode(storedMode as any)
     }
 
-    // Dynamic model switching: check if active model changed since session was created
-    const currentActive = getActiveModelConfig()
-    if (currentActive && (session.config.modelConfig.model !== currentActive.model.modelId || (session as any)._protocol !== currentActive.group.protocol)) {
-      const provider = this.createProvider(currentActive.group)
-      session.updateProvider(provider, {
-        model: currentActive.model.modelId,
-        maxTokens: currentActive.model.maxTokens || 32000,
-        contextWindow: currentActive.model.contextWindow || 200000,
-        compressAt: currentActive.model.compressAt || 0.9,
-      })
-      ;(session as any)._protocol = currentActive.group.protocol
-    } else if (currentActive) {
-      // Same model but config may have changed (contextWindow, compressAt, maxTokens)
-      const newCtx = currentActive.model.contextWindow || 200000
-      const newCompressAt = currentActive.model.compressAt || 0.9
-      const newMaxTokens = currentActive.model.maxTokens || 32000
-      if (session.config.modelConfig.contextWindow !== newCtx ||
-          session.config.modelConfig.compressAt !== newCompressAt ||
-          session.config.modelConfig.maxTokens !== newMaxTokens) {
-        session.updateProvider(session.getProvider(), {
-          model: currentActive.model.modelId,
-          maxTokens: newMaxTokens,
-          contextWindow: newCtx,
-          compressAt: newCompressAt,
-        })
+    // Refresh model config in case user edited model params (contextWindow, maxTokens, etc.)
+    const sessionModelId = this.history.getSessionModel(sessionId)
+    if (sessionModelId) {
+      const resolved = this.resolveModelById(sessionModelId)
+      if (resolved) {
+        const mc = session.config.modelConfig
+        if (mc.model !== resolved.modelConfig.model || (session as any)._protocol !== resolved.protocol) {
+          session.updateProvider(resolved.provider, resolved.modelConfig)
+          ;(session as any)._protocol = resolved.protocol
+        } else if (mc.contextWindow !== resolved.modelConfig.contextWindow ||
+                   mc.compressAt !== resolved.modelConfig.compressAt ||
+                   mc.maxTokens !== resolved.modelConfig.maxTokens) {
+          session.updateProvider(session.getProvider(), resolved.modelConfig)
+        }
       }
     }
 
