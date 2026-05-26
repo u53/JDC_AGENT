@@ -60,6 +60,8 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
               'do NOT submit clones (e.g. three "Code Explorer"s). The responsibility is injected into that member\'s system prompt ' +
               'and shown in the UI, so use it to make each worker focus on a different angle of the objective ' +
               '(different files, different layer, different question, different verification path). ' +
+              'Set expertPrompt for each member to define their work patterns (use preset keys: backend, frontend, frontend-ui, qa, devops, database, security, architect). ' +
+              'QA/test workers should NOT be the same person who writes the code — use separate members. ' +
               'If omitted, a small generic team is auto-generated, but you should almost always specify members yourself.',
             items: {
               type: 'object',
@@ -98,14 +100,17 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
           },
           tasks: {
             type: 'array',
-            description: 'Initial tasks for the team. Each task has a title and description.',
+            description:
+              'Initial tasks for the team. Tasks run in PHASES — use dependsOn to enforce ordering. ' +
+              'Common pattern: design/scaffold tasks first → implementation tasks (can parallelize) → test/QA tasks (depend on implementation). ' +
+              'NEVER let test tasks run in parallel with the code they test.',
             items: {
               type: 'object',
               properties: {
                 title: { type: 'string' },
                 description: { type: 'string' },
                 priority: { type: 'string', enum: ['low', 'normal', 'high', 'urgent'] },
-                dependsOn: { type: 'array', items: { type: 'string' } },
+                dependsOn: { type: 'array', items: { type: 'string' }, description: 'Titles of tasks that must complete before this one starts. Use to enforce phase ordering.' },
               },
               required: ['title', 'description'],
             },
