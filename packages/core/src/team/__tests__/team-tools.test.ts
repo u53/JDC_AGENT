@@ -60,9 +60,10 @@ describe('Team tools', () => {
       tasks: Array.from({ length: 30 }, (_, i) => ({ title: `T${i}`, description: `t${i}` })),
     } as any, {} as any)
     expect(result.isError).toBeFalsy()
-    // Members count: extract between "Members:" and "Delegated tasks"
-    const membersSection = result.content.split('Members:')[1]?.split('Delegated tasks')[0] || ''
-    const memberLineCount = (membersSection.match(/^  - /gm) || []).length
+    // Members count: lines between "Initial members:" and "Initial tasks"
+    const afterMembers = result.content.split('Initial members:\n')[1] || ''
+    const beforeTasks = afterMembers.split('Initial tasks')[0]
+    const memberLineCount = (beforeTasks.match(/^  - /gm) || []).length
     expect(memberLineCount).toBeLessThanOrEqual(10)
     expect(memberLineCount).toBeGreaterThan(0)
   })

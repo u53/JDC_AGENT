@@ -34,18 +34,19 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
       name: 'Team',
       description:
         'IMPORTANT: Before calling this tool, you MUST have completed the Pre-Team Intake Protocol ' +
-        '(clarify objective → present brief plan → get user confirmation — or meet skip conditions). ' +
+        '(clarify objective with user → get confirmation — or meet skip conditions). ' +
         'If you have not done this, STOP and go back to the user first. ' +
         'Create a multi-agent team to work on a complex objective collaboratively. ' +
         'Use this when the user says "开个团队", "team", "组个团队", "多人协作", or when a task benefits from multiple agents working in parallel with coordination. ' +
         'Prefer Team over multiple Agent calls when: (1) the user explicitly asks for a team, (2) the task has 3+ subtasks that benefit from parallel execution, or (3) the task needs coordination between workers. ' +
         'IMPORTANT: Only ONE running team is allowed per session. If a team is already active, this tool will return an error — wrap_up the existing team first (use background_send with intent="wrap_up"), then create a new one. ' +
-        'The team has a PM that assigns tasks, coordinates members, and synthesizes results. ' +
+        'The team has an AI PM that AUTONOMOUSLY decides staffing, task breakdown, and assignment. ' +
+        'You only need to provide the objective — do NOT plan members or tasks yourself unless the user explicitly specifies them. ' +
+        'The PM handles all coordination: hiring workers, decomposing work, assigning tasks, quality control, and synthesis. ' +
         'Use background_send to message the team, background_status to check progress, ' +
         'background_events to view detailed events, team_list to see all teams. The team runs as a background task. ' +
-        'CRITICAL — DELEGATION CONTRACT: once you create the team, the team OWNS the objective and the tasks you handed over. ' +
-        'You MUST NOT silently redo the team\'s work yourself in parallel ("let me also analyze for speed", "I\'ll write the file while they think"). ' +
-        'That defeats delegation, doubles token spend, produces conflicting outputs, and is exactly what the user did NOT ask for. ' +
+        'CRITICAL — DELEGATION CONTRACT: once you create the team, the team OWNS the objective. ' +
+        'You MUST NOT silently redo the team\'s work yourself in parallel. ' +
         'After this tool returns: STOP working on the delegated objective. Wait for the team_complete notification, then USE the team\'s synthesized output as the source of truth. ' +
         'You may: (a) idle until team_complete arrives, (b) work on clearly-unrelated user requests, (c) relay PM messages / status to the user when asked. ' +
         'You may NOT: pre-emptively write files the team is supposed to produce, run your own version of the team\'s analysis, or "tick off" your own todos that map to the team\'s tasks. ' +
@@ -55,17 +56,14 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
       inputSchema: {
         type: 'object',
         properties: {
-          objective: { type: 'string', description: 'High-level goal for the team' },
+          objective: { type: 'string', description: 'The only required field. Describe the concrete deliverable in 1-3 sentences. The PM uses this to decide staffing and task breakdown autonomously.' },
           members: {
             type: 'array',
             description:
-              'Member specifications. Each member MUST have a distinct role AND a distinct one-sentence responsibility — ' +
-              'do NOT submit clones (e.g. three "Code Explorer"s). The responsibility is injected into that member\'s system prompt ' +
-              'and shown in the UI, so use it to make each worker focus on a different angle of the objective ' +
-              '(different files, different layer, different question, different verification path). ' +
-              'Set expertPrompt for each member to define their work patterns (use preset keys: backend, frontend, frontend-ui, qa, devops, database, security, architect). ' +
-              'QA/test workers should NOT be the same person who writes the code — use separate members. ' +
-              'If omitted, a small generic team is auto-generated, but you should almost always specify members yourself.',
+              'Optional member hints. If omitted or empty, the PM autonomously decides what roles to hire based on the objective. ' +
+              'Only provide members when you have specific knowledge about what specialists are needed. ' +
+              'If provided, each member MUST have a distinct role AND a distinct one-sentence responsibility. ' +
+              'Set expertPrompt for each member to define their work patterns (use preset keys: backend, frontend, frontend-ui, qa, devops, database, security, architect, or custom text).',
             items: {
               type: 'object',
               properties: {
@@ -107,10 +105,9 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
           tasks: {
             type: 'array',
             description:
-              'Initial tasks for the team. PARALLEL BY DEFAULT — only add dependsOn when task B literally needs the OUTPUT of task A. ' +
-              'Common pattern: scaffold task first → implementation tasks IN PARALLEL (different modules/layers) → test/QA tasks (depend on their implementation). ' +
-              'WRONG: data-layer dependsOn scaffold, ui dependsOn data-layer, test dependsOn ui — this is a serial chain that wastes 3 idle workers! ' +
-              'RIGHT: scaffold first, then data-layer + ui + test-setup ALL in parallel (they work on different files). QA depends on the code it tests. ' +
+              'Optional task hints. If omitted or empty, the PM autonomously decomposes the objective into tasks. ' +
+              'Only provide tasks when you have a clear breakdown the PM should follow. ' +
+              'PARALLEL BY DEFAULT — only add dependsOn when task B literally needs the OUTPUT of task A. ' +
               'If two tasks work on DIFFERENT files/modules, they MUST be parallel (no dependsOn). ' +
               'NEVER let test tasks run in parallel with the code they test.',
             items: {
@@ -178,17 +175,6 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
       const maxWorkers = Math.min((input.maxWorkers as number | undefined) ?? 5, 10)
       const timeoutMinutes = input.timeoutMinutes as number | undefined
 
-      const members: TeamMemberSpec[] = requestedMembers.length > 0
-        ? requestedMembers
-        : [
-            {
-              role: 'Lead Investigator',
-              responsibility: `Lead the investigation into the objective end-to-end and produce a single coherent report. Objective: ${objective}`,
-              agentType: 'explore',
-              expertPrompt: 'architect',
-            },
-          ]
-
       // Resolve expertPrompt for each member (preset key → full text, custom → pass through)
       // Smart auto-assign: scan responsibility/role for domain keywords if expertPrompt not provided
       const AGENT_TYPE_TO_EXPERT: Record<string, string> = {
@@ -209,14 +195,12 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
         if (/\b(backend|后端|api|express|server|endpoint|路由)\b/.test(text)) return 'backend'
         return 'backend'
       }
-      const resolvedMembers: TeamMemberSpec[] = members.map(m => {
+      const resolvedMembers: TeamMemberSpec[] = requestedMembers.map(m => {
         const prompt = m.expertPrompt || inferExpertFromContext(m.role, m.responsibility) || AGENT_TYPE_TO_EXPERT[m.agentType || 'general']
         return { ...m, expertPrompt: resolveExpertPrompt(prompt) }
       })
 
-      const tasks = requestedTasks.length > 0
-        ? requestedTasks
-        : [{ title: 'Investigate', description: objective }]
+      const tasks = requestedTasks
 
       const plan: TeamRuntimePlan = {
         members: resolvedMembers.slice(0, maxWorkers),
@@ -282,20 +266,24 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
       deps.teamRegistry.register(team)
       await team.start()
 
-      const memberLines = team.getMembers().map(m => `  - ${m.role} (${m.agentType})`).join('\n')
-      const taskLines = (plan.tasks ?? []).map((t: any) => `  - ${t.title ?? t.description ?? '(unnamed task)'}`).join('\n')
+      const members = team.getMembers()
+      const memberLines = members.length > 0
+        ? members.map(m => `  - ${m.role} (${m.agentType})`).join('\n')
+        : '  (PM will hire workers autonomously)'
+      const taskLines = (plan.tasks ?? []).length > 0
+        ? (plan.tasks ?? []).map((t: any) => `  - ${t.title ?? t.description ?? '(unnamed task)'}`).join('\n')
+        : ''
       return {
         content: [
           `Team created and started.`,
           `Team ID: ${bgTask.id}`,
           `Objective: ${objective}`,
-          `Members:`,
-          memberLines,
-          taskLines ? `Delegated tasks (now OWNED by the team — do NOT redo them yourself):\n${taskLines}` : '',
+          members.length > 0 ? `Initial members:\n${memberLines}` : `The PM is now planning staffing and task breakdown autonomously.`,
+          taskLines ? `Initial tasks (hints):\n${taskLines}` : '',
           routerNote ? `\n${routerNote}` : '',
           ``,
           `HANDOFF CONTRACT — IMPORTANT:`,
-          `  • The objective and the tasks above now belong to the team. Do NOT analyze, draft, or write the same outputs in parallel "to speed things up".`,
+          `  • The objective now belongs to the team. Do NOT analyze, draft, or write outputs in parallel.`,
           `  • Wait for the team_complete notification, then base your follow-up work on the team's synthesized result.`,
           `  • If the user pings you while the team is running, relay status / forward intents via background_send. Do not pre-empt the team.`,
           `  • You can still handle user requests that are clearly unrelated to the delegated objective.`,

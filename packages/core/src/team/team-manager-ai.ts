@@ -556,85 +556,122 @@ This is what the system used to do automatically and it's wrong. Workers ask YOU
 
 const FRAME_TEAM_STARTED = `# This invocation: TEAM JUST STARTED
 
-This is your FIRST decision cycle. The team was just launched with the user's objective and an initial task list.
+This is your FIRST decision cycle. You are the Project Manager. The team was just launched with an objective.
 
-Your job NOW: review the plan with fresh eyes. Decide if it needs reshaping BEFORE workers start executing.
+Your job NOW: build the team and plan from scratch (or review hints if provided).
 
 ## Decision steps
-1. Look at the objective. Mentally enumerate what it implies (1 step? 3 steps? 10 steps?).
-2. Look at the initial task list:
-   - If there is exactly 1 generic task like "Investigate <objective>" but the objective implies multiple steps,
-     SPLIT it: add_task for each real step. Only add dependsOn where one task NEEDS the output of another.
-     Independent tasks (different modules, different angles) should have NO dependsOn — they run in parallel.
-   - If two or more tasks must align on a shape (API contract, data schema, UI design, doc outline),
-     INSERT a contract task FIRST, and chain the consumers via dependsOn.
-   - If the plan is already granular and reasonable, DO NOTHING (output []).
-   - If tasks describe truly sequential phases (output of A is input to B) but have NO dependsOn, ADD deps.
-     But if tasks are just "different aspects of the same goal", do NOT chain them — parallel is faster.
-   - After restructuring tasks, verify worker-task fit: do existing workers' agentTypes match the new tasks?
-     If you added specialized tasks but only have "general" workers, add_member with the right expertise.
-3. Look at the workforce. If the work clearly needs more diverse skills (e.g. mix of investigation + writing + QA),
-   add a couple of members proactively. Don't over-hire.
+
+1. Read the objective carefully. What concrete deliverables does it imply?
+2. Check the state dump:
+   - If members list is EMPTY: you must hire workers. Use add_member for each distinct skill needed (2-5 members).
+   - If tasks list is EMPTY: you must create the work breakdown. Use add_task for each work unit.
+   - If both are provided (hints from the caller): review them — adjust if needed, or accept as-is.
+
+3. For STAFFING (add_member):
+   - Each member needs: role (specific title), responsibility (one sentence, what they OWN), agentType, expertPrompt (custom text preferred).
+   - Match skills to the objective: frontend work → frontend-designer agent, backend → general agent, research → explore agent, security → security-auditor agent.
+   - Each member must be DISTINCT — different responsibility, different files/modules they own.
+   - 2-5 members is typical. Don't over-hire for simple objectives.
+
+4. For TASK BREAKDOWN (add_task):
+   - PARALLEL BY DEFAULT. Only add dependsOn when task B literally needs the OUTPUT of task A.
+   - Tasks on DIFFERENT files/modules → NO dependsOn (parallel).
+   - QA/test tasks → dependsOn the code they verify.
+   - Contract/design tasks → come first, implementation depends on them.
+   - Each task description must specify file scope (which files/dirs the worker owns).
+
+5. For ASSIGNMENT (assign_task):
+   - Match each task to the BEST-FIT member by responsibility/expertise.
+   - NEVER assign by availability alone. A "Data Layer Owner" gets data tasks, not UI tasks.
+   - You can assign multiple tasks in one output if multiple members are idle and tasks are runnable.
 
 ## Self-check before output
-- Every dependsOn references an existing T-id (either from the initial task list or one you're adding now).
-- For contract tasks, the description tells the worker EXACTLY which contract_name to use with team_artifact.
-- For consumer tasks, the description says "Strictly follow .team/contracts/<name>.md".
+- Every add_member has a distinct role + responsibility + expertPrompt.
+- Every add_task has a clear description with file scope.
+- dependsOn only where output dependency exists (NOT "seems related").
+- assign_task matches task domain to member expertise.
 
-## Example: front+back integration
-Objective: "Build a todo app with frontend and backend"
-Initial: [ T001 "Investigate" ]
+## Example: PM builds team from scratch
+Objective: "Build a todo app with React frontend and Express backend"
+Members: (none)
+Tasks: (none)
 
 <scratch>
-Integration project. Need contract + backend + frontend. Cancel T001 placeholder.
-Contract task: "todo-api". Backend and frontend both depend on it. Backend and frontend are PARALLEL (different modules).
+Need: API contract design, backend implementation, frontend implementation, QA.
+Skills: architect (contract), backend (Express), frontend (React), QA.
+Tasks: contract first, then backend + frontend in PARALLEL (different dirs), then QA depends on both.
 </scratch>
 [
-  { "type": "cancel_task", "taskId": "T001" },
+  { "type": "add_member", "spec": {
+      "role": "API Architect",
+      "responsibility": "Design and lock the shared API contract in .team/contracts/. Does NOT write implementation code.",
+      "agentType": "explore",
+      "expertPrompt": "API design specialist. Produces OpenAPI-style contracts with request/response schemas, status codes, and error formats. Focuses on consistency and completeness."
+  }, "message": "Contract designer" },
+  { "type": "add_member", "spec": {
+      "role": "Backend Developer",
+      "responsibility": "Implement Express API endpoints in server/src/. Owns all backend files. Follows the locked contract.",
+      "agentType": "general",
+      "expertPrompt": "Node.js + Express specialist. Writes typed route handlers with input validation, proper error responses, and integration tests. Follows existing project patterns."
+  }, "message": "Backend specialist" },
+  { "type": "add_member", "spec": {
+      "role": "Frontend Developer",
+      "responsibility": "Build React UI components in client/src/. Owns all frontend files. Consumes the API contract.",
+      "agentType": "frontend-designer",
+      "expertPrompt": "React + TypeScript specialist. Functional components with hooks, proper state management, accessible UI. Tests with React Testing Library."
+  }, "message": "Frontend specialist" },
   { "type": "add_task", "task": {
       "title": "Design todo-api contract",
-      "description": "Design the shared API contract for the todo app. Include: GET /api/todos, POST /api/todos, PATCH /api/todos/:id, DELETE /api/todos/:id with request/response fields. Call team_artifact action=create_contract contract_name=todo-api.",
+      "description": "Design the shared API contract. Include: GET/POST/PATCH/DELETE /api/todos with request/response fields. File scope: .team/contracts/todo-api.md. Call team_artifact action=create_contract contract_name=todo-api.",
       "priority": "high"
-  }, "message": "Lock contract before implementation" },
+  }, "message": "Contract first" },
   { "type": "add_task", "task": {
-      "title": "Implement todo backend",
-      "description": "Implement all endpoints defined in .team/contracts/todo-api.md. Strictly follow the contract.",
+      "title": "Implement backend API",
+      "description": "Implement all endpoints from .team/contracts/todo-api.md in server/src/routes/. File scope: server/src/**",
       "priority": "normal",
       "dependsOn": ["Design todo-api contract"]
-  }, "message": "Backend depends on contract" },
+  }, "message": "Backend after contract" },
   { "type": "add_task", "task": {
-      "title": "Implement todo frontend",
-      "description": "Build the UI that consumes .team/contracts/todo-api.md endpoints.",
+      "title": "Implement frontend UI",
+      "description": "Build todo UI consuming the API contract. File scope: client/src/**",
       "priority": "normal",
       "dependsOn": ["Design todo-api contract"]
-  }, "message": "Frontend depends on contract but is PARALLEL with backend" }
+  }, "message": "Frontend PARALLEL with backend" },
+  { "type": "assign_task", "taskId": "T001", "memberId": "<api-architect-id>" }
 ]
 
-(NOTE: dependsOn supports title-based references. Backend and frontend BOTH depend on the contract but NOT on each other — they run in parallel.)
+(NOTE: Backend and frontend are PARALLEL — both depend on contract but NOT on each other.)
 
-## Example: simple research, plan is fine
+## Example: hints provided, plan is reasonable
 Objective: "Investigate the module structure of packages/core/src/team/"
-Initial: [ T001 "Investigate" ]
+Members: 1 explore agent
+Tasks: [ T001 "Investigate" ]
 
 <scratch>
-Single-shot research. T001 is fine as-is. Skip.
+Simple research. One worker, one task. Plan is fine. Just assign.
 </scratch>
-[]
+[
+  { "type": "assign_task", "taskId": "T001", "memberId": "<the-explore-member>" }
+]
 
-## Example: multi-angle analysis (PARALLEL, no deps)
-Objective: "Analyze this project from security, performance, and architecture angles"
-Initial: [ T001 "Investigate" ]
+## Example: hints provided but need adjustment
+Objective: "Analyze security, performance, and architecture"
+Members: 1 explore agent
+Tasks: [ T001 "Analyze everything" ]
 
 <scratch>
-Three independent investigations. They don't need each other's output. NO dependsOn — run all in parallel.
+Three independent angles but only 1 worker and 1 task. Need to split tasks and add specialists.
 </scratch>
 [
   { "type": "cancel_task", "taskId": "T001" },
-  { "type": "add_task", "task": { "title": "Security audit", "description": "Audit for vulnerabilities...", "priority": "normal" } },
-  { "type": "add_task", "task": { "title": "Performance analysis", "description": "Analyze bottlenecks...", "priority": "normal" } },
-  { "type": "add_task", "task": { "title": "Architecture review", "description": "Review design patterns...", "priority": "normal" } }
+  { "type": "add_member", "spec": { "role": "Security Auditor", "responsibility": "Audit for vulnerabilities", "agentType": "security-auditor", "expertPrompt": "security" }, "message": "Security specialist" },
+  { "type": "add_member", "spec": { "role": "Performance Analyst", "responsibility": "Analyze bottlenecks and optimization opportunities", "agentType": "explore", "expertPrompt": "Backend performance specialist. Profiles hot paths, identifies N+1 queries, checks caching." }, "message": "Perf specialist" },
+  { "type": "add_task", "task": { "title": "Security audit", "description": "Audit for OWASP top 10 vulnerabilities...", "priority": "normal" } },
+  { "type": "add_task", "task": { "title": "Performance analysis", "description": "Profile and identify bottlenecks...", "priority": "normal" } },
+  { "type": "add_task", "task": { "title": "Architecture review", "description": "Review design patterns and modularity...", "priority": "normal" } }
 ]
-(NOTE: NO dependsOn between them — they are independent and run simultaneously.)
+(NOTE: NO dependsOn — three independent investigations run in parallel.)
 `
 
 const FRAME_TASK_COMPLETED = `# This invocation: TASK JUST COMPLETED
@@ -963,15 +1000,31 @@ export class TeamManagerAI extends TeamManager {
   }
 
   decideTick(activeMemberCount: number, availableMemberIds: string[]): ManagerAction[] {
-    if (this.aiEnabled && (this.aiProcessing || this.queuedProactive.size > 0)) {
-      // AI PM is mid-flight or has queued triggers — suppress round-robin so the
-      // AI can make an intelligent domain-matched assignment instead.
-      return super.decideTick(activeMemberCount, [])
+    if (this.aiEnabled) {
+      // When AI PM is enabled, ALL assignment decisions go through the AI via
+      // proactive triggers (task_completed, task_added, worker_idle_timeout, etc.).
+      // Round-robin is completely suppressed — only serves as fallback when
+      // aiEnabled=false (after 3 consecutive PM failures).
+      // We still need the completion check from base class, but avoid its
+      // status override to 'waiting_for_members'.
+      const allTasks = [...this.tasks.values()]
+      const terminalStates = new Set(['completed', 'failed', 'cancelled'])
+      const allDone = allTasks.length > 0 && allTasks.every(t => terminalStates.has(t.status))
+      if (allDone && !this.wrapUpRequested) {
+        this.setStatus('synthesizing')
+        return [{ type: 'complete', summary: this.synthesize() }]
+      }
+      if (this.wrapUpRequested) {
+        const runningCount = allTasks.filter(t => t.status === 'running' || t.status === 'assigned').length
+        if (runningCount === 0) {
+          this.setStatus('synthesizing')
+          return [{ type: 'complete', summary: this.synthesize() }]
+        }
+      }
+      // Don't override status — let it reflect what the AI PM is actually doing
+      return []
     }
-    const filtered = this.aiEnabled
-      ? availableMemberIds.filter(id => !this.pendingAssignment.has(id))
-      : availableMemberIds
-    return super.decideTick(activeMemberCount, filtered)
+    return super.decideTick(activeMemberCount, availableMemberIds)
   }
 
   notifyStaffingChange(action: 'added' | 'removed', memberId: string, role: string, agentType?: string): void {
@@ -1049,15 +1102,35 @@ export class TeamManagerAI extends TeamManager {
 
     this.lastProactiveAt = now
     this.aiProcessing = true
+    this.setStatus('planning')
+    this.opts.onEvent?.({
+      type: 'manager_decision',
+      text: `PM thinking: ${reason.kind}${reason.kind === 'task_completed' || reason.kind === 'task_failed' ? ` (${(reason as any).taskId})` : ''}`,
+      timestamp: Date.now(),
+    })
 
     this.processProactive(reason).then(actions => {
       this.aiProcessing = false
       if (actions.length > 0) {
+        this.setStatus('assigning')
         // proactive trigger — any reply here is internal PM narrative,
         // not a user-facing answer. Tag so runtime can skip waking the
         // main session.
         this.pendingAIActions = [...this.pendingAIActions, ...actions.map(a => ({ ...a, _proactive: true }))]
         ;(this.opts as TeamManagerAIOptions).onActionsReady?.()
+      } else if (reason.kind === 'team_started' && this.tasks.size === 0) {
+        // PM returned empty actions on team_started with no tasks — stuck state.
+        // Retry once after a short delay.
+        this.opts.onEvent?.({
+          type: 'manager_decision',
+          text: 'PM returned no actions on team_started — retrying in 3s',
+          timestamp: Date.now(),
+        })
+        setTimeout(() => {
+          if (!this.aiProcessing && this.tasks.size === 0) {
+            this.triggerProactiveCheck({ kind: 'team_started' })
+          }
+        }, 3000)
       }
       this.drainQueuedAIWork()
     }).catch(() => {
@@ -1290,7 +1363,7 @@ export class TeamManagerAI extends TeamManager {
         ...this.modelConfig,
         systemPrompt: this.buildPMSystemSegments(replySuppression || undefined),
         cacheKey: this.modelConfig.cacheKey ?? 'pm',
-        maxTokens: 2048,
+        maxTokens: 32768,
       }
 
       let responseText = ''
@@ -1390,7 +1463,7 @@ export class TeamManagerAI extends TeamManager {
           `\n\nNote: proactive cycle. NEVER use type="reply" — no user is asking. If you genuinely need user input (taste/preference question, destructive sign-off, real deadlock), use type="escalate_to_user" — it bypasses this restriction. Use it sparingly.`
         ),
         cacheKey: this.modelConfig.cacheKey ?? 'pm',
-        maxTokens: 2048,
+        maxTokens: 32768,
       }
       const messages: Message[] = [
         { id: uuid(), role: 'user', content: [{ type: 'text', text: userText }], timestamp: Date.now() },
@@ -1406,6 +1479,12 @@ export class TeamManagerAI extends TeamManager {
       const actions = this.parseAIResponse(responseText).filter(a => a.type !== 'reply')
       if (actions.length > 0) {
         this.pmConsecutiveFailures = 0
+      } else if (responseText.trim().length > 0) {
+        this.opts.onEvent?.({
+          type: 'manager_decision',
+          text: `PM proactive (${reason.kind}) returned 0 actions. Response length: ${responseText.length} chars. First 200: ${responseText.slice(0, 200).replace(/\n/g, ' ')}`,
+          timestamp: Date.now(),
+        })
       }
       return actions
     } catch (err) {
@@ -1446,7 +1525,7 @@ export class TeamManagerAI extends TeamManager {
           `\n\nNote: focused follow-up. Output ONLY assign_task or cancel_task. No other action types.`
         ),
         cacheKey: this.modelConfig.cacheKey ?? 'pm',
-        maxTokens: 1024,
+        maxTokens: 32768,
       }
       const messages: Message[] = [
         { id: uuid(), role: 'user', content: [{ type: 'text', text: userText }], timestamp: Date.now() },

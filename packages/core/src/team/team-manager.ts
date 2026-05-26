@@ -49,10 +49,10 @@ export class TeamManager {
   private currentDecision?: string
   private lastActivityAt: number = Date.now()
 
-  private tasks = new Map<string, TeamTask>()
+  protected tasks = new Map<string, TeamTask>()
   private titleToId = new Map<string, string>()
   private constraints: string[] = []
-  private wrapUpRequested = false
+  protected wrapUpRequested = false
 
   constructor(protected opts: TeamManagerOptions) {
     this.id = opts.managerId ?? `pm_${uuid().slice(0, 8)}`
@@ -269,7 +269,7 @@ export class TeamManager {
     // Check if all tasks are done -> complete
     const allTasks = [...this.tasks.values()]
     const terminalStates = new Set(['completed', 'failed', 'cancelled'])
-    const allDone = allTasks.every(t => terminalStates.has(t.status))
+    const allDone = allTasks.length > 0 && allTasks.every(t => terminalStates.has(t.status))
     if (allDone) {
       this.status = 'synthesizing'
       actions.push({ type: 'complete', summary: this.synthesize() })
