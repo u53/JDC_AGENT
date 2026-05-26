@@ -94,6 +94,7 @@ export class TeamMember {
       name: this.name,
       role: this.role,
       responsibility: this.responsibility,
+      expertPrompt: this.expertPrompt,
       agentType: this.agentType,
       modelId: this.modelId,
       status: this.status,

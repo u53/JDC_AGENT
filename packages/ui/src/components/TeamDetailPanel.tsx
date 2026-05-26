@@ -534,6 +534,14 @@ function MemberDetailModal({
             </ModalSection>
           )}
 
+          {member.expertPrompt && (
+            <ModalSection title="Expert Prompt">
+              <pre className="text-[11px] leading-snug text-[var(--text)] whitespace-pre-wrap font-mono max-h-[160px] overflow-y-auto bg-[var(--bg)] rounded p-2 border border-[var(--border)]">
+                {member.expertPrompt}
+              </pre>
+            </ModalSection>
+          )}
+
           <ModalSection title="Current task">
             {task ? (
               <div>

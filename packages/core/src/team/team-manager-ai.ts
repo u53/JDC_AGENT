@@ -966,6 +966,19 @@ export class TeamManagerAI extends TeamManager {
   }
 
   decideTick(activeMemberCount: number, availableMemberIds: string[]): ManagerAction[] {
+    // When AI PM is enabled, do NOT auto-complete when all tasks reach terminal state.
+    // Instead, let the proactive check (triggered by task_completed) handle the final
+    // quality review. The base class auto-complete bypasses PM's quality gate.
+    if (this.aiEnabled) {
+      const allTasks = this.getTasks()
+      const terminalStates = new Set(['completed', 'failed', 'cancelled'])
+      const allDone = allTasks.length > 0 && allTasks.every(t => terminalStates.has(t.status))
+      if (allDone) {
+        this.triggerProactiveCheck({ kind: 'task_completed', taskId: allTasks[allTasks.length - 1]?.id ?? '' })
+        return []
+      }
+    }
+
     const filtered = this.aiEnabled
       ? availableMemberIds.filter(id => !this.pendingAssignment.has(id))
       : availableMemberIds
