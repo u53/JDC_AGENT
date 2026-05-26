@@ -1097,9 +1097,10 @@ export class TeamManagerAI extends TeamManager {
         if (m.responsibility) {
           lines.push(`    responsibility: ${m.responsibility}`)
         }
-        if ((m as any).expertPrompt) {
-          const key = (m as any).expertPrompt.length <= 30 ? (m as any).expertPrompt : (m as any).expertPrompt.slice(0, 50) + '…'
-          lines.push(`    expertise: ${key}`)
+        if (m.expertPrompt) {
+          const firstLine = m.expertPrompt.split('\n')[0].trim()
+          const display = m.expertPrompt.length <= 50 ? m.expertPrompt : firstLine.slice(0, 100)
+          lines.push(`    expertise: ${display}`)
         }
       }
     }
