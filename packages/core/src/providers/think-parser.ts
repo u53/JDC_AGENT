@@ -89,6 +89,8 @@ export class ThinkTagStreamParser {
   private pendingText = ''
   private pendingKind: 'text' | 'thinking' = 'text'
   private insideThink = false
+  private emittedContent = false
+  private sawExplicitOpen = false
 
   writeText(text: string): StreamChunk[] {
     return [...this.prepareFor('text', text), ...this.write(text, 'text')]
@@ -115,6 +117,7 @@ export class ThinkTagStreamParser {
     const chunk: StreamChunk = { type, text: this.pendingText }
     this.pendingText = ''
     this.pendingKind = this.insideThink ? 'thinking' : 'text'
+    this.emittedContent = true
     return [chunk]
   }
 
@@ -127,18 +130,52 @@ export class ThinkTagStreamParser {
   private write(text: string, kind: 'text' | 'thinking'): StreamChunk[] {
     if (!text) return []
     this.pendingText += text
+    if (kind === 'thinking' && !this.insideThink && !this.sawExplicitOpen && !this.emittedContent) {
+      const orphan = findLeadingCloseTail(this.pendingText)
+      if (orphan) {
+        this.pendingText = ''
+        this.pendingKind = 'text'
+        return orphan.remaining ? this.write(orphan.remaining, 'text') : []
+      }
+    }
     const explicitInside = this.insideThink
     const semanticInside = kind === 'thinking' || this.pendingKind === 'thinking'
     const result = parseThinkTags(this.pendingText, explicitInside || semanticInside)
     this.pendingText = result.remaining
+    this.sawExplicitOpen = this.sawExplicitOpen || result.sawOpen
     this.insideThink = explicitInside || result.sawOpen
       ? result.insideThink
       : false
     this.pendingKind = result.insideThink || (kind === 'thinking' && !result.sawClose)
       ? 'thinking'
       : 'text'
+    if (result.chunks.some((chunk) => chunk.text)) this.emittedContent = true
     return result.chunks
   }
+}
+
+function findLeadingCloseTail(text: string): { remaining: string } | null {
+  const maxTailLen = 16
+  let earliestTag = -1
+  let tag = ''
+  let tagKind: 'open' | 'close' = 'open'
+
+  for (const thinkTag of THINK_TAGS) {
+    for (const candidate of [
+      { value: thinkTag.open, kind: 'open' as const },
+      { value: thinkTag.close, kind: 'close' as const },
+    ]) {
+      const idx = text.indexOf(candidate.value)
+      if (idx !== -1 && (earliestTag === -1 || idx < earliestTag)) {
+        earliestTag = idx
+        tag = candidate.value
+        tagKind = candidate.kind
+      }
+    }
+  }
+
+  if (earliestTag === -1 || tagKind !== 'close' || earliestTag > maxTailLen) return null
+  return { remaining: text.slice(earliestTag + tag.length) }
 }
 
 function canCompleteSplitTag(pending: string, incoming: string): boolean {

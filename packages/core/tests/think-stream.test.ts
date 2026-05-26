@@ -94,6 +94,53 @@ describe('thinking tag streaming', () => {
     expect(textOf(chunks, 'text_delta')).toBe('final answer')
   })
 
+  it('drops orphaned OpenAI thinking close tails at the start of a fresh stream', async () => {
+    const provider = new OpenAIChatProvider('test-key')
+    ;(provider as any).client = {
+      chat: {
+        completions: {
+          create: async () =>
+            openAIStream([
+              { choices: [{ delta: { reasoning_content: 'f.</thinking>\n\nfinal answer' } }] },
+              {
+                choices: [{ delta: {}, finish_reason: 'stop' }],
+                usage: { prompt_tokens: 1, completion_tokens: 2 },
+              },
+            ]),
+        },
+      },
+    }
+
+    const chunks = await collect(provider.stream([], [], config))
+
+    expect(textOf(chunks, 'thinking_delta')).toBe('')
+    expect(textOf(chunks, 'text_delta')).toBe('\n\nfinal answer')
+  })
+
+  it('drops orphaned OpenAI thinking close tails split across stream chunks', async () => {
+    const provider = new OpenAIChatProvider('test-key')
+    ;(provider as any).client = {
+      chat: {
+        completions: {
+          create: async () =>
+            openAIStream([
+              { choices: [{ delta: { reasoning_content: 'f.</thin' } }] },
+              { choices: [{ delta: { reasoning_content: 'king>\n\nfinal answer' } }] },
+              {
+                choices: [{ delta: {}, finish_reason: 'stop' }],
+                usage: { prompt_tokens: 1, completion_tokens: 2 },
+              },
+            ]),
+        },
+      },
+    }
+
+    const chunks = await collect(provider.stream([], [], config))
+
+    expect(textOf(chunks, 'thinking_delta')).toBe('')
+    expect(textOf(chunks, 'text_delta')).toBe('\n\nfinal answer')
+  })
+
   it('keeps Anthropic thinking tag state across thinking and text deltas', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(anthropicSse([
       {
@@ -155,5 +202,31 @@ describe('thinking tag streaming', () => {
 
     expect(textOf(chunks, 'thinking_delta')).toBe('native reason ')
     expect(textOf(chunks, 'text_delta')).toBe('final answer')
+  })
+
+  it('drops orphaned Anthropic thinking close tails at the start of a fresh stream', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(anthropicSse([
+      {
+        type: 'message_start',
+        message: { usage: { input_tokens: 1, output_tokens: 0 } },
+      },
+      {
+        type: 'content_block_delta',
+        delta: { type: 'thinking_delta', thinking: 'f.</thinking>' },
+      },
+      {
+        type: 'content_block_delta',
+        delta: { type: 'text_delta', text: '\n\nfinal answer' },
+      },
+      {
+        type: 'message_stop',
+      },
+    ]), { status: 200 })))
+
+    const provider = new AnthropicProvider('test-key')
+    const chunks = await collect(provider.stream([], [], config))
+
+    expect(textOf(chunks, 'thinking_delta')).toBe('')
+    expect(textOf(chunks, 'text_delta')).toBe('\n\nfinal answer')
   })
 })
