@@ -182,9 +182,24 @@ export class TeamManager {
       ? opts.title.trim()
       : '(untitled task)'
     const description = typeof opts.description === 'string' ? opts.description : ''
-    const deps = Array.isArray(opts.dependsOn)
-      ? opts.dependsOn.filter(d => typeof d === 'string' && d.length > 0).map(dep => this.resolveTaskRef(dep))
-      : undefined
+    const rawDeps = Array.isArray(opts.dependsOn)
+      ? opts.dependsOn.filter(d => typeof d === 'string' && d.length > 0)
+      : []
+    // Resolve deps: title → ID. Drop unresolvable refs (PM used a bad reference)
+    // so the task doesn't get permanently blocked.
+    const deps: string[] = []
+    for (const dep of rawDeps) {
+      const resolved = this.resolveTaskRef(dep)
+      if (this.tasks.has(resolved)) {
+        deps.push(resolved)
+      } else {
+        this.opts.onEvent?.({
+          type: 'manager_decision',
+          text: `Warning: dependsOn "${dep}" in task "${title}" could not be resolved — dropping this dependency`,
+          timestamp: Date.now(),
+        })
+      }
+    }
     const task: TeamTask = {
       id: `task_${uuid().slice(0, 6)}`,
       title,
@@ -192,7 +207,7 @@ export class TeamManager {
       status: 'todo',
       priority: opts.priority ?? 'normal',
       riskLevel: opts.riskLevel ?? 'low',
-      dependsOn: deps,
+      dependsOn: deps.length > 0 ? deps : undefined,
       createdBy: 'manager',
       createdAt: Date.now(),
       updatedAt: Date.now(),

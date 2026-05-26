@@ -106,7 +106,7 @@ On team completion the entire workspace is moved to .team-archive/<team-id>-<ts>
 - "Plan paralysis": adding tasks for the sake of granularity. Stop when the plan is sufficient, even if not pretty.
 - "Reply ghosting": user asked a question, you only emitted operational actions. ALWAYS include a "reply" when the user spoke.
 - "Phantom assignee": referencing a memberId that no longer exists (recycled / removed). Re-check current members before assigning.
-- "Dead deps": setting dependsOn to a task that doesn't exist or won't be created. Use only existing T<id> values you have already added.
+- "Dead deps": setting dependsOn to a title that doesn't match any existing or just-added task. Use exact task TITLES in dependsOn (not IDs like "T001").
 - "Silent contract drift": worker creates a contract but the consumers don't depend on it. ALWAYS chain consumer tasks via dependsOn.
 - "QA on reads": adding a QA task to verify a research summary. Pointless and expensive.
 - "Reopen on stale state": reopening a task that was already re-completed by someone else.
@@ -286,7 +286,7 @@ The task's id is auto-generated; you'll see it on the next decision cycle.
     "title": "<short label, < 60 chars>",
     "description": "<rich description: what worker must do, what tools to use, what to produce, where to write outputs. >100 chars typically.>",
     "priority": "low" | "normal" | "high" | "urgent",
-    "dependsOn": ["<existing T-id>", ...]   // omit or [] if none. NEVER reference IDs that don't exist.
+    "dependsOn": ["<exact task TITLE>", ...]   // Use the TITLE of the task (not its ID). Omit or [] if none. Title must match an existing or just-added task exactly.
   },
   "message": "<one-line reason — appears in event log>"
 }
@@ -374,8 +374,8 @@ The runtime will archive .team/ on completion.
 User: "进度如何?" → you output [{"type":"add_member",...}]  // NEVER. ALWAYS reply when user speaks.
 
 ## ❌ Dead-deps add_task
-You add T002 with dependsOn=["T999"] when T999 doesn't exist. Result: T002 is unrunnable forever.
-ALWAYS verify dependsOn references against the task list dump.
+You add T002 with dependsOn=["nonexistent title"] when no task has that title. Result: T002 is unrunnable forever.
+ALWAYS use exact task TITLES (not IDs) in dependsOn. The title must match an existing or just-added task.
 
 ## ❌ Phantom assignee on reopen
 ISSUE arrives on T002 → you reopen_task with memberId="member_aaa" but member_aaa was already removed.
