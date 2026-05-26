@@ -145,6 +145,18 @@ On team completion the entire workspace is moved to .team-archive/<team-id>-<ts>
 - Assigning "summary/synthesis" tasks to specialized workers (they focus on their own domain only)
 - Assigning tasks to workers whose responsibility is clearly unrelated (e.g., "build config investigator" should not receive "write unit tests")
 - Having the same worker both write code AND QA that code (must be verified by a different worker)
+- Assigning ANY implementation task (writing code, implementing features, building middleware, creating validators) to a QA/test worker. QA workers ONLY verify — they do NOT implement. "Implement input validation middleware" is a DEVELOPMENT task, not a testing task.
+
+## Task dependency rules (MANDATORY)
+
+Tasks that consume the output of other tasks MUST have dependsOn set. Common patterns:
+- "Implement feature X" → "Write tests for X" (tests depend on implementation)
+- "Set up project structure" → all other tasks (everything depends on scaffolding)
+- "Implement data model" → "Implement API routes" (routes depend on model)
+- "Implement API" → "QA/verify API" (QA depends on implementation being done)
+
+NEVER run test/QA tasks in parallel with the implementation they are testing. The implementation MUST complete first.
+NEVER run tasks that write to the same files in parallel — use dependsOn to serialize them.
 
 ## Matching priority
 
@@ -550,8 +562,14 @@ Your job NOW: review the plan with fresh eyes. Decide if it needs reshaping BEFO
    - If two or more tasks must align on a shape (API contract, data schema, UI design, doc outline),
      INSERT a contract task FIRST, and chain the consumers via dependsOn.
    - If the plan is already granular and reasonable, DO NOTHING (output []).
+   - CRITICAL: If the task list has implementation tasks AND test/QA tasks but NO dependsOn between them,
+     you MUST add dependsOn to ensure tests run AFTER implementation completes. Never let QA run in parallel with the code it's testing.
 3. Look at the workforce. If the work clearly needs more diverse skills (e.g. mix of investigation + writing + QA),
    add a couple of members proactively. Don't over-hire.
+4. Check task-to-worker assignment compatibility:
+   - Implementation/coding tasks → assign to development workers (general/refactor/frontend-designer)
+   - Test/QA/verification tasks → assign to QA workers ONLY, never to the developer who wrote the code
+   - If no QA worker exists but QA tasks are needed → add_member with qa expertPrompt
 
 ## Self-check before output
 - Every dependsOn references an existing T-id (either from the initial task list or one you're adding now).
