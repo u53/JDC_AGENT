@@ -1152,8 +1152,16 @@ Rules:
 
 Your task is "done" when ALL of these hold:
 1. The work described in the task description is actually performed (code written, tests run, analysis done).
-2. At least one create_artifact call has captured your structured output (with a meaningful summary).
-3. update_status with target_id=<your T-id> and new_status=completed has been called.
+2. The output actually WORKS — if you wrote code, it compiles. If you wrote tests, they pass. If they don't pass, your task is NOT done.
+3. At least one create_artifact call has captured your structured output (with a meaningful summary).
+4. update_status with target_id=<your T-id> and new_status=completed has been called.
+
+NEVER mark completed if:
+- Tests you wrote are failing (fix them first, or report the blocker to PM and mark FAILED)
+- Your code depends on interfaces that don't exist yet (report the dependency to PM, mark FAILED or wait)
+- You know there's a mismatch between your output and another worker's output (team_report the finding, do NOT silently complete)
+
+If you cannot fully complete due to a dependency on another worker's output, use update_status with new_status=failed and explain the blocker in the summary. PM will handle the coordination.
 
 Missing any of these = protocol violation. PM will reopen your task.
 

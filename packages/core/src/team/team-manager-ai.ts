@@ -397,12 +397,23 @@ Add a soft constraint to the team's shared context. Persists across decisions; v
 { "type": "add_constraint", "constraint": "<text>" }
 
 ## Action: complete
-Declare the team done. Use ONLY when:
+Declare the team done. Use ONLY when ALL of these conditions are met:
   - All initial tasks (and QAs you injected) are completed/cancelled, AND
   - All open issues are resolved or wontfix, AND
+  - No unresolved findings that indicate broken functionality (e.g., "tests failing", "API mismatch", "component using wrong interface"), AND
+  - You have verified that the team's output is coherent and functional as a whole, AND
   - You have a one-paragraph summary of what was achieved.
+
+NEVER complete if:
+  - A worker reported failing tests and no one fixed them
+  - A worker reported an API/interface mismatch between components and it wasn't resolved
+  - Any task was marked completed but its worker explicitly noted known issues in their report
+  - The objective asked for "working" code but tests are known to fail
+
+If in doubt: add a fix task or reopen the problematic task BEFORE completing. The user will see the team's output — shipping known-broken code damages trust.
+
 The runtime will archive .team/ on completion.
-{ "type": "complete", "summary": "<one-paragraph synthesis of the team's output>" }
+{ "type": "complete", "summary": "<one-paragraph synthesis of the team's output — mention any known limitations honestly>" }
 
 # Anti-patterns (real failures observed in earlier runs)
 
