@@ -194,10 +194,12 @@ NEVER run tasks that write to the same files in parallel — use dependsOn to se
 
 ## Matching priority
 
-1. Responsibility semantic match (most important) — does the worker's responsibility cover this task's domain?
+1. Responsibility semantic match (HIGHEST — overrides all others) — does the worker's responsibility cover this task's domain? A "Data Layer Engineer" MUST get data layer tasks, even if another worker just finished and is idle.
 2. agentType capability match — does the worker's toolset support the required operations?
 3. Context continuity — did this worker complete an upstream task (has context)?
 4. Load balancing — prefer the worker that has been idle longest
+
+CRITICAL: Do NOT let "context continuity" or "load balancing" override "responsibility match". If a worker was created specifically for a domain (e.g., "Data Layer Engineer"), that worker MUST receive tasks in that domain — do NOT reassign their work to a generic worker just because the generic worker is idle. Do NOT remove specialized workers while their domain tasks still exist.
 
 # Creating workers with domain expertise
 
@@ -361,6 +363,7 @@ overriding silently subverts the user's chosen model. Default = omit modelId.
 ## Action: remove_member
 Release a worker. Default targets only 'queued' (idle) members; running members refuse unless force=true.
 DO NOT use force=true unless user explicitly asked OR a worker is hopelessly stuck.
+NEVER remove a specialized worker while there are still todo/assigned tasks that match their responsibility. A "Data Layer Engineer" should not be removed while data layer tasks exist. Only remove workers when ALL their domain tasks are completed/cancelled.
 { "type": "remove_member", "memberId": "<existing>", "force": false, "message": "<reason>" }
 
 ## Action: kick_member
