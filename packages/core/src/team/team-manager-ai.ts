@@ -1301,7 +1301,7 @@ export class TeamManagerAI extends TeamManager {
         const summary = this.summarizeActionsForReply(parsed)
         parsed.push({
           type: 'reply',
-          message: summary || '已收到。我先继续推进当前进展,稍后再同步结果。',
+          message: summary || 'Acknowledged. Continuing with current work, will sync results shortly.',
         } as ManagerAction)
       }
       if (parsed.length > 0) {
@@ -1336,21 +1336,21 @@ export class TeamManagerAI extends TeamManager {
     const parts: string[] = []
     for (const a of actions) {
       switch (a.type) {
-        case 'add_task': parts.push(`新增任务「${(a as any).taskInput?.title ?? a.message ?? '...'}」`); break
-        case 'assign_task': parts.push(`分派任务 ${a.taskId}`); break
-        case 'cancel_task': parts.push(`取消任务 ${a.taskId}`); break
-        case 'reopen_task': parts.push(`重开任务 ${a.taskId}`); break
-        case 'add_member': parts.push(`新增成员`); break
-        case 'remove_member': parts.push(`移除成员 ${a.memberId}`); break
-        case 'broadcast': parts.push(`广播 ${a.intent ?? 'message'}`); break
-        case 'send_member_message': parts.push(`点对点提示 ${a.memberId}`); break
-        case 'kick_member': parts.push(`重启 ${a.memberId}`); break
-        case 'add_constraint': parts.push(`加约束`); break
-        case 'complete': parts.push(`收尾`); break
+        case 'add_task': parts.push(`added task "${(a as any).taskInput?.title ?? a.message ?? '...'}""`); break
+        case 'assign_task': parts.push(`assigned ${a.taskId}`); break
+        case 'cancel_task': parts.push(`cancelled ${a.taskId}`); break
+        case 'reopen_task': parts.push(`reopened ${a.taskId}`); break
+        case 'add_member': parts.push(`hired new worker`); break
+        case 'remove_member': parts.push(`removed ${a.memberId}`); break
+        case 'broadcast': parts.push(`broadcast ${a.intent ?? 'message'}`); break
+        case 'send_member_message': parts.push(`messaged ${a.memberId}`); break
+        case 'kick_member': parts.push(`restarted ${a.memberId}`); break
+        case 'add_constraint': parts.push(`added constraint`); break
+        case 'complete': parts.push(`completing team`); break
       }
     }
     if (parts.length === 0) return ''
-    return `已收到。我刚做了:${parts.join(',')}。`
+    return `Acknowledged. Actions taken: ${parts.join(', ')}.`
   }
 
   private async processProactive(reason: ProactiveReason): Promise<ManagerAction[]> {
@@ -1468,21 +1468,44 @@ export class TeamManagerAI extends TeamManager {
       const cleaned = text.replace(/<scratch>[\s\S]*?<\/scratch>/g, '').trim()
       // Find the LAST top-level JSON array (greedy from end)
       const arr = this.findLastJsonArray(cleaned)
-      if (!arr) return []
+      if (!arr) {
+        if (text.trim().length > 0) {
+          this.consecutiveEmptyResponses++
+          if (this.consecutiveEmptyResponses >= 5) {
+            this.aiEnabled = false
+            this.opts.onEvent?.({ type: 'manager_decision', text: `PM AI disabled: ${this.consecutiveEmptyResponses} consecutive unparseable responses`, timestamp: Date.now() })
+          }
+        }
+        return []
+      }
       const parsed = JSON.parse(arr)
-      if (!Array.isArray(parsed)) return []
+      if (!Array.isArray(parsed)) {
+        if (text.trim().length > 0) this.consecutiveEmptyResponses++
+        return []
+      }
 
       const validTypes = new Set([
         'assign_task', 'cancel_task', 'send_member_message', 'broadcast', 'add_constraint',
         'complete', 'reply', 'escalate_to_user', 'add_member', 'remove_member', 'add_task', 'reopen_task', 'kick_member',
       ])
-      return parsed
+      const actions = parsed
         .filter((a: any) => a && validTypes.has(a.type))
         .map((a: any) => {
           if (a.content && !a.message) a = { ...a, message: a.content }
           if (a.task && !a.taskInput) a = { ...a, taskInput: a.task }
           return a
         }) as ManagerAction[]
+
+      if (actions.length > 0) {
+        this.consecutiveEmptyResponses = 0
+      } else if (text.trim().length > 0) {
+        this.consecutiveEmptyResponses++
+        if (this.consecutiveEmptyResponses >= 5) {
+          this.aiEnabled = false
+          this.opts.onEvent?.({ type: 'manager_decision', text: `PM AI disabled: ${this.consecutiveEmptyResponses} consecutive empty responses`, timestamp: Date.now() })
+        }
+      }
+      return actions
     } catch {
       return []
     }

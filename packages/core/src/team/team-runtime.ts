@@ -707,7 +707,7 @@ export class TeamRuntime {
         }
         case 'kick_member':
           if (action.memberId) {
-            this.kickMember(action.memberId, action.message ?? 'PM 觉得你似乎卡住了，换个思路重试。')
+            this.kickMember(action.memberId, action.message ?? 'PM detected you are stuck. Try a different approach.')
           }
           break
       }
@@ -812,11 +812,11 @@ export class TeamRuntime {
             }
           }
           issueBlock =
-            `\n\n⚠️ ISSUES TO FIX (来自 QA 验收 - 必须全部 resolve 才算完成):\n\n` +
+            `\n\n⚠️ ISSUES TO FIX (from QA — all must be resolved before completion):\n\n` +
             sections.join('\n\n') +
             `\n\nResolution required:\n` +
-            `- 修复实现\n` +
-            `- 修复后调 team_artifact action=update_status target_id=<ISSUE-id> new_status=resolved resolution=<说明>\n`
+            `- Fix the implementation\n` +
+            `- After fixing, call team_artifact action=update_status target_id=<ISSUE-id> new_status=resolved resolution=<description>\n`
         }
       } catch { /* tolerate */ }
     }
