@@ -2,7 +2,7 @@ import OpenAI from 'openai'
 import type { ModelProvider } from '../model-provider.js'
 import type { ContentBlock, Message, ModelConfig, PromptSegment, ReasoningEffort, StreamChunk, ToolDefinition } from '../types.js'
 import { joinSegments } from '../context.js'
-import { parseThinkTags } from './think-parser.js'
+import { ThinkTagStreamParser } from './think-parser.js'
 import { getModelTraits } from './model-traits.js'
 
 function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): string | undefined {
@@ -128,23 +128,18 @@ export class OpenAIChatProvider implements ModelProvider {
     const stream = await this.client.chat.completions.create(params, { signal })
 
     let toolCallsStarted = 0
-    let insideThink = false
-    let pendingText = ''
+    const thinkParser = new ThinkTagStreamParser()
 
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta as any
       const finishReason = chunk.choices[0]?.finish_reason
 
       if (delta?.reasoning_content) {
-        yield { type: 'thinking_delta', text: delta.reasoning_content }
+        for (const c of thinkParser.writeThinking(delta.reasoning_content)) yield c
       }
 
       if (delta?.content) {
-        pendingText += delta.content
-        const result = parseThinkTags(pendingText, insideThink)
-        for (const c of result.chunks) yield c
-        pendingText = result.remaining
-        insideThink = result.insideThink
+        for (const c of thinkParser.writeText(delta.content)) yield c
       }
 
       if (delta?.tool_calls) {
@@ -171,28 +166,14 @@ export class OpenAIChatProvider implements ModelProvider {
 
       if (finishReason === 'tool_calls') {
         // Flush remaining pendingText before tool calls
-        if (pendingText) {
-          if (insideThink) {
-            yield { type: 'thinking_delta', text: pendingText }
-          } else {
-            yield { type: 'text_delta', text: pendingText }
-          }
-          pendingText = ''
-        }
+        for (const c of thinkParser.flush()) yield c
         // Close the last open tool call
         if (toolCallsStarted > 0) {
           yield { type: 'tool_use_end' }
         }
       } else if (finishReason === 'stop') {
         // Flush remaining pendingText
-        if (pendingText) {
-          if (insideThink) {
-            yield { type: 'thinking_delta', text: pendingText }
-          } else {
-            yield { type: 'text_delta', text: pendingText }
-          }
-          pendingText = ''
-        }
+        for (const c of thinkParser.flush()) yield c
         yield {
           type: 'message_end',
           usage: {

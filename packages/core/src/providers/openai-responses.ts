@@ -2,7 +2,7 @@ import OpenAI from 'openai'
 import type { ModelProvider } from '../model-provider.js'
 import type { ContentBlock, Message, ModelConfig, PromptSegment, ReasoningEffort, StreamChunk, ToolDefinition } from '../types.js'
 import { joinSegments } from '../context.js'
-import { parseThinkTags } from './think-parser.js'
+import { ThinkTagStreamParser } from './think-parser.js'
 import { getModelTraits } from './model-traits.js'
 
 function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): string | undefined {
@@ -164,16 +164,11 @@ export class OpenAIResponsesProvider implements ModelProvider {
 
     const stream = await (this.client as any).responses.create(params, { signal })
 
-    let insideThink = false
-    let pendingText = ''
+    const thinkParser = new ThinkTagStreamParser()
 
     for await (const event of stream) {
       if (event.type === 'response.output_text.delta') {
-        pendingText += event.delta
-        const result = parseThinkTags(pendingText, insideThink)
-        for (const c of result.chunks) yield c
-        pendingText = result.remaining
-        insideThink = result.insideThink
+        for (const c of thinkParser.writeText(event.delta)) yield c
       } else if (event.type === 'response.output_item.added' && event.item?.type === 'function_call') {
         yield {
           type: 'tool_use_start',
@@ -188,17 +183,10 @@ export class OpenAIResponsesProvider implements ModelProvider {
         yield { type: 'tool_use_end' }
       } else if (event.type === 'response.reasoning_summary_text.delta' || event.type === 'response.reasoning_text.delta') {
         if (event.delta) {
-          yield { type: 'thinking_delta', text: event.delta }
+          for (const c of thinkParser.writeThinking(event.delta)) yield c
         }
       } else if (event.type === 'response.completed') {
-        if (pendingText) {
-          if (insideThink) {
-            yield { type: 'thinking_delta', text: pendingText }
-          } else {
-            yield { type: 'text_delta', text: pendingText }
-          }
-          pendingText = ''
-        }
+        for (const c of thinkParser.flush()) yield c
         const usage = event.response?.usage
         const cachedTokens = usage?.input_tokens_details?.cached_tokens ?? 0
         yield {

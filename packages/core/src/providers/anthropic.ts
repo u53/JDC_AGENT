@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { ModelProvider } from '../model-provider.js'
 import type { ContentBlock, Message, ModelConfig, PromptSegment, ReasoningEffort, StreamChunk, ToolDefinition } from '../types.js'
 import { joinSegments } from '../context.js'
-import { parseThinkTags } from './think-parser.js'
+import { ThinkTagStreamParser } from './think-parser.js'
 
 function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): any {
   if (!systemPrompt) return undefined
@@ -154,8 +154,8 @@ export class AnthropicProvider implements ModelProvider {
     const stream = this.client.messages.stream(params, { signal })
 
     let usage = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }
-    let insideThink = false
-    let pendingText = ''
+    const thinkParser = new ThinkTagStreamParser()
+    let currentBlockType: string | undefined
 
     for await (const event of stream) {
       if (event.type === 'message_start') {
@@ -173,43 +173,34 @@ export class AnthropicProvider implements ModelProvider {
         }
       } else if (event.type === 'content_block_delta') {
         if (event.delta.type === 'text_delta') {
-          pendingText += event.delta.text
-          const result = parseThinkTags(pendingText, insideThink)
-          for (const chunk of result.chunks) yield chunk
-          pendingText = result.remaining
-          insideThink = result.insideThink
+          const chunks = currentBlockType === 'thinking'
+            ? thinkParser.writeThinking(event.delta.text)
+            : thinkParser.writeText(event.delta.text)
+          for (const chunk of chunks) yield chunk
         } else if (event.delta.type === 'input_json_delta') {
           yield { type: 'tool_use_delta', toolUse: { id: '', name: '', input: event.delta.partial_json } }
         } else if ((event.delta as any).type === 'thinking_delta') {
-          yield { type: 'thinking_delta', text: (event.delta as any).thinking }
+          for (const chunk of thinkParser.writeThinking((event.delta as any).thinking)) yield chunk
         } else if ((event.delta as any).type === 'signature_delta') {
           yield { type: 'thinking_end', signature: (event.delta as any).signature }
         }
       } else if (event.type === 'content_block_start') {
+        currentBlockType = (event.content_block as any).type
         if (event.content_block.type === 'tool_use') {
+          for (const chunk of thinkParser.flush()) yield chunk
           yield { type: 'tool_use_start', toolUse: { id: event.content_block.id, name: event.content_block.name, input: '' } }
         } else if ((event.content_block as any).type === 'thinking') {
-          yield { type: 'thinking_delta', text: '' }
+          for (const chunk of thinkParser.startThinking()) yield chunk
         }
       } else if (event.type === 'content_block_stop') {
-        if (pendingText) {
-          if (insideThink) {
-            yield { type: 'thinking_delta', text: pendingText }
-          } else {
-            yield { type: 'text_delta', text: pendingText }
-          }
-          pendingText = ''
-        }
+        const chunks = currentBlockType === 'thinking'
+          ? thinkParser.endThinking()
+          : thinkParser.flush()
+        for (const chunk of chunks) yield chunk
+        currentBlockType = undefined
         yield { type: 'tool_use_end' }
       } else if (event.type === 'message_stop') {
-        if (pendingText) {
-          if (insideThink) {
-            yield { type: 'thinking_delta', text: pendingText }
-          } else {
-            yield { type: 'text_delta', text: pendingText }
-          }
-          pendingText = ''
-        }
+        for (const chunk of thinkParser.flush()) yield chunk
         yield { type: 'message_end', usage }
       }
     }
@@ -237,8 +228,8 @@ export class AnthropicProvider implements ModelProvider {
     const decoder = new TextDecoder()
     let buffer = ''
     let usage = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }
-    let insideThink = false
-    let pendingText = ''
+    const thinkParser = new ThinkTagStreamParser()
+    let currentBlockType: string | undefined
 
     while (true) {
       const { done, value } = await reader.read()
@@ -280,43 +271,34 @@ export class AnthropicProvider implements ModelProvider {
           }
         } else if (event.type === 'content_block_delta') {
           if (event.delta?.type === 'text_delta') {
-            pendingText += event.delta.text
-            const result = parseThinkTags(pendingText, insideThink)
-            for (const chunk of result.chunks) yield chunk
-            pendingText = result.remaining
-            insideThink = result.insideThink
+            const chunks = currentBlockType === 'thinking'
+              ? thinkParser.writeThinking(event.delta.text)
+              : thinkParser.writeText(event.delta.text)
+            for (const chunk of chunks) yield chunk
           } else if (event.delta?.type === 'input_json_delta') {
             yield { type: 'tool_use_delta', toolUse: { id: '', name: '', input: event.delta.partial_json } }
           } else if (event.delta?.type === 'thinking_delta') {
-            yield { type: 'thinking_delta', text: event.delta.thinking }
+            for (const chunk of thinkParser.writeThinking(event.delta.thinking)) yield chunk
           } else if (event.delta?.type === 'signature_delta') {
             yield { type: 'thinking_end', signature: event.delta.signature }
           }
         } else if (event.type === 'content_block_start') {
+          currentBlockType = event.content_block?.type
           if (event.content_block?.type === 'tool_use') {
+            for (const chunk of thinkParser.flush()) yield chunk
             yield { type: 'tool_use_start', toolUse: { id: event.content_block.id, name: event.content_block.name, input: '' } }
           } else if (event.content_block?.type === 'thinking') {
-            yield { type: 'thinking_delta', text: '' }
+            for (const chunk of thinkParser.startThinking()) yield chunk
           }
         } else if (event.type === 'content_block_stop') {
-          if (pendingText) {
-            if (insideThink) {
-              yield { type: 'thinking_delta', text: pendingText }
-            } else {
-              yield { type: 'text_delta', text: pendingText }
-            }
-            pendingText = ''
-          }
+          const chunks = currentBlockType === 'thinking'
+            ? thinkParser.endThinking()
+            : thinkParser.flush()
+          for (const chunk of chunks) yield chunk
+          currentBlockType = undefined
           yield { type: 'tool_use_end' }
         } else if (event.type === 'message_stop') {
-          if (pendingText) {
-            if (insideThink) {
-              yield { type: 'thinking_delta', text: pendingText }
-            } else {
-              yield { type: 'text_delta', text: pendingText }
-            }
-            pendingText = ''
-          }
+          for (const chunk of thinkParser.flush()) yield chunk
           yield { type: 'message_end', usage }
         }
       }
