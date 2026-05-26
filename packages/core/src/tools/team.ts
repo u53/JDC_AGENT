@@ -3,6 +3,7 @@ import { TeamRuntime, type TeamRuntimePlan } from '../team/team-runtime.js'
 import { TeamRegistry } from '../team/team-registry.js'
 import type { BackgroundTaskManager } from '../background-tasks.js'
 import type { TeamMemberSpec, TeamEvent } from '../team/team-types.js'
+import { resolveExpertPrompt } from '../team/expert-prompts.js'
 import type { SubSessionOptions } from '../sub-session.js'
 import type { ModelProvider } from '../model-provider.js'
 import type { ModelConfig } from '../types.js'
@@ -164,15 +165,30 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
               role: 'Lead Investigator',
               responsibility: `Lead the investigation into the objective end-to-end and produce a single coherent report. Objective: ${objective}`,
               agentType: 'explore',
+              expertPrompt: 'architect',
             },
           ]
+
+      // Resolve expertPrompt for each member (preset key → full text, custom → pass through)
+      // Auto-assign default expertPrompt based on agentType if not provided
+      const AGENT_TYPE_TO_EXPERT: Record<string, string> = {
+        'general': 'backend',
+        'explore': 'architect',
+        'refactor': 'backend',
+        'security-auditor': 'security',
+        'frontend-designer': 'frontend-ui',
+      }
+      const resolvedMembers: TeamMemberSpec[] = members.map(m => {
+        const prompt = m.expertPrompt || AGENT_TYPE_TO_EXPERT[m.agentType || 'general']
+        return { ...m, expertPrompt: resolveExpertPrompt(prompt) }
+      })
 
       const tasks = requestedTasks.length > 0
         ? requestedTasks
         : [{ title: 'Investigate', description: objective }]
 
       const plan: TeamRuntimePlan = {
-        members: members.slice(0, maxWorkers),
+        members: resolvedMembers.slice(0, maxWorkers),
         tasks,
       }
 

@@ -19,6 +19,7 @@ import {
   type RiskLevel,
   type TeamMessageIntent,
 } from './team-types.js'
+import { resolveExpertPrompt } from './expert-prompts.js'
 import type { SubSessionOptions } from '../sub-session.js'
 import type { ModelProvider } from '../model-provider.js'
 import type { ModelConfig } from '../types.js'
@@ -225,8 +226,9 @@ export class TeamRuntime {
       })
       return null
     }
+    const resolvedSpec = { ...spec, expertPrompt: resolveExpertPrompt(spec.expertPrompt) || spec.expertPrompt }
     const member = new TeamMember({
-      spec,
+      spec: resolvedSpec,
       taskPrompt: '',
       subSessionDeps: this.opts.subSessionDeps,
       resolveModel: this.opts.resolveModel,
@@ -831,7 +833,7 @@ export class TeamRuntime {
       contractsBlock: contractBlocks,
       issueBlock,
       upstream,
-      member: { role: member.role, responsibility: member.responsibility, agentType: member.agentType },
+      member: { role: member.role, responsibility: member.responsibility, agentType: member.agentType, expertPrompt: member.expertPrompt },
       objective: this.objective,
       kickHint,
       workerSkillContent: this.opts.skillInjection?.workerContent,
@@ -1271,7 +1273,7 @@ interface WorkerTaskPromptArgs {
   contractsBlock: string[]      // each element is a "--- contracts/X.md ---\n…\n--- end ---" block
   issueBlock: string            // pre-rendered "⚠️ ISSUES TO FIX" section, or empty string
   upstream: Array<{ filePath: string; summary: string }>
-  member: { role: string; responsibility?: string; agentType: string }
+  member: { role: string; responsibility?: string; agentType: string; expertPrompt?: string }
   objective: string
   kickHint?: string             // PM intervention message when restarting a stuck worker
   /** Execution methodology selected by SkillRouter, plain text. */
@@ -1284,6 +1286,15 @@ function buildWorkerTaskPrompt(args: WorkerTaskPromptArgs): string {
   const sections: string[] = []
   sections.push(WORKER_IDENTITY)
   sections.push(WORKER_PROTOCOL)
+
+  if (member.expertPrompt) {
+    sections.push(
+      `# Expert Identity\n\n` +
+      `You are not a generic engineer. You are a domain specialist. ` +
+      `The following defines your technical expertise, working style, and quality bar:\n\n` +
+      member.expertPrompt
+    )
+  }
 
   sections.push(`# Team objective\n\n${objective}`)
   const youAreLines = [
