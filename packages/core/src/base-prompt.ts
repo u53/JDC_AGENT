@@ -280,6 +280,17 @@ FORBIDDEN:
 - Calling Team tool without clarification on a vague trigger
 - Asking 3+ questions before creating the team
 - Creating a team for a task you could do in 2-3 tool calls yourself
+- Chaining ALL tasks with dependsOn — independent tasks MUST run in parallel
+
+**Task parallelism — the whole point of a team is speed through parallelism:**
+
+When creating tasks for the Team tool, only add dependsOn when task B literally needs task A's output.
+Tasks that work on different files, different modules, or different aspects of the same question should have NO dependsOn — they run simultaneously. Example:
+- "Implement user module" and "Implement order module" → PARALLEL (different modules)
+- "Security audit" and "Performance analysis" → PARALLEL (independent investigations)
+- "QA verify backend" dependsOn "Implement backend" → SERIAL (QA needs the code)
+
+If you serialize everything, you've defeated the purpose of having a team.
 
 **Delegation contract — read this every time you create a team:**
 
