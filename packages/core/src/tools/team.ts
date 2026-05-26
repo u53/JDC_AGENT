@@ -87,9 +87,10 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
                   type: 'string',
                   description:
                     'Domain-specific expert identity injected into the worker\'s system prompt. ' +
-                    'Use a preset key (java-backend, react-frontend, vue-frontend, qa-engineer, devops, database, security-audit, architect) ' +
-                    'or write custom text describing technical expertise, working style, and quality standards. ' +
-                    'Example: "技术栈：Java 17+, Spring Boot 3.x. 工作方式：严格分层..."',
+                    'Use a preset key (backend, frontend, qa, devops, database, security, architect) ' +
+                    'or write custom text describing working style and quality standards. ' +
+                    'Presets define work patterns only — actual tech stack is inferred from the project. ' +
+                    'Custom example: "精通 Rust + Actix-web，负责高性能网关层的请求路由和限流"',
                 },
               },
               required: ['role', 'responsibility'],
