@@ -99,6 +99,8 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   const activeTeamId = useTeamStore((s) => s.activeTeamId)
   const setActiveTeam = useTeamStore((s) => s.setActiveTeam)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const isNearBottomRef = useRef(true)
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const [permissionMode, setPermissionMode] = useState(() => {
     return localStorage.getItem('jdcagnet-permission-mode') || 'standard'
   })
@@ -181,8 +183,32 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
 
   useEffect(() => {
     const el = scrollRef.current
-    if (el) el.scrollTop = el.scrollHeight
+    if (!el) return
+    const handleScroll = () => {
+      const threshold = 80
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+      isNearBottomRef.current = atBottom
+      setShowScrollToBottom(!atBottom)
+    }
+    el.addEventListener('scroll', handleScroll)
+    return () => el.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el && isNearBottomRef.current) {
+      el.scrollTop = el.scrollHeight
+    }
   }, [messages, toolEvents, isThinking, isStreaming])
+
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current
+    if (el) {
+      el.scrollTop = el.scrollHeight
+      isNearBottomRef.current = true
+      setShowScrollToBottom(false)
+    }
+  }, [])
 
   const showToast = useCallback((msg: string) => {
     setToast(msg)
@@ -325,7 +351,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   return (
     <div className="flex flex-1 overflow-hidden relative">
       {/* Left: main chat */}
-      <div className={`flex flex-col overflow-hidden ${showRightPanel ? 'w-[60%]' : 'w-full'} transition-all`}>
+      <div className={`relative flex flex-col overflow-hidden ${showRightPanel ? 'w-[60%]' : 'w-full'} transition-all`}>
         <SessionHeader permissionMode={permissionMode} effort={effort} planMode={planMode} />
 
         {/* Conversation Timeline */}
@@ -374,7 +400,15 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
           </div>
         </div>
 
-        {/* Toast */}
+        {/* Scroll to bottom button */}
+        {showScrollToBottom && (
+          <button
+            onClick={scrollToBottom}
+            className="absolute bottom-[140px] left-1/2 -translate-x-1/2 bg-[var(--surface)] border border-[var(--border)] rounded-full px-4 py-1.5 text-[11px] text-[var(--muted)] hover:text-[var(--text)] shadow-[var(--shadow-soft)] z-40 transition-colors"
+          >
+            ↓ 回到底部
+          </button>
+        )}
         {toast && (
           <div className="absolute top-14 left-1/2 -translate-x-1/2 bg-[var(--surface)] border border-[var(--border)] rounded-[8px] px-4 py-2 text-[11px] text-[var(--text)] z-50 shadow-[var(--shadow-soft)]">
             {toast}
