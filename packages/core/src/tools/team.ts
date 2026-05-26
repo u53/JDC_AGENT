@@ -87,11 +87,14 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
                 expertPrompt: {
                   type: 'string',
                   description:
-                    'Domain expertise for this worker. Use a preset key: backend, frontend, frontend-ui, qa, devops, database, security, architect. ' +
-                    'Or provide custom text describing their expertise. ' +
-                    'IMPORTANT: Match this to the worker\'s ACTUAL domain — a frontend worker should get "frontend", a test writer should get "qa", etc. ' +
-                    'If omitted, auto-assigned based on agentType (which is often wrong — e.g. all "general" workers get "backend" by default). ' +
-                    'Always specify explicitly for best results.',
+                    'Domain expertise for this worker. Two options:\n' +
+                    '1. Preset key (short): backend, frontend, frontend-ui, qa, devops, database, security, architect\n' +
+                    '2. Custom text (PREFERRED for specific projects): write 2-3 sentences describing the worker\'s exact expertise, ' +
+                    'tech stack, and quality standards for THIS project. Example: "React 18 + TypeScript specialist. ' +
+                    'Uses functional components with hooks, Zustand for state, Tailwind for styling. ' +
+                    'Tests with React Testing Library. Follows existing component patterns in src/components/."\n' +
+                    'Custom text produces MUCH better results than preset keys because it\'s project-specific. ' +
+                    'Use presets only when you don\'t know the project\'s tech stack yet.',
                 },
                 modelId: {
                   type: 'string',
