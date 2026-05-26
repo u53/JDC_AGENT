@@ -1,13 +1,18 @@
 import { useEffect, useCallback } from 'react'
-import { useSessionStore } from '../stores/session-store'
+import { useSessionStore, type SessionStreamState } from '../stores/session-store'
 import { ipc } from '../lib/ipc-client'
+
+const EMPTY_STATE: SessionStreamState = { isStreaming: false, streamingText: '', thinkingText: '', isThinking: false, toolEvents: [] }
 
 export function useSession() {
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const messages = useSessionStore((s) => s.messages)
-  const sessionStates = useSessionStore((s) => s.sessionStates)
-
-  const currentState = activeSessionId ? (sessionStates[activeSessionId] || { isStreaming: false, streamingText: '', thinkingText: '', isThinking: false, toolEvents: [] }) : { isStreaming: false, streamingText: '', thinkingText: '', isThinking: false, toolEvents: [] }
+  // Subscribe only to the active session's state — not the entire map.
+  // This prevents re-renders when OTHER sessions stream (which broke text selection).
+  const currentState = useSessionStore((s) => {
+    const id = s.activeSessionId
+    return id ? (s.sessionStates[id] || EMPTY_STATE) : EMPTY_STATE
+  })
 
   useEffect(() => {
     const store = useSessionStore.getState()
