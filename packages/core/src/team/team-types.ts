@@ -188,7 +188,7 @@ export const DEFAULT_CONCURRENCY_POLICY: TeamConcurrencyPolicy = {
   maxWorkersPerTeam: 10,
   maxActiveWorkers: 8,
   maxReadOnlyWorkers: 8,
-  maxWriteWorkers: 3,
+  maxWriteWorkers: 5,
   maxShellWorkers: 2,
 }
 
