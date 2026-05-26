@@ -117,6 +117,31 @@ On team completion the entire workspace is moved to .team-archive/<team-id>-<ts>
 # Language and tone
 - User-facing replies should match the user's language (中文 / English) and stay concise.
 - Internal action messages can be brief Chinese or English — they appear in event log.
+
+# Conflict Resolution Protocol
+
+When two workers produce contradictory findings or outputs:
+1. Identify the conflict from result summaries or worker reports.
+2. Determine which worker has higher authority:
+   - A security-auditor's finding about vulnerabilities outweighs a general worker's "no issues" claim.
+   - A specialist (expertPrompt matches the domain) outweighs a generalist.
+   - A worker who ran actual tests/verification outweighs one who only read code.
+3. If authority is unclear: add_task a focused reconciliation task that references BOTH artifacts and asks a fresh worker to determine which is correct.
+4. Do NOT silently pick one side. The conflict must be explicitly resolved before complete.
+
+# Concurrency Decision Rules
+
+## Critical path awareness
+
+When multiple runnable tasks compete for assignment, prefer the task that:
+1. Has the MOST downstream dependents (unblocks the most future work)
+2. Is on the longest remaining dependency chain (determines total completion time)
+A "normal" priority task that unblocks 3 others is more urgent than a "high" priority leaf task.
+
+## Context affinity
+
+When assigning a task, prefer a worker who just completed a RELATED task (same module, same domain) over a fresh idle worker. The completed worker already has file context loaded and will be faster.
+Exception: QA tasks should NOT go to the implementation author (conflict of interest).
 `
 
 const PM_TOOLBOX = `# Action toolbox
@@ -440,6 +465,10 @@ Your job NOW: review the plan with fresh eyes. Decide if it needs reshaping BEFO
    - If two or more tasks must align on a shape (API contract, data schema, UI design, doc outline),
      INSERT a contract task FIRST, and chain the consumers via dependsOn.
    - If the plan is already granular and reasonable, DO NOTHING (output []).
+   - If tasks describe sequential phases (analysis → design → implementation) but have NO dependsOn
+     between them, ADD the dependency chain. Granular ≠ correct — a plan can be well-split but missing deps.
+   - After restructuring tasks, verify worker-task fit: do existing workers' agentTypes match the new tasks?
+     If you added specialized tasks but only have "general" workers, add_member with the right expertise.
 3. Look at the workforce. If the work clearly needs more diverse skills (e.g. mix of investigation + writing + QA),
    add a couple of members proactively. Don't over-hire.
 
@@ -498,6 +527,9 @@ Your job NOW: decide if this completion needs follow-up work, AND keep workers f
      - What to verify (the contract / the file written / the behavior)
      - How (Read the file, run bash tests if applicable)
      - What to do on failure: team_artifact action=create_issue, on_task=T<id>
+   - Cross-check: Does the result summary align with the task's KEY requirements?
+     If the task specified a technology/approach (e.g., "React", "REST API", "PostgreSQL") but the result
+     doesn't mention it or mentions something different, treat as SUSPICIOUS — reopen or ensure QA checks this.
 3. Was this a READ task? (investigation, summary, plan)
    → No QA needed. Just keep the pipeline flowing — assign more work to idle members.
 4. Are there now runnable tasks but no idle members? → consider add_member.
@@ -852,7 +884,7 @@ export class TeamManagerAI extends TeamManager {
     // team_started bypasses throttle (fires once per team).
     // task_failed / task_added are urgent: a worker is already idle waiting for orders,
     // every second of throttle is wasted capacity. Use a shorter window for these.
-    const isUrgent = reason.kind === 'task_failed' || reason.kind === 'task_added'
+    const isUrgent = reason.kind === 'task_failed' || reason.kind === 'task_added' || reason.kind === 'task_completed'
     const throttleMs = isUrgent
       ? TeamManagerAI.URGENT_PROACTIVE_THROTTLE_MS
       : TeamManagerAI.PROACTIVE_THROTTLE_MS
@@ -896,12 +928,16 @@ export class TeamManagerAI extends TeamManager {
   private drainQueuedProactive(): void {
     if (this.queuedProactive.size === 0) return
     if (this.aiProcessing) return
-    // Take the first queued trigger and re-run through triggerProactiveCheck,
-    // which will re-evaluate throttle / lock state. The remainder stay queued
-    // for subsequent drains.
-    const [firstKey, firstReason] = this.queuedProactive.entries().next().value!
-    this.queuedProactive.delete(firstKey)
-    this.triggerProactiveCheck(firstReason)
+    // Drain all queued triggers — pick the highest-priority reason for the PM call.
+    // If 3 tasks complete within the throttle window, PM gets ONE call (with the
+    // full state dump showing all 3 completions) instead of 3 sequential calls.
+    const reasons = [...this.queuedProactive.values()]
+    this.queuedProactive.clear()
+    // Priority: task_failed > task_completed > task_added > worker_idle_timeout
+    const priorityOrder: Record<string, number> = { task_failed: 0, task_completed: 1, task_added: 2, worker_idle_timeout: 3 }
+    reasons.sort((a, b) => (priorityOrder[a.kind] ?? 99) - (priorityOrder[b.kind] ?? 99))
+    // Use the highest-priority reason — the state dump shows ALL current state anyway
+    this.triggerProactiveCheck(reasons[0])
   }
 
   private scheduleQueuedProactiveDrain(): void {
@@ -910,7 +946,7 @@ export class TeamManagerAI extends TeamManager {
     // (task_failed / task_added) is waiting, drain in 2s rather than 8s.
     let throttleMs = TeamManagerAI.PROACTIVE_THROTTLE_MS
     for (const r of this.queuedProactive.values()) {
-      if (r.kind === 'task_failed' || r.kind === 'task_added') {
+      if (r.kind === 'task_failed' || r.kind === 'task_added' || r.kind === 'task_completed') {
         throttleMs = TeamManagerAI.URGENT_PROACTIVE_THROTTLE_MS
         break
       }
@@ -957,6 +993,10 @@ export class TeamManagerAI extends TeamManager {
         if (m.responsibility) {
           lines.push(`    responsibility: ${m.responsibility}`)
         }
+        if ((m as any).expertPrompt) {
+          const key = (m as any).expertPrompt.length <= 30 ? (m as any).expertPrompt : (m as any).expertPrompt.slice(0, 50) + '…'
+          lines.push(`    expertise: ${key}`)
+        }
       }
     }
     lines.push('')
@@ -975,6 +1015,9 @@ export class TeamManagerAI extends TeamManager {
         if ((t.status === 'failed' || t.status === 'reopened') && t.lastError) {
           const err = t.lastError.length > 240 ? t.lastError.slice(0, 240) + '…' : t.lastError
           lines.push(`    lastError: ${err}`)
+        }
+        if (t.status === 'completed' && (t as any).result?.summary) {
+          lines.push(`    result: ${(t as any).result.summary.slice(0, 150)}`)
         }
       }
     }

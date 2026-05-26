@@ -54,14 +54,15 @@ describe('Team tools', () => {
     const tool = createTeamTool({ teamRegistry: registry, backgroundTasks: bg, buildSubSessionDeps })
 
     const result = await tool.execute({
-      objective: 'test',
+      objective: 'Test capping members at the maximum allowed limit',
       members: Array.from({ length: 15 }, (_, i) => ({ role: `m${i}`, agentType: 'explore' })),
       maxWorkers: 20, // requested 20, should cap at 10
       tasks: Array.from({ length: 30 }, (_, i) => ({ title: `T${i}`, description: `t${i}` })),
     } as any, {} as any)
     expect(result.isError).toBeFalsy()
-    // Members count should be visible from result content (one line per member)
-    const memberLineCount = (result.content.match(/^  - /gm) || []).length
+    // Members count: extract between "Members:" and "Delegated tasks"
+    const membersSection = result.content.split('Members:')[1]?.split('Delegated tasks')[0] || ''
+    const memberLineCount = (membersSection.match(/^  - /gm) || []).length
     expect(memberLineCount).toBeLessThanOrEqual(10)
     expect(memberLineCount).toBeGreaterThan(0)
   })

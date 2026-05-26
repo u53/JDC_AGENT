@@ -82,6 +82,8 @@ export class TeamRuntime {
   // Cleared when the task completes or fails terminally. Cap at 2 to avoid infinite kicks.
   private kickCounts = new Map<string, number>()
   private static readonly MAX_KICKS_PER_TASK = 2
+  private qualityGateAttempts = 0
+  private static readonly MAX_QUALITY_GATE_ATTEMPTS = 3
 
   constructor(opts: TeamRuntimeOptions) {
     this.opts = opts
@@ -674,9 +676,33 @@ export class TeamRuntime {
             }
           }
           break
-        case 'complete':
-          this.completeTeam(action.summary ?? this.manager.synthesize())
+        case 'complete': {
+          // Quality Gate: validate before accepting completion
+          const completeSummary = action.summary ?? this.manager.synthesize()
+          const gateResult = this.runQualityGate(completeSummary)
+          if (gateResult.passed) {
+            this.completeTeam(completeSummary)
+          } else {
+            this.qualityGateAttempts++
+            this.recordEvent({
+              type: 'manager_decision',
+              text: `Quality gate REJECTED completion (attempt ${this.qualityGateAttempts}/${TeamRuntime.MAX_QUALITY_GATE_ATTEMPTS}): ${gateResult.failures.join('; ')}`,
+              timestamp: Date.now(),
+            })
+            if (this.qualityGateAttempts >= TeamRuntime.MAX_QUALITY_GATE_ATTEMPTS) {
+              // Force-complete with caveat after max attempts
+              const caveat = `\n\n[Quality gate could not be satisfied after ${this.qualityGateAttempts} attempts. Remaining issues: ${gateResult.failures.join('; ')}]`
+              this.completeTeam(completeSummary + caveat)
+            } else {
+              // Trigger PM to fix the issues
+              this.triggerProactive({
+                kind: 'task_failed',
+                taskId: 'quality_gate',
+              } as any)
+            }
+          }
           break
+        }
         case 'kick_member':
           if (action.memberId) {
             this.kickMember(action.memberId, action.message ?? 'PM 觉得你似乎卡住了，换个思路重试。')
@@ -1000,6 +1026,38 @@ export class TeamRuntime {
         })
       }
     }
+  }
+
+  private runQualityGate(summary: string): { passed: boolean; failures: string[] } {
+    const failures: string[] = []
+    const tasks = this.manager.getTasks()
+    const completedTasks = tasks.filter(t => t.status === 'completed')
+    const failedTasks = tasks.filter(t => t.status === 'failed')
+
+    // 1. Check for failed tasks that weren't replaced by a completed equivalent
+    const unresolvedFailed = failedTasks.filter(ft => {
+      const hasReplacement = completedTasks.some(ct =>
+        ct.title.toLowerCase().includes(ft.title.toLowerCase().slice(0, 20)) ||
+        ft.title.toLowerCase().includes(ct.title.toLowerCase().slice(0, 20))
+      )
+      return !hasReplacement
+    })
+    if (unresolvedFailed.length > 0) {
+      failures.push(`${unresolvedFailed.length} failed task(s) with no replacement: ${unresolvedFailed.map(t => t.id).join(', ')}`)
+    }
+
+    // 2. Check synthesis is substantive
+    if (!summary || summary.trim().length < 50) {
+      failures.push('Synthesis is too short (< 50 chars). PM must provide a meaningful summary.')
+    }
+
+    // 3. Check for tasks stuck in non-terminal state (should not happen but defensive)
+    const stuckTasks = tasks.filter(t => t.status === 'running' || t.status === 'assigned')
+    if (stuckTasks.length > 0) {
+      failures.push(`${stuckTasks.length} task(s) still running/assigned: ${stuckTasks.map(t => t.id).join(', ')}`)
+    }
+
+    return { passed: failures.length === 0, failures }
   }
 
   private completeTeam(summary: string): void {

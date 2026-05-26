@@ -183,7 +183,7 @@ export const DEFAULT_CONCURRENCY_POLICY: TeamConcurrencyPolicy = {
   maxActiveWorkers: 8,
   maxReadOnlyWorkers: 8,
   maxWriteWorkers: 3,
-  maxShellWorkers: 3,
+  maxShellWorkers: 2,
 }
 
 // ── Workspace frontmatter types ─────────────────────────────────────────

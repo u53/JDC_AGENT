@@ -12,10 +12,14 @@ describe('TeamConcurrencyController', () => {
     expect(ctrl.canStart('explore')).toBe(false)
   })
 
-  it('limits write-capable agents to 1 by default', () => {
+  it('limits write-capable agents to maxWriteWorkers (3 by default)', () => {
     const ctrl = new TeamConcurrencyController(DEFAULT_CONCURRENCY_POLICY)
     expect(ctrl.canStart('general')).toBe(true)
     ctrl.markRunning('writer-1', 'general')
+    expect(ctrl.canStart('general')).toBe(true)
+    ctrl.markRunning('writer-2', 'general')
+    expect(ctrl.canStart('general')).toBe(true)
+    ctrl.markRunning('writer-3', 'general')
     expect(ctrl.canStart('general')).toBe(false)
     expect(ctrl.canStart('refactor')).toBe(false)
     expect(ctrl.canStart('frontend-designer')).toBe(false)
@@ -24,6 +28,8 @@ describe('TeamConcurrencyController', () => {
   it('releasing a slot allows new starts', () => {
     const ctrl = new TeamConcurrencyController(DEFAULT_CONCURRENCY_POLICY)
     ctrl.markRunning('writer-1', 'general')
+    ctrl.markRunning('writer-2', 'general')
+    ctrl.markRunning('writer-3', 'general')
     expect(ctrl.canStart('general')).toBe(false)
     ctrl.markDone('writer-1')
     expect(ctrl.canStart('general')).toBe(true)

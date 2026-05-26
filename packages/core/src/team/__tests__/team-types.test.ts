@@ -6,7 +6,7 @@ describe('team-types', () => {
     expect(DEFAULT_CONCURRENCY_POLICY.maxWorkersPerTeam).toBe(10)
     expect(DEFAULT_CONCURRENCY_POLICY.maxActiveWorkers).toBe(8)
     expect(DEFAULT_CONCURRENCY_POLICY.maxReadOnlyWorkers).toBe(8)
-    expect(DEFAULT_CONCURRENCY_POLICY.maxWriteWorkers).toBe(1)
+    expect(DEFAULT_CONCURRENCY_POLICY.maxWriteWorkers).toBe(3)
     expect(DEFAULT_CONCURRENCY_POLICY.maxShellWorkers).toBe(2)
   })
 
