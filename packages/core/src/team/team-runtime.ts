@@ -1107,59 +1107,69 @@ Actions:
 
 const WORKER_PROTOCOL = `# Communication Protocol (read this BEFORE starting work)
 
-## team_report — 向 PM 发送信号
+## team_report — signal the PM
 
-| 场景 | intent | 示例 |
-|------|--------|------|
-| 发现影响全局的信息 | finding | "发现 src/utils/auth.ts 已有 JWT 验证逻辑，不需要重写" |
-| 被阻塞，无法继续 | blocker | "上游 task 的 API contract 缺少 error response 定义" |
-| 需要 PM 做决策 | question | "用户表要支持软删除还是硬删除？" |
-| 完成后的重要附言 | finding | "实现可用但 Redis 连接池未调优，建议后续 task 处理" |
+| Scenario | intent | Example |
+|----------|--------|---------|
+| Found globally relevant info | finding | "src/utils/auth.ts already has JWT validation — no need to rewrite" |
+| Blocked, cannot continue | blocker | "Upstream task's API contract is missing error response definition" |
+| Need PM decision | question | "Should the users table support soft-delete or hard-delete?" |
+| Post-completion note | finding | "Implementation works but Redis pool is untuned — suggest follow-up task" |
 
-规则：
-- team_report 是非阻塞的（PM 异步读取），发完继续工作。
-- 不要用 team_report 代替 team_artifact — report 不持久化产出。
-- 不要频繁 report 进度（"我开始读文件了"）— 只报告 PM 需要知道的事。
+Rules:
+- team_report is non-blocking (PM reads async). Send it and keep working.
+- Do NOT use team_report as a substitute for team_artifact — reports are not persisted as deliverables.
+- Do NOT report routine progress ("I started reading files"). Only report what PM needs to know.
 
-## team_artifact — 持久化你的产出
+## team_artifact — persist your deliverables
 
-### action=create_artifact（每个有意义的产出都要调）
-- summary 字段必填，一句话说清楚这个 artifact 是什么。
-- 在工作过程中多次调用（每完成一个阶段就 create），不要攒到最后一次性 dump。
-- 类型选择：report（分析/调研）、design（设计/方案）、code（代码产出）、data（测试数据）、decision（技术决策）。
+### action=create_artifact (call for every meaningful output)
+- summary field is REQUIRED. One sentence capturing what this artifact is, in concrete terms.
+- Call multiple times during work (once per completed phase). Do NOT batch everything into one final dump.
+- Types: report (analysis), design (architecture/spec), code (implementation), data (test results), decision (tech choice).
 
-### action=create_contract（锁定共享契约）
-- 仅当你的产出需要 2+ 其他 task 对齐时才创建。
-- 创建后不可单方面修改 — 必须先 team_report 给 PM 获批。
+### action=create_contract (lock shared specs)
+- Only when your output needs alignment from 2+ other tasks.
+- Once created, cannot be unilaterally modified — team_report to PM for approval first.
 
-### action=create_issue（仅 QA 角色使用）
-- 你是 QA task 时，发现缺陷用 create_issue 归档。
-- 你不是 QA 时，发现别人的问题用 team_report(intent=finding) 告知 PM。
+### action=create_issue (QA role only)
+- When you ARE a QA task and found a defect, file it via create_issue.
+- When you are NOT QA, report others' issues via team_report(intent=finding).
 
-### action=update_status（任务结束的最后一步）
-- target_id=你的 task ID, new_status=completed/failed, summary=一句话总结。
-- 调用后立即停止 — 不要再输出任何文本或调用任何工具。
+### action=update_status (final step of your task)
+- target_id = your task ID, new_status = completed/failed, summary = one sentence.
+- STOP immediately after calling. Do not output more text or call more tools — the runtime ends your session.
 
-## 绝对禁止
+## Hard prohibitions
 
-1. 不要超出你的 responsibility 范围。如果 task 描述似乎要求你做别人的事，team_report(intent=question) 问 PM。
-2. 不要修改 .team/ 目录下的文件（用 team_artifact 工具代替 Write/Edit）。
-3. 不要修改其他 worker 正在处理的文件 — 如果你需要改动一个可能有冲突的文件，先 team_report(intent=question) 确认。
-4. 不要忽略 LOCKED CONTRACTS — 如果你的实现与 contract 矛盾，先 report 再改。
-5. 不要在 update_status 之后继续工作 — 那些 token 会被丢弃。
+1. Do NOT exceed your responsibility scope. If the task seems to require work outside your lane, team_report(intent=question) to PM first.
+2. Do NOT modify files inside .team/ directory — use team_artifact tools instead of Write/Edit.
+3. Do NOT modify files another worker is actively working on — team_report(intent=question) to confirm before touching shared files.
+4. Do NOT ignore LOCKED CONTRACTS — if your implementation contradicts a contract, report before changing.
+5. Do NOT continue working after update_status — those tokens are discarded.
 
-## 完成标准（Completion Contract）
+## Completion contract
 
-你的 task 在以下条件全部满足时才算 "done"：
-1. task description 要求的工作已实际完成（代码写了、测试跑了、分析做了）。
-2. 至少一次 create_artifact 调用记录了你的结构化产出（带有效 summary）。
-3. update_status target_id=<你的 T-id> new_status=completed 已调用。
+Your task is "done" when ALL of these hold:
+1. The work described in the task description is actually performed (code written, tests run, analysis done).
+2. At least one create_artifact call has captured your structured output (with a meaningful summary).
+3. update_status with target_id=<your T-id> and new_status=completed has been called.
 
-缺少任何一条 = 协议违规。PM 会 reopen 你的 task。
+Missing any of these = protocol violation. PM will reopen your task.
 
-## 语言
+## Existing code style
 
-推理和 team_report 使用 task description 的语言。代码标识符保持英文。
+Before writing or modifying code, read 2-3 existing files in the same area to understand:
+- Naming conventions (camelCase vs snake_case, file naming patterns)
+- Error handling patterns (how does this project handle errors?)
+- Import style (relative vs absolute, barrel files vs direct imports)
+- Test patterns (if writing tests, match existing test structure)
+
+Your output must be indistinguishable from code written by the project's existing developers. Do NOT introduce new patterns, libraries, or conventions unless the task explicitly requires it.
+
+## Language
+
+Match the language of your task description in reasoning and team_report messages. Code identifiers stay in English.
 `
 
 interface WorkerTaskPromptArgs {
