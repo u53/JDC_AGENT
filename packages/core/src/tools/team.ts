@@ -107,8 +107,11 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
           tasks: {
             type: 'array',
             description:
-              'Initial tasks for the team. Tasks run in PHASES — use dependsOn to enforce ordering. ' +
-              'Common pattern: design/scaffold tasks first → implementation tasks (can parallelize) → test/QA tasks (depend on implementation). ' +
+              'Initial tasks for the team. PARALLEL BY DEFAULT — only add dependsOn when task B literally needs the OUTPUT of task A. ' +
+              'Common pattern: scaffold task first → implementation tasks IN PARALLEL (different modules/layers) → test/QA tasks (depend on their implementation). ' +
+              'WRONG: data-layer dependsOn scaffold, ui dependsOn data-layer, test dependsOn ui — this is a serial chain that wastes 3 idle workers! ' +
+              'RIGHT: scaffold first, then data-layer + ui + test-setup ALL in parallel (they work on different files). QA depends on the code it tests. ' +
+              'If two tasks work on DIFFERENT files/modules, they MUST be parallel (no dependsOn). ' +
               'NEVER let test tasks run in parallel with the code they test.',
             items: {
               type: 'object',

@@ -5,6 +5,7 @@ export interface TeamMemberUI {
   name: string
   role: string
   responsibility?: string
+  expertPrompt?: string
   agentType: string
   modelId?: string
   status: string

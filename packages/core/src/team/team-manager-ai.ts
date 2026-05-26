@@ -686,6 +686,26 @@ Read task done, T002 unblocked. Assign.
 [
   { "type": "assign_task", "taskId": "T002", "memberId": "member_x" }
 ]
+
+## CRITICAL: Domain-match before assigning the next task
+
+When a task completes and the completing worker becomes idle, do NOT automatically give them the next task.
+Instead: look at the NEXT runnable task's domain, then find the BEST-MATCHING idle worker.
+
+WRONG example:
+  T001 "Init scaffold" completed by member_scaffold (role: "Scaffold Builder").
+  T002 "Implement data layer" is now runnable. member_scaffold is idle.
+  → Assigning T002 to member_scaffold because they're free. ← THIS IS WRONG!
+  member_data (role: "Data Layer Owner") exists and is idle — assign to THEM.
+
+RIGHT example:
+  T001 "Init scaffold" completed by member_scaffold.
+  T002 "Implement data layer" is now runnable.
+  → Check all idle members. member_data's responsibility says "data layer" → assign T002 to member_data.
+  → member_scaffold stays idle until a scaffold-related task appears (or gets removed if none will).
+
+The worker who just finished is NOT automatically the best candidate for the next task.
+Always match by responsibility/expertise FIRST, availability SECOND.
 `
 
 const FRAME_TASK_FAILED = `# This invocation: TASK JUST FAILED
@@ -943,6 +963,11 @@ export class TeamManagerAI extends TeamManager {
   }
 
   decideTick(activeMemberCount: number, availableMemberIds: string[]): ManagerAction[] {
+    if (this.aiEnabled && (this.aiProcessing || this.queuedProactive.size > 0)) {
+      // AI PM is mid-flight or has queued triggers — suppress round-robin so the
+      // AI can make an intelligent domain-matched assignment instead.
+      return super.decideTick(activeMemberCount, [])
+    }
     const filtered = this.aiEnabled
       ? availableMemberIds.filter(id => !this.pendingAssignment.has(id))
       : availableMemberIds
