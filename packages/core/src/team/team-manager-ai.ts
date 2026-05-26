@@ -1005,8 +1005,14 @@ export class TeamManagerAI extends TeamManager {
       // proactive triggers (task_completed, task_added, worker_idle_timeout, etc.).
       // Round-robin is completely suppressed — only serves as fallback when
       // aiEnabled=false (after 3 consecutive PM failures).
-      // We still need the completion check from base class, but avoid its
-      // status override to 'waiting_for_members'.
+
+      // If PM is mid-flight (processing a trigger), do NOT auto-complete —
+      // the PM might add QA tasks or reopen work after reviewing the last result.
+      if (this.aiProcessing || this.queuedProactive.size > 0) {
+        return []
+      }
+
+      // Only check allDone when PM is idle (no pending decisions)
       const allTasks = [...this.tasks.values()]
       const terminalStates = new Set(['completed', 'failed', 'cancelled'])
       const allDone = allTasks.length > 0 && allTasks.every(t => terminalStates.has(t.status))
@@ -1021,7 +1027,6 @@ export class TeamManagerAI extends TeamManager {
           return [{ type: 'complete', summary: this.synthesize() }]
         }
       }
-      // Don't override status — let it reflect what the AI PM is actually doing
       return []
     }
     return super.decideTick(activeMemberCount, availableMemberIds)
