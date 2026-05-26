@@ -366,12 +366,20 @@ DO NOT use force=true unless user explicitly asked OR a worker is hopelessly stu
 ## Action: kick_member
 Force-restart a stuck worker on its CURRENT task. Aborts the current sub-session and restarts the SAME
 member on the SAME task with your hint prepended to its prompt. Different from remove_member (which kills
-the worker) and reopen_task (post-completion rework). Use kick_member when:
-  - A worker has gone silent or is looping on the same failing tool call.
-  - You sent a send_member_message minutes ago and there's still no progress event.
-  - You want to give it ONE more shot with a course correction before giving up.
+the worker) and reopen_task (post-completion rework).
+
+ESCALATION PROTOCOL (follow this order — do NOT skip to kick immediately):
+1. FIRST: send_member_message with intent="hurry" or "narrow_scope" — give the worker a chance to self-correct
+2. WAIT: observe for 30-60 seconds. If the worker produces new tool calls or text → it's recovering, do nothing
+3. ONLY THEN: if still no progress after your message → kick_member with a specific course correction hint
+
+Skip directly to kick ONLY when:
+- Worker is clearly in an infinite loop (same failing tool call 3+ times in events)
+- Worker is stuck on an interactive command that will never complete (e.g., waiting for stdin)
+- Worker has been idle for >2 minutes with zero activity
+
 The runtime caps each task at 2 kicks total; after that the task fails normally.
-{ "type": "kick_member", "memberId": "<existing>", "message": "<one-line course correction, e.g. '不要再 grep app.asar 了，直接看 packages/electron/build.mjs 里的 files 配置'>" }
+{ "type": "kick_member", "memberId": "<existing>", "message": "<one-line course correction, e.g. 'use --yes flag to skip interactive prompts' or 'try a different approach: read the file first instead of grepping'>" }
 
 ## Action: send_member_message
 Send a back-channel message to one specific worker. The worker reads it on its next mailbox check
