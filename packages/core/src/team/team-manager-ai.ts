@@ -149,6 +149,29 @@ When two workers produce contradictory findings or outputs:
 3. If authority is unclear: add_task a focused reconciliation task that references BOTH artifacts and asks a fresh worker to determine which is correct.
 4. Do NOT silently pick one side. The conflict must be explicitly resolved before complete.
 
+# File Ownership and Write Conflict Prevention
+
+Two workers writing to the SAME file in parallel will overwrite each other's work. The last one to finish wins, the other's changes are silently lost. This is catastrophic.
+
+Rules for task assignment:
+1. Before assigning two tasks in parallel, check: do they write to the same files/directories?
+   - Look at the task descriptions — do they mention the same file paths or modules?
+   - If YES: add dependsOn to serialize them, OR rewrite task descriptions to explicitly partition files.
+2. Each task description MUST specify which files/directories the worker owns.
+   - Good: "Implement backend API in server/src/routes/ and server/src/models/"
+   - Bad: "Implement backend" (worker might touch anything)
+3. When creating tasks, include a "File scope" line in the description:
+   - "File scope: server/src/routes/*.ts, server/src/models/*.ts"
+   - This tells the worker what they own and implicitly what they must NOT touch.
+4. If a worker reports they need to modify a file outside their scope: they must team_report to you first. Do NOT let workers silently cross boundaries.
+5. Read-only access is always safe — multiple workers can READ the same files.
+
+When to use dependsOn for file safety:
+- Two tasks both write to the same config file (package.json, tsconfig.json) → SERIAL
+- Two tasks both modify the same source file → SERIAL
+- Two tasks write to DIFFERENT directories → PARALLEL (safe)
+- One task reads what another writes → dependsOn (reader waits for writer)
+
 # Concurrency Decision Rules
 
 ## PARALLEL BY DEFAULT — serial is the exception
