@@ -82,6 +82,15 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
                     'Example: "排查 packages/electron/build.mjs 的 asar 配置以及 electron-builder 输出, 不碰 UI 层".',
                 },
                 agentType: { type: 'string', enum: ['explore', 'plan', 'refactor', 'security-auditor', 'frontend-designer', 'general'] },
+                expertPrompt: {
+                  type: 'string',
+                  description:
+                    'Domain expertise for this worker. Use a preset key: backend, frontend, frontend-ui, qa, devops, database, security, architect. ' +
+                    'Or provide custom text describing their expertise. ' +
+                    'IMPORTANT: Match this to the worker\'s ACTUAL domain — a frontend worker should get "frontend", a test writer should get "qa", etc. ' +
+                    'If omitted, auto-assigned based on agentType (which is often wrong — e.g. all "general" workers get "backend" by default). ' +
+                    'Always specify explicitly for best results.',
+                },
                 modelId: {
                   type: 'string',
                   description: 'Optional model override for this member. ONLY set this when the user explicitly asked for a different model. Omitting it (the default) makes the member inherit the main session model + reasoning effort — that is what the user configured. Do NOT guess a model name from training memory; if the ID is not configured locally the override is rejected and falls back anyway.',
@@ -170,7 +179,7 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
           ]
 
       // Resolve expertPrompt for each member (preset key → full text, custom → pass through)
-      // Auto-assign default expertPrompt based on agentType if not provided
+      // Smart auto-assign: scan responsibility/role for domain keywords if expertPrompt not provided
       const AGENT_TYPE_TO_EXPERT: Record<string, string> = {
         'general': 'backend',
         'explore': 'architect',
@@ -178,8 +187,19 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
         'security-auditor': 'security',
         'frontend-designer': 'frontend-ui',
       }
+      function inferExpertFromContext(role: string, responsibility?: string): string {
+        const text = `${role} ${responsibility || ''}`.toLowerCase()
+        if (/\b(test|qa|验证|测试|vitest|jest|testing)\b/.test(text)) return 'qa'
+        if (/\b(frontend|前端|react|vue|ui|component|页面|css|tailwind)\b/.test(text)) return 'frontend'
+        if (/\b(security|安全|audit|vulnerability|漏洞)\b/.test(text)) return 'security'
+        if (/\b(database|数据库|sql|migration|schema|prisma|knex)\b/.test(text)) return 'database'
+        if (/\b(devops|ci|cd|docker|deploy|部署|infrastructure)\b/.test(text)) return 'devops'
+        if (/\b(architect|架构|design|设计文档)\b/.test(text)) return 'architect'
+        if (/\b(backend|后端|api|express|server|endpoint|路由)\b/.test(text)) return 'backend'
+        return 'backend'
+      }
       const resolvedMembers: TeamMemberSpec[] = members.map(m => {
-        const prompt = m.expertPrompt || AGENT_TYPE_TO_EXPERT[m.agentType || 'general']
+        const prompt = m.expertPrompt || inferExpertFromContext(m.role, m.responsibility) || AGENT_TYPE_TO_EXPERT[m.agentType || 'general']
         return { ...m, expertPrompt: resolveExpertPrompt(prompt) }
       })
 
