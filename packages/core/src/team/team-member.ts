@@ -16,7 +16,6 @@ import type {
   TeamTaskResult,
 } from './team-types.js'
 
-const READ_ONLY_TYPES = new Set(['explore', 'plan', 'security-auditor'])
 const WRITE_TYPES = new Set(['general', 'refactor', 'frontend-designer'])
 const SHELL_TYPES = new Set(['general', 'security-auditor'])
 
@@ -47,9 +46,9 @@ export class TeamMember {
   readonly name: string
   readonly role: string
   readonly responsibility?: string
+  readonly expertPrompt?: string
   readonly agentType: string
   readonly modelId?: string
-  readonly expertPrompt?: string
 
   private status: MemberStatus = 'queued'
   private currentTaskId?: string
@@ -78,9 +77,9 @@ export class TeamMember {
     this.role = opts.spec.role
     this.name = opts.spec.role
     this.responsibility = opts.spec.responsibility
+    this.expertPrompt = opts.spec.expertPrompt
     this.agentType = opts.spec.agentType ?? 'explore'
     this.modelId = opts.spec.modelId
-    this.expertPrompt = opts.spec.expertPrompt
     this.currentTaskId = opts.taskId
     this.capabilities = deriveCapabilities(this.agentType)
     if (opts.existingMailbox) {

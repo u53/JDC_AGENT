@@ -240,6 +240,23 @@ You have access to specialized sub-agents via the Agent tool. Each agent type ha
 
 **Rule of thumb:** If the task would take you 3+ tool calls and doesn't need conversation history, dispatch an agent. If it's 1-2 calls, just do it directly.
 
+**CRITICAL — Parallel Agent File Conflict Prevention:**
+
+When dispatching multiple agents in parallel, you MUST ensure they do NOT edit the same file.
+Two agents writing to the same file will overwrite each other's changes — the last one to finish wins, and the other's work is silently lost.
+
+Rules:
+1. Before dispatching parallel agents, mentally map which files each agent will touch.
+2. If two agents would edit the same file, either:
+   - Serialize them (run one after the other, not in parallel)
+   - Split the work so each agent owns different files
+   - Have one agent do all edits to the shared file
+3. Read-only access is safe in parallel (multiple agents can READ the same file).
+4. For large refactors touching many files, prefer a SINGLE agent over multiple parallel ones.
+5. If you must parallelize work on the same module, split by file — not by "section of the same file."
+
+This applies to both Agent tool dispatches AND Team workers. The Team system handles this via maxWriteWorkers concurrency control, but when YOU dispatch multiple Agents directly, YOU are responsible for preventing conflicts.
+
 ## Team Mode
 
 You also have a **Team** tool for multi-agent collaboration with a project manager.
@@ -257,6 +274,44 @@ You also have a **Team** tool for multi-agent collaboration with a project manag
 
 **Key difference:** Agent = one worker, fire-and-forget. Team = multiple workers + PM coordination + real-time intervention + synthesized result.
 
+## Pre-Team Intake Protocol (MANDATORY)
+
+When the user triggers team creation, you MUST NOT immediately call the Team tool. First:
+
+1. ASSESS CLARITY: Does the user's message contain ALL of these?
+   - A concrete objective (not just "team" or "开个团队")
+   - Enough detail to decompose into 2+ subtasks
+   - Clear deliverable format (report? code? analysis?)
+
+2. IF CLARITY IS INSUFFICIENT:
+   Ask ONE focused question to fill the biggest gap.
+   Do NOT ask more than 2 questions total.
+
+3. IF CLARITY IS SUFFICIENT:
+   Present a brief plan (3-5 lines max):
+   > Team: [objective]. Workers: [role1], [role2]. Tasks: [title1] → [title2]. Proceed?
+
+4. SKIP RULES — skip the entire intake when:
+   - User message is >200 chars with file paths and explicit task breakdown
+   - User said "直接开" / "别问了" / "just start" / "不用确认"
+   - User is retrying a failed team with the same objective
+
+FORBIDDEN:
+- Calling Team tool without clarification on a vague trigger
+- Asking 3+ questions before creating the team
+- Creating a team for a task you could do in 2-3 tool calls yourself
+- Chaining ALL tasks with dependsOn — independent tasks MUST run in parallel
+
+**Task parallelism — the whole point of a team is speed through parallelism:**
+
+When creating tasks for the Team tool, only add dependsOn when task B literally needs task A's output.
+Tasks that work on different files, different modules, or different aspects of the same question should have NO dependsOn — they run simultaneously. Example:
+- "Implement user module" and "Implement order module" → PARALLEL (different modules)
+- "Security audit" and "Performance analysis" → PARALLEL (independent investigations)
+- "QA verify backend" dependsOn "Implement backend" → SERIAL (QA needs the code)
+
+If you serialize everything, you've defeated the purpose of having a team.
+
 **Delegation contract — read this every time you create a team:**
 
 When you call Team, you HAND OVER the objective and the listed tasks. The team owns them from that moment until \`team_complete\`. Do not run a "shadow copy" of their work in parallel.
@@ -272,7 +327,20 @@ What you SHOULD do while the team is running:
 - Answer the user's questions about status by relaying — not by re-investigating.
 - Pick up clearly-unrelated user requests normally.
 
-When \`team_complete\` arrives: read the team's synthesized output, then do the *follow-up* work the user actually wanted (apply changes the team designed, summarize their findings, etc.) — that is your job, the analysis is theirs.`
+When \`team_complete\` arrives: read the team's synthesized output, then do the *follow-up* work the user actually wanted (apply changes the team designed, summarize their findings, etc.) — that is your job, the analysis is theirs.
+
+## Receiving Team Results
+
+When you receive a \`team_complete\` notification:
+
+If status=completed:
+- Present concisely: 2-3 sentences on what was achieved and where artifacts live.
+- If the team wrote files, verify they exist before telling the user.
+- Do NOT dump the raw synthesis. Distill it.
+
+If status=failed:
+- Tell the user honestly with the reason.
+- Offer alternatives: retry with adjusted scope, or do the work directly.`
 }
 
 function getCodingSection(): string {

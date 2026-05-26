@@ -20,16 +20,14 @@ export interface TeamMemberSpec {
    * One-sentence statement of what THIS specific member is responsible for and how
    * they differ from peers. Injected into the worker's system prompt so behavior
    * actually diverges, and shown in the UI so the user can tell members apart.
-   * Example: "深入排查 build.mjs 的 asar 打包配置, 验证 electron-builder 输出".
    */
   responsibility?: string
   agentType?: string
   modelId?: string
   /**
    * Domain-specific expert identity prompt injected into the worker's task prompt.
-   * Describes technical expertise, working style, and quality standards.
-   * Example: "技术栈：Java 17+, Spring Boot 3.x, MyBatis-Plus. 工作方式：严格分层..."
-   * Can reference a preset key from expert-prompts.ts (e.g., "java-backend") or be custom text.
+   * Can be a preset key (backend, frontend, frontend-ui, qa, devops, database, security, architect)
+   * or custom text describing expertise and work patterns.
    */
   expertPrompt?: string
 }
@@ -190,7 +188,7 @@ export const DEFAULT_CONCURRENCY_POLICY: TeamConcurrencyPolicy = {
   maxWorkersPerTeam: 10,
   maxActiveWorkers: 8,
   maxReadOnlyWorkers: 8,
-  maxWriteWorkers: 1,
+  maxWriteWorkers: 3,
   maxShellWorkers: 2,
 }
 

@@ -33,6 +33,9 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
     definition: {
       name: 'Team',
       description:
+        'IMPORTANT: Before calling this tool, you MUST have completed the Pre-Team Intake Protocol ' +
+        '(clarify objective → present brief plan → get user confirmation — or meet skip conditions). ' +
+        'If you have not done this, STOP and go back to the user first. ' +
         'Create a multi-agent team to work on a complex objective collaboratively. ' +
         'Use this when the user says "开个团队", "team", "组个团队", "多人协作", or when a task benefits from multiple agents working in parallel with coordination. ' +
         'Prefer Team over multiple Agent calls when: (1) the user explicitly asks for a team, (2) the task has 3+ subtasks that benefit from parallel execution, or (3) the task needs coordination between workers. ' +
@@ -81,18 +84,18 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
                     'Example: "排查 packages/electron/build.mjs 的 asar 配置以及 electron-builder 输出, 不碰 UI 层".',
                 },
                 agentType: { type: 'string', enum: ['explore', 'plan', 'refactor', 'security-auditor', 'frontend-designer', 'general'] },
-                modelId: {
-                  type: 'string',
-                  description: 'Optional model override for this member. ONLY set this when the user explicitly asked for a different model. Omitting it (the default) makes the member inherit the main session model + reasoning effort — that is what the user configured. Do NOT guess a model name from training memory; if the ID is not configured locally the override is rejected and falls back anyway.',
-                },
                 expertPrompt: {
                   type: 'string',
                   description:
-                    'Domain-specific expert identity injected into the worker\'s system prompt. ' +
-                    'Use a preset key (backend, frontend, qa, devops, database, security, architect) ' +
-                    'or write custom text describing working style and quality standards. ' +
-                    'Presets define work patterns only — actual tech stack is inferred from the project. ' +
-                    'Custom example: "精通 Rust + Actix-web，负责高性能网关层的请求路由和限流"',
+                    'Domain expertise for this worker. Use a preset key: backend, frontend, frontend-ui, qa, devops, database, security, architect. ' +
+                    'Or provide custom text describing their expertise. ' +
+                    'IMPORTANT: Match this to the worker\'s ACTUAL domain — a frontend worker should get "frontend", a test writer should get "qa", etc. ' +
+                    'If omitted, auto-assigned based on agentType (which is often wrong — e.g. all "general" workers get "backend" by default). ' +
+                    'Always specify explicitly for best results.',
+                },
+                modelId: {
+                  type: 'string',
+                  description: 'Optional model override for this member. ONLY set this when the user explicitly asked for a different model. Omitting it (the default) makes the member inherit the main session model + reasoning effort — that is what the user configured. Do NOT guess a model name from training memory; if the ID is not configured locally the override is rejected and falls back anyway.',
                 },
               },
               required: ['role', 'responsibility'],
@@ -131,6 +134,14 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
     async execute(input: Record<string, unknown>, _ctx: ToolContext): Promise<ToolResult> {
       const objective = input.objective as string
 
+      const objectiveText = (input.objective as string || '').trim()
+      if (objectiveText.length < 15) {
+        return {
+          content: `Error: objective is too vague (${objectiveText.length} chars). The Pre-Team Intake Protocol requires you to clarify the objective with the user before calling this tool. A good objective is 1-2 sentences describing the concrete deliverable.`,
+          isError: true,
+        }
+      }
+
       // One running team per session: reject if there's already a running team.
       // Archived (completed/failed) teams don't count.
       const activeTeams = deps.teamRegistry.getAll().filter(t => {
@@ -156,10 +167,7 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
         }
       }
 
-      const requestedMembers = ((input.members as TeamMemberSpec[] | undefined) ?? []).map(m => ({
-        ...m,
-        expertPrompt: resolveExpertPrompt(m.expertPrompt),
-      }))
+      const requestedMembers = (input.members as TeamMemberSpec[] | undefined) ?? []
       const requestedTasks = (input.tasks as any[] | undefined) ?? []
       const maxWorkers = Math.min((input.maxWorkers as number | undefined) ?? 5, 10)
       const timeoutMinutes = input.timeoutMinutes as number | undefined
@@ -171,15 +179,41 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
               role: 'Lead Investigator',
               responsibility: `Lead the investigation into the objective end-to-end and produce a single coherent report. Objective: ${objective}`,
               agentType: 'explore',
+              expertPrompt: 'architect',
             },
           ]
+
+      // Resolve expertPrompt for each member (preset key → full text, custom → pass through)
+      // Smart auto-assign: scan responsibility/role for domain keywords if expertPrompt not provided
+      const AGENT_TYPE_TO_EXPERT: Record<string, string> = {
+        'general': 'backend',
+        'explore': 'architect',
+        'refactor': 'backend',
+        'security-auditor': 'security',
+        'frontend-designer': 'frontend-ui',
+      }
+      function inferExpertFromContext(role: string, responsibility?: string): string {
+        const text = `${role} ${responsibility || ''}`.toLowerCase()
+        if (/\b(test|qa|验证|测试|vitest|jest|testing)\b/.test(text)) return 'qa'
+        if (/\b(frontend|前端|react|vue|ui|component|页面|css|tailwind)\b/.test(text)) return 'frontend'
+        if (/\b(security|安全|audit|vulnerability|漏洞)\b/.test(text)) return 'security'
+        if (/\b(database|数据库|sql|migration|schema|prisma|knex)\b/.test(text)) return 'database'
+        if (/\b(devops|ci|cd|docker|deploy|部署|infrastructure)\b/.test(text)) return 'devops'
+        if (/\b(architect|架构|design|设计文档)\b/.test(text)) return 'architect'
+        if (/\b(backend|后端|api|express|server|endpoint|路由)\b/.test(text)) return 'backend'
+        return 'backend'
+      }
+      const resolvedMembers: TeamMemberSpec[] = members.map(m => {
+        const prompt = m.expertPrompt || inferExpertFromContext(m.role, m.responsibility) || AGENT_TYPE_TO_EXPERT[m.agentType || 'general']
+        return { ...m, expertPrompt: resolveExpertPrompt(prompt) }
+      })
 
       const tasks = requestedTasks.length > 0
         ? requestedTasks
         : [{ title: 'Investigate', description: objective }]
 
       const plan: TeamRuntimePlan = {
-        members: members.slice(0, maxWorkers),
+        members: resolvedMembers.slice(0, maxWorkers),
         tasks,
       }
 

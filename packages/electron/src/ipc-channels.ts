@@ -42,6 +42,8 @@ export const IPC_CHANNELS = {
   PLAN_RESPOND: 'plan:respond',
   SESSION_GET_TASKS: 'session:get-tasks',
   SESSION_RENAME: 'session:rename',
+  SESSION_SET_MODEL: 'session:set-model',
+  SESSION_GET_MODEL: 'session:get-model',
 
   // Git
   GIT_BRANCH_LIST: 'git:branch-list',

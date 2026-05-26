@@ -83,11 +83,15 @@ export const ipc = {
     list: () =>
       invoke('session:list') as Promise<ProjectGroup[]>,
     switch: (sessionId: string) =>
-      invoke('session:switch', { sessionId }) as Promise<{ messages: Message[] }>,
+      invoke('session:switch', { sessionId }) as Promise<{ messages: Message[]; usage?: any; modelId?: string }>,
     delete: (sessionId: string) =>
       invoke('session:delete', { sessionId }) as Promise<{ success: boolean }>,
     rename: (sessionId: string, title: string) =>
       invoke('session:rename', { sessionId, title }) as Promise<{ success: boolean }>,
+    setModel: (sessionId: string, modelId: string) =>
+      invoke('session:set-model', { sessionId, modelId }) as Promise<{ success: boolean }>,
+    getModel: (sessionId: string) =>
+      invoke('session:get-model', { sessionId }) as Promise<{ modelId: string | null }>,
   },
 
   query: {

@@ -219,6 +219,10 @@ export class TeamManager {
   reopenTask(taskId: string, reason?: string): boolean {
     const task = this.tasks.get(taskId)
     if (!task) return false
+    if ((task.failureCount ?? 0) >= 3) {
+      this.cancelTask(taskId, `Auto-cancelled: exceeded max failure count (${task.failureCount})`)
+      return false
+    }
     task.status = 'reopened'
     task.assigneeId = undefined
     task.updatedAt = Date.now()

@@ -200,6 +200,13 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     showToast(`推理: ${labels[next]}`)
   }, [activeSessionId, showToast])
 
+  const handleModelChange = useCallback((modelId: string) => {
+    setActiveModel(modelId)
+    if (activeSessionId) {
+      ipc.session.setModel(activeSessionId, modelId)
+    }
+  }, [activeSessionId, setActiveModel])
+
   const handlePlanToggle = useCallback(() => {
     const api = (window as any).electronAPI
     if (activeSessionId && api?.setPlanMode) {
@@ -399,7 +406,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
           modelName={activeModel?.model.name}
           modelId={activeModelId ?? undefined}
           models={allModels}
-          onModelChange={setActiveModel}
+          onModelChange={handleModelChange}
           onModelClick={openSettings}
           skills={skills}
         />

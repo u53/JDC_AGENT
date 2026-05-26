@@ -36,7 +36,7 @@ describe('Team tools', () => {
     const tool = createTeamTool({ teamRegistry: registry, backgroundTasks: bg, buildSubSessionDeps })
 
     const result = await tool.execute({
-      objective: 'test team',
+      objective: 'test team creation and registration flow',
       members: [{ role: 'explorer', agentType: 'explore' }],
       tasks: [{ title: 'A', description: 'a' }],
     } as any, {} as any)
@@ -54,14 +54,14 @@ describe('Team tools', () => {
     const tool = createTeamTool({ teamRegistry: registry, backgroundTasks: bg, buildSubSessionDeps })
 
     const result = await tool.execute({
-      objective: 'test',
+      objective: 'Test capping members at the maximum allowed limit',
       members: Array.from({ length: 15 }, (_, i) => ({ role: `m${i}`, agentType: 'explore' })),
       maxWorkers: 20, // requested 20, should cap at 10
       tasks: Array.from({ length: 30 }, (_, i) => ({ title: `T${i}`, description: `t${i}` })),
     } as any, {} as any)
     expect(result.isError).toBeFalsy()
-    // Members count: lines between "Members:" and "Delegated tasks" that start with "  - "
-    const membersSection = result.content.split('Delegated tasks')[0]
+    // Members count: extract between "Members:" and "Delegated tasks"
+    const membersSection = result.content.split('Members:')[1]?.split('Delegated tasks')[0] || ''
     const memberLineCount = (membersSection.match(/^  - /gm) || []).length
     expect(memberLineCount).toBeLessThanOrEqual(10)
     expect(memberLineCount).toBeGreaterThan(0)
@@ -72,7 +72,7 @@ describe('Team tools', () => {
     const registry = new TeamRegistry()
     const teamTool = createTeamTool({ teamRegistry: registry, backgroundTasks: bg, buildSubSessionDeps })
     await teamTool.execute({
-      objective: 'test',
+      objective: 'test background send message to a team',
       members: [{ role: 'r', agentType: 'explore' }],
       tasks: [{ title: 'A', description: 'a' }, { title: 'B', description: 'b' }, { title: 'C', description: 'c' }],
     } as any, {} as any)
@@ -101,7 +101,7 @@ describe('Team tools', () => {
     const registry = new TeamRegistry()
     const teamTool = createTeamTool({ teamRegistry: registry, backgroundTasks: bg, buildSubSessionDeps })
     await teamTool.execute({
-      objective: 'analyze',
+      objective: 'analyze the project structure and dependencies',
       members: [{ role: 'explorer', agentType: 'explore' }],
       tasks: [{ title: 'A', description: 'a' }],
     } as any, {} as any)
@@ -121,7 +121,7 @@ describe('Team tools', () => {
     const registry = new TeamRegistry()
     const teamTool = createTeamTool({ teamRegistry: registry, backgroundTasks: bg, buildSubSessionDeps })
     await teamTool.execute({
-      objective: 'analyze',
+      objective: 'analyze the project structure and dependencies',
       members: [{ role: 'explorer', agentType: 'explore' }],
       tasks: [{ title: 'A', description: 'a' }],
     } as any, {} as any)
