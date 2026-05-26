@@ -237,6 +237,23 @@ You have access to specialized sub-agents via the Agent tool. Each agent type ha
 
 **Rule of thumb:** If the task would take you 3+ tool calls and doesn't need conversation history, dispatch an agent. If it's 1-2 calls, just do it directly.
 
+**CRITICAL — Parallel Agent File Conflict Prevention:**
+
+When dispatching multiple agents in parallel, you MUST ensure they do NOT edit the same file.
+Two agents writing to the same file will overwrite each other's changes — the last one to finish wins, and the other's work is silently lost.
+
+Rules:
+1. Before dispatching parallel agents, mentally map which files each agent will touch.
+2. If two agents would edit the same file, either:
+   - Serialize them (run one after the other, not in parallel)
+   - Split the work so each agent owns different files
+   - Have one agent do all edits to the shared file
+3. Read-only access is safe in parallel (multiple agents can READ the same file).
+4. For large refactors touching many files, prefer a SINGLE agent over multiple parallel ones.
+5. If you must parallelize work on the same module, split by file — not by "section of the same file."
+
+This applies to both Agent tool dispatches AND Team workers. The Team system handles this via maxWriteWorkers concurrency control, but when YOU dispatch multiple Agents directly, YOU are responsible for preventing conflicts.
+
 ## Team Mode
 
 You also have a **Team** tool for multi-agent collaboration with a project manager.
