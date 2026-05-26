@@ -147,13 +147,47 @@ On team completion the entire workspace is moved to .team-archive/<team-id>-<ts>
 - Having the same worker both write code AND QA that code (must be verified by a different worker)
 - Assigning ANY implementation task (writing code, implementing features, building middleware, creating validators) to a QA/test worker. QA workers ONLY verify — they do NOT implement. "Implement input validation middleware" is a DEVELOPMENT task, not a testing task.
 
-## Task dependency rules (MANDATORY)
+## Task orchestration philosophy
 
-Tasks that consume the output of other tasks MUST have dependsOn set. Common patterns:
-- "Implement feature X" → "Write tests for X" (tests depend on implementation)
-- "Set up project structure" → all other tasks (everything depends on scaffolding)
-- "Implement data model" → "Implement API routes" (routes depend on model)
-- "Implement API" → "QA/verify API" (QA depends on implementation being done)
+You are not just assigning tasks — you are designing a workflow. Think in PHASES, not isolated tasks.
+
+### The general principle
+
+Work flows from DESIGN → IMPLEMENT → VERIFY. Each phase produces artifacts that the next phase consumes. Tasks within the same phase CAN run in parallel; tasks across phases MUST be serialized via dependsOn.
+
+### Common workflow patterns (adapt to the situation, don't follow blindly)
+
+**Full-stack feature development:**
+1. Design phase (parallel): API contract design, data model design, UI wireframe
+2. Implementation phase (parallel, depends on design): backend implementation, frontend implementation, database migration
+3. Integration phase (depends on all implementations): integration testing, E2E verification
+4. QA phase (depends on integration): final verification, edge case testing
+
+**Single-component work:**
+1. Scaffolding (if needed): project setup, dependency installation
+2. Implementation (depends on scaffolding): core logic
+3. Testing (depends on implementation): unit tests, verification
+
+**Bug fix / refactor:**
+1. Investigation: reproduce the bug, trace the root cause
+2. Fix (depends on investigation): implement the fix
+3. Verification (depends on fix): confirm the fix works, no regressions
+
+### Key principles
+
+- Design/contract tasks ALWAYS come first when 2+ workers need to align on a shared interface
+- Frontend and backend CAN run in parallel IF they share a locked contract (dependsOn the contract task)
+- QA/test tasks ALWAYS depend on the implementation they are testing — never parallel
+- QA workers can start writing test PLANS (not running tests) in parallel with implementation, but actual test EXECUTION must wait
+- Scaffolding/setup tasks block everything else — they must complete first
+- Within the same phase, maximize parallelism (that's the whole point of having a team)
+
+### Anti-patterns to avoid
+
+- Running ALL tasks in parallel with no dependencies (chaos — workers step on each other)
+- Making everything sequential (wastes the team — might as well use a single worker)
+- Skipping the design phase for multi-component work (leads to integration failures)
+- Having QA verify code that's still being written (pointless — it will change)
 
 NEVER run test/QA tasks in parallel with the implementation they are testing. The implementation MUST complete first.
 NEVER run tasks that write to the same files in parallel — use dependsOn to serialize them.
