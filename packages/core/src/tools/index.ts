@@ -12,9 +12,27 @@ import { notebookEditTool } from './notebook-edit.js'
 import { webFetchTool } from './web-fetch.js'
 import { webSearchTool } from './web-search.js'
 import { lspTool } from './lsp.js'
+import { createPowerShellTool } from './powershell.js'
+import { findGitBash, findPowerShell } from '../utils/shell-detection.js'
+import { isWindows } from '../utils/platform.js'
 
 export function registerBuiltinTools(registry: ToolRegistry): void {
-  registry.register(bashTool)
+  const onWindows = isWindows()
+  const hasGitBash = onWindows ? !!findGitBash() : true
+
+  if (hasGitBash) {
+    registry.register(bashTool)
+  }
+
+  // Register PowerShell tool on Windows
+  if (onWindows) {
+    const psPath = findPowerShell()
+    if (psPath) {
+      const psTool = createPowerShellTool(psPath)
+      registry.register(psTool)
+    }
+  }
+
   registry.register(fileReadTool)
   registry.register(fileWriteTool)
   registry.register(fileEditTool)

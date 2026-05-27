@@ -2,6 +2,19 @@ import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 import { lspManager } from '../lsp/lsp-manager.js'
 import path from 'node:path'
 
+/**
+ * Convert a file path to a proper file:// URI.
+ * On Windows: C:\Users\foo → file:///C:/Users/foo
+ * On Unix: /home/foo → file:///home/foo
+ */
+function pathToFileUri(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/')
+  if (/^[A-Za-z]:/.test(normalized)) {
+    return `file:///${normalized}`
+  }
+  return `file://${normalized}`
+}
+
 type Operation = 'goToDefinition' | 'findReferences' | 'hover' | 'documentSymbol' | 'workspaceSymbol'
 
 const OPERATION_METHODS: Record<Operation, string> = {
@@ -66,12 +79,12 @@ Use this for precise code navigation instead of grep when you need type-aware re
         params = { query }
       } else if (operation === 'documentSymbol') {
         params = {
-          textDocument: { uri: `file://${filePath}` },
+          textDocument: { uri: pathToFileUri(filePath) },
         }
       } else {
         // Convert 1-based to 0-based for LSP protocol
         params = {
-          textDocument: { uri: `file://${filePath}` },
+          textDocument: { uri: pathToFileUri(filePath) },
           position: { line: line - 1, character: character - 1 },
           context: operation === 'findReferences' ? { includeDeclaration: true } : undefined,
         }

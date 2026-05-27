@@ -1,6 +1,7 @@
 import { exec } from 'node:child_process'
 import type { HookConfig, HookEvent, HookInput, HookOutput } from './types.js'
 import { getMatchingHooks } from './loader.js'
+import { findGitBash } from '../utils/shell-detection.js'
 
 export class HookEngine {
   private config: HookConfig
@@ -55,7 +56,19 @@ export class HookEngine {
         HOOK_EVENT: input.hook_event,
       }
 
-      const child = exec(command, { timeout, cwd: input.cwd, env }, (error, stdout) => {
+      // On Windows, exec() defaults to cmd.exe which can't run POSIX hook scripts.
+      // Use Git Bash if available, otherwise PowerShell.
+      let shellOpt: { shell?: string } = {}
+      if (process.platform === 'win32') {
+        const gitBash = findGitBash()
+        if (gitBash) {
+          shellOpt = { shell: gitBash }
+        } else {
+          shellOpt = { shell: 'powershell.exe' }
+        }
+      }
+
+      const child = exec(command, { timeout, cwd: input.cwd, env, ...shellOpt }, (error, stdout) => {
         if (error) {
           resolve({ message: `Hook error: ${error.message}` })
           return

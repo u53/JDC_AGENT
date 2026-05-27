@@ -4,6 +4,7 @@ import { v4 as uuid } from 'uuid'
 import path from 'node:path'
 import { RingBuffer } from './team/team-mailbox.js'
 import type { TeamEvent, TeamMemberSpec, TeamMessage } from './team/team-types.js'
+import { findGitBash } from './utils/shell-detection.js'
 
 export type TaskType = 'shell' | 'agent' | 'team'
 
@@ -66,14 +67,30 @@ export class BackgroundTaskManager {
     writeFileSync(logFile, '')
 
     const isWindows = process.platform === 'win32'
-    const userShell = process.env.SHELL || 'bash'
-    const shellCmd = isWindows ? 'cmd.exe' : userShell
-    const shellArgs = isWindows ? ['/S', '/C', command] : ['-l', '-c', command]
+    let shellCmd: string
+    let shellArgs: string[]
+
+    if (isWindows) {
+      const gitBashPath = findGitBash()
+      if (gitBashPath) {
+        shellCmd = gitBashPath
+        shellArgs = ['--login', '-c', command]
+      } else {
+        // Fall back to PowerShell if no Git Bash
+        shellCmd = 'powershell.exe'
+        shellArgs = ['-NoProfile', '-NonInteractive', '-Command', command]
+      }
+    } else {
+      const userShell = process.env.SHELL || '/bin/bash'
+      shellCmd = userShell
+      shellArgs = ['-l', '-c', command]
+    }
 
     const proc = spawn(shellCmd, shellArgs, {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
-      detached: false,
+      detached: !isWindows,
+      windowsHide: true,
       env: env || process.env as Record<string, string>,
     })
 

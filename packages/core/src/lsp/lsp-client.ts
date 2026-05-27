@@ -8,7 +8,16 @@ export class LspClient {
   private contentLength = -1
 
   async start(command: string, args: string[], cwd: string): Promise<void> {
-    this.process = spawn(command, args, { cwd, stdio: ['pipe', 'pipe', 'pipe'] })
+    // On Windows, npm-installed binaries are .cmd files that cannot be spawned
+    // directly without shell: true. This is safe here because the command comes
+    // from our own SERVER_CONFIGS, not user input.
+    const isWindows = process.platform === 'win32'
+    this.process = spawn(command, args, {
+      cwd,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: isWindows,
+      windowsHide: true,
+    })
 
     this.process.stdout!.on('data', (chunk: Buffer) => {
       this.buffer += chunk.toString()

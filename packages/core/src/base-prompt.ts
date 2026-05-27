@@ -1,4 +1,5 @@
 import type { ToolDefinition } from './types.js'
+import { findGitBash, findPowerShell } from './utils/shell-detection.js'
 
 export interface PromptEnvironment {
   os: string
@@ -632,7 +633,7 @@ You can also use \`list_mcp_resources\` to discover available resources and \`re
 }
 
 function getConfigurationSection(env: PromptEnvironment): string {
-  const home = process.env.HOME || '~'
+  const home = process.env.HOME || process.env.USERPROFILE || '~'
   return `# Configuration Paths
 
 JDCAGNET uses a two-level configuration system: global (user-wide) and project (per-project). Project-level configs override global ones.
@@ -741,6 +742,17 @@ function getEnvironmentSection(env: PromptEnvironment): string {
     `- Working directory: ${env.cwd}`,
     `- Shell: ${env.shell}`,
   ]
+  // On Windows, clarify which shell tools are available so the model uses correct syntax
+  if (process.platform === 'win32') {
+    const gitBash = findGitBash()
+    const psPath = findPowerShell()
+    if (gitBash) lines.push(`- Bash tool: Git Bash (${gitBash}) — use POSIX/bash syntax`)
+    if (psPath) {
+      const edition = psPath.toLowerCase().includes('pwsh') ? 'PowerShell 7+' : 'PowerShell 5.1'
+      lines.push(`- PowerShell tool: ${edition} (${psPath})`)
+    }
+    if (!gitBash && !psPath) lines.push('- WARNING: No suitable shell found. Install Git for Windows or PowerShell.')
+  }
   if (env.hostname) lines.push(`- Hostname: ${env.hostname}`)
   if (env.arch) lines.push(`- Architecture: ${env.arch}`)
   if (env.gitBranch) lines.push(`- Git branch: ${env.gitBranch}`)

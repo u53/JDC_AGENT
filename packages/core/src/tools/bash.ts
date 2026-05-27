@@ -3,6 +3,20 @@ import { readFileSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
+import { findGitBash } from '../utils/shell-detection.js'
+import { windowsPathToPosix, posixPathToWindows, rewriteWindowsNullRedirect } from '../utils/windows-paths.js'
+
+const WINDOWS_BASH_NOTE = process.platform === 'win32' ? `
+# Windows (Git Bash)
+This tool runs commands in Git Bash on Windows. The shell is POSIX-compatible:
+- Use forward slashes in paths: /c/Users/name/project (not C:\\Users\\name\\project)
+- Standard POSIX commands are available: ls, grep, cat, find, sed, awk, curl, etc.
+- Windows executables are also accessible: git.exe, node.exe, npm.cmd, code.exe, etc.
+- To call Windows executables with spaces in path: "/c/Program Files/App/app.exe" arg1
+- Do NOT use CMD-specific syntax: dir, type, findstr, set, %VAR%, 2>nul
+- Use /dev/null instead of nul for null redirection
+- Environment variables: $VAR (not %VAR%)
+` : ''
 
 /**
  * Environment variables injected into every bash subprocess to ensure
@@ -51,7 +65,7 @@ export const bashTool: ToolHandler = {
   definition: {
     name: 'bash',
     description: `Execute a bash command and return its output (stdout + stderr).
-
+${WINDOWS_BASH_NOTE}
 The shell runs in a non-interactive environment (CI=true, GIT_TERMINAL_PROMPT=0, DEBIAN_FRONTEND=noninteractive). Commands that require interactive input will fail — use appropriate flags to bypass prompts (e.g., --yes, -y, --non-interactive, --batch).
 
 # Tool Preference
@@ -150,10 +164,19 @@ The shell runs in a non-interactive environment (CI=true, GIT_TERMINAL_PROMPT=0,
     let shellArgs: string[]
 
     if (isWindows) {
-      // On Windows, use cmd.exe with /C. CWD tracking uses cd > file.
-      const wrappedCommand = `${command} & set __jdcagnet_exit=!ERRORLEVEL! & cd > "${cwdFile}" 2>nul & exit /b !__jdcagnet_exit!`
-      shellCmd = 'cmd.exe'
-      shellArgs = ['/V:ON', '/S', '/C', wrappedCommand]
+      // On Windows, prefer Git Bash for POSIX compatibility.
+      // If Git Bash is not available, this tool should not be registered (PowerShell tool takes over).
+      const gitBashPath = findGitBash()
+      if (!gitBashPath) {
+        return { content: 'Error: Git Bash not found. Use the powershell tool instead, or install Git for Windows.', isError: true }
+      }
+      // Rewrite common model mistakes: 2>nul → 2>/dev/null
+      const normalizedCommand = rewriteWindowsNullRedirect(command)
+      // Convert CWD file path to POSIX for bash's pwd -P
+      const posixCwdFile = windowsPathToPosix(cwdFile)
+      const wrappedCommand = `${normalizedCommand}; __jdcagnet_exit=$?; pwd -P > ${posixCwdFile} 2>/dev/null; exit $__jdcagnet_exit`
+      shellCmd = gitBashPath
+      shellArgs = ['--login', '-c', wrappedCommand]
     } else {
       // Unix: spawn the user's login shell so PATH set up by tool managers (nvm, pyenv,
       // rbenv, conda, asdf, brew shellenv, custom ~/.npm-global/bin etc.) is available.
@@ -192,7 +215,8 @@ The shell runs in a non-interactive environment (CI=true, GIT_TERMINAL_PROMPT=0,
         timeout,
         env,
         stdio: ['ignore', 'pipe', 'pipe'],
-        ...(isWindows ? {} : { detached: true }),
+        detached: !isWindows,
+        windowsHide: true,
       })
 
       let stdout = ''
@@ -209,7 +233,11 @@ The shell runs in a non-interactive environment (CI=true, GIT_TERMINAL_PROMPT=0,
       proc.on('close', (code) => {
         // Read the CWD after command execution for tracking
         try {
-          const newCwd = readFileSync(cwdFile, 'utf-8').trim()
+          let newCwd = readFileSync(cwdFile, 'utf-8').trim()
+          // Git Bash outputs POSIX paths (/c/Users/...), convert back to Windows native
+          if (isWindows && newCwd.startsWith('/')) {
+            newCwd = posixPathToWindows(newCwd)
+          }
           if (newCwd && newCwd !== context.cwd) {
             ;(context as unknown as Record<string, unknown>).__newCwd = newCwd
           }

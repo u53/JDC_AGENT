@@ -1,6 +1,19 @@
 import { LspClient } from './lsp-client.js'
 import path from 'node:path'
 
+/**
+ * Convert a file path to a proper file:// URI.
+ * On Windows: C:\Users\foo → file:///C:/Users/foo
+ * On Unix: /home/foo → file:///home/foo
+ */
+function pathToFileUri(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/')
+  if (/^[A-Za-z]:/.test(normalized)) {
+    return `file:///${normalized}`
+  }
+  return `file://${normalized}`
+}
+
 interface ServerConfig {
   command: string
   args: string[]
@@ -58,11 +71,12 @@ export class LspManager {
     await client.start(config.command, config.args, cwd)
 
     // Initialize the LSP server
+    const rootUri = pathToFileUri(cwd)
     await client.request('initialize', {
       processId: process.pid,
       capabilities: {},
-      rootUri: `file://${cwd}`,
-      workspaceFolders: [{ uri: `file://${cwd}`, name: path.basename(cwd) }],
+      rootUri,
+      workspaceFolders: [{ uri: rootUri, name: path.basename(cwd) }],
     })
 
     client.notify('initialized', {})

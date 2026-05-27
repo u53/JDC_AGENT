@@ -123,7 +123,9 @@ export async function assembleSystemPrompt(opts: ContextOptions): Promise<Prompt
   const env = {
     os: `${os.platform()} ${os.release()}`,
     cwd: opts.cwd,
-    shell: process.env.SHELL || 'bash',
+    shell: process.platform === 'win32'
+      ? (process.env.COMSPEC || 'powershell')
+      : (process.env.SHELL || '/bin/bash'),
     gitBranch: git.branch,
     gitUser: git.user,
     hostname: os.hostname(),

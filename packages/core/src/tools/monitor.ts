@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
+import { findGitBash } from '../utils/shell-detection.js'
 
 export const monitorTool: ToolHandler = {
   definition: {
@@ -33,9 +34,24 @@ export const monitorTool: ToolHandler = {
 
     return new Promise<ToolResult>((resolve) => {
       const isWindows = process.platform === 'win32'
-      const shellCmd = isWindows ? 'cmd.exe' : 'sh'
-      const shellArgs = isWindows ? ['/S', '/C', command] : ['-c', command]
-      const proc = spawn(shellCmd, shellArgs, { cwd: context.cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+      let shellCmd: string
+      let shellArgs: string[]
+
+      if (isWindows) {
+        const gitBash = findGitBash()
+        if (gitBash) {
+          shellCmd = gitBash
+          shellArgs = ['-c', command]
+        } else {
+          shellCmd = 'powershell.exe'
+          shellArgs = ['-NoProfile', '-NonInteractive', '-Command', command]
+        }
+      } else {
+        shellCmd = 'sh'
+        shellArgs = ['-c', command]
+      }
+
+      const proc = spawn(shellCmd, shellArgs, { cwd: context.cwd, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
       const lines: string[] = []
       let killed = false
 
