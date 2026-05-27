@@ -729,9 +729,9 @@ Hook input is passed via stdin as JSON. Hook stdout is parsed as JSON: \`{"decis
 
 ## Project Instructions
 
-- Global: \`${home}/.jdcagnet/JDCAGNET.md\`
-- Project: \`${env.cwd}/JDCAGNET.md\` or \`${env.cwd}/.jdcagnet/JDCAGNET.md\`
-- Project rules: \`${env.cwd}/.jdcagnet/rules/*.md\`
+- Global: \`${home}/.jdcagnet/JDCAGNET.md\` or \`${home}/.claude/CLAUDE.md\`
+- Project (first found wins): \`JDCAGNET.md\`, \`.jdcagnet/JDCAGNET.md\`, \`CLAUDE.md\`, \`.claude/CLAUDE.md\`, \`AGENTS.md\`, \`.github/copilot-instructions.md\`, \`.cursorrules\`
+- Project rules: \`${env.cwd}/.jdcagnet/rules/*.md\` or \`${env.cwd}/.claude/rules/*.md\`
 
 These files contain instructions that are loaded into the system prompt automatically.`
 }

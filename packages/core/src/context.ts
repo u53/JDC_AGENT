@@ -22,11 +22,15 @@ export interface ContextOptions {
 }
 
 export async function loadProjectMd(cwd: string): Promise<string | null> {
+  // Support multiple conventions: JDCAGNET.md, CLAUDE.md, AGENTS.md, .cursorrules
   const candidates = [
     path.join(cwd, 'JDCAGNET.md'),
     path.join(cwd, '.jdcagnet', 'JDCAGNET.md'),
     path.join(cwd, 'CLAUDE.md'),
     path.join(cwd, '.claude', 'CLAUDE.md'),
+    path.join(cwd, 'AGENTS.md'),
+    path.join(cwd, '.github', 'copilot-instructions.md'),
+    path.join(cwd, '.cursorrules'),
   ]
   for (const p of candidates) {
     try { return await readFile(p, 'utf-8') } catch {}
@@ -35,21 +39,35 @@ export async function loadProjectMd(cwd: string): Promise<string | null> {
 }
 
 export async function loadGlobalMd(): Promise<string | null> {
-  try { return await readFile(path.join(CONFIG_DIR, 'JDCAGNET.md'), 'utf-8') } catch { return null }
+  // Support both ~/.jdcagnet/JDCAGNET.md and ~/.claude/CLAUDE.md
+  const candidates = [
+    path.join(CONFIG_DIR, 'JDCAGNET.md'),
+    path.join(os.homedir(), '.claude', 'CLAUDE.md'),
+  ]
+  for (const p of candidates) {
+    try { return await readFile(p, 'utf-8') } catch {}
+  }
+  return null
 }
 
 export async function loadProjectRules(cwd: string): Promise<string[]> {
-  const rulesDir = path.join(cwd, '.jdcagnet', 'rules')
-  try {
-    const files = await readdir(rulesDir)
-    const mds = files.filter(f => f.endsWith('.md')).sort()
-    const contents: string[] = []
-    for (const f of mds) {
-      const content = await readFile(path.join(rulesDir, f), 'utf-8')
-      contents.push(`# ${f}\n${content}`)
-    }
-    return contents
-  } catch { return [] }
+  // Support both .jdcagnet/rules/ and .claude/rules/
+  const rulesDirs = [
+    path.join(cwd, '.jdcagnet', 'rules'),
+    path.join(cwd, '.claude', 'rules'),
+  ]
+  const contents: string[] = []
+  for (const rulesDir of rulesDirs) {
+    try {
+      const files = await readdir(rulesDir)
+      const mds = files.filter(f => f.endsWith('.md')).sort()
+      for (const f of mds) {
+        const content = await readFile(path.join(rulesDir, f), 'utf-8')
+        contents.push(`# ${f}\n${content}`)
+      }
+    } catch {}
+  }
+  return contents
 }
 
 export function getMemoryDir(cwd: string): string {
