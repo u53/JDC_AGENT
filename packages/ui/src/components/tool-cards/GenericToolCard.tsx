@@ -19,8 +19,8 @@ export function GenericToolCard({ event, name, input, result }: Props) {
 
   return (
     <ToolCardShell
-      label={`>>> ${toolName}`}
-      detail=""
+      label="TOOL"
+      detail={toolName}
       status={status}
       defaultExpanded={status === 'running'}
     >

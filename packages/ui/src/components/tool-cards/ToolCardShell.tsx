@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ReactNode } from 'react'
+import { useState, useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { IconChevronRight, IconChevronDown } from '../icons'
 
 interface Props {
@@ -12,9 +12,9 @@ interface Props {
 }
 
 const statusConfig = {
-  running: { dot: 'bg-[var(--warn)] animate-pulse' },
-  done: { dot: 'bg-[var(--good)]' },
-  error: { dot: 'bg-[var(--bad)]' },
+  running: { label: 'RUNNING', dot: 'bg-[var(--warn)]' },
+  done: { label: 'DONE', dot: 'bg-[var(--good)]' },
+  error: { label: 'ERROR', dot: 'bg-[var(--bad)]' },
 }
 
 export function ToolCardShell({
@@ -39,21 +39,53 @@ export function ToolCardShell({
   const cfg = statusConfig[status]
   const hasContent = !!children
   const canToggle = collapsible && hasContent && status !== 'running'
+  const showContent = (expanded || (status === 'running' && hasContent)) && hasContent
+
+  const toggle = () => {
+    if (canToggle) setExpanded(!expanded)
+  }
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!canToggle) return
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      toggle()
+    }
+  }
 
   return (
-    <div className={`mb-2 border rounded-[8px] bg-[var(--surface-2)] ${status === 'error' ? 'border-[var(--bad)]' : 'border-[var(--border)]'}`}>
+    <div className="jdc-event-card mb-2" data-status={status} data-expanded={showContent ? 'true' : 'false'}>
+      <div className="jdc-event-rail" aria-hidden="true" />
       <div
-        className={`flex items-center gap-2 px-3 py-2 min-h-[36px] ${canToggle ? 'cursor-pointer hover:bg-[var(--surface-3)]' : ''} transition-colors rounded-t-[8px]`}
-        onClick={() => { if (canToggle) setExpanded(!expanded) }}
+        className={`jdc-event-card-header ${canToggle ? 'is-toggleable' : ''}`}
+        onClick={toggle}
+        onKeyDown={handleKeyDown}
+        role={canToggle ? 'button' : undefined}
+        tabIndex={canToggle ? 0 : undefined}
+        aria-expanded={canToggle ? expanded : undefined}
       >
-        <span className={`inline-block h-[6px] w-[6px] rounded-full flex-shrink-0 ${cfg.dot}`} />
-        {canToggle && (expanded ? <IconChevronDown size={12} className="text-[var(--muted)]" /> : <IconChevronRight size={12} className="text-[var(--muted)]" />)}
-        <span className="text-[12px] font-medium text-[var(--text)]">{label}</span>
-        <span className="text-[12px] text-[var(--muted)] truncate flex-1 text-left" style={{ fontFamily: 'var(--font-mono)' }} title={detail}>{detail}</span>
+        <span className="jdc-event-status" aria-hidden="true">
+          <span className={`jdc-event-dot ${cfg.dot}`} />
+          {status === 'running' && (
+            <span className="jdc-event-bars">
+              <span />
+              <span />
+              <span />
+            </span>
+          )}
+        </span>
+        {canToggle && (
+          <span className="jdc-event-chevron">
+            {expanded ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />}
+          </span>
+        )}
+        <span className="jdc-event-label">{label}</span>
+        <span className="jdc-event-detail" title={detail}>{detail}</span>
+        <span className="jdc-event-chip">{cfg.label}</span>
         {actions && <div className="flex items-center gap-1 flex-shrink-0">{actions}</div>}
       </div>
-      {(expanded || (status === 'running' && hasContent)) && hasContent && (
-        <div className="border-t border-[var(--border)] px-3 py-2">
+      {showContent && (
+        <div className="jdc-event-content">
           {children}
         </div>
       )}

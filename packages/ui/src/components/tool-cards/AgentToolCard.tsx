@@ -58,7 +58,7 @@ export function AgentToolCard({ event, input, result }: ToolCardRouterProps) {
         actions={
           status === 'running' ? (
             <button
-              className="text-[10px] uppercase tracking-[0.05em] text-red-500 hover:text-red-400 transition-colors ml-2"
+              className="text-[10px] uppercase tracking-[0.05em] text-[var(--bad)] hover:opacity-80 transition-opacity ml-2"
               onClick={handleAbort}
             >
               Abort
@@ -67,10 +67,10 @@ export function AgentToolCard({ event, input, result }: ToolCardRouterProps) {
         }
       >
         {status === 'running' && recentTools.length > 0 && (
-          <div className="text-[12px] text-[var(--muted)] mb-2" style={{ fontFamily: 'var(--font-mono)' }}>
+          <div className="jdc-agent-timeline text-[12px] text-[var(--muted)] mb-2" style={{ fontFamily: 'var(--font-mono)' }}>
             {recentTools.map((te, i) => (
-              <div key={i} className="flex items-center gap-1">
-                <span className="text-[var(--muted)]">{i === recentTools.length - 1 ? '└─' : '├─'}</span>
+              <div key={i} className="jdc-agent-timeline-row">
+                <span className="jdc-agent-timeline-dot" data-status={te.status} />
                 <span className={te.status === 'error' ? 'text-[var(--bad)]' : te.status === 'complete' ? 'text-[var(--good)]' : 'text-[var(--text)]'}>
                   {te.toolName}
                 </span>
@@ -80,8 +80,8 @@ export function AgentToolCard({ event, input, result }: ToolCardRouterProps) {
           </div>
         )}
         {status === 'running' && recentTools.length === 0 && (
-          <div className="text-[10px] text-purple-400 uppercase tracking-[0.1em]">
-            <span className="inline-block h-2 w-2 rounded-full bg-purple-400 animate-pulse mr-2" />
+          <div className="text-[10px] text-[var(--accent)] uppercase tracking-[0.1em]">
+            <span className="inline-block h-2 w-2 rounded-full bg-[var(--accent)] animate-pulse mr-2" />
             Initializing...
           </div>
         )}
@@ -91,7 +91,7 @@ export function AgentToolCard({ event, input, result }: ToolCardRouterProps) {
         {status !== 'running' && prompt && (
           <div className="mb-2">
             <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--muted)] mb-1">Input</div>
-            <pre className="max-h-32 overflow-auto p-2 text-[12px] whitespace-pre-wrap text-[var(--text)] bg-[var(--surface-2)] rounded-[4px]" style={{ fontFamily: 'var(--font-mono)' }}>
+            <pre className="max-h-32 overflow-auto p-2 text-[12px] whitespace-pre-wrap text-[var(--text)] rounded-[4px]" style={{ fontFamily: 'var(--font-mono)' }}>
               {truncateText(prompt, 500)}
             </pre>
           </div>

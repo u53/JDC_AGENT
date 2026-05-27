@@ -153,3 +153,288 @@ body {
 .animate-cg-progress {
   animation: cg-progress 8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
+
+.jdc-event-card {
+  --event-color: var(--accent);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--event-color) 12%, var(--border));
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 92%, var(--event-color) 8%), var(--surface-2)),
+    var(--surface-2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 14px 34px -28px color-mix(in srgb, var(--event-color) 48%, transparent);
+  transition:
+    border-color 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.jdc-event-card[data-status="running"] {
+  --event-color: var(--warn);
+}
+
+.jdc-event-card[data-status="done"] {
+  --event-color: var(--good);
+}
+
+.jdc-event-card[data-status="error"] {
+  --event-color: var(--bad);
+}
+
+.jdc-event-card:hover {
+  border-color: color-mix(in srgb, var(--event-color) 34%, var(--border));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 16px 38px -30px color-mix(in srgb, var(--event-color) 58%, transparent);
+}
+
+.jdc-event-card[data-status="running"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    transparent 34%,
+    color-mix(in srgb, var(--event-color) 14%, transparent) 48%,
+    transparent 62%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: jdc-event-scan 3.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.jdc-event-rail {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--event-color) 34%, transparent),
+    var(--event-color),
+    color-mix(in srgb, var(--event-color) 22%, transparent)
+  );
+  opacity: 0.76;
+}
+
+.jdc-event-card-header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 8px 13px;
+  border-radius: 8px 8px 0 0;
+  transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.jdc-event-card-header.is-toggleable {
+  cursor: pointer;
+}
+
+.jdc-event-card-header.is-toggleable:hover,
+.jdc-event-card-header.is-toggleable:focus-visible {
+  background: color-mix(in srgb, var(--event-color) 7%, transparent);
+}
+
+.jdc-event-status {
+  position: relative;
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+}
+
+.jdc-event-dot {
+  position: relative;
+  z-index: 1;
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--event-color) 16%, transparent);
+}
+
+.jdc-event-card[data-status="running"] .jdc-event-dot {
+  animation: jdc-event-breathe 1.6s ease-in-out infinite;
+}
+
+.jdc-event-bars {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  opacity: 0;
+  transform: translateX(13px);
+}
+
+.jdc-event-bars span {
+  width: 2px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--event-color);
+  animation: jdc-event-bars 900ms ease-in-out infinite;
+}
+
+.jdc-event-bars span:nth-child(2) {
+  animation-delay: 120ms;
+}
+
+.jdc-event-bars span:nth-child(3) {
+  animation-delay: 240ms;
+}
+
+.jdc-event-card[data-status="running"] .jdc-event-status {
+  width: 34px;
+}
+
+.jdc-event-card[data-status="running"] .jdc-event-bars {
+  opacity: 0.72;
+}
+
+.jdc-event-chevron {
+  display: inline-flex;
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+.jdc-event-label {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+.jdc-event-detail {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jdc-event-chip {
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, var(--event-color) 24%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--event-color) 10%, transparent);
+  color: var(--event-color);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  padding: 4px 6px;
+}
+
+.jdc-event-content {
+  position: relative;
+  z-index: 1;
+  border-top: 1px solid color-mix(in srgb, var(--event-color) 12%, var(--border));
+  padding: 10px 12px 11px 14px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 20%, transparent), transparent),
+    color-mix(in srgb, var(--surface-2) 82%, var(--surface-3) 18%);
+}
+
+.jdc-event-content pre {
+  border: 1px solid color-mix(in srgb, var(--event-color) 10%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 42%, var(--surface-3) 58%);
+}
+
+.jdc-event-content table {
+  color: var(--text);
+}
+
+.jdc-agent-timeline {
+  position: relative;
+  display: grid;
+  gap: 5px;
+}
+
+.jdc-agent-timeline-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.jdc-agent-timeline-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.jdc-agent-timeline-dot[data-status="complete"] {
+  background: var(--good);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 14%, transparent);
+}
+
+.jdc-agent-timeline-dot[data-status="error"] {
+  background: var(--bad);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 14%, transparent);
+}
+
+.jdc-agent-timeline-dot[data-status="start"] {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 16%, transparent);
+  animation: jdc-event-breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes jdc-event-scan {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+@keyframes jdc-event-breathe {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.78;
+  }
+  50% {
+    transform: scale(1.26);
+    opacity: 1;
+  }
+}
+
+@keyframes jdc-event-bars {
+  0%, 100% {
+    transform: scaleY(0.45);
+    opacity: 0.42;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jdc-event-card,
+  .jdc-event-card::after,
+  .jdc-event-dot,
+  .jdc-event-bars span,
+  .jdc-agent-timeline-dot {
+    animation: none !important;
+    transition: none !important;
+  }
+}
