@@ -19,10 +19,12 @@ import java.util.TimerTask
 class JdcagnetPlugin : AppLifecycleListener {
     private var server: IdeWebSocketServer? = null
     private var lockfile: LockfileManager? = null
+    private var productInfo: IdeProductInfo? = null
 
     override fun appFrameCreated(commandLineArgs: MutableList<String>) {
+        productInfo = currentIdeProductInfo()
         lockfile = LockfileManager()
-        val rpcHandler = RpcHandler(lockfile!!.authToken, OpenFileHandler(), DiagnosticsHandler())
+        val rpcHandler = RpcHandler(lockfile!!.authToken, productInfo!!, OpenFileHandler(), DiagnosticsHandler())
         server = IdeWebSocketServer(rpcHandler)
 
         val port = server!!.start()
@@ -60,6 +62,6 @@ class JdcagnetPlugin : AppLifecycleListener {
         val workspaceFolders = ProjectManager.getInstance().openProjects
             .mapNotNull { it.basePath }
             .filter { it.isNotEmpty() }
-        lockfile?.write(port, workspaceFolders)
+        lockfile?.write(port, workspaceFolders, productInfo ?: currentIdeProductInfo())
     }
 }

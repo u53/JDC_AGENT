@@ -1,5 +1,5 @@
-import { existsSync } from 'node:fs'
-import { execFile } from 'node:child_process'
+import { existsSync, readdirSync } from 'node:fs'
+import { execFile, spawnSync } from 'node:child_process'
 import { homedir } from 'node:os'
 import path from 'node:path'
 
@@ -32,12 +32,14 @@ const APP_DEFS: AppDef[] = [
     id: 'cursor', name: 'Cursor', shortName: 'Cu',
     bundleNames: ['Cursor.app'],
     getCmd: (cwd) => ({ cmd: 'cursor', args: [cwd] }),
+    winPaths: ['Cursor\\Cursor.exe'],
     winGetCmd: (cwd) => ({ cmd: 'cursor', args: [cwd] }),
   },
   {
     id: 'windsurf', name: 'Windsurf', shortName: 'Ws',
     bundleNames: ['Windsurf.app'],
     getCmd: (cwd) => ({ cmd: 'open', args: ['-a', 'Windsurf', cwd] }),
+    winPaths: ['Windsurf\\Windsurf.exe'],
     winGetCmd: (cwd) => ({ cmd: 'windsurf', args: [cwd] }),
   },
   {
@@ -56,24 +58,28 @@ const APP_DEFS: AppDef[] = [
     id: 'webstorm', name: 'WebStorm', shortName: 'WS',
     bundleNames: ['WebStorm.app'],
     getCmd: (cwd) => ({ cmd: 'webstorm', args: [cwd] }),
+    winPaths: ['JetBrains\\WebStorm*\\bin\\webstorm64.exe'],
     winGetCmd: (cwd) => ({ cmd: 'webstorm', args: [cwd] }),
   },
   {
     id: 'pycharm', name: 'PyCharm', shortName: 'PC',
     bundleNames: ['PyCharm.app', 'PyCharm CE.app'],
     getCmd: (cwd) => ({ cmd: 'pycharm', args: [cwd] }),
+    winPaths: ['JetBrains\\PyCharm*\\bin\\pycharm64.exe'],
     winGetCmd: (cwd) => ({ cmd: 'pycharm', args: [cwd] }),
   },
   {
     id: 'goland', name: 'GoLand', shortName: 'GL',
     bundleNames: ['GoLand.app'],
     getCmd: (cwd) => ({ cmd: 'goland', args: [cwd] }),
+    winPaths: ['JetBrains\\GoLand*\\bin\\goland64.exe'],
     winGetCmd: (cwd) => ({ cmd: 'goland', args: [cwd] }),
   },
   {
     id: 'clion', name: 'CLion', shortName: 'CL',
     bundleNames: ['CLion.app'],
     getCmd: (cwd) => ({ cmd: 'clion', args: [cwd] }),
+    winPaths: ['JetBrains\\CLion*\\bin\\clion64.exe'],
     winGetCmd: (cwd) => ({ cmd: 'clion', args: [cwd] }),
   },
   {
@@ -133,12 +139,11 @@ export class AppLauncher {
       ]
       this.cache = APP_DEFS.filter((appDef) => {
         if (appDef.alwaysAvailable) return true
-        if (!appDef.winPaths) {
-          return appDef.winGetCmd !== undefined
-        }
-        return appDef.winPaths.some((wp) =>
-          programDirs.some((dir) => existsSync(path.join(dir, wp.replace('*', ''))))
-        )
+        const hasKnownInstall = appDef.winPaths?.some((wp) =>
+          programDirs.some((dir) => existsWinPattern(path.join(dir, wp)))
+        ) ?? false
+        const cmd = appDef.winGetCmd?.('').cmd
+        return hasKnownInstall || (cmd ? commandExists(cmd) : false)
       }).filter((a) => a.getCmd || a.winGetCmd)
         .map((a) => ({ id: a.id, name: a.name, shortName: a.shortName, available: true }))
     } else {
@@ -164,4 +169,35 @@ export class AppLauncher {
       })
     })
   }
+}
+
+function commandExists(command: string): boolean {
+  if (!command || command.includes('\\') || command.includes('/')) return existsSync(command)
+  return spawnSync('where.exe', [command], { stdio: 'ignore' }).status === 0
+}
+
+function existsWinPattern(patternPath: string): boolean {
+  if (!patternPath.includes('*')) return existsSync(patternPath)
+
+  const parsed = path.parse(patternPath)
+  const parts = patternPath.slice(parsed.root.length).split(path.sep).filter(Boolean)
+  let current = parsed.root
+  for (const part of parts) {
+    if (!part.includes('*')) {
+      current = path.join(current, part)
+      continue
+    }
+
+    let entries: string[]
+    try { entries = readdirSync(current) } catch { return false }
+    const rx = new RegExp(`^${part.split('*').map(escapeRegExp).join('.*')}$`, 'i')
+    const match = entries.find((entry) => rx.test(entry))
+    if (!match) return false
+    current = path.join(current, match)
+  }
+  return existsSync(current)
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }

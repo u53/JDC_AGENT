@@ -5,6 +5,7 @@ import { diffContentProvider, DIFF_SCHEME } from './diff-provider'
 import { handleOpenFile, handleOpenDiff, handleCloseTab, handleCloseAllDiffTabs, handleGetDiagnostics } from './rpc-handler'
 import { createSelectionTracker } from './selection'
 import { registerAtMentionCommand } from './at-mention'
+import { detectIdeProduct } from './ide-product'
 
 let server: IdeServer | null = null
 let lockfile: LockfileManager | null = null
@@ -18,6 +19,7 @@ export async function activate(context: vscode.ExtensionContext) {
   )
 
   const workspaceFolders = (vscode.workspace.workspaceFolders || []).map(f => f.uri.fsPath)
+  const product = detectIdeProduct(vscode.env.appName, vscode.env.uriScheme)
 
   const port = await server.start({
     onInitialize: (_ws, params) => {
@@ -25,8 +27,11 @@ export async function activate(context: vscode.ExtensionContext) {
         throw new Error('Invalid auth token')
       }
       return {
-        ideName: 'VS Code',
+        ideId: product.ideId,
+        ideName: product.ideName,
         ideVersion: vscode.version,
+        appName: product.appName,
+        uriScheme: product.uriScheme,
         capabilities: ['openFile', 'openDiff', 'getDiagnostics', 'selection', 'atMention'],
       }
     },
@@ -42,7 +47,7 @@ export async function activate(context: vscode.ExtensionContext) {
     },
   })
 
-  lockfile.write(port, workspaceFolders)
+  lockfile.write(port, workspaceFolders, product, vscode.version)
 
   const selectionDisposables = createSelectionTracker((data) => server?.sendNotification('selection_changed', data))
   context.subscriptions.push(...selectionDisposables)
@@ -52,7 +57,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100)
   statusBar.text = '$(plug) JDC Code'
-  statusBar.tooltip = `JDC Code IDE server running on port ${port}`
+  statusBar.tooltip = `JDC Code ${product.ideName} server running on port ${port}`
   statusBar.show()
   context.subscriptions.push(statusBar)
 }

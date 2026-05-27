@@ -11,7 +11,7 @@ JetBrains IDE 与 JDC Code 桌面应用之间的双向通信插件。
 
 ## 兼容性
 
-支持所有基于 IntelliJ Platform 2023.3+ 的 IDE:
+支持所有基于 IntelliJ Platform 2023.1+ 的 IDE:
 
 - IntelliJ IDEA (Community / Ultimate)
 - WebStorm
@@ -36,7 +36,7 @@ JetBrains IDE 与 JDC Code 桌面应用之间的双向通信插件。
 1. 安装插件后重启 IDE
 2. 打开项目（与 JDC Code 中的项目路径一致）
 3. 启动 JDC Code 桌面应用并打开相同项目
-4. 自动连接 — JDC Code Composer 底部状态栏显示绿色圆点 + "IntelliJ IDEA"
+4. 自动连接 — JDC Code Composer 底部状态栏显示绿色圆点 + 当前 IDE 名称
 
 ### 代码选中
 

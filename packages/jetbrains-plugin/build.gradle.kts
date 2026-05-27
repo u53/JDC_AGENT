@@ -14,6 +14,7 @@ dependencies {
     implementation("io.ktor:ktor-server-netty:2.3.7")
     implementation("io.ktor:ktor-server-websockets:2.3.7")
     implementation("com.google.code.gson:gson:2.10.1")
+    testImplementation(kotlin("test"))
 }
 
 intellij {
@@ -23,8 +24,8 @@ intellij {
 
 tasks {
     patchPluginXml {
-        sinceBuild.set("233")
-        untilBuild.set("252.*")
+        sinceBuild.set("231")
+        untilBuild.set("")
     }
 }
 

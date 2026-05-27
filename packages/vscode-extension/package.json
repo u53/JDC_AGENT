@@ -2,7 +2,7 @@
   "name": "jdc-code",
   "displayName": "JDC Code",
   "description": "Bidirectional communication between JDC Code and VS Code",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "jdcagnet",
   "repository": {
     "type": "git",

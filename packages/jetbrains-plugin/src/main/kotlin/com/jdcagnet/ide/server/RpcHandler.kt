@@ -3,9 +3,11 @@ package com.jdcagnet.ide.server
 import com.google.gson.JsonObject
 import com.jdcagnet.ide.handlers.OpenFileHandler
 import com.jdcagnet.ide.handlers.DiagnosticsHandler
+import com.jdcagnet.ide.IdeProductInfo
 
 class RpcHandler(
     private val authToken: String,
+    private val productInfo: IdeProductInfo,
     private val openFileHandler: OpenFileHandler,
     private val diagnosticsHandler: DiagnosticsHandler
 ) {
@@ -24,8 +26,9 @@ class RpcHandler(
         val token = params.get("authToken")?.asString
         if (token != authToken) throw SecurityException("Invalid auth token")
         return mapOf(
-            "ideName" to "IntelliJ IDEA",
-            "ideVersion" to "2024.1",
+            "ideId" to productInfo.ideId,
+            "ideName" to productInfo.ideName,
+            "ideVersion" to productInfo.ideVersion,
             "capabilities" to listOf("openFile", "getDiagnostics", "selection", "atMention")
         )
     }

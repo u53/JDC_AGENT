@@ -1,7 +1,11 @@
 export interface IdeLockfile {
   workspaceFolders: string[]
   pid: number
+  ideId?: string
   ideName: string
+  ideVersion?: string
+  appName?: string
+  uriScheme?: string
   authToken: string
   version: string
   timestamp: number
@@ -9,7 +13,11 @@ export interface IdeLockfile {
 
 export interface IdeConnection {
   port: number
+  ideId?: string
   ideName: string
+  ideVersion?: string
+  appName?: string
+  uriScheme?: string
   workspaceFolders: string[]
   status: IdeConnectionStatus
 }

@@ -2,7 +2,11 @@ import { create } from 'zustand'
 
 interface IdeConnection {
   port: number
+  ideId?: string
   ideName: string
+  ideVersion?: string
+  appName?: string
+  uriScheme?: string
   workspaceFolders: string[]
   status: 'disconnected' | 'connecting' | 'connected' | 'error'
 }
