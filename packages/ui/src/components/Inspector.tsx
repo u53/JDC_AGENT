@@ -129,9 +129,6 @@ export function Inspector() {
     setActiveTeam(newlyRunning[newlyRunning.length - 1])
   }, [backgroundTasks, setActiveTeam])
 
-  // Hide entirely on very narrow windows
-  if (windowWidth < 700) return null
-
   const startDrag = (e: React.MouseEvent) => {
     e.preventDefault()
     dragRef.current = { startX: e.clientX, startWidth: width }
@@ -165,6 +162,9 @@ export function Inspector() {
       try { localStorage.setItem(INSPECTOR_WIDTH_KEY, String(width)) } catch {}
     }
   }, [width])
+
+  // Hide entirely on very narrow windows
+  if (windowWidth < 700) return null
 
   const toggleSection = (section: SectionId) => {
     if (!expanded) {

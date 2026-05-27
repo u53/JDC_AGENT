@@ -5,6 +5,7 @@ import { BranchSwitcher } from './BranchSwitcher'
 import { IconSend, IconStop } from './icons'
 import { useSessionStore } from '../stores/session-store'
 import { useIdeStore } from '../stores/ide-store'
+import { isSameOrChildPath } from '../lib/path-match'
 
 interface Props {
   onSend: (text: string, images?: { data: string; mediaType: string }[]) => void
@@ -122,7 +123,7 @@ export function Composer({
 
   const ideConnections = useIdeStore((s) => s.connections)
   const ideSelection = useIdeStore((s) => s.selection)
-  const connectedIde = ideConnections.find((c) => c.status === 'connected' && c.workspaceFolders.some(f => cwd.startsWith(f)))
+  const connectedIde = ideConnections.find((c) => c.status === 'connected' && c.workspaceFolders.some(f => isSameOrChildPath(cwd, f)))
 
   const addImageFile = useCallback((file: File) => {
     const validTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
