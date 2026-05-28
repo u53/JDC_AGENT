@@ -19,6 +19,7 @@ const TMP_DIR = path.join(ROOT, 'tmp', 'codegraph-fetch')
 
 function buildFetchOptions(): RequestInit {
   const headers: Record<string, string> = { 'user-agent': 'jdc-fetch-codegraph' }
+  if (process.env.GH_TOKEN) headers.authorization = `Bearer ${process.env.GH_TOKEN}`
   const proxy = process.env.HTTPS_PROXY || process.env.https_proxy
   const dispatcher = proxy
     ? new ProxyAgent({ uri: proxy, requestTls: { rejectUnauthorized: true }, connectTimeout: 30_000 })
