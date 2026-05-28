@@ -4,7 +4,7 @@ import type { BackgroundTaskManager } from '../background-tasks.js'
 export function createTaskOutputTool(mgr: BackgroundTaskManager): ToolHandler {
   return {
     definition: {
-      name: 'task_output',
+      name: 'TaskOutput',
       description:
         'Get raw stdout/stderr output of a shell or agent background task. ' +
         'NOT for team tasks — use background_events instead for teams. ' +

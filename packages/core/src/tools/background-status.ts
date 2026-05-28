@@ -10,7 +10,7 @@ export interface BackgroundStatusDeps {
 export function createBackgroundStatusTool(deps: BackgroundStatusDeps): ToolHandler {
   return {
     definition: {
-      name: 'background_status',
+      name: 'BackgroundStatus',
       description:
         'Get a point-in-time snapshot of a background task. ' +
         'For teams: returns manager state, member statuses, and task progress counts. ' +

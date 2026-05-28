@@ -8,7 +8,7 @@ const turndown = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fen
 
 export const webFetchTool: ToolHandler = {
   definition: {
-    name: 'web_fetch',
+    name: 'WebFetch',
     description:
       'Fetch a URL and extract its content as markdown. Use the prompt to specify what information to extract.\n\n' +
       'IMPORTANT: Will FAIL for authenticated/private URLs (Google Docs, Jira, Confluence, private repos). ' +

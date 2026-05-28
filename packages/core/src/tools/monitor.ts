@@ -4,7 +4,7 @@ import { findGitBash } from '../utils/shell-detection.js'
 
 export const monitorTool: ToolHandler = {
   definition: {
-    name: 'monitor',
+    name: 'Monitor',
     description:
       'Start a background monitor that streams events. Each stdout line is a progress event.\n\n' +
       'Choose the right tool:\n' +

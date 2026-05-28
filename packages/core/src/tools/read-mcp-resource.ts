@@ -4,7 +4,7 @@ import type { McpManager } from '../mcp/manager.js'
 export function createReadMcpResourceTool(manager: McpManager): ToolHandler {
   return {
     definition: {
-      name: 'read_mcp_resource',
+      name: 'ReadMcpResource',
       description: 'Read a specific resource from an MCP server by URI.',
       inputSchema: {
         type: 'object',

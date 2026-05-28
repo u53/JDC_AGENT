@@ -4,7 +4,7 @@ import type { McpManager } from '../mcp/manager.js'
 export function createListMcpResourcesTool(manager: McpManager): ToolHandler {
   return {
     definition: {
-      name: 'list_mcp_resources',
+      name: 'ListMcpResources',
       description:
         'List available resources from connected MCP servers. Use this to discover remote resources ' +
         '(database schemas, API specs, documentation) that are not available as local files. ' +

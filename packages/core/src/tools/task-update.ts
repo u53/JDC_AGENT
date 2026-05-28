@@ -4,7 +4,7 @@ import type { TaskStore } from '../task-store.js'
 export function createTaskUpdateTool(store: TaskStore): ToolHandler {
   return {
     definition: {
-      name: 'task_update',
+      name: 'TaskUpdate',
       description:
         'Update a task status or content. Set in_progress BEFORE starting work, completed ONLY when FULLY accomplished. ' +
         'If errors or blockers occur, keep as in_progress. Never mark completed if: tests failing, implementation partial, or unresolved errors. ' +

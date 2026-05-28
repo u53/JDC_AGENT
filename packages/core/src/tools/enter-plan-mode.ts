@@ -2,11 +2,11 @@ import path from 'node:path'
 import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 
 export const PLAN_MODE_ALLOWED_TOOLS = [
-  'file_read', 'glob', 'grep', 'ls', 'tree', 'lsp',
-  'file_write', 'Agent', 'Skill',
-  'exit_plan_mode',
-  'task_create', 'task_get', 'task_list', 'task_update',
-  'background_status', 'background_events', 'team_list',
+  'Read', 'Glob', 'Grep', 'LS', 'Tree', 'LSP',
+  'Write', 'Agent', 'Skill',
+  'ExitPlanMode',
+  'TaskCreate', 'TaskGet', 'TaskList', 'TaskUpdate',
+  'BackgroundStatus', 'BackgroundEvents', 'team_list',
 ]
 
 export function isPlanModeToolAllowed(
@@ -16,7 +16,7 @@ export function isPlanModeToolAllowed(
 ): boolean {
   if (!PLAN_MODE_ALLOWED_TOOLS.includes(toolName)) return false
 
-  if (toolName === 'file_write') {
+  if (toolName === 'Write') {
     const filePath = (input.file_path || input.path || '') as string
     if (!cwd) return false
     const resolved = path.resolve(cwd, filePath)
@@ -36,7 +36,7 @@ export type PlanModeCallback = () => void
 export function createEnterPlanModeTool(onEnter: PlanModeCallback): ToolHandler {
   return {
     definition: {
-      name: 'enter_plan_mode',
+      name: 'EnterPlanMode',
       description:
         'Enter plan mode to design an implementation approach before writing code. ' +
         'Use proactively when: (1) new feature implementation, (2) multiple valid approaches exist, ' +

@@ -7,7 +7,7 @@ export const FILE_UNCHANGED_MESSAGE = 'File unchanged since last read. The conte
 
 export const fileReadTool: ToolHandler = {
   definition: {
-    name: 'file_read',
+    name: 'Read',
     description: `Read a file from the filesystem. Results are returned with line numbers (1-based).
 
 Usage notes:

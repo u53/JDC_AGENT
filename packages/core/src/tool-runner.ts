@@ -92,7 +92,7 @@ export class ToolRunner {
     }
 
     // Plan mode restriction check
-    if (this.planMode === 'planning' && toolName !== 'enter_plan_mode') {
+    if (this.planMode === 'planning' && toolName !== 'EnterPlanMode') {
       if (!isPlanModeToolAllowed(toolName, input, this.planModeCwd || this.cwd)) {
         const result: ToolResult = {
           content: `Cannot use ${toolName} in plan mode. Only read operations and writing plan files are allowed.`,

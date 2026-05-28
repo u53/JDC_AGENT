@@ -5,7 +5,7 @@ import { buildFileNotFoundError } from '../utils/path-suggestions.js'
 
 export const fileEditTool: ToolHandler = {
   definition: {
-    name: 'file_edit',
+    name: 'Edit',
     description: `Performs exact string replacement in a file.
 
 Usage notes:

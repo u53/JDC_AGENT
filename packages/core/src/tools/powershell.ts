@@ -31,7 +31,7 @@ export function createPowerShellTool(shellPath: string): ToolHandler {
 
   return {
     definition: {
-      name: 'powershell',
+      name: 'Powershell',
       description: `Execute a PowerShell command. Working directory persists between calls; shell state (variables, functions) does not.
 
 ${getEditionPrompt(edition)}

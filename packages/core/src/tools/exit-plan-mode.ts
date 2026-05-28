@@ -7,7 +7,7 @@ export type PlanReviewCallback = (planFile: string, content: string) => Promise<
 export function createExitPlanModeTool(onExit: PlanReviewCallback): ToolHandler {
   return {
     definition: {
-      name: 'exit_plan_mode',
+      name: 'ExitPlanMode',
       description:
         'Submit your plan for user approval. Only use when planning implementation steps that require writing code — ' +
         'NOT for research tasks. Do NOT use ask_user to ask "is this plan okay?" — that is what THIS tool does.',

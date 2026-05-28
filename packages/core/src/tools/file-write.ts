@@ -5,7 +5,7 @@ import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 
 export const fileWriteTool: ToolHandler = {
   definition: {
-    name: 'file_write',
+    name: 'Write',
     description: `Write content to a file, creating it if it does not exist. Overwrites existing content.
 
 Usage notes:

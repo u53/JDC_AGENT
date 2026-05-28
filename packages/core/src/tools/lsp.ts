@@ -27,7 +27,7 @@ const OPERATION_METHODS: Record<Operation, string> = {
 
 export const lspTool: ToolHandler = {
   definition: {
-    name: 'lsp',
+    name: 'LSP',
     description: `Interact with Language Server Protocol servers for code intelligence.
 
 Supported operations:

@@ -4,7 +4,7 @@ import type { TaskStore } from '../task-store.js'
 export function createTaskCreateTool(store: TaskStore): ToolHandler {
   return {
     definition: {
-      name: 'task_create',
+      name: 'TaskCreate',
       description:
         'Create a new task to track work progress. The task appears in the user\'s task panel. ' +
         'Use for complex multi-step tasks (3+ steps), when the user provides multiple things to do, or when starting plan mode. ' +

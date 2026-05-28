@@ -8,7 +8,7 @@ export interface BackgroundEventsDeps {
 export function createBackgroundEventsTool(deps: BackgroundEventsDeps): ToolHandler {
   return {
     definition: {
-      name: 'background_events',
+      name: 'BackgroundEvents',
       description: 'Get structured events from a background task (mainly useful for teams). Returns event log with task assignments, member progress, tool usage, manager decisions, etc.',
       inputSchema: {
         type: 'object',

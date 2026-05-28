@@ -9,7 +9,7 @@ export type AskUserCallback = (
 export function createAskUserTool(onAskUser: AskUserCallback): ToolHandler {
   return {
     definition: {
-      name: 'ask_user',
+      name: 'AskUser',
       description:
         'Ask the user a question when you genuinely cannot proceed without their input. Can provide options for single or multi-select.\n\n' +
         'Only use this when you cannot figure out the answer yourself using tools (file_read, grep, glob). ' +

@@ -3,7 +3,7 @@ import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 
 export const webSearchTool: ToolHandler = {
   definition: {
-    name: 'web_search',
+    name: 'WebSearch',
     description: `Search the web for current information. Returns titles, URLs, and snippets.
 
 Usage notes:

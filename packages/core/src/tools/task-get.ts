@@ -4,7 +4,7 @@ import type { TaskStore } from '../task-store.js'
 export function createTaskGetTool(store: TaskStore): ToolHandler {
   return {
     definition: {
-      name: 'task_get',
+      name: 'TaskGet',
       description: 'Get details of a specific task by ID.',
       inputSchema: {
         type: 'object',

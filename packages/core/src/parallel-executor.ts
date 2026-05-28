@@ -14,13 +14,13 @@ export interface ToolBatchResult {
 }
 
 const READ_TOOLS = new Set([
-  'file_read', 'glob', 'grep', 'ls', 'tree',
-  'web_fetch', 'web_search', 'lsp',
-  'task_get', 'task_list', 'task_stop',
-  'list_mcp_resources', 'read_mcp_resource', 'skill',
+  'Read', 'Glob', 'Grep', 'LS', 'Tree',
+  'WebFetch', 'WebSearch', 'LSP',
+  'TaskGet', 'TaskList', 'TaskStop',
+  'ListMcpResources', 'ReadMcpResource', 'skill',
 ])
 
-const LONG_RUNNING_TOOLS = new Set(['Agent', 'bash', 'monitor'])
+const LONG_RUNNING_TOOLS = new Set(['Agent', 'Bash', 'Monitor'])
 
 const MAX_CONCURRENCY = 5
 

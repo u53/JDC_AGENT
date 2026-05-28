@@ -139,12 +139,12 @@ assistant: That would recursively delete files in /var/logs. This is hard to rev
 }
 
 function getToolUsageSection(toolNames: string[]): string {
-  const hasFileRead = toolNames.includes('file_read')
-  const hasFileEdit = toolNames.includes('file_edit')
-  const hasFileWrite = toolNames.includes('file_write')
-  const hasGlob = toolNames.includes('glob')
-  const hasGrep = toolNames.includes('grep')
-  const hasBash = toolNames.includes('bash')
+  const hasFileRead = toolNames.includes('Read')
+  const hasFileEdit = toolNames.includes('Edit')
+  const hasFileWrite = toolNames.includes('Write')
+  const hasGlob = toolNames.includes('Glob')
+  const hasGrep = toolNames.includes('Grep')
+  const hasBash = toolNames.includes('Bash')
   const hasAgent = toolNames.includes('Agent')
   const hasSkill = toolNames.includes('Skill')
 
@@ -152,12 +152,12 @@ function getToolUsageSection(toolNames: string[]): string {
     'Do NOT use bash to run commands when a relevant dedicated tool is provided. Using dedicated tools allows the user to better understand and review your work.',
   ]
 
-  if (hasFileRead) items.push('To read files, use file_read instead of cat, head, or tail.')
-  if (hasFileEdit) items.push('To edit files, use file_edit instead of sed or awk.')
-  if (hasFileWrite) items.push('To create new files, use file_write instead of echo redirection.')
-  if (hasGlob) items.push('To search for files by name pattern, use glob instead of find.')
-  if (hasGrep) items.push('To search file contents, use grep instead of shell grep or rg.')
-  if (hasBash) items.push('Reserve bash exclusively for system commands and terminal operations that require shell execution.')
+  if (hasFileRead) items.push('To read files, use Read instead of cat, head, or tail.')
+  if (hasFileEdit) items.push('To edit files, use Edit instead of sed or awk.')
+  if (hasFileWrite) items.push('To create new files, use Write instead of echo redirection.')
+  if (hasGlob) items.push('To search for files by name pattern, use Glob instead of find.')
+  if (hasGrep) items.push('To search file contents, use Grep instead of shell grep or rg.')
+  if (hasBash) items.push('Reserve Bash exclusively for system commands and terminal operations that require shell execution.')
 
   if (hasAgent) {
     items.push(

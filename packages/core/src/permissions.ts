@@ -10,14 +10,14 @@ export type DangerLevel = 'dangerous' | 'critical'
 export { type PermissionRule } from './permission-rules.js'
 
 const READ_ONLY_TOOLS = new Set([
-  'file_read', 'glob', 'grep', 'ls', 'tree',
-  'task_create', 'task_get', 'task_list', 'task_update', 'task_stop',
-  'todo_write', 'lsp', 'web_search', 'ask_user',
-  'list_mcp_resources', 'read_mcp_resource', 'skill',
+  'Read', 'Glob', 'Grep', 'LS', 'Tree',
+  'TaskCreate', 'TaskGet', 'TaskList', 'TaskUpdate', 'TaskStop',
+  'TodoWrite', 'LSP', 'WebSearch', 'AskUser',
+  'ListMcpResources', 'ReadMcpResource', 'skill',
 ])
 
 const WRITE_TOOLS = new Set([
-  'bash', 'file_write', 'file_edit', 'notebook_edit', 'web_fetch', 'agent',
+  'Bash', 'Write', 'Edit', 'NotebookEdit', 'WebFetch', 'agent',
 ])
 
 const CRITICAL_PATTERNS = [
@@ -80,7 +80,7 @@ export class PermissionChecker {
     }
 
     // Critical commands always ask regardless of mode
-    if (toolName === 'bash' && this.getDangerLevel(input) === 'critical') {
+    if (toolName === 'Bash' && this.getDangerLevel(input) === 'critical') {
       return 'ask'
     }
 
@@ -213,12 +213,12 @@ export class PermissionChecker {
 }
 
 export const DEFAULT_RULES: PermissionRule[] = [
-  { tool: 'file_read', decision: 'allow' },
-  { tool: 'glob', decision: 'allow' },
-  { tool: 'grep', decision: 'allow' },
-  { tool: 'ls', decision: 'allow' },
-  { tool: 'tree', decision: 'allow' },
-  { tool: 'bash', decision: 'ask' },
-  { tool: 'file_write', decision: 'ask' },
-  { tool: 'file_edit', decision: 'ask' },
+  { tool: 'Read', decision: 'allow' },
+  { tool: 'Glob', decision: 'allow' },
+  { tool: 'Grep', decision: 'allow' },
+  { tool: 'LS', decision: 'allow' },
+  { tool: 'Tree', decision: 'allow' },
+  { tool: 'Bash', decision: 'ask' },
+  { tool: 'Write', decision: 'ask' },
+  { tool: 'Edit', decision: 'ask' },
 ]

@@ -5,7 +5,7 @@ export type NotifyCallback = (message: string) => void
 export function createNotifyTool(onNotify: NotifyCallback): ToolHandler {
   return {
     definition: {
-      name: 'notify',
+      name: 'Notify',
       description:
         'Send a desktop notification to get the user\'s attention. ' +
         'Do NOT notify for routine progress or when the user is clearly watching the conversation. ' +

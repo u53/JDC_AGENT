@@ -36,7 +36,7 @@ export const AGENT_TYPES: AgentTypeDefinition[] = [
 # Hard rules
 - Read-only. Do NOT modify any files.
 - Do NOT run state-changing commands.`,
-    allowedTools: ['file_read', 'glob', 'grep', 'ls', 'tree', 'web_search', 'web_fetch', 'lsp'],
+    allowedTools: ['Read', 'Glob', 'Grep', 'LS', 'Tree', 'WebSearch', 'WebFetch', 'LSP'],
     allowedMcpServers: ['codegraph'],
     maxTurns: 25,
   },
@@ -63,7 +63,7 @@ export const AGENT_TYPES: AgentTypeDefinition[] = [
 - Do NOT implement anything — write plans only.
 - Do NOT write outside .jdcagnet/plans/.
 - A plan that says "refactor X" without naming files is rejected — be specific.`,
-    allowedTools: ['file_read', 'glob', 'grep', 'ls', 'tree', 'file_write'],
+    allowedTools: ['Read', 'Glob', 'Grep', 'LS', 'Tree', 'Write'],
     allowedMcpServers: ['codegraph'],
     maxTurns: 20,
   },
@@ -91,7 +91,7 @@ export const AGENT_TYPES: AgentTypeDefinition[] = [
 - Do NOT run shell commands.
 - Do NOT add features.
 - Do NOT change formatting that's already consistent — only change what makes the code clearer.`,
-    allowedTools: ['file_read', 'file_edit', 'file_write', 'grep', 'glob', 'ls'],
+    allowedTools: ['Read', 'Edit', 'Write', 'Grep', 'Glob', 'LS'],
     allowedMcpServers: ['codegraph'],
     maxTurns: 30,
   },
@@ -133,7 +133,7 @@ Order by severity: critical > high > medium > low. End with a one-paragraph summ
 - Do NOT fix code — only report.
 - Bash is restricted to read-only commands (grep, find, cat, git log, npm audit, etc.).
 - Do not file findings you cannot pinpoint to a file:line. "The codebase might have XSS" is not a finding.`,
-    allowedTools: ['file_read', 'grep', 'glob', 'ls', 'tree', 'bash'],
+    allowedTools: ['Read', 'Grep', 'Glob', 'LS', 'Tree', 'Bash'],
     allowedMcpServers: ['codegraph'],
     maxTurns: 20,
   },
@@ -165,7 +165,7 @@ Order by severity: critical > high > medium > low. End with a one-paragraph summ
 - Do NOT run shell commands.
 - Do NOT introduce new design primitives when the codebase already has equivalents.
 - Match the project's component file naming convention exactly.`,
-    allowedTools: ['file_read', 'file_write', 'file_edit', 'glob', 'ls', 'web_fetch'],
+    allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'LS', 'WebFetch'],
     allowedMcpServers: [],
     maxTurns: 30,
   },
@@ -225,7 +225,7 @@ export function filterToolsForAgent(agentType: string, allTools: ToolDefinition[
   const FORBIDDEN_FOR_SUBAGENT = new Set([
     'Agent',
     'Skill',
-    'ask_user',
+    'AskUser',
     'AskUserQuestion',
     'EnterPlanMode',
     'ExitPlanMode',

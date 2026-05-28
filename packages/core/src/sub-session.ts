@@ -136,7 +136,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
     const availableToolNames = toolDefs.map(t => t.name).sort()
     const TOOL_WHITELIST_OVERRIDE =
       `\n\n# ⚠️ Tools available to YOU (overrides any tool list in the parent prompt)\n\n` +
-      `You can ONLY use these tools — anything mentioned earlier (bash, file_edit, file_write, etc.) ` +
+      `You can ONLY use these tools — anything mentioned earlier (Bash, Edit, Write, etc.) ` +
       `that is NOT in this list is NOT available to you and will fail with "Unknown tool":\n\n` +
       availableToolNames.map(n => `- ${n}`).join('\n') +
       `\n\nIf your task seems to require a tool not in this list, do NOT try to call it. Either ` +
@@ -267,7 +267,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
       }
 
       // Agent-type-specific restrictions
-      if (opts.agentType === 'plan' && tu.name === 'file_write') {
+      if (opts.agentType === 'plan' && tu.name === 'Write') {
         const writePath = (parsedInput.file_path || parsedInput.path || '') as string
         if (!isWriteAllowedForPlanAgent(writePath, cwd)) {
           const restrictResult = { content: 'Plan agent can only write to .jdcagnet/plans/ directory', isError: true }
@@ -277,7 +277,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
         }
       }
 
-      if (opts.agentType === 'security-auditor' && tu.name === 'bash') {
+      if (opts.agentType === 'security-auditor' && tu.name === 'Bash') {
         const cmd = (parsedInput.command || '') as string
         if (!isBashAllowedForAuditor(cmd)) {
           const restrictResult = { content: 'Security auditor bash is restricted to read-only commands', isError: true }

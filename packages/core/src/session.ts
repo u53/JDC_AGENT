@@ -859,7 +859,7 @@ export class Session {
       )
       if (this.abortController?.signal.aborted) break
 
-      const TASK_TOOL_NAMES = new Set(['task_create', 'task_update', 'task_list', 'task_get', 'task_stop', 'todo_write'])
+      const TASK_TOOL_NAMES = new Set(['TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TaskStop', 'TodoWrite'])
       const usedTaskTool = toolUseBlocks.some((b: any) => TASK_TOOL_NAMES.has(b.name))
       if (usedTaskTool) {
         this.turnsSinceTaskTool = 0
@@ -1091,26 +1091,5 @@ export class Session {
 }
 
 function reorderAssistantContent(content: any[]): any[] {
-  if (content.length === 0) return content
-
-  const thinkingBlocks: any[] = []
-  const textParts: string[] = []
-  const toolBlocks: any[] = []
-
-  for (const block of content) {
-    if (block.type === 'thinking') {
-      thinkingBlocks.push(block)
-    } else if (block.type === 'text') {
-      if (block.text) textParts.push(block.text)
-    } else if (block.type === 'tool_use') {
-      toolBlocks.push(block)
-    }
-  }
-
-  const result: any[] = [...thinkingBlocks]
-  if (textParts.length > 0) {
-    result.push({ type: 'text', text: textParts.join('\n\n') })
-  }
-  result.push(...toolBlocks)
-  return result
+  return content
 }

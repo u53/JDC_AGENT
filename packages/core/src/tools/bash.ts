@@ -63,7 +63,7 @@ export function getNonInteractiveEnv(cwd: string): Record<string, string> {
 
 export const bashTool: ToolHandler = {
   definition: {
-    name: 'bash',
+    name: 'Bash',
     description: `Execute a bash command and return its output (stdout + stderr).
 ${WINDOWS_BASH_NOTE}
 The shell runs in a non-interactive environment (CI=true, GIT_TERMINAL_PROMPT=0, DEBIAN_FRONTEND=noninteractive). Commands that require interactive input will fail — use appropriate flags to bypass prompts (e.g., --yes, -y, --non-interactive, --batch).

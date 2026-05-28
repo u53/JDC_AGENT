@@ -7,7 +7,7 @@ import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 
 export const grepTool: ToolHandler = {
   definition: {
-    name: 'grep',
+    name: 'Grep',
     description: `Search file contents using regex. Returns matching lines with file paths and line numbers.
 
 Usage notes:

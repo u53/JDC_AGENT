@@ -9,7 +9,7 @@ interface EditOp {
 
 export const multiEditTool: ToolHandler = {
   definition: {
-    name: 'multi_edit',
+    name: 'MultiEdit',
     description: `Apply multiple string replacements to a single file atomically. All edits succeed or none are applied.
 
 Use this instead of multiple file_edit calls when:

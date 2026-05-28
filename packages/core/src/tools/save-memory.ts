@@ -6,7 +6,7 @@ import { extractBody } from '../memory-extractor.js'
 
 export const saveMemoryTool: ToolHandler = {
   definition: {
-    name: 'save_memory',
+    name: 'SaveMemory',
     description:
       'Save information to persistent memory that will be available in all future sessions. Use when:\n' +
       '- The user explicitly asks you to remember something\n' +

@@ -6,7 +6,7 @@ const MAX_RESULTS = 100
 
 export const globTool: ToolHandler = {
   definition: {
-    name: 'glob',
+    name: 'Glob',
     description: `Find files matching a glob pattern. Returns up to 100 file paths.
 
 Usage notes:

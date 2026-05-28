@@ -29,7 +29,7 @@ export function PermissionDialog({ sessionId }: Props) {
     setRequest(null)
   }
 
-  const isBash = request.toolName === 'bash'
+  const isBash = request.toolName === 'Bash'
   const bashCommand = isBash ? (request.input.command as string || '') : ''
 
   return (

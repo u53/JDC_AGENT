@@ -12,7 +12,7 @@ export interface BackgroundSendDeps {
 export function createBackgroundSendTool(deps: BackgroundSendDeps): ToolHandler {
   return {
     definition: {
-      name: 'background_send',
+      name: 'BackgroundSend',
       description:
         'Send a message to a running team. Goes to the PM mailbox by default. ' +
         'Typical uses: "hurry" when deadline approaches, "narrow_scope" to reduce work, ' +
