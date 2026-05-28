@@ -78,6 +78,11 @@ export class OpenAIChatProvider implements ModelProvider {
 
     const content: ContentBlock[] = []
 
+    const reasoningContent = (choice.message as any).reasoning_content || (choice.message as any).reasoning
+    if (reasoningContent) {
+      content.push({ type: 'thinking', thinking: reasoningContent })
+    }
+
     if (choice.message.content) {
       content.push({ type: 'text', text: choice.message.content })
     }
@@ -129,13 +134,14 @@ export class OpenAIChatProvider implements ModelProvider {
 
     let toolCallsStarted = 0
     const thinkParser = new ThinkTagStreamParser()
+    let flushed = false
 
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta as any
       const finishReason = chunk.choices[0]?.finish_reason
 
-      if (delta?.reasoning_content) {
-        for (const c of thinkParser.writeThinking(delta.reasoning_content)) yield c
+      if (delta?.reasoning_content || delta?.reasoning) {
+        for (const c of thinkParser.writeThinking(delta.reasoning_content || delta.reasoning)) yield c
       }
 
       if (delta?.content) {
@@ -165,15 +171,15 @@ export class OpenAIChatProvider implements ModelProvider {
       }
 
       if (finishReason === 'tool_calls') {
-        // Flush remaining pendingText before tool calls
         for (const c of thinkParser.flush()) yield c
-        // Close the last open tool call
+        flushed = true
         if (toolCallsStarted > 0) {
           yield { type: 'tool_use_end' }
         }
-      } else if (finishReason === 'stop') {
-        // Flush remaining pendingText
+      } else if (finishReason) {
+        // Handle 'stop', 'length', 'content_filter', etc.
         for (const c of thinkParser.flush()) yield c
+        flushed = true
         yield {
           type: 'message_end',
           usage: {
@@ -186,6 +192,10 @@ export class OpenAIChatProvider implements ModelProvider {
 
       // Final chunk with usage (stream_options: include_usage)
       if (!chunk.choices.length && chunk.usage) {
+        if (!flushed) {
+          for (const c of thinkParser.flush()) yield c
+          flushed = true
+        }
         yield {
           type: 'message_end',
           usage: {
@@ -195,6 +205,12 @@ export class OpenAIChatProvider implements ModelProvider {
           },
         }
       }
+    }
+
+    // Safety net: flush any remaining buffered content if the stream ended
+    // without a proper finish_reason (e.g., connection closed abruptly)
+    if (!flushed) {
+      for (const c of thinkParser.flush()) yield c
     }
   }
 

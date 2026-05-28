@@ -118,7 +118,13 @@ export class OpenAIResponsesProvider implements ModelProvider {
     const content: ContentBlock[] = []
 
     for (const item of response.output) {
-      if (item.type === 'message') {
+      if ((item as any).type === 'reasoning') {
+        const summary = (item as any).summary
+        if (Array.isArray(summary)) {
+          const text = summary.map((s: any) => s.text || '').join('')
+          if (text) content.push({ type: 'thinking', thinking: text })
+        }
+      } else if (item.type === 'message') {
         for (const part of item.content) {
           if (part.type === 'output_text') {
             content.push({ type: 'text', text: part.text })
@@ -165,6 +171,7 @@ export class OpenAIResponsesProvider implements ModelProvider {
     const stream = await (this.client as any).responses.create(params, { signal })
 
     const thinkParser = new ThinkTagStreamParser()
+    let flushed = false
 
     for await (const event of stream) {
       if (event.type === 'response.output_text.delta') {
@@ -187,6 +194,7 @@ export class OpenAIResponsesProvider implements ModelProvider {
         }
       } else if (event.type === 'response.completed') {
         for (const c of thinkParser.flush()) yield c
+        flushed = true
         const usage = event.response?.usage
         const cachedTokens = usage?.input_tokens_details?.cached_tokens ?? 0
         yield {
@@ -198,6 +206,10 @@ export class OpenAIResponsesProvider implements ModelProvider {
           },
         }
       }
+    }
+
+    if (!flushed) {
+      for (const c of thinkParser.flush()) yield c
     }
   }
 
