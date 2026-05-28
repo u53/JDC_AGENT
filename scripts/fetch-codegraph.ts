@@ -35,7 +35,7 @@ function buildFetchOptions(): RequestInit {
 function parseArgs(): { platforms: Platform[]; version: string } {
   const argv = process.argv.slice(2)
   let platforms: Platform[] = []
-  let version = 'latest'
+  let version = 'v0.9.6'
   for (const a of argv) {
     if (a.startsWith('--platforms=')) {
       platforms = a.slice('--platforms='.length).split(',').map(s => s.trim()) as Platform[]
@@ -114,9 +114,7 @@ async function main() {
   const { platforms, version } = parseArgs()
   console.log(`[fetch-codegraph] platforms=${platforms.join(',')} version=${version}`)
 
-  const release = version === 'latest'
-    ? await fetchJson('https://api.github.com/repos/colbymchenry/codegraph/releases/latest')
-    : await fetchJson(`https://api.github.com/repos/colbymchenry/codegraph/releases/tags/${version}`)
+  const release = await fetchJson(`https://api.github.com/repos/colbymchenry/codegraph/releases/tags/${version}`)
 
   const tag: string = release.tag_name
   const assets: ReleaseAsset[] = release.assets || []
