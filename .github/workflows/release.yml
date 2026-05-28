@@ -36,8 +36,6 @@ jobs:
 
       - name: Fetch CodeGraph binaries
         run: pnpm fetch-codegraph
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Import signing certificate
         run: |
@@ -97,8 +95,6 @@ jobs:
 
       - name: Fetch CodeGraph binaries
         run: pnpm fetch-codegraph
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Package
         run: pnpm package
