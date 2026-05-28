@@ -150,12 +150,26 @@ export function Composer({
         if (item.type.startsWith('image/')) {
           e.preventDefault()
           const file = item.getAsFile()
-          if (file) addImageFile(file)
+          if (file) {
+            addImageFile(file)
+            const sid = useSessionStore.getState().activeSessionId
+            const currentImages = sid ? useSessionStore.getState().drafts[sid]?.images ?? [] : []
+            const imageIndex = currentImages.length + 1
+            const ta = textareaRef.current
+            if (ta) {
+              const pos = ta.selectionStart
+              const before = text.slice(0, pos)
+              const after = text.slice(pos)
+              setText(before + `[image_${imageIndex}]` + after)
+            } else {
+              setText(text + `[image_${imageIndex}]`)
+            }
+          }
           return
         }
       }
     },
-    [addImageFile],
+    [addImageFile, text, setText],
   )
 
   const handleDrop = useCallback(

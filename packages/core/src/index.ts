@@ -39,3 +39,4 @@ export { createExitPlanModeTool, type PlanReviewCallback } from './tools/exit-pl
 export { IdeManager } from './ide/index.js'
 export type { IdeConnection, IdeConnectionStatus, SelectionData, AtMentionData, OpenDiffParams, OpenDiffResult, DiagnosticFile, IdeCallbacks } from './ide/index.js'
 export * as codegraph from './codegraph/index.js'
+export { compressImageForAPI, type CompressedImage } from './utils/image-resizer.js'

@@ -6,7 +6,7 @@ import {
   type PermissionCallback, createAskUserTool, type AskUserCallback, createNotifyTool, type NotifyCallback,
   McpManager, loadMcpConfig, saveMcpConfig, type McpServerConfig, type McpServerState,
   IdeManager, type IdeConnection, type OpenDiffParams, type OpenDiffResult, type DiagnosticFile,
-  codegraph,
+  codegraph, compressImageForAPI,
 } from '@jdcagnet/core'
 import type { ToolExecutionEvent } from '@jdcagnet/core'
 import { Notification, type BrowserWindow } from 'electron'
@@ -377,15 +377,43 @@ export class SessionManager {
       },
     }
 
-    // Convert images to ImageContent blocks
-    const extraContent = images?.map(img => ({
-      type: 'image' as const,
-      source: {
-        type: 'base64' as const,
-        media_type: img.mediaType as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp',
-        data: img.data,
-      },
-    }))
+    // Compress and convert images to ImageContent blocks
+    let extraContent: Array<{ type: 'image'; source: { type: 'base64'; media_type: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'; data: string } }> | undefined
+    if (images?.length) {
+      extraContent = await Promise.all(
+        images.map(async (img) => {
+          try {
+            const compressed = await compressImageForAPI(img.data, img.mediaType)
+            const originalSize = Buffer.from(img.data, 'base64').length
+            const compressedSize = Buffer.from(compressed.data, 'base64').length
+            console.log(`[IMAGE] Compressed: ${(originalSize / 1024).toFixed(0)}KB → ${(compressedSize / 1024).toFixed(0)}KB (${compressed.mediaType})`)
+            return {
+              type: 'image' as const,
+              source: {
+                type: 'base64' as const,
+                media_type: compressed.mediaType,
+                data: compressed.data,
+              },
+            }
+          } catch (err) {
+            console.warn('[IMAGE] Compression failed, sending original:', (err as Error).message)
+            const rawSize = Buffer.from(img.data, 'base64').length
+            const base64Size = Math.ceil((rawSize * 4) / 3)
+            if (base64Size > 5 * 1024 * 1024) {
+              throw new Error(`Image too large (${(base64Size / 1024 / 1024).toFixed(1)}MB) and compression failed`)
+            }
+            return {
+              type: 'image' as const,
+              source: {
+                type: 'base64' as const,
+                media_type: img.mediaType as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp',
+                data: img.data,
+              },
+            }
+          }
+        })
+      )
+    }
 
     try {
       await session.sendMessage(text, events, extraContent)

@@ -12,7 +12,7 @@ await build({
   bundle: true,
   platform: 'node',
   outdir: path.join(__dirname, 'dist'),
-  external: ['electron', 'node-pty'],
+  external: ['electron', 'node-pty', 'sharp'],
   format: 'cjs',
   minify: true,
   keepNames: true,
