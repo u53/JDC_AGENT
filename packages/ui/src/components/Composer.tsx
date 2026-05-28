@@ -132,10 +132,15 @@ export function Composer({
     reader.onload = () => {
       const result = reader.result as string
       const base64 = result.split(',')[1]
-      if (base64) setImages((prev) => [...prev, { data: base64, mediaType: file.type }])
+      if (base64) {
+        const sid = useSessionStore.getState().activeSessionId
+        if (!sid) return
+        const current = useSessionStore.getState().drafts[sid]?.images ?? []
+        setDraftImages(sid, [...current, { data: base64, mediaType: file.type }])
+      }
     }
     reader.readAsDataURL(file)
-  }, [])
+  }, [setDraftImages])
 
   const handlePaste = useCallback(
     (e: ClipboardEvent<HTMLTextAreaElement>) => {
