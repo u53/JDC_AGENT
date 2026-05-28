@@ -357,6 +357,21 @@ export class Session {
     await this.skillLoader.loadAll(this.config.cwd)
   }
 
+  private syncMcpTools(): void {
+    if (!this.mcpManager) return
+    const currentTools = this.mcpManager.getTools()
+    for (const tool of currentTools) {
+      if (this.toolRegistry.get(tool.name)) continue
+      const serverName = tool.name.split('__')[1]
+      const toolName = tool.name.split('__').slice(2).join('__')
+      this.toolRegistry.register(createMcpToolHandler(
+        serverName,
+        { name: toolName, description: tool.description, inputSchema: tool.inputSchema },
+        this.mcpManager
+      ))
+    }
+  }
+
   getSkillLoader(): SkillLoader {
     return this.skillLoader
   }
@@ -456,6 +471,7 @@ export class Session {
   async sendMessage(text: string, events: SessionEvents, extraContent?: import('./types.js').ContentBlock[]): Promise<void> {
     await this.ensureHooksReady()
     await this.ensureSkillsReady()
+    this.syncMcpTools()
 
     // Assemble system prompt with current tool list
     const toolDefs = this.toolRegistry.getDefinitions()
