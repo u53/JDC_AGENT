@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import { ipc } from '../lib/ipc-client'
 
-export type ThemeMode = 'light' | 'dark' | 'system'
-export type SettingsTab = 'appearance' | 'models' | 'mcp' | 'shortcuts' | 'advanced'
+export type ThemeMode = 'light' | 'dark' | 'system' | 'ocean' | 'purple' | 'cyber' | 'warm'
+export type SettingsTab = 'models' | 'mcp' | 'shortcuts' | 'advanced'
 
 interface SettingsState {
   config: any | null
@@ -25,7 +25,7 @@ function applyTheme(theme: ThemeMode) {
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   config: null,
   isOpen: false,
-  activeTab: 'appearance',
+  activeTab: 'models',
   theme: 'system',
 
   open: (tab) => set({ isOpen: true, activeTab: tab || get().activeTab }),

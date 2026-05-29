@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSettingsStore, type SettingsTab } from '../stores/settings-store'
 import { useModelStore, type ApiProtocol, type ModelGroup } from '../stores/model-store'
 import { useSessionStore } from '../stores/session-store'
-import { ThemeSegmented } from './ThemeSegmented'
 import { IconX } from './icons'
 import type { McpServerState } from '../lib/ipc-client'
 
@@ -67,7 +66,6 @@ function ProtocolSelect({ value, onChange }: { value: ApiProtocol; onChange: (v:
 }
 
 const TABS: { key: SettingsTab; label: string }[] = [
-  { key: 'appearance', label: '外观' },
   { key: 'models', label: '模型' },
   { key: 'mcp', label: 'MCP' },
   { key: 'shortcuts', label: '快捷键' },
@@ -106,7 +104,7 @@ export function SettingsOverlay() {
         </div>
 
         {/* Right content */}
-        <div className="flex-1 overflow-y-auto p-6 relative">
+        <div className="flex-1 overflow-y-auto p-6 relative min-h-[400px]">
           <button
             onClick={close}
             className="absolute top-4 right-4 text-[var(--muted)] hover:text-[var(--text)] transition-colors"
@@ -114,7 +112,6 @@ export function SettingsOverlay() {
             <IconX size={18} />
           </button>
 
-          {activeTab === 'appearance' && <AppearanceTab />}
           {activeTab === 'models' && <ModelsTab />}
           {activeTab === 'mcp' && <McpTab />}
           {activeTab === 'shortcuts' && <ShortcutsTab />}
@@ -126,15 +123,6 @@ export function SettingsOverlay() {
 }
 
 /* ─── Appearance ─── */
-function AppearanceTab() {
-  return (
-    <div>
-      <h3 className="text-[13px] font-medium text-[var(--text)] mb-3">主题</h3>
-      <ThemeSegmented />
-    </div>
-  )
-}
-
 /* ─── Advanced ─── */
 function AdvancedTab() {
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error' | 'uptodate'>('idle')

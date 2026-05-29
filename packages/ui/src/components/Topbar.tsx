@@ -30,10 +30,10 @@ export function Topbar() {
         <button
           onClick={addProject}
           className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] border border-[var(--border)] rounded-[8px] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors"
-          aria-label="New session"
+          aria-label="New project"
         >
           <IconPlus size={14} />
-          <span>New session</span>
+          <span>New project</span>
         </button>
         <button
           onClick={() => openSettings()}

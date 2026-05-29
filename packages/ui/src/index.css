@@ -72,6 +72,90 @@
   }
 }
 
+[data-theme="ocean"] {
+  --bg: #2e3440;
+  --surface: #3b4252;
+  --surface-2: #434c5e;
+  --surface-3: #4c566a;
+  --text: #eceff4;
+  --muted: #d8dee9;
+  --border: rgba(216, 222, 233, 0.10);
+  --border-strong: rgba(216, 222, 233, 0.18);
+  --accent: #88c0d0;
+  --accent-soft: #3b4252;
+  --accent-ink: #2e3440;
+  --good: #a3be8c;
+  --warn: #ebcb8b;
+  --bad: #bf616a;
+  --plan: #b48ead;
+  --shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+  --shadow-soft: 0 12px 32px rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
+}
+
+[data-theme="purple"] {
+  --bg: #1e1e2e;
+  --surface: #313244;
+  --surface-2: #45475a;
+  --surface-3: #585b70;
+  --text: #cdd6f4;
+  --muted: #a6adc8;
+  --border: rgba(166, 173, 200, 0.12);
+  --border-strong: rgba(166, 173, 200, 0.20);
+  --accent: #cba6f7;
+  --accent-soft: #2a2640;
+  --accent-ink: #1e1e2e;
+  --good: #a6e3a1;
+  --warn: #f9e2af;
+  --bad: #f38ba8;
+  --plan: #cba6f7;
+  --shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+  --shadow-soft: 0 12px 32px rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
+}
+
+[data-theme="cyber"] {
+  --bg: #191724;
+  --surface: #1f1d2e;
+  --surface-2: #26233a;
+  --surface-3: #2a2740;
+  --text: #e0def4;
+  --muted: #908caa;
+  --border: rgba(144, 140, 170, 0.12);
+  --border-strong: rgba(144, 140, 170, 0.20);
+  --accent: #ebbcba;
+  --accent-soft: #2a2535;
+  --accent-ink: #191724;
+  --good: #9ccfd8;
+  --warn: #f6c177;
+  --bad: #eb6f92;
+  --plan: #c4a7e7;
+  --shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+  --shadow-soft: 0 12px 32px rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
+}
+
+[data-theme="warm"] {
+  --bg: #fdf6e3;
+  --surface: #eee8d5;
+  --surface-2: #e8e1cc;
+  --surface-3: #ddd6c1;
+  --text: #586e75;
+  --muted: #93a1a1;
+  --border: rgba(88, 110, 117, 0.12);
+  --border-strong: rgba(88, 110, 117, 0.20);
+  --accent: #268bd2;
+  --accent-soft: #eee8d5;
+  --accent-ink: #fdf6e3;
+  --good: #859900;
+  --warn: #b58900;
+  --bad: #dc322f;
+  --plan: #6c71c4;
+  --shadow: 0 1px 0 rgba(88, 110, 117, 0.04);
+  --shadow-soft: 0 8px 28px rgba(88, 110, 117, 0.08);
+  color-scheme: light;
+}
+
 body {
   font-family: var(--font-sans);
   color: var(--text);
