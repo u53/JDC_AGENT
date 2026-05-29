@@ -141,15 +141,6 @@ export class ConversationHistory {
     this.save()
   }
 
-  getSessionTitle(sessionId: string): string | null {
-    const stmt = this.db!.prepare('SELECT title FROM sessions WHERE id = ?')
-    stmt.bind([sessionId])
-    let title: string | null = null
-    if (stmt.step()) title = stmt.getAsObject().title as string | null
-    stmt.free()
-    return title
-  }
-
   listSessions(cwd?: string): Array<{ id: string; projectName: string; cwd: string; title: string | null; createdAt: number; updatedAt: number }> {
     const stmt = cwd
       ? this.db!.prepare('SELECT * FROM sessions WHERE cwd = ? ORDER BY updated_at DESC')

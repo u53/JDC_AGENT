@@ -417,9 +417,6 @@ export class SessionManager {
 
     try {
       await session.sendMessage(text, events, extraContent)
-      if (!this.history.getSessionTitle(sessionId)) {
-        this.generateSessionTitle(sessionId, text, session)
-      }
       this.window?.webContents.send('query:finished', { sessionId })
     } catch (err: any) {
       console.error('[SEND] Error:', err.message, err.stack)
@@ -473,27 +470,6 @@ export class SessionManager {
 
   renameSession(sessionId: string, title: string): void {
     this.history.updateSessionTitle(sessionId, title)
-  }
-
-  private generateSessionTitle(sessionId: string, userMessage: string, session: Session): void {
-    const provider = session.getProvider()
-    const config = { ...session.config.modelConfig, maxTokens: 50 }
-    provider.chat(
-      [{ id: 'title-req', role: 'user', content: [{ type: 'text', text: `给以下用户消息生成一个简短的会话标题（不超过20个字，不要引号）：\n\n${userMessage.slice(0, 200)}` }], timestamp: Date.now() }],
-      [],
-      config,
-    ).then(({ content }) => {
-      const textBlock = content.find((b: any) => b.type === 'text')
-      const title = (textBlock as any)?.text?.trim().slice(0, 40) || userMessage.replace(/\n/g, ' ').trim().slice(0, 30)
-      if (title) {
-        this.history.updateSessionTitle(sessionId, title)
-        this.window?.webContents.send('session:title-changed', { sessionId, title })
-      }
-    }).catch(() => {
-      const fallback = userMessage.replace(/\n/g, ' ').trim().slice(0, 30) || 'New Chat'
-      this.history.updateSessionTitle(sessionId, fallback)
-      this.window?.webContents.send('session:title-changed', { sessionId, title: fallback })
-    })
   }
 
   getMessages(sessionId: string) {
