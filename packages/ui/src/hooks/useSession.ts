@@ -170,6 +170,18 @@ export function useSession() {
       useSessionStore.getState().updateSessionState(sessionId, { aborting: false })
     })
 
+    const unsubTitleChanged = window.electronAPI?.on('session:title-changed', (_e: unknown, data: unknown) => {
+      const { sessionId, title } = data as { sessionId: string; title: string }
+      useSessionStore.setState((s) => ({
+        projects: s.projects.map((p) => ({
+          ...p,
+          sessions: p.sessions.map((sess) =>
+            sess.id === sessionId ? { ...sess, title } : sess
+          ),
+        })),
+      }))
+    }) || (() => {})
+
     return () => {
       unsubStream()
       unsubTool()
@@ -180,6 +192,7 @@ export function useSession() {
       unsubMessagesUpdated()
       unsubUsage()
       unsubBgNotification()
+      unsubTitleChanged()
     }
   }, [])
 
