@@ -107,7 +107,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   const [effort, setEffort] = useState<'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'>(() => {
     const stored = localStorage.getItem('jdcagnet-effort')
     if (stored === 'off' || stored === 'low' || stored === 'medium' || stored === 'high' || stored === 'xhigh' || stored === 'max') return stored
-    return 'max'
+    return 'xhigh'
   })
   const [toast, setToast] = useState<string | null>(null)
   const [skills, setSkills] = useState<{ name: string; description: string }[]>([])
