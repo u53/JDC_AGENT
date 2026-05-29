@@ -134,9 +134,9 @@ Priority for matching:
 4. LAST RESORT: general worker with no specific expertise — but only if no specialist exists
 
 # Language and tone
-- ALL your output (replies, action messages, task descriptions) must be in English.
-- Exception: if the user writes in Chinese, your "reply" content matches their language. But action messages, task titles, and descriptions stay in English.
-- Internal action messages should be brief English — they appear in event log.
+- ALL your output (replies, action messages, task descriptions, task titles) must be in Chinese (中文).
+- Internal action messages (the "message" field in actions) should be brief Chinese — they appear in event log and UI.
+- Exception: code identifiers, file paths, and technical terms can stay in English.
 
 # Conflict Resolution Protocol
 
@@ -165,6 +165,7 @@ Rules for task assignment:
    - This tells the worker what they own and implicitly what they must NOT touch.
 4. If a worker reports they need to modify a file outside their scope: they must team_report to you first. Do NOT let workers silently cross boundaries.
 5. Read-only access is always safe — multiple workers can READ the same files.
+6. Task descriptions must be COMPLETE and DETAILED — workers have NO context from the original conversation. Include: what to do, what to produce, expected output format, quality criteria, and all relevant constraints. If the description is too long, split it into clearly labeled sections (Background / Requirements / Output Format / Constraints).
 
 When to use dependsOn for file safety:
 - Two tasks both write to the same config file (package.json, tsconfig.json) → SERIAL
@@ -1110,7 +1111,7 @@ export class TeamManagerAI extends TeamManager {
     this.setStatus('planning')
     this.opts.onEvent?.({
       type: 'manager_decision',
-      text: `PM thinking: ${reason.kind}${reason.kind === 'task_completed' || reason.kind === 'task_failed' ? ` (${(reason as any).taskId})` : ''}`,
+      text: `PM 思考中: ${reason.kind}${reason.kind === 'task_completed' || reason.kind === 'task_failed' ? ` (${(reason as any).taskId})` : ''}`,
       timestamp: Date.now(),
     })
 
@@ -1128,7 +1129,7 @@ export class TeamManagerAI extends TeamManager {
         // Retry once after a short delay.
         this.opts.onEvent?.({
           type: 'manager_decision',
-          text: 'PM returned no actions on team_started — retrying in 3s',
+          text: 'PM 启动时未产生操作 — 3秒后重试',
           timestamp: Date.now(),
         })
         setTimeout(() => {
@@ -1415,14 +1416,14 @@ export class TeamManagerAI extends TeamManager {
       this.pmConsecutiveFailures++
       this.opts.onEvent?.({
         type: 'manager_decision',
-        text: `PM AI error (#${this.pmConsecutiveFailures}): ${err instanceof Error ? err.message : String(err)}`,
+        text: `PM AI 错误 (#${this.pmConsecutiveFailures}): ${err instanceof Error ? err.message : String(err)}`,
         timestamp: Date.now(),
       })
       if (this.pmConsecutiveFailures >= 3) {
         this.aiEnabled = false
         this.opts.onEvent?.({
           type: 'manager_decision',
-          text: 'PM AI disabled after 3 consecutive failures — falling back to round-robin assignment',
+          text: 'PM AI 连续3次失败已禁用 — 回退到轮询分配',
           timestamp: Date.now(),
         })
       }
@@ -1487,7 +1488,7 @@ export class TeamManagerAI extends TeamManager {
       } else if (responseText.trim().length > 0) {
         this.opts.onEvent?.({
           type: 'manager_decision',
-          text: `PM proactive (${reason.kind}) returned 0 actions. Response length: ${responseText.length} chars. First 200: ${responseText.slice(0, 200).replace(/\n/g, ' ')}`,
+          text: `PM 主动检查 (${reason.kind}) 未产生操作。响应长度: ${responseText.length} 字符`,
           timestamp: Date.now(),
         })
       }
@@ -1496,14 +1497,14 @@ export class TeamManagerAI extends TeamManager {
       this.pmConsecutiveFailures++
       this.opts.onEvent?.({
         type: 'manager_decision',
-        text: `PM AI error (#${this.pmConsecutiveFailures}): ${err instanceof Error ? err.message : String(err)}`,
+        text: `PM AI 错误 (#${this.pmConsecutiveFailures}): ${err instanceof Error ? err.message : String(err)}`,
         timestamp: Date.now(),
       })
       if (this.pmConsecutiveFailures >= 3) {
         this.aiEnabled = false
         this.opts.onEvent?.({
           type: 'manager_decision',
-          text: 'PM AI disabled after 3 consecutive failures — falling back to round-robin assignment',
+          text: 'PM AI 连续3次失败已禁用 — 回退到轮询分配',
           timestamp: Date.now(),
         })
       }
@@ -1552,14 +1553,14 @@ export class TeamManagerAI extends TeamManager {
       this.pmConsecutiveFailures++
       this.opts.onEvent?.({
         type: 'manager_decision',
-        text: `PM AI error (#${this.pmConsecutiveFailures}): ${err instanceof Error ? err.message : String(err)}`,
+        text: `PM AI 错误 (#${this.pmConsecutiveFailures}): ${err instanceof Error ? err.message : String(err)}`,
         timestamp: Date.now(),
       })
       if (this.pmConsecutiveFailures >= 3) {
         this.aiEnabled = false
         this.opts.onEvent?.({
           type: 'manager_decision',
-          text: 'PM AI disabled after 3 consecutive failures — falling back to round-robin assignment',
+          text: 'PM AI 连续3次失败已禁用 — 回退到轮询分配',
           timestamp: Date.now(),
         })
       }
@@ -1582,7 +1583,7 @@ export class TeamManagerAI extends TeamManager {
           this.consecutiveEmptyResponses++
           if (this.consecutiveEmptyResponses >= 5) {
             this.aiEnabled = false
-            this.opts.onEvent?.({ type: 'manager_decision', text: `PM AI disabled: ${this.consecutiveEmptyResponses} consecutive unparseable responses`, timestamp: Date.now() })
+            this.opts.onEvent?.({ type: 'manager_decision', text: `PM AI 已禁用: 连续 ${this.consecutiveEmptyResponses} 次无法解析的响应`, timestamp: Date.now() })
           }
         }
         return []
@@ -1611,7 +1612,7 @@ export class TeamManagerAI extends TeamManager {
         this.consecutiveEmptyResponses++
         if (this.consecutiveEmptyResponses >= 5) {
           this.aiEnabled = false
-          this.opts.onEvent?.({ type: 'manager_decision', text: `PM AI disabled: ${this.consecutiveEmptyResponses} consecutive empty responses`, timestamp: Date.now() })
+          this.opts.onEvent?.({ type: 'manager_decision', text: `PM AI 已禁用: 连续 ${this.consecutiveEmptyResponses} 次空响应`, timestamp: Date.now() })
         }
       }
       return actions

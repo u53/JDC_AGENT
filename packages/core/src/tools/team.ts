@@ -41,7 +41,9 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
         'Prefer Team over multiple Agent calls when: (1) the user explicitly asks for a team, (2) the task has 3+ subtasks that benefit from parallel execution, or (3) the task needs coordination between workers. ' +
         'IMPORTANT: Only ONE running team is allowed per session. If a team is already active, this tool will return an error — wrap_up the existing team first (use background_send with intent="wrap_up"), then create a new one. ' +
         'The team has an AI PM that AUTONOMOUSLY decides staffing, task breakdown, and assignment. ' +
-        'You only need to provide the objective — do NOT plan members or tasks yourself unless the user explicitly specifies them. ' +
+        'YOUR ROLE before calling this tool: analyze the user\'s request, understand what needs to be done, then write a DETAILED objective that captures the full scope. ' +
+        'Do NOT specify members — let the PM decide staffing. Only pass members when the user EXPLICITLY names specific roles or team composition. ' +
+        'If the user specifies a model to use (e.g. "用公司的deepseek"), you MUST include the model requirement in the objective text so the PM can assign it to workers. ' +
         'The PM handles all coordination: hiring workers, decomposing work, assigning tasks, quality control, and synthesis. ' +
         'Use background_send to message the team, background_status to check progress, ' +
         'background_events to view detailed events, team_list to see all teams. The team runs as a background task. ' +

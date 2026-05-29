@@ -134,6 +134,29 @@ export class SessionManager {
     const config = loadAppConfig()
     const data = config.modelGroups
     if (!data?.groups) return null
+
+    // Composite key format: "groupId:modelId" (from AI via team/agent tools)
+    const colonIdx = modelId.indexOf(':')
+    if (colonIdx > 0) {
+      const groupId = modelId.slice(0, colonIdx)
+      const mId = modelId.slice(colonIdx + 1)
+      const group = data.groups.find((g: any) => g.id === groupId)
+      if (group) {
+        const model = group.models?.find((m: any) => m.modelId === mId)
+        if (model) {
+          const provider = this.createProvider(group)
+          const modelConfig: ModelConfig = {
+            model: model.modelId,
+            maxTokens: model.maxTokens || 32000,
+            contextWindow: model.contextWindow || 200000,
+            compressAt: model.compressAt || 0.9,
+          }
+          return { provider, modelConfig, protocol: group.protocol || 'anthropic' }
+        }
+      }
+    }
+
+    // Fallback: UUID lookup (for activeModelId stored in session DB)
     for (const group of data.groups) {
       const model = group.models?.find((m: any) => m.id === modelId)
       if (model) {

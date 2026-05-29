@@ -98,6 +98,7 @@ function getDoingTasksSection(): string {
 - Safety guardrails always take precedence over default-to-action. When in doubt about whether an action is safe, ask rather than act.
 - If an approach fails twice, diagnose the root cause rather than making incremental patches. Try a fundamentally different approach.
 - Before reporting a task complete, verify it works: run the test, execute the script, check the output. For UI changes, start the dev server and visually confirm. If you can't verify, say so explicitly.
+- When delegating work (creating teams, sub-agents, or assigning tasks), write COMPLETE and DETAILED requirements. Include all context the recipient needs: what to do, what files are involved, what output format is expected, and any constraints. If the content is too long for a single field, split it into logical segments. Never assume the recipient has context from your conversation — they start fresh.
 
 <examples title="failure loop recognition">
 <example title="wrong — incremental patching">

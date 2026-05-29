@@ -221,7 +221,7 @@ export class TeamRuntime {
     if (this.members.length >= 10) {
       this.recordEvent({
         type: 'manager_decision',
-        text: `Cannot add member: team is at the 10-worker cap.`,
+        text: `无法添加成员: 团队已达到10人上限`,
         timestamp: Date.now(),
       })
       return null
@@ -265,7 +265,7 @@ export class TeamRuntime {
     if (status === 'running' && !opts.force) {
       this.recordEvent({
         type: 'manager_decision',
-        text: `Cannot remove ${member.role} (${memberId}): currently running. Use force=true to abort.`,
+        text: `无法移除 ${member.role} (${memberId}): 正在运行中。使用 force=true 强制中止。`,
         timestamp: Date.now(),
       })
       return false
@@ -306,7 +306,7 @@ export class TeamRuntime {
     if (!member) {
       this.recordEvent({
         type: 'manager_decision',
-        text: `kick_member: no such member ${memberId}`,
+        text: `kick_member: 成员 ${memberId} 不存在`,
         timestamp: Date.now(),
       })
       return
@@ -314,7 +314,7 @@ export class TeamRuntime {
     if (member.getStatus() !== 'running') {
       this.recordEvent({
         type: 'manager_decision',
-        text: `kick_member: ${memberId} is not running (status=${member.getStatus()}); ignoring`,
+        text: `kick_member: ${memberId} 未在运行 (status=${member.getStatus()})，忽略`,
         timestamp: Date.now(),
       })
       return
@@ -323,7 +323,7 @@ export class TeamRuntime {
     if (!taskId) {
       this.recordEvent({
         type: 'manager_decision',
-        text: `kick_member: ${memberId} has no current task; ignoring`,
+        text: `kick_member: ${memberId} 没有当前任务，忽略`,
         timestamp: Date.now(),
       })
       return
@@ -333,7 +333,7 @@ export class TeamRuntime {
     if (prevKicks >= TeamRuntime.MAX_KICKS_PER_TASK) {
       this.recordEvent({
         type: 'manager_decision',
-        text: `kick_member: task ${taskId} already kicked ${prevKicks} times — letting it fail naturally`,
+        text: `kick_member: 任务 ${taskId} 已被踢 ${prevKicks} 次 — 让其自然失败`,
         timestamp: Date.now(),
       })
       return
@@ -342,7 +342,7 @@ export class TeamRuntime {
 
     this.recordEvent({
       type: 'manager_decision',
-      text: `kicking ${member.role} (${memberId}) on task ${taskId} (kick #${prevKicks + 1}): ${hint}`,
+      text: `踢出 ${member.role} (${memberId}) 的任务 ${taskId} (第 ${prevKicks + 1} 次): ${hint}`,
       timestamp: Date.now(),
     })
 
@@ -576,7 +576,7 @@ export class TeamRuntime {
       const hasActiveTask = tasks.some(t => t.status === 'running' || t.status === 'assigned' || t.status === 'todo' || t.status === 'reopened')
       const hasRunningWorker = this.members.some(m => m.getStatus() === 'running')
       if (!hasActiveTask && !hasRunningWorker) {
-        this.recordEvent({ type: 'manager_decision', text: 'wrap_up auto-complete: no active tasks/workers remain', timestamp: Date.now() })
+        this.recordEvent({ type: 'manager_decision', text: 'wrap_up 自动完成: 没有活跃的任务/成员', timestamp: Date.now() })
         this.completeTeam(this.manager.synthesize())
       }
     }

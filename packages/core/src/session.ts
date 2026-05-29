@@ -509,13 +509,13 @@ export class Session {
         if (group.models?.length) {
           for (const m of group.models) {
             const active = m.id === modelGroups.activeModelId ? ' (current)' : ''
-            modelLines.push(`- ${m.name} [modelId: "${m.modelId}"]${active}`)
+            modelLines.push(`- ${m.name} [${group.name}] (modelId: "${group.id}:${m.modelId}")${active}`)
           }
         }
       }
       if (modelLines.length > 0) {
         this.config.modelConfig.systemPrompt.push({
-          content: `<available-models>\nWhen dispatching sub-agents via the Agent tool, you can specify a modelId to use a different model. Available models:\n${modelLines.join('\n')}\nIf the user asks to use a specific model for a sub-agent, pass its modelId value.\n</available-models>`,
+          content: `<available-models>\nWhen dispatching sub-agents or creating teams, you can specify a modelId to use a different model. Available models:\n${modelLines.join('\n')}\nIMPORTANT: When the user asks to use a specific model (e.g. "用公司的deepseek"), you MUST pass the corresponding modelId value. For teams, include it in the objective text (e.g. "使用模型: <modelId>") so the PM knows which model to assign to workers.\n</available-models>`,
           cacheable: false,
         })
       }
