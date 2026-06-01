@@ -1,6 +1,8 @@
 import TurndownService from 'turndown'
 import { Readability } from '@mozilla/readability'
 import { parseHTML } from 'linkedom'
+import { HttpsProxyAgent } from 'https-proxy-agent'
+import { loadAppConfig } from '../config.js'
 import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 
 const MAX_CONTENT_LENGTH = 50000
@@ -40,10 +42,15 @@ export const webFetchTool: ToolHandler = {
     }
 
     try {
-      const response = await fetch(url, {
+      const config = loadAppConfig()
+      const proxy = (config.webSearch as any)?.proxy
+      const fetchOpts: RequestInit = {
         headers: { 'User-Agent': 'JDCAGNET/1.0 (Desktop AI Assistant)' },
         signal: context.signal || AbortSignal.timeout(30000),
-      })
+      }
+      if (proxy) (fetchOpts as any).agent = new HttpsProxyAgent(proxy)
+
+      const response = await fetch(url, fetchOpts)
 
       if (!response.ok) {
         return { content: `Error: HTTP ${response.status} ${response.statusText}`, isError: true }
