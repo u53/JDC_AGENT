@@ -90,37 +90,6 @@ export function Composer({
   const activeProject = projects.find((p) => p.sessions.some((s) => s.id === activeSessionId))
   const cwd = activeProject?.cwd || ''
 
-  // CodeGraph state
-  const [cgState, setCgState] = useState<'hidden' | 'idle' | 'indexing' | 'done' | 'error'>('hidden')
-  const [cgProgress, setCgProgress] = useState('')
-  const cgApi = (window as any).electronAPI?.codegraphApi
-
-  useEffect(() => {
-    if (!cgApi || !cwd) { setCgState('hidden'); return }
-    const unsub = cgApi.onState((s: any) => {
-      if (s.cwd !== cwd) return
-      setCgState(s.initialized ? 'done' : 'idle')
-    })
-    const unsubP = cgApi.onInitProgress((e: any) => {
-      if (e.cwd !== cwd) return
-      setCgState('indexing')
-      const clean = (e.line || '').replace(/\x1B\[[0-9;]*[a-zA-Z]|\r/g, '').trim()
-      if (clean) setCgProgress(clean.length > 30 ? clean.slice(0, 27) + '…' : clean)
-    })
-    cgApi.refreshState(cwd)
-    return () => { unsub(); unsubP() }
-  }, [cgApi, cwd])
-
-  const handleCgAction = useCallback(async () => {
-    if (!cgApi || !cwd) return
-    setCgState('indexing')
-    setCgProgress('')
-    try {
-      if (cgState === 'done') await cgApi.reindex(cwd)
-      else await cgApi.init(cwd)
-    } catch { setCgState('error') }
-  }, [cgApi, cwd, cgState])
-
   const ideConnections = useIdeStore((s) => s.connections)
   const ideSelection = useIdeStore((s) => s.selection)
   const connectedIde = ideConnections.find((c) => c.status === 'connected' && c.workspaceFolders.some(f => isSameOrChildPath(cwd, f)))
@@ -344,42 +313,6 @@ export function Composer({
             skillsOnly={slashOnlySkills}
           />
           <div className="flex items-end gap-3">
-            {/* CodeGraph indicator — left of input */}
-            {cgState !== 'hidden' && (
-              <div className="relative group shrink-0">
-                <button
-                  onClick={cgState !== 'indexing' ? handleCgAction : undefined}
-                  disabled={cgState === 'indexing'}
-                  className={`flex flex-col items-center justify-center gap-1 px-2.5 py-2 rounded-[10px] border transition-colors ${
-                    cgState === 'done'
-                      ? 'border-[var(--good)]/30 text-[var(--good)] hover:bg-[var(--good)]/5'
-                      : cgState === 'indexing'
-                      ? 'border-[var(--border)] text-[var(--accent)] cursor-wait'
-                      : cgState === 'error'
-                      ? 'border-[var(--bad)]/30 text-[var(--bad)] hover:bg-[var(--bad)]/5'
-                      : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--border-strong)]'
-                  }`}
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <circle cx="4" cy="8" r="1.8" fill="currentColor" />
-                    <circle cx="12" cy="4" r="1.8" fill="currentColor" />
-                    <circle cx="12" cy="12" r="1.8" fill="currentColor" />
-                    <path d="M5.8 7.2L10.2 4.8M5.8 8.8L10.2 11.2" stroke="currentColor" strokeWidth="1.1" />
-                  </svg>
-                  <span className={`text-[9px] leading-none whitespace-nowrap ${cgState === 'indexing' ? 'animate-pulse' : ''}`}>
-                    {cgState === 'idle' ? '图谱' : cgState === 'indexing' ? '索引' : cgState === 'done' ? '就绪' : '失败'}
-                  </span>
-                </button>
-                {/* Tooltip */}
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-[8px] bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-soft)] text-[11px] text-[var(--text)] whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 z-50">
-                  {cgState === 'idle' && '建立代码图谱，让 AI 理解调用关系'}
-                  {cgState === 'indexing' && (cgProgress || '正在扫描项目文件…')}
-                  {cgState === 'done' && '代码图谱已就绪，点击可重建索引'}
-                  {cgState === 'error' && '索引失败，点击重试'}
-                  <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-[1px] w-2 h-2 rotate-45 bg-[var(--surface)] border-r border-b border-[var(--border)]" />
-                </div>
-              </div>
-            )}
             <textarea
               ref={textareaRef}
               value={text}

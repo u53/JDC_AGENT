@@ -584,36 +584,10 @@ function McpTab() {
   const [servers, setServers] = useState<McpServerState[]>([])
   const [expanded, setExpanded] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [reindexing, setReindexing] = useState(false)
-  const [cgInitialized, setCgInitialized] = useState(false)
   const projects = useSessionStore((s) => s.projects)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const activeProject = projects.find((p) => p.sessions.some((s) => s.id === activeSessionId))
   const cwd = activeProject?.cwd || ''
-
-  useEffect(() => {
-    if (!cwd) return
-    const unsub = window.electronAPI?.codegraphApi?.onState((s: any) => {
-      if (s.cwd === cwd) setCgInitialized(!!s.initialized)
-    })
-    window.electronAPI?.codegraphApi?.refreshState(cwd)
-    return () => { unsub?.() }
-  }, [cwd])
-
-  const handleCodegraphAction = useCallback(async () => {
-    if (!cwd) return
-    setReindexing(true)
-    try {
-      if (cgInitialized) {
-        await window.electronAPI?.codegraphApi?.reindex(cwd)
-      } else {
-        await window.electronAPI?.codegraphApi?.init(cwd)
-      }
-    } catch {
-      // error handled by banner
-    }
-    setReindexing(false)
-  }, [cwd, cgInitialized])
 
   useEffect(() => {
     setLoading(true)
@@ -651,24 +625,6 @@ function McpTab() {
 
   return (
     <div className="space-y-2">
-      {/* CodeGraph index */}
-      {cwd && (
-        <div className="flex items-center justify-between px-3 py-2.5 border border-[var(--border)] rounded-[6px]">
-          <div>
-            <span className="text-[13px] text-[var(--text)]">CodeGraph 索引</span>
-            <span className="text-[11px] text-[var(--muted)] ml-2">
-              {cgInitialized ? '重建当前项目的代码索引' : '为当前项目建立代码索引'}
-            </span>
-          </div>
-          <button
-            onClick={handleCodegraphAction}
-            disabled={reindexing}
-            className="px-3 py-1 text-[12px] rounded-[6px] border border-[var(--border)] text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors disabled:opacity-50"
-          >
-            {reindexing ? '索引中...' : cgInitialized ? '重建索引' : '建立索引'}
-          </button>
-        </div>
-      )}
       {servers.length === 0 && <p className="text-[13px] text-[var(--muted)] text-center py-4">暂无 MCP 服务器配置</p>}
       {servers.map((server) => (
         <div key={server.name} className="border border-[var(--border)] rounded-[6px] overflow-hidden">

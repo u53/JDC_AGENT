@@ -7,6 +7,7 @@ import { ReadToolCard } from './ReadToolCard'
 import { AgentToolCard } from './AgentToolCard'
 import { SkillToolCard } from './SkillToolCard'
 import { McpToolCard } from './McpToolCard'
+import { JdcToolCard } from './JdcToolCard'
 import { parseMcpToolName } from './shared'
 
 export interface ToolCardRouterProps {
@@ -31,6 +32,11 @@ export function ToolCardRouter(props: ToolCardRouterProps) {
   const mcpParsed = parseMcpToolName(toolName)
   if (mcpParsed) {
     return <McpToolCard {...props} />
+  }
+
+  // JDC Context Engine native tools (jdc_*) get a branded card.
+  if (toolName.startsWith('jdc_')) {
+    return <JdcToolCard {...props} />
   }
 
   const Card = TOOL_CARD_REGISTRY[toolName]

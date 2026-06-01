@@ -1,11 +1,5 @@
 import type { AppConfig, Message, StreamChunk, ToolExecutionEvent } from '@jdcagnet/core'
 
-export interface CodegraphState {
-  cwd: string
-  initialized: boolean
-  dismissed: boolean
-}
-
 export interface McpServerState {
   name: string
   config: { transport: string; command?: string; args?: string[]; url?: string; disabled?: boolean }
@@ -39,15 +33,6 @@ declare global {
       terminalDestroy: (id: string) => Promise<{ success: boolean }>
       onTerminalData: (callback: (payload: { id: string; data: string }) => void) => () => void
       onTerminalExit: (callback: (payload: { id: string; code: number }) => void) => () => void
-      // CodeGraph
-      codegraphApi: {
-        init: (cwd: string) => Promise<void>
-        reindex: (cwd: string) => Promise<void>
-        dismiss: (cwd: string) => Promise<void>
-        refreshState: (cwd: string) => Promise<void>
-        onState: (cb: (s: CodegraphState) => void) => () => void
-        onInitProgress: (cb: (e: { cwd: string; line: string }) => void) => () => void
-      }
     }
   }
 }

@@ -10,6 +10,20 @@ export interface AgentTypeDefinition {
   maxTurns: number
 }
 
+// JDC Context Engine tools — native code intelligence, always available to any
+// agent that benefits from code navigation (read-only, safe).
+export const JDC_CONTEXT_TOOLS = [
+  'jdc_context',
+  'jdc_search',
+  'jdc_node',
+  'jdc_callers',
+  'jdc_callees',
+  'jdc_impact',
+  'jdc_trace',
+  'jdc_explore',
+  'jdc_files',
+]
+
 export const AGENT_TYPES: AgentTypeDefinition[] = [
   {
     name: 'explore',
@@ -36,8 +50,8 @@ export const AGENT_TYPES: AgentTypeDefinition[] = [
 # Hard rules
 - Read-only. Do NOT modify any files.
 - Do NOT run state-changing commands.`,
-    allowedTools: ['Read', 'Glob', 'Grep', 'LS', 'Tree', 'WebSearch', 'WebFetch', 'LSP'],
-    allowedMcpServers: ['codegraph'],
+    allowedTools: ['Read', 'Glob', 'Grep', 'LS', 'Tree', 'WebSearch', 'WebFetch', 'LSP', ...JDC_CONTEXT_TOOLS],
+    allowedMcpServers: [],
     maxTurns: 25,
   },
   {
@@ -63,8 +77,8 @@ export const AGENT_TYPES: AgentTypeDefinition[] = [
 - Do NOT implement anything — write plans only.
 - Do NOT write outside .jdcagnet/plans/.
 - A plan that says "refactor X" without naming files is rejected — be specific.`,
-    allowedTools: ['Read', 'Glob', 'Grep', 'LS', 'Tree', 'Write'],
-    allowedMcpServers: ['codegraph'],
+    allowedTools: ['Read', 'Glob', 'Grep', 'LS', 'Tree', 'Write', ...JDC_CONTEXT_TOOLS],
+    allowedMcpServers: [],
     maxTurns: 20,
   },
   {
@@ -91,8 +105,8 @@ export const AGENT_TYPES: AgentTypeDefinition[] = [
 - Do NOT run shell commands.
 - Do NOT add features.
 - Do NOT change formatting that's already consistent — only change what makes the code clearer.`,
-    allowedTools: ['Read', 'Edit', 'Write', 'Grep', 'Glob', 'LS'],
-    allowedMcpServers: ['codegraph'],
+    allowedTools: ['Read', 'Edit', 'Write', 'Grep', 'Glob', 'LS', ...JDC_CONTEXT_TOOLS],
+    allowedMcpServers: [],
     maxTurns: 30,
   },
   {
@@ -133,8 +147,8 @@ Order by severity: critical > high > medium > low. End with a one-paragraph summ
 - Do NOT fix code — only report.
 - Bash is restricted to read-only commands (grep, find, cat, git log, npm audit, etc.).
 - Do not file findings you cannot pinpoint to a file:line. "The codebase might have XSS" is not a finding.`,
-    allowedTools: ['Read', 'Grep', 'Glob', 'LS', 'Tree', 'Bash'],
-    allowedMcpServers: ['codegraph'],
+    allowedTools: ['Read', 'Grep', 'Glob', 'LS', 'Tree', 'Bash', ...JDC_CONTEXT_TOOLS],
+    allowedMcpServers: [],
     maxTurns: 20,
   },
   {
@@ -165,7 +179,7 @@ Order by severity: critical > high > medium > low. End with a one-paragraph summ
 - Do NOT run shell commands.
 - Do NOT introduce new design primitives when the codebase already has equivalents.
 - Match the project's component file naming convention exactly.`,
-    allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'LS', 'WebFetch'],
+    allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'LS', 'WebFetch', ...JDC_CONTEXT_TOOLS],
     allowedMcpServers: [],
     maxTurns: 30,
   },

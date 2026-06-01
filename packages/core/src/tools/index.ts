@@ -12,6 +12,7 @@ import { notebookEditTool } from './notebook-edit.js'
 import { webFetchTool } from './web-fetch.js'
 import { webSearchTool } from './web-search.js'
 import { lspTool } from './lsp.js'
+import { createContextEngineTools } from './context-engine-tools.js'
 import { createPowerShellTool } from './powershell.js'
 import { findGitBash, findPowerShell } from '../utils/shell-detection.js'
 import { isWindows } from '../utils/platform.js'
@@ -45,6 +46,12 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
   registry.register(webFetchTool)
   registry.register(webSearchTool)
   registry.register(lspTool)
+
+  // JDC Context Engine — native code intelligence (replaces CodeGraph MCP).
+  for (const tool of createContextEngineTools()) {
+    registry.register(tool)
+  }
 }
 
 export { bashTool, fileReadTool, fileWriteTool, fileEditTool, multiEditTool, globTool, grepTool, lsTool, treeTool, notebookEditTool, webFetchTool, webSearchTool, lspTool }
+export { createContextEngineTools } from './context-engine-tools.js'

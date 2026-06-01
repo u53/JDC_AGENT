@@ -2,7 +2,6 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import type { McpServerConfig, McpServerState, McpToolInfo, McpConnectionStatus } from './types.js'
-import { CODEGRAPH_SERVER_NAME, getDefaultCodegraphMcpConfig } from '../codegraph/mcp-default.js'
 
 interface ConnectedServer {
   name: string
@@ -24,13 +23,6 @@ export class McpManager {
   }
 
   async loadConfig(configs: Record<string, McpServerConfig>): Promise<void> {
-    if (!(CODEGRAPH_SERVER_NAME in configs)) {
-      const defaultConfig = getDefaultCodegraphMcpConfig()
-      if (defaultConfig) {
-        configs[CODEGRAPH_SERVER_NAME] = defaultConfig
-      }
-    }
-
     for (const [name, config] of Object.entries(configs)) {
       if (config.disabled) {
         this.servers.set(name, {

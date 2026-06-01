@@ -6,7 +6,7 @@ import {
   type PermissionCallback, createAskUserTool, type AskUserCallback, createNotifyTool, type NotifyCallback,
   McpManager, loadMcpConfig, saveMcpConfig, type McpServerConfig, type McpServerState,
   IdeManager, type IdeConnection, type OpenDiffParams, type OpenDiffResult, type DiagnosticFile,
-  codegraph, compressImageForAPI,
+  compressImageForAPI, getContextEngine,
 } from '@jdcagnet/core'
 import type { ToolExecutionEvent } from '@jdcagnet/core'
 import { Notification, type BrowserWindow } from 'electron'
@@ -78,6 +78,28 @@ export class SessionManager {
 
   startIdeDiscovery(cwd: string): void {
     this.ideManager.startDiscovery(cwd)
+  }
+
+  /** Pre-warm the JDC Context Engine index in the background on project open. */
+  private warmContextEngine(cwd: string): void {
+    try {
+      const engine = getContextEngine(cwd)
+      if (!engine.isIndexed()) {
+        engine
+          .index()
+          .then(() => {
+            // Begin live incremental updates once the initial index is built.
+            engine.startWatching()
+          })
+          .catch((err) => {
+            console.error('[context-engine] background index failed:', err)
+          })
+      } else {
+        engine.startWatching()
+      }
+    } catch (err) {
+      console.error('[context-engine] warm failed:', err)
+    }
   }
 
   getIdeConnections(): IdeConnection[] {
@@ -201,6 +223,7 @@ export class SessionManager {
     if (!meta) throw new Error(`Session ${sessionId} not found`)
     this.activeSessionId = sessionId
     this.ideManager.startDiscovery(meta.cwd)
+    this.warmContextEngine(meta.cwd)
     if (this.sessions.has(sessionId)) return
 
     const sessionModelId = this.history.getSessionModel(sessionId)
@@ -326,7 +349,6 @@ export class SessionManager {
       })
     }
     this.sessions.set(sessionId, session)
-    this.evaluateCodegraphState(meta.cwd)
   }
 
   async sendMessage(sessionId: string, text: string, images?: { data: string; mediaType: string }[]): Promise<void> {
@@ -708,58 +730,5 @@ export class SessionManager {
 
   saveMcpServers(servers: Record<string, McpServerConfig>, scope: 'global' | 'project', cwd?: string): void {
     saveMcpConfig(servers, scope, cwd)
-  }
-
-  private getDismissedCodegraphCwds(): string[] {
-    const cfg = loadAppConfig() as { dismissedCodegraphForCwds?: string[] }
-    return Array.isArray(cfg.dismissedCodegraphForCwds) ? cfg.dismissedCodegraphForCwds : []
-  }
-
-  evaluateCodegraphState(cwd: string): void {
-    const initialized = codegraph.isInitialized(cwd)
-    const dismissed = this.getDismissedCodegraphCwds().includes(cwd)
-    this.window?.webContents.send('codegraph:project-state', { cwd, initialized, dismissed })
-  }
-
-  async runCodegraphInit(cwd: string): Promise<void> {
-    // Ensure .codegraph is in .gitignore before indexing
-    this.ensureGitignore(cwd)
-    const onLine = (line: string) => {
-      this.window?.webContents.send('codegraph:init-progress', { cwd, line })
-    }
-    await codegraph.init(cwd, onLine)
-    this.evaluateCodegraphState(cwd)
-  }
-
-  private ensureGitignore(cwd: string): void {
-    const fs = require('node:fs')
-    const path = require('node:path')
-    const gitignorePath = path.join(cwd, '.gitignore')
-    const entry = '.codegraph'
-    try {
-      if (!fs.existsSync(gitignorePath)) return
-      const content: string = fs.readFileSync(gitignorePath, 'utf-8')
-      const lines = content.split('\n').map((l: string) => l.trim())
-      if (!lines.includes(entry) && !lines.includes(entry + '/')) {
-        const suffix = content.endsWith('\n') ? '' : '\n'
-        fs.appendFileSync(gitignorePath, `${suffix}${entry}\n`)
-      }
-    } catch { /* non-critical, don't block init */ }
-  }
-
-  async runCodegraphReindex(cwd: string): Promise<void> {
-    const onLine = (line: string) => {
-      this.window?.webContents.send('codegraph:init-progress', { cwd, line })
-    }
-    await codegraph.forceReindex(cwd, onLine)
-    this.evaluateCodegraphState(cwd)
-  }
-
-  dismissCodegraphForCwd(cwd: string): void {
-    const cfg = loadAppConfig() as { dismissedCodegraphForCwds?: string[] }
-    const list = Array.isArray(cfg.dismissedCodegraphForCwds) ? [...cfg.dismissedCodegraphForCwds] : []
-    if (!list.includes(cwd)) list.push(cwd)
-    saveAppConfig({ ...cfg, dismissedCodegraphForCwds: list })
-    this.evaluateCodegraphState(cwd)
   }
 }

@@ -8,17 +8,6 @@ function makeRunner(cwd: string) {
   const captured: Record<string, unknown>[] = []
   registry.register({
     definition: {
-      name: 'mcp__codegraph__codegraph_search',
-      description: '',
-      inputSchema: { type: 'object', properties: {} },
-    },
-    async execute(input) {
-      captured.push(input)
-      return { content: 'ok' }
-    },
-  })
-  registry.register({
-    definition: {
       name: 'mcp__other__thing',
       description: '',
       inputSchema: { type: 'object', properties: {} },
@@ -32,22 +21,8 @@ function makeRunner(cwd: string) {
   return { runner, captured }
 }
 
-describe('ToolRunner — codegraph projectPath auto-injection', () => {
-  it('injects projectPath when missing', async () => {
-    const cwd = '/tmp/proj-A'
-    const { runner, captured } = makeRunner(cwd)
-    await runner.execute('mcp__codegraph__codegraph_search', 'tu1', { query: 'foo' }, () => {})
-    expect(captured[0]).toEqual({ query: 'foo', projectPath: cwd })
-  })
-
-  it('keeps explicit projectPath when caller provides it', async () => {
-    const cwd = '/tmp/proj-A'
-    const { runner, captured } = makeRunner(cwd)
-    await runner.execute('mcp__codegraph__codegraph_search', 'tu1', { query: 'foo', projectPath: '/other' }, () => {})
-    expect(captured[0]).toEqual({ query: 'foo', projectPath: '/other' })
-  })
-
-  it('does not inject for non-codegraph MCP tools', async () => {
+describe('ToolRunner — input passthrough', () => {
+  it('passes tool input through unchanged (no implicit injection)', async () => {
     const cwd = '/tmp/proj-A'
     const { runner, captured } = makeRunner(cwd)
     await runner.execute('mcp__other__thing', 'tu1', { x: 1 }, () => {})

@@ -15,6 +15,7 @@ export interface ToolContext {
   turnIndex?: number
   backgroundTasks?: import('./background-tasks.js').BackgroundTaskManager
   ideManager?: import('./ide/ide-manager.js').IdeManager
+  contextEngine?: import('./context-engine/engine.js').ContextEngine
 }
 
 export interface ToolResult {

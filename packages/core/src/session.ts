@@ -7,7 +7,7 @@ import { ToolRunner, type ToolExecutionEvent, type PermissionCallback } from './
 import { registerBuiltinTools } from './tools/index.js'
 import { ConversationHistory } from './history.js'
 import { assembleSystemPrompt, getMemoryDir } from './context.js'
-import { getCodegraphPromptSegment } from './codegraph/index.js'
+import { getContextEnginePromptSegment } from './context-engine/index.js'
 import { loadAppConfig, getConfigDir } from './config.js'
 import { PermissionChecker } from './permissions.js'
 import { TaskStore } from './task-store.js'
@@ -521,12 +521,12 @@ export class Session {
       }
     }
 
-    // Inject codegraph prompt segment when project has .codegraph/
-    const codegraphSegment = getCodegraphPromptSegment(this.config.cwd)
-    if (codegraphSegment.segment && Array.isArray(this.config.modelConfig.systemPrompt)) {
+    // Inject JDC Context Engine prompt segment — always available, no index gate.
+    const engineSegment = getContextEnginePromptSegment()
+    if (engineSegment.segment && Array.isArray(this.config.modelConfig.systemPrompt)) {
       this.config.modelConfig.systemPrompt.push({
-        content: codegraphSegment.segment,
-        cacheable: codegraphSegment.cacheable,
+        content: engineSegment.segment,
+        cacheable: engineSegment.cacheable,
       })
     }
 

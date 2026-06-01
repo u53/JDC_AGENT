@@ -3,8 +3,6 @@
   "private": true,
   "scripts": {
     "dev": "tsx scripts/dev.ts",
-    "predev": "node -e \"const{existsSync}=require('fs');const p='packages/electron/resources/codegraph/VERSION';if(!existsSync(p)){console.log('[predev] CodeGraph not found, fetching...');const{execSync}=require('child_process');execSync('pnpm fetch-codegraph',{stdio:'inherit'})}else{console.log('[predev] CodeGraph already fetched, skipping.')}\"",
-    "fetch-codegraph": "tsx scripts/fetch-codegraph.ts",
     "build": "pnpm -r build",
     "build:electron": "pnpm --filter @jdcagnet/electron build",
     "build:ui": "pnpm --filter @jdcagnet/ui build",
@@ -33,5 +31,9 @@
       "@vscode/vsce-sign",
       "electron"
     ]
+  },
+  "dependencies": {
+    "tree-sitter-wasms": "0.1.13",
+    "web-tree-sitter": "0.25.10"
   }
 }

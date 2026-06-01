@@ -29,6 +29,10 @@ export function isPlanModeToolAllowed(
   // MCP tools (mcp__*) are read-only queries, allow them
   if (toolName.startsWith('mcp__')) return true
 
+  // JDC Context Engine (jdc_*) — native read-only code intelligence, always
+  // allowed during planning (mirrors mcp__* treatment).
+  if (toolName.startsWith('jdc_')) return true
+
   if (!PLAN_MODE_ALLOWED_TOOLS.includes(toolName)) return false
 
   // Write/Edit/NotebookEdit: only allow targeting plan files

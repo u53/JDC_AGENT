@@ -10,6 +10,15 @@ import { GitService } from './git-service.js'
 import { AppLauncher } from './app-launcher.js'
 import { TerminalService } from './terminal-service.js'
 
+// Point the JDC Context Engine at the Tree-sitter wasm assets bundled into dist
+// (copied by build.mjs). In dev these resolve from node_modules automatically,
+// but setting them is harmless and makes packaged builds deterministic.
+const tsRuntimeDir = path.join(__dirname, 'tree-sitter')
+if (existsSync(path.join(tsRuntimeDir, 'tree-sitter.wasm'))) {
+  process.env.JDC_TREE_SITTER_WASM_DIR = tsRuntimeDir
+  process.env.JDC_GRAMMAR_WASM_DIR = path.join(tsRuntimeDir, 'grammars')
+}
+
 // Mirror console output to a file so production users can ship logs back.
 // Path: %APPDATA%\JDC Code\logs\main.log on Windows, ~/Library/Logs/JDC Code/main.log on macOS.
 function setupFileLogger(): void {

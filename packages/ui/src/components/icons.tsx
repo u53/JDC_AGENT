@@ -220,3 +220,73 @@ export function IconTeam({ size = 18, className }: IconProps) {
     </svg>
   );
 }
+
+// ---- JDC Context Engine icons ----
+
+// Brand mark: a small node-graph (connected nodes), evokes the call graph.
+export function IconJdcGraph({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...defaultProps}>
+      <circle cx={6} cy={6} r={2.4} />
+      <circle cx={18} cy={7} r={2.4} />
+      <circle cx={12} cy={18} r={2.4} />
+      <path d="M8 7.2 10.4 16M16.2 8.6 13.2 16M8.2 6.2h7.6" />
+    </svg>
+  );
+}
+
+// Search: magnifier over a node.
+export function IconJdcSearch({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...defaultProps}>
+      <circle cx={10.5} cy={10.5} r={6} />
+      <path d="M20 20l-4.2-4.2" />
+    </svg>
+  );
+}
+
+// Callers: arrows converging inward.
+export function IconJdcCallers({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...defaultProps}>
+      <circle cx={12} cy={12} r={2.6} />
+      <path d="M3 6l5 4.4M21 6l-5 4.4M12 21v-5.2" />
+      <path d="M8 10.4 6.4 8.2M8 10.4 9.6 7.8M16 10.4l1.6-2.2M16 10.4l-1.6-2.6" />
+    </svg>
+  );
+}
+
+// Callees: arrows radiating outward.
+export function IconJdcCallees({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...defaultProps}>
+      <circle cx={12} cy={12} r={2.6} />
+      <path d="M12 9.4V4M8.8 13.6 5 17M15.2 13.6 19 17" />
+      <path d="M5 17h3.2M5 17v-3.2M19 17h-3.2M19 17v-3.2M12 4h-1.8M12 4h1.8" />
+    </svg>
+  );
+}
+
+// Impact: concentric ripple.
+export function IconJdcImpact({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...defaultProps}>
+      <circle cx={12} cy={12} r={2} />
+      <circle cx={12} cy={12} r={6} opacity={0.6} />
+      <circle cx={12} cy={12} r={9.5} opacity={0.3} />
+    </svg>
+  );
+}
+
+// Trace: a connected path A -> B.
+export function IconJdcTrace({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...defaultProps}>
+      <circle cx={5} cy={6} r={2} />
+      <circle cx={19} cy={18} r={2} />
+      <path d="M6.6 7.4C9 10 9 10 12 12s3 2 5.4 4.6" />
+      <path d="M12 12l2.4-.4M12 12l-.4 2.4" />
+    </svg>
+  );
+}
+

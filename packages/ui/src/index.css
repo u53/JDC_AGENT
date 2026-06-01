@@ -16,6 +16,7 @@
   --warn: #a07c37;
   --bad: #a35b53;
   --plan: #8b7ec8;
+  --jdc-engine-accent: #6d5fc4;
   --shadow: 0 1px 0 rgba(30, 29, 26, 0.02);
   --shadow-soft: 0 8px 28px rgba(30, 29, 26, 0.05);
   --font-serif: "Iowan Old Style", "Baskerville", "Georgia", serif;
@@ -40,6 +41,7 @@
   --warn: #d0b57d;
   --bad: #d29b94;
   --plan: #a99be0;
+  --jdc-engine-accent: #a99be0;
   --shadow: 0 1px 0 rgba(0, 0, 0, 0.24);
   --shadow-soft: 0 12px 32px rgba(0, 0, 0, 0.25);
   color-scheme: dark;
@@ -425,6 +427,92 @@ body {
   letter-spacing: 0.08em;
   line-height: 1;
   padding: 4px 6px;
+}
+
+/* ---- JDC Context Engine branded tool card ---- */
+/* Distinct accent so engine calls read apart from generic/MCP tools. */
+.jdc-event-card:has(.jdc-engine-head) {
+  --event-color: var(--jdc-engine-accent, #7c6cf0);
+}
+
+.jdc-engine-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.jdc-engine-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: 7px;
+  color: var(--event-color);
+  border: 1px solid color-mix(in srgb, var(--event-color) 30%, transparent);
+  background:
+    radial-gradient(120% 120% at 30% 20%, color-mix(in srgb, var(--event-color) 22%, transparent), transparent 70%),
+    color-mix(in srgb, var(--event-color) 8%, transparent);
+}
+
+.jdc-engine-op {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text);
+  letter-spacing: 0.01em;
+}
+
+.jdc-engine-count {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--event-color);
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--event-color) 22%, transparent);
+  background: color-mix(in srgb, var(--event-color) 9%, transparent);
+}
+
+.jdc-engine-result {
+  margin: 0;
+  max-height: 360px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid color-mix(in srgb, var(--event-color) 12%, var(--border));
+  border-radius: 6px;
+  padding: 9px 11px;
+  background: color-mix(in srgb, var(--surface) 42%, var(--surface-3) 58%);
+}
+
+.jdc-engine-empty {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.jdc-tc-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  color: var(--muted);
+  transition: color 0.12s, background 0.12s;
+}
+
+.jdc-tc-copy:hover {
+  color: var(--event-color);
+  background: color-mix(in srgb, var(--event-color) 10%, transparent);
 }
 
 .jdc-event-content {

@@ -12,9 +12,7 @@ files:
   - ui/**/*
   - package.json
   - node_modules/node-pty/**/*
-extraResources:
-  - from: packages/electron/resources/codegraph
-    to: codegraph
+  - node_modules/web-tree-sitter/**/*
 publish:
   provider: github
   owner: u53
