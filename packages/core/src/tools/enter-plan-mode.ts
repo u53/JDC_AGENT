@@ -3,30 +3,46 @@ import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 
 export const PLAN_MODE_ALLOWED_TOOLS = [
   'Read', 'Glob', 'Grep', 'LS', 'Tree', 'LSP',
-  'Write', 'Agent', 'Skill',
-  'ExitPlanMode',
+  'Bash', 'Edit', 'Write', 'NotebookEdit',
+  'Agent', 'Skill',
+  'EnterPlanMode', 'ExitPlanMode',
+  'AskUserQuestion',
   'TaskCreate', 'TaskGet', 'TaskList', 'TaskUpdate',
   'BackgroundStatus', 'BackgroundEvents', 'team_list',
+  'WebSearch', 'WebFetch',
 ]
+
+// Tools that are allowed to write only to plan files
+const PLAN_FILE_WRITE_TOOLS = ['Write', 'Edit', 'NotebookEdit']
+
+function isPlanFilePath(filePath: string, cwd: string): boolean {
+  const resolved = path.resolve(cwd, filePath)
+  const planDir = path.resolve(cwd, '.jdcagnet', 'plans')
+  return resolved.startsWith(planDir + path.sep) || resolved.startsWith(planDir + '/')
+}
 
 export function isPlanModeToolAllowed(
   toolName: string,
   input: Record<string, unknown>,
   cwd?: string
 ): boolean {
+  // MCP tools (mcp__*) are read-only queries, allow them
+  if (toolName.startsWith('mcp__')) return true
+
   if (!PLAN_MODE_ALLOWED_TOOLS.includes(toolName)) return false
 
-  if (toolName === 'Write') {
-    const filePath = (input.file_path || input.path || '') as string
-    if (!cwd) return false
-    const resolved = path.resolve(cwd, filePath)
-    const planDir = path.resolve(cwd, '.jdcagnet', 'plans')
-    return resolved.startsWith(planDir + path.sep) || resolved.startsWith(planDir + '/')
+  // Write/Edit/NotebookEdit: only allow targeting plan files
+  if (PLAN_FILE_WRITE_TOOLS.includes(toolName)) {
+    const filePath = (input.file_path || input.path || input.notebook_path || '') as string
+    if (!filePath || !cwd) return false
+    return isPlanFilePath(filePath, cwd)
   }
 
-  if (toolName === 'Agent') {
-    return input.type === 'explore'
-  }
+  // Bash: allow all commands (read-only queries like grep, find, git log, etc.)
+  // The model is instructed not to make destructive changes; this gate
+  // doesn't need to duplicate that — blocking Bash entirely prevents
+  // useful exploration during planning.
+  if (toolName === 'Bash') return true
 
   return true
 }

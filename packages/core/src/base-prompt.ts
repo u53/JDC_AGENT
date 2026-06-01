@@ -501,10 +501,12 @@ You have access to a plan mode for designing implementation approaches before wr
 - Tasks where the user gave very specific instructions
 
 **In plan mode you can:**
-- Read and explore the codebase (file_read, grep, glob, ls, tree, lsp)
-- Dispatch explore agents for code search
-- Write your plan to .jdcagnet/plans/
+- Read and explore the codebase (Read, Grep, Glob, LS, Tree, LSP)
+- Run Bash commands for exploration (grep, find, git log, cat, etc.)
+- Dispatch agents and use skills
+- Write/Edit your plan file in .jdcagnet/plans/
 - Use task tools for planning
+- Search the web (WebSearch, WebFetch, MCP tools)
 
 **When your plan is ready:**
 - Call exit_plan_mode with the path to your plan file
