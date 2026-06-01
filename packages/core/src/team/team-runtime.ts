@@ -719,6 +719,22 @@ export class TeamRuntime {
     const member = this.memberById.get(memberId)
     if (!task || !member) return
 
+    // Idempotency guard against double-assignment. Proactive PM cycles run
+    // back-to-back: cycle A emits assign_task, but the actual assignTask() runs
+    // async on a later tick — so cycle B's state dump can still show the task as
+    // pending and the model assigns it again. markTaskRunning() below is
+    // synchronous, so whichever assign lands first flips the task to 'running'
+    // and any later duplicate is caught here. Legitimate re-assignment (kick,
+    // reopen) resets the task to 'assigned'/'reopened' first, so it passes.
+    if (task.status === 'running') {
+      this.recordEvent({
+        type: 'manager_decision',
+        text: `跳过重复分配: 任务 ${taskId} 已在运行中 (assignee=${task.assigneeId ?? '?'})`,
+        timestamp: Date.now(),
+      })
+      return
+    }
+
     const isReopened = task.status === 'reopened'
 
     this.manager.markTaskAssigned(taskId, memberId)
