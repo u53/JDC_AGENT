@@ -88,7 +88,7 @@ export function useSession() {
 
     const unsubTool = ipc.query.onToolEvent(({ sessionId, event }) => {
       store.addToolEvent(sessionId, event)
-      if (event.type === 'complete' && event.toolName?.startsWith('task_')) {
+      if (event.type === 'complete' && (event.toolName?.startsWith('Task') || event.toolName?.startsWith('task_') || event.toolName === 'TodoWrite')) {
         const current = useSessionStore.getState()
         if (sessionId === current.activeSessionId) {
           current.loadTasks(sessionId)
