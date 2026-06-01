@@ -33,8 +33,8 @@ describe('Session with MCP', () => {
 
     const defs = (session as any).toolRegistry.getDefinitions()
     expect(defs.some((d: any) => d.name === 'mcp__test__hello')).toBe(true)
-    expect(defs.some((d: any) => d.name === 'list_mcp_resources')).toBe(true)
-    expect(defs.some((d: any) => d.name === 'read_mcp_resource')).toBe(true)
+    expect(defs.some((d: any) => d.name === 'ListMcpResources')).toBe(true)
+    expect(defs.some((d: any) => d.name === 'ReadMcpResource')).toBe(true)
   })
 
   it('does not register MCP tools when no mcpManager', () => {
@@ -54,6 +54,6 @@ describe('Session with MCP', () => {
     )
 
     const defs = (session as any).toolRegistry.getDefinitions()
-    expect(defs.some((d: any) => d.name === 'list_mcp_resources')).toBe(false)
+    expect(defs.some((d: any) => d.name === 'ListMcpResources')).toBe(false)
   })
 })

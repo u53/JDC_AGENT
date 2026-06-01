@@ -12,10 +12,16 @@ function projectDir(cwd: string): string {
 
 export class SkillLoader {
   private skills = new Map<string, SkillDefinition>()
+  private globalDir: string
+
+  // globalDir is injectable so tests can isolate from the real ~/.jdcagnet/skills.
+  constructor(globalDir: string = GLOBAL_DIR) {
+    this.globalDir = globalDir
+  }
 
   async loadAll(cwd: string): Promise<void> {
     this.skills.clear()
-    await this.loadDir(GLOBAL_DIR, 'global')
+    await this.loadDir(this.globalDir, 'global')
     await this.loadDir(projectDir(cwd), 'project')
   }
 

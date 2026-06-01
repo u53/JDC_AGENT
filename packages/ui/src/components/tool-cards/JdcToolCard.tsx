@@ -6,6 +6,7 @@ import {
 } from '../icons'
 import { copyToClipboard } from '../../lib/clipboard'
 import type { ComponentType } from 'react'
+import { deriveToolStatus } from './tool-card-meta'
 
 interface IconProps { size?: number; className?: string }
 
@@ -15,39 +16,39 @@ const TOOL_META: Record<string, {
   Icon: ComponentType<IconProps>
   summary: (input: Record<string, unknown>) => string
 }> = {
-  jdc_context: {
+  JdcContext: {
     label: '上下文检索', Icon: IconJdcGraph,
     summary: (i) => str(i.task),
   },
-  jdc_search: {
+  JdcSearch: {
     label: '符号搜索', Icon: IconJdcSearch,
     summary: (i) => str(i.query),
   },
-  jdc_node: {
+  JdcNode: {
     label: '符号详情', Icon: IconJdcGraph,
     summary: (i) => str(i.symbol),
   },
-  jdc_callers: {
+  JdcCallers: {
     label: '谁调用了它', Icon: IconJdcCallers,
     summary: (i) => str(i.symbol),
   },
-  jdc_callees: {
+  JdcCallees: {
     label: '它调用了谁', Icon: IconJdcCallees,
     summary: (i) => str(i.symbol),
   },
-  jdc_impact: {
+  JdcImpact: {
     label: '影响半径', Icon: IconJdcImpact,
     summary: (i) => str(i.symbol),
   },
-  jdc_trace: {
+  JdcTrace: {
     label: '调用路径', Icon: IconJdcTrace,
     summary: (i) => `${str(i.from)} → ${str(i.to)}`,
   },
-  jdc_explore: {
+  JdcExplore: {
     label: '批量源码', Icon: IconFiles,
     summary: (i) => Array.isArray(i.symbols) ? (i.symbols as unknown[]).map(String).join(', ') : '',
   },
-  jdc_files: {
+  JdcFiles: {
     label: '项目文件', Icon: IconFiles,
     summary: (i) => str(i.path) || '全部',
   },
@@ -68,13 +69,11 @@ function countResultRows(content: string): number {
 }
 
 export function JdcToolCard({ event, input, result, name }: ToolCardRouterProps) {
-  const status = event
-    ? (event.type === 'complete' ? 'done' : event.type === 'error' ? 'error' : 'running')
-    : (result?.is_error ? 'error' : 'done')
+  const status = deriveToolStatus(event, result)
 
   const toolName = event?.toolName || name || ''
   const meta = TOOL_META[toolName] ?? {
-    label: toolName.replace(/^jdc_/, ''), Icon: IconJdcGraph, summary: () => '',
+    label: toolName.replace(/^Jdc/, ''), Icon: IconJdcGraph, summary: () => '',
   }
 
   const toolInput = (event?.input || input || {}) as Record<string, unknown>
@@ -89,6 +88,9 @@ export function JdcToolCard({ event, input, result, name }: ToolCardRouterProps)
       detail={summary || meta.label}
       status={status}
       defaultExpanded={false}
+      rail
+      variant="jdc"
+      className="jdc-engine-card"
       actions={
         content ? (
           <button
@@ -116,4 +118,3 @@ export function JdcToolCard({ event, input, result, name }: ToolCardRouterProps)
     </ToolCardShell>
   )
 }
-

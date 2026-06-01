@@ -7,8 +7,10 @@ describe('ConversationHistory', () => {
   const dbPath = path.join(os.tmpdir(), `jdcagnet-test-${Date.now()}.db`)
   let history: ConversationHistory
 
-  it('should create and list sessions', () => {
+  it('should create and list sessions', async () => {
     history = new ConversationHistory(dbPath)
+    // DB init is async (sql.js); wait for it before synchronous operations.
+    await history.ensureReady()
     history.createSession('s1', 'TestProject', '/tmp/test')
     history.createSession('s2', 'OtherProject', '/tmp/other')
 

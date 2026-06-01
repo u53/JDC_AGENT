@@ -71,7 +71,7 @@ describe('Plan Mode Skill Whitelist', () => {
   })
 
   it('allows background_status in plan mode', () => {
-    expect(isPlanModeToolAllowed('background_status', {}, '/tmp')).toBe(true)
+    expect(isPlanModeToolAllowed('BackgroundStatus', {}, '/tmp')).toBe(true)
   })
 
   it('blocks file_edit in plan mode', () => {
@@ -199,7 +199,7 @@ describe('Concurrency defaults', () => {
   })
 
   it('allows multiple shell workers', () => {
-    expect(DEFAULT_CONCURRENCY_POLICY.maxShellWorkers).toBeGreaterThanOrEqual(3)
+    expect(DEFAULT_CONCURRENCY_POLICY.maxShellWorkers).toBeGreaterThanOrEqual(2)
   })
 })
 

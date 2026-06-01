@@ -4,7 +4,7 @@ import path from 'node:path'
 
 describe('globTool', () => {
   it('has correct definition', () => {
-    expect(globTool.definition.name).toBe('glob')
+    expect(globTool.definition.name).toBe('Glob')
     expect(globTool.definition.inputSchema.properties).toHaveProperty('pattern')
   })
 

@@ -3,7 +3,7 @@ import { lspTool } from '../src/tools/lsp.js'
 
 describe('lspTool', () => {
   it('has correct definition', () => {
-    expect(lspTool.definition.name).toBe('lsp')
+    expect(lspTool.definition.name).toBe('LSP')
     expect(lspTool.definition.inputSchema.properties).toHaveProperty('operation')
     expect(lspTool.definition.inputSchema.properties).toHaveProperty('filePath')
   })

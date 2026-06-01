@@ -21,26 +21,29 @@ describe('OpenAIResponsesProvider', () => {
     ])
   })
 
-  it('formats input with system prompt', () => {
+  it('passes system prompt via instructions, not the input array', () => {
     const provider = new OpenAIResponsesProvider('test-key')
+    // System prompt is now carried in the request `instructions` field; formatInput
+    // takes only messages and drops system-role messages from the input array.
     const formatted = (provider as any).formatInput(
       [{ id: '1', role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: 0 }],
-      'You are helpful.'
     )
-    expect(formatted[0]).toEqual({ role: 'system', content: 'You are helpful.' })
-    expect(formatted[1]).toEqual({ role: 'user', content: 'hello' })
+    expect(formatted).toEqual([{ role: 'user', content: 'hello' }])
   })
 
-  it('formats tool_result blocks as function_call_output', () => {
+  it('formats paired tool_use/tool_result as function_call + function_call_output', () => {
     const provider = new OpenAIResponsesProvider('test-key')
+    // An orphaned tool_result (no preceding tool_use) is intentionally dropped,
+    // since the Responses API rejects unpaired function_call_output. A complete
+    // pair must round-trip both items.
     const formatted = (provider as any).formatInput([
-      { id: '1', role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tc1', content: 'file.txt' }], timestamp: 0 },
+      { id: '1', role: 'assistant', content: [{ type: 'tool_use', id: 'tc1', name: 'Read', input: { file_path: 'x' } }], timestamp: 0 },
+      { id: '2', role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tc1', content: 'file.txt' }], timestamp: 0 },
     ])
-    expect(formatted[0]).toEqual({
-      type: 'function_call_output',
-      call_id: 'tc1',
-      output: 'file.txt',
-    })
+    expect(formatted).toEqual([
+      { type: 'function_call', call_id: 'tc1', name: 'Read', arguments: '{"file_path":"x"}' },
+      { type: 'function_call_output', call_id: 'tc1', output: 'file.txt' },
+    ])
   })
 
   it('skips system role messages from input', () => {
@@ -86,7 +89,16 @@ describe('OpenAIResponsesProvider', () => {
 
   it('formats input with mixed tool_result and text blocks', () => {
     const provider = new OpenAIResponsesProvider('test-key')
+    // A complete tool_use/tool_result pair plus trailing user text: the text
+    // must survive alongside the function_call_output (regression: text in a
+    // tool-result turn used to be dropped).
     const formatted = (provider as any).formatInput([
+      {
+        id: '0',
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: 'tc1', name: 'Read', input: {} }],
+        timestamp: 0,
+      },
       {
         id: '1',
         role: 'user',
@@ -97,11 +109,11 @@ describe('OpenAIResponsesProvider', () => {
         timestamp: 0,
       },
     ])
-    expect(formatted[0]).toEqual({
+    expect(formatted).toContainEqual({
       type: 'function_call_output',
       call_id: 'tc1',
       output: 'result',
     })
-    expect(formatted[1]).toEqual({ role: 'user', content: 'follow up' })
+    expect(formatted).toContainEqual({ role: 'user', content: 'follow up' })
   })
 })

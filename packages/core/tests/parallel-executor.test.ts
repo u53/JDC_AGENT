@@ -14,7 +14,7 @@ describe('ParallelExecutor', () => {
     const order: string[] = []
 
     registry.register({
-      definition: { name: 'file_read', description: 'Read', inputSchema: { type: 'object', properties: {} } },
+      definition: { name: 'Read', description: 'Read', inputSchema: { type: 'object', properties: {} } },
       execute: async (input) => {
         order.push(`start-${input.id}`)
         await new Promise(r => setTimeout(r, 50))
@@ -28,9 +28,9 @@ describe('ParallelExecutor', () => {
 
     const results = await executor.executeBatch(
       [
-        { type: 'tool_use', id: 'a', name: 'file_read', input: { id: '1' } },
-        { type: 'tool_use', id: 'b', name: 'file_read', input: { id: '2' } },
-        { type: 'tool_use', id: 'c', name: 'file_read', input: { id: '3' } },
+        { type: 'tool_use', id: 'a', name: 'Read', input: { id: '1' } },
+        { type: 'tool_use', id: 'b', name: 'Read', input: { id: '2' } },
+        { type: 'tool_use', id: 'c', name: 'Read', input: { id: '3' } },
       ],
       (e) => events.push(e)
     )
@@ -49,7 +49,7 @@ describe('ParallelExecutor', () => {
     const order: string[] = []
 
     registry.register({
-      definition: { name: 'file_write', description: 'Write', inputSchema: { type: 'object', properties: {} } },
+      definition: { name: 'Write', description: 'Write', inputSchema: { type: 'object', properties: {} } },
       execute: async (input) => {
         order.push(`start-${input.id}`)
         await new Promise(r => setTimeout(r, 30))
@@ -61,9 +61,9 @@ describe('ParallelExecutor', () => {
     const executor = new ParallelExecutor(createRunner(registry))
     const results = await executor.executeBatch(
       [
-        { type: 'tool_use', id: 'w1', name: 'file_write', input: { id: '1' } },
-        { type: 'tool_use', id: 'w2', name: 'file_write', input: { id: '2' } },
-        { type: 'tool_use', id: 'w3', name: 'file_write', input: { id: '3' } },
+        { type: 'tool_use', id: 'w1', name: 'Write', input: { id: '1' } },
+        { type: 'tool_use', id: 'w2', name: 'Write', input: { id: '2' } },
+        { type: 'tool_use', id: 'w3', name: 'Write', input: { id: '3' } },
       ],
       () => {}
     )
@@ -80,7 +80,7 @@ describe('ParallelExecutor', () => {
     const execOrder: string[] = []
 
     registry.register({
-      definition: { name: 'file_read', description: 'Read', inputSchema: { type: 'object', properties: {} } },
+      definition: { name: 'Read', description: 'Read', inputSchema: { type: 'object', properties: {} } },
       execute: async (input) => {
         execOrder.push(`read-${input.id}`)
         await new Promise(r => setTimeout(r, 20))
@@ -88,7 +88,7 @@ describe('ParallelExecutor', () => {
       },
     })
     registry.register({
-      definition: { name: 'file_write', description: 'Write', inputSchema: { type: 'object', properties: {} } },
+      definition: { name: 'Write', description: 'Write', inputSchema: { type: 'object', properties: {} } },
       execute: async (input) => {
         execOrder.push(`write-${input.id}`)
         return { content: `w-${input.id}` }
@@ -99,10 +99,10 @@ describe('ParallelExecutor', () => {
     // Mixed order: write, read, read, write
     const results = await executor.executeBatch(
       [
-        { type: 'tool_use', id: 'a', name: 'file_write', input: { id: 'A' } },
-        { type: 'tool_use', id: 'b', name: 'file_read', input: { id: 'B' } },
-        { type: 'tool_use', id: 'c', name: 'file_read', input: { id: 'C' } },
-        { type: 'tool_use', id: 'd', name: 'file_write', input: { id: 'D' } },
+        { type: 'tool_use', id: 'a', name: 'Write', input: { id: 'A' } },
+        { type: 'tool_use', id: 'b', name: 'Read', input: { id: 'B' } },
+        { type: 'tool_use', id: 'c', name: 'Read', input: { id: 'C' } },
+        { type: 'tool_use', id: 'd', name: 'Write', input: { id: 'D' } },
       ],
       () => {}
     )
@@ -125,7 +125,7 @@ describe('ParallelExecutor', () => {
     const executed: string[] = []
 
     registry.register({
-      definition: { name: 'file_read', description: 'Read', inputSchema: { type: 'object', properties: {} } },
+      definition: { name: 'Read', description: 'Read', inputSchema: { type: 'object', properties: {} } },
       execute: async (input, context) => {
         if (input.id === 'fail') {
           executed.push('fail')
@@ -140,7 +140,7 @@ describe('ParallelExecutor', () => {
       },
     })
     registry.register({
-      definition: { name: 'file_write', description: 'Write', inputSchema: { type: 'object', properties: {} } },
+      definition: { name: 'Write', description: 'Write', inputSchema: { type: 'object', properties: {} } },
       execute: async (input) => {
         executed.push(`write-${input.id}`)
         return { content: `w-${input.id}` }
@@ -150,9 +150,9 @@ describe('ParallelExecutor', () => {
     const executor = new ParallelExecutor(createRunner(registry))
     const results = await executor.executeBatch(
       [
-        { type: 'tool_use', id: 'r1', name: 'file_read', input: { id: 'fail' } },
-        { type: 'tool_use', id: 'r2', name: 'file_read', input: { id: 'slow' } },
-        { type: 'tool_use', id: 'w1', name: 'file_write', input: { id: 'X' } },
+        { type: 'tool_use', id: 'r1', name: 'Read', input: { id: 'fail' } },
+        { type: 'tool_use', id: 'r2', name: 'Read', input: { id: 'slow' } },
+        { type: 'tool_use', id: 'w1', name: 'Write', input: { id: 'X' } },
       ],
       () => {}
     )
@@ -202,7 +202,7 @@ describe('ParallelExecutor', () => {
     let current = 0
 
     registry.register({
-      definition: { name: 'file_read', description: 'Read', inputSchema: { type: 'object', properties: {} } },
+      definition: { name: 'Read', description: 'Read', inputSchema: { type: 'object', properties: {} } },
       execute: async () => {
         current++
         if (current > maxConcurrent) maxConcurrent = current
@@ -217,7 +217,7 @@ describe('ParallelExecutor', () => {
     const blocks = Array.from({ length: 10 }, (_, i) => ({
       type: 'tool_use' as const,
       id: `r${i}`,
-      name: 'file_read',
+      name: 'Read',
       input: {},
     }))
 
@@ -230,7 +230,7 @@ describe('ParallelExecutor', () => {
     const registry = new ToolRegistry()
 
     registry.register({
-      definition: { name: 'file_read', description: 'Read', inputSchema: { type: 'object', properties: {} } },
+      definition: { name: 'Read', description: 'Read', inputSchema: { type: 'object', properties: {} } },
       execute: async (_input, context) => {
         await new Promise((resolve, reject) => {
           const timer = setTimeout(resolve, 500)
@@ -248,8 +248,8 @@ describe('ParallelExecutor', () => {
 
     const results = await executor.executeBatch(
       [
-        { type: 'tool_use', id: 'r1', name: 'file_read', input: {} },
-        { type: 'tool_use', id: 'r2', name: 'file_read', input: {} },
+        { type: 'tool_use', id: 'r1', name: 'Read', input: {} },
+        { type: 'tool_use', id: 'r2', name: 'Read', input: {} },
       ],
       () => {},
       externalAbort.signal

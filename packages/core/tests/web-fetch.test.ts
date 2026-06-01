@@ -3,7 +3,7 @@ import { webFetchTool } from '../src/tools/web-fetch.js'
 
 describe('webFetchTool', () => {
   it('has correct definition', () => {
-    expect(webFetchTool.definition.name).toBe('web_fetch')
+    expect(webFetchTool.definition.name).toBe('WebFetch')
     expect(webFetchTool.definition.inputSchema.required).toContain('url')
     expect(webFetchTool.definition.inputSchema.required).toContain('prompt')
   })

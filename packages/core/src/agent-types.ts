@@ -13,15 +13,15 @@ export interface AgentTypeDefinition {
 // JDC Context Engine tools — native code intelligence, always available to any
 // agent that benefits from code navigation (read-only, safe).
 export const JDC_CONTEXT_TOOLS = [
-  'jdc_context',
-  'jdc_search',
-  'jdc_node',
-  'jdc_callers',
-  'jdc_callees',
-  'jdc_impact',
-  'jdc_trace',
-  'jdc_explore',
-  'jdc_files',
+  'JdcContext',
+  'JdcSearch',
+  'JdcNode',
+  'JdcCallers',
+  'JdcCallees',
+  'JdcImpact',
+  'JdcTrace',
+  'JdcExplore',
+  'JdcFiles',
 ]
 
 export const AGENT_TYPES: AgentTypeDefinition[] = [

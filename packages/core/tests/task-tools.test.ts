@@ -32,7 +32,7 @@ function createMockHistory(): ConversationHistory {
       if (updates.description) t.description = updates.description
       t.updated_at = Date.now()
     },
-    deleteTask: (id: string) => { tasks.delete(id) },
+    deleteTask: (_sessionId: string, id: string) => { tasks.delete(id) },
     getActiveTasks: (sessionId: string) => {
       const results: any[] = []
       for (const t of tasks.values()) {

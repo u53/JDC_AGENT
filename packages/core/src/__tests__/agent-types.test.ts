@@ -11,8 +11,8 @@ describe('agent-types', () => {
     const explore = getAgentType('explore')
     expect(explore).toBeDefined()
     expect(explore!.name).toBe('explore')
-    expect(explore!.allowedTools).toContain('file_read')
-    expect(explore!.allowedTools).not.toContain('bash')
+    expect(explore!.allowedTools).toContain('Read')
+    expect(explore!.allowedTools).not.toContain('Bash')
   })
 
   it('getAgentType returns undefined for unknown type', () => {
@@ -21,40 +21,40 @@ describe('agent-types', () => {
 
   it('filterToolsForAgent filters to whitelist', () => {
     const allTools = [
-      { name: 'file_read', description: '', inputSchema: {} },
-      { name: 'bash', description: '', inputSchema: {} },
-      { name: 'file_write', description: '', inputSchema: {} },
+      { name: 'Read', description: '', inputSchema: {} },
+      { name: 'Bash', description: '', inputSchema: {} },
+      { name: 'Write', description: '', inputSchema: {} },
       { name: 'Agent', description: '', inputSchema: {} },
     ]
     const filtered = filterToolsForAgent('explore', allTools)
-    expect(filtered.map(t => t.name)).toEqual(['file_read'])
+    expect(filtered.map(t => t.name)).toEqual(['Read'])
   })
 
   it('filterToolsForAgent for general returns all except Agent', () => {
     const allTools = [
-      { name: 'file_read', description: '', inputSchema: {} },
-      { name: 'bash', description: '', inputSchema: {} },
+      { name: 'Read', description: '', inputSchema: {} },
+      { name: 'Bash', description: '', inputSchema: {} },
       { name: 'Agent', description: '', inputSchema: {} },
     ]
     const filtered = filterToolsForAgent('general', allTools)
-    expect(filtered.map(t => t.name)).toEqual(['file_read', 'bash'])
+    expect(filtered.map(t => t.name)).toEqual(['Read', 'Bash'])
   })
 
   const mcpTools: ToolDefinition[] = [
-    { name: 'file_read', description: '', inputSchema: {} },
-    { name: 'grep', description: '', inputSchema: {} },
-    { name: 'jdc_search', description: '', inputSchema: {} },
-    { name: 'jdc_context', description: '', inputSchema: {} },
+    { name: 'Read', description: '', inputSchema: {} },
+    { name: 'Grep', description: '', inputSchema: {} },
+    { name: 'JdcSearch', description: '', inputSchema: {} },
+    { name: 'JdcContext', description: '', inputSchema: {} },
     { name: 'mcp__other__do_thing', description: '', inputSchema: {} },
     { name: 'Agent', description: '', inputSchema: {} },
     { name: 'Skill', description: '', inputSchema: {} },
   ]
 
   describe('filterToolsForAgent — MCP whitelisting', () => {
-    it('explore allows native jdc_* tools but denies all mcp__*', () => {
+    it('explore allows native Jdc* tools but denies all mcp__*', () => {
       const out = filterToolsForAgent('explore', mcpTools).map(t => t.name)
-      expect(out).toContain('jdc_search')
-      expect(out).toContain('jdc_context')
+      expect(out).toContain('JdcSearch')
+      expect(out).toContain('JdcContext')
       expect(out).not.toContain('mcp__other__do_thing')
     })
 
@@ -65,7 +65,7 @@ describe('agent-types', () => {
 
     it('general allows all mcp__* tools', () => {
       const out = filterToolsForAgent('general', mcpTools).map(t => t.name)
-      expect(out).toContain('jdc_search')
+      expect(out).toContain('JdcSearch')
       expect(out).toContain('mcp__other__do_thing')
     })
 

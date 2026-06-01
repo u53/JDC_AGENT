@@ -23,14 +23,14 @@ describe('plan-mode tool restrictions', () => {
   })
 
   // JDC Context Engine: native read-only code intelligence, always allowed
-  it('allows jdc_context', () => {
-    expect(isPlanModeToolAllowed('jdc_context', { task: 'how does X work' })).toBe(true)
+  it('allows JdcContext', () => {
+    expect(isPlanModeToolAllowed('JdcContext', { task: 'how does X work' })).toBe(true)
   })
-  it('allows jdc_search', () => {
-    expect(isPlanModeToolAllowed('jdc_search', { query: 'foo' })).toBe(true)
+  it('allows JdcSearch', () => {
+    expect(isPlanModeToolAllowed('JdcSearch', { query: 'foo' })).toBe(true)
   })
-  it('allows jdc_trace', () => {
-    expect(isPlanModeToolAllowed('jdc_trace', { from: 'a', to: 'b' })).toBe(true)
+  it('allows JdcTrace', () => {
+    expect(isPlanModeToolAllowed('JdcTrace', { from: 'a', to: 'b' })).toBe(true)
   })
 
   // Bash: allowed for exploration

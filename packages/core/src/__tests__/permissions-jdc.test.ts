@@ -2,12 +2,12 @@ import { describe, it, expect } from 'vitest'
 import { PermissionChecker } from '../permissions.js'
 
 const JDC_TOOLS = [
-  'jdc_context', 'jdc_search', 'jdc_node', 'jdc_callers', 'jdc_callees',
-  'jdc_impact', 'jdc_trace', 'jdc_explore', 'jdc_files',
+  'JdcContext', 'JdcSearch', 'JdcNode', 'JdcCallers', 'JdcCallees',
+  'JdcImpact', 'JdcTrace', 'JdcExplore', 'JdcFiles',
 ]
 
 describe('permissions: JDC Context Engine tools are read-only', () => {
-  it('allows jdc_* without prompting in standard mode', () => {
+  it('allows Jdc* without prompting in standard mode', () => {
     const checker = new PermissionChecker('standard', '/project', {
       projectRules: [],
       globalRules: [],
@@ -17,7 +17,7 @@ describe('permissions: JDC Context Engine tools are read-only', () => {
     }
   })
 
-  it('keeps jdc_* allowed even in strict mode (not downgraded to ask)', () => {
+  it('keeps Jdc* allowed even in strict mode (not downgraded to ask)', () => {
     const checker = new PermissionChecker('strict', '/project', {
       projectRules: [],
       globalRules: [],

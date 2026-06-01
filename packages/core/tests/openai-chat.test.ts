@@ -49,9 +49,13 @@ describe('OpenAIChatProvider', () => {
 
   it('handles assistant message with tool_calls arguments as JSON', () => {
     const provider = new OpenAIChatProvider('test-key')
+    // An assistant tool_use with no matching tool_result is dropped (OpenAI
+    // rejects unpaired tool_calls), so the pair must be complete to round-trip.
     const formatted = (provider as any).formatMessages([
       { id: '1', role: 'assistant', content: [{ type: 'tool_use', id: 'tc1', name: 'bash', input: { command: 'ls', flags: ['-la'] } }], timestamp: 0 },
+      { id: '2', role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tc1', content: 'out' }], timestamp: 0 },
     ])
-    expect(formatted[0].tool_calls[0].function.arguments).toBe('{"command":"ls","flags":["-la"]}')
+    const assistant = formatted.find((m: any) => m.role === 'assistant')
+    expect(assistant.tool_calls[0].function.arguments).toBe('{"command":"ls","flags":["-la"]}')
   })
 })

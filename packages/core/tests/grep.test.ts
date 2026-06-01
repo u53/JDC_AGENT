@@ -4,7 +4,7 @@ import path from 'node:path'
 
 describe('grepTool', () => {
   it('has correct definition', () => {
-    expect(grepTool.definition.name).toBe('grep')
+    expect(grepTool.definition.name).toBe('Grep')
     expect(grepTool.definition.inputSchema.properties).toHaveProperty('pattern')
   })
 

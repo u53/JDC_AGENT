@@ -281,8 +281,9 @@ export class OpenAIResponsesProvider implements ModelProvider {
         continue
       }
 
-      // User text messages
-      if (textBlocks.length > 0 && toolResultBlocks.length === 0) {
+      // User text messages. Emitted even alongside tool_result blocks (handled
+      // just above) so trailing user text in a tool-result turn isn't dropped.
+      if (textBlocks.length > 0) {
         const text = textBlocks
           .filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text')
           .map(b => b.text)

@@ -61,17 +61,46 @@ describe('saveMemories', () => {
     expect(index).toContain('test-pref')
   })
 
-  it('should skip existing memory files', async () => {
-    const existing = path.join(tmpDir, 'existing.md')
-    writeFileSync(existing, 'old content')
-
+  it('skips rewriting when existing content has no substantive change', async () => {
+    // saveMemories now updates an existing file only when the body meaningfully
+    // changed (shouldOverwrite). Identical content must be left untouched.
     const memories = [
-      { name: 'existing', type: 'feedback', description: 'Exists', content: 'new content' },
+      { name: 'existing', type: 'feedback', description: 'Exists', content: 'same content' },
     ]
+    const existing = path.join(tmpDir, 'existing.md')
+    writeFileSync(existing, `---
+name: existing
+description: Exists
+metadata:
+  type: feedback
+---
+
+same content
+`)
 
     const count = await saveMemories(memories, tmpDir, 'session-123')
     expect(count).toBe(0)
-    expect(readFileSync(existing, 'utf-8')).toBe('old content')
+  })
+
+  it('updates an existing memory file when the body changed', async () => {
+    const existing = path.join(tmpDir, 'existing.md')
+    writeFileSync(existing, `---
+name: existing
+description: Exists
+metadata:
+  type: feedback
+---
+
+old content
+`)
+
+    const memories = [
+      { name: 'existing', type: 'feedback', description: 'Exists', content: 'substantially different new content' },
+    ]
+
+    const count = await saveMemories(memories, tmpDir, 'session-123')
+    expect(count).toBe(1)
+    expect(readFileSync(existing, 'utf-8')).toContain('substantially different new content')
   })
 
   it('should return 0 for empty memories array', async () => {

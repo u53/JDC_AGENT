@@ -34,7 +34,7 @@ describe('createListMcpResourcesTool', () => {
   it('has correct definition', () => {
     const mockManager = { listResources: async () => [] } as any
     const tool = createListMcpResourcesTool(mockManager)
-    expect(tool.definition.name).toBe('list_mcp_resources')
+    expect(tool.definition.name).toBe('ListMcpResources')
   })
 
   it('returns JSON array of resources', async () => {
@@ -63,7 +63,7 @@ describe('createReadMcpResourceTool', () => {
   it('has correct definition', () => {
     const mockManager = { readResource: async () => ({ content: '' }) } as any
     const tool = createReadMcpResourceTool(mockManager)
-    expect(tool.definition.name).toBe('read_mcp_resource')
+    expect(tool.definition.name).toBe('ReadMcpResource')
   })
 
   it('returns resource content', async () => {

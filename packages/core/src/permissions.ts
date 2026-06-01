@@ -16,8 +16,8 @@ const READ_ONLY_TOOLS = new Set([
   'ListMcpResources', 'ReadMcpResource', 'skill',
   // JDC Context Engine — native, read-only code intelligence. Always allowed,
   // mirroring how mcp__* code-nav tools were treated.
-  'jdc_context', 'jdc_search', 'jdc_node', 'jdc_callers', 'jdc_callees',
-  'jdc_impact', 'jdc_trace', 'jdc_explore', 'jdc_files',
+  'JdcContext', 'JdcSearch', 'JdcNode', 'JdcCallers', 'JdcCallees',
+  'JdcImpact', 'JdcTrace', 'JdcExplore', 'JdcFiles',
 ])
 
 const WRITE_TOOLS = new Set([

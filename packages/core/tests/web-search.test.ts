@@ -3,7 +3,7 @@ import { webSearchTool } from '../src/tools/web-search.js'
 
 describe('webSearchTool', () => {
   it('has correct definition', () => {
-    expect(webSearchTool.definition.name).toBe('web_search')
+    expect(webSearchTool.definition.name).toBe('WebSearch')
     expect(webSearchTool.definition.inputSchema.required).toContain('query')
   })
 

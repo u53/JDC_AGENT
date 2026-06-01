@@ -60,7 +60,7 @@ function noEngine(): ToolResult {
 
 const jdcSearch: ToolHandler = {
   definition: {
-    name: 'jdc_search',
+    name: 'JdcSearch',
     description:
       'Quick symbol search by name across the project. Returns matching definitions with file:line. Backed by the always-up-to-date JDC Context Engine (no manual indexing needed).',
     inputSchema: {
@@ -83,7 +83,7 @@ const jdcSearch: ToolHandler = {
 
 const jdcContext: ToolHandler = {
   definition: {
-    name: 'jdc_context',
+    name: 'JdcContext',
     description:
       'PRIMARY code-intelligence tool. For any "how does X work", architecture, feature, or bug-context question, call this FIRST. Composes symbol search + callers/callees + key source in one call. Returns entry points, related symbols, and code snippets.',
     inputSchema: {
@@ -133,7 +133,7 @@ const jdcContext: ToolHandler = {
 
 const jdcNode: ToolHandler = {
   definition: {
-    name: 'jdc_node',
+    name: 'JdcNode',
     description:
       "Get one symbol's details (location, signature) plus its trail — what it calls and what calls it, each with file:line. Pass includeCode=true for the full source body. Use this to walk the call graph hop-by-hop.",
     inputSchema: {
@@ -163,7 +163,7 @@ const jdcNode: ToolHandler = {
 
 const jdcCallers: ToolHandler = {
   definition: {
-    name: 'jdc_callers',
+    name: 'JdcCallers',
     description: 'Find all functions/methods that call a given symbol. Useful for understanding usage and change impact.',
     inputSchema: {
       type: 'object',
@@ -182,7 +182,7 @@ const jdcCallers: ToolHandler = {
 
 const jdcCallees: ToolHandler = {
   definition: {
-    name: 'jdc_callees',
+    name: 'JdcCallees',
     description: 'Find all functions/methods that a given symbol calls. Useful for understanding dependencies and code flow.',
     inputSchema: {
       type: 'object',
@@ -201,7 +201,7 @@ const jdcCallees: ToolHandler = {
 
 const jdcImpact: ToolHandler = {
   definition: {
-    name: 'jdc_impact',
+    name: 'JdcImpact',
     description: 'Analyze the impact radius of changing a symbol — everything that transitively calls it, up to a depth.',
     inputSchema: {
       type: 'object',
@@ -223,7 +223,7 @@ const jdcImpact: ToolHandler = {
 
 const jdcTrace: ToolHandler = {
   definition: {
-    name: 'jdc_trace',
+    name: 'JdcTrace',
     description: 'Trace the call path between two symbols — "how does <from> reach <to>?" Returns the chain of functions, or reports no static path exists.',
     inputSchema: {
       type: 'object',
@@ -245,7 +245,7 @@ const jdcTrace: ToolHandler = {
 
 const jdcExplore: ToolHandler = {
   definition: {
-    name: 'jdc_explore',
+    name: 'JdcExplore',
     description: 'Return source for several related symbols at once, grouped by file. Efficient way to inspect many symbols together. Pass an array of symbol names.',
     inputSchema: {
       type: 'object',
@@ -267,7 +267,7 @@ const jdcExplore: ToolHandler = {
 
 const jdcFiles: ToolHandler = {
   definition: {
-    name: 'jdc_files',
+    name: 'JdcFiles',
     description: 'Get the indexed project file structure with per-file symbol counts. Fast overview of project organization.',
     inputSchema: {
       type: 'object',

@@ -6,9 +6,15 @@ import { SkillLoader, renderSkill } from '../loader.js'
 
 describe('SkillLoader', () => {
   let tmpDir: string
+  let emptyGlobalDir: string
+
+  // Isolate from the real ~/.jdcagnet/skills by pointing the loader's global dir
+  // at an empty temp directory; otherwise the host's installed skills leak in.
+  const newLoader = () => new SkillLoader(emptyGlobalDir)
 
   beforeEach(async () => {
     tmpDir = await mkdtemp(path.join(os.tmpdir(), 'skill-test-'))
+    emptyGlobalDir = await mkdtemp(path.join(os.tmpdir(), 'skill-global-'))
     const skillsDir = path.join(tmpDir, '.jdcagnet', 'skills')
     await mkdir(skillsDir, { recursive: true })
     await writeFile(path.join(skillsDir, 'refactor.md'), `---
@@ -45,16 +51,16 @@ Deploy steps here.
 `)
   })
 
-  afterEach(async () => { await rm(tmpDir, { recursive: true }) })
+  afterEach(async () => { await rm(tmpDir, { recursive: true }); await rm(emptyGlobalDir, { recursive: true }) })
 
   it('loads skills from project directory', async () => {
-    const loader = new SkillLoader()
+    const loader = newLoader()
     await loader.loadAll(tmpDir)
     expect(loader.getAll()).toHaveLength(3)
   })
 
   it('filters user-invocable skills', async () => {
-    const loader = new SkillLoader()
+    const loader = newLoader()
     await loader.loadAll(tmpDir)
     const invocable = loader.getInvocable()
     expect(invocable).toHaveLength(2)
@@ -62,7 +68,7 @@ Deploy steps here.
   })
 
   it('gets skill by name', async () => {
-    const loader = new SkillLoader()
+    const loader = newLoader()
     await loader.loadAll(tmpDir)
     const skill = loader.get('refactor')
     expect(skill?.description).toBe('Refactor a file')
@@ -71,14 +77,14 @@ Deploy steps here.
   })
 
   it('loads directory-based skills', async () => {
-    const loader = new SkillLoader()
+    const loader = newLoader()
     await loader.loadAll(tmpDir)
     const skill = loader.get('deploy')
     expect(skill?.content).toBe('Deploy steps here.')
   })
 
   it('returns undefined for unknown skill', async () => {
-    const loader = new SkillLoader()
+    const loader = newLoader()
     await loader.loadAll(tmpDir)
     expect(loader.get('nonexistent')).toBeUndefined()
   })
