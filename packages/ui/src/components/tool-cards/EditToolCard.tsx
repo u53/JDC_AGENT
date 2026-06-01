@@ -2,11 +2,11 @@ import type { ToolCardRouterProps } from './ToolCardRouter'
 import { ToolCardShell } from './ToolCardShell'
 import { computeLineDiff } from './shared'
 import { DiffView } from './DiffView'
+import { deriveToolStatus, getToolVariant, shouldShowToolRail } from './tool-card-meta'
 
-export function EditToolCard({ event, input, result }: ToolCardRouterProps) {
-  const status = event
-    ? (event.type === 'complete' ? 'done' : event.type === 'error' ? 'error' : 'running')
-    : (result?.is_error ? 'error' : 'done')
+export function EditToolCard({ event, input, result, name }: ToolCardRouterProps) {
+  const status = deriveToolStatus(event, result)
+  const toolName = event?.toolName || name || 'Edit'
 
   const toolInput = event?.input || input || {}
   const filePath = (toolInput.file_path || '') as string
@@ -28,6 +28,8 @@ export function EditToolCard({ event, input, result }: ToolCardRouterProps) {
       detail={detail}
       status={status}
       defaultExpanded={status === 'running'}
+      rail={shouldShowToolRail(toolName, status)}
+      variant={getToolVariant(toolName)}
     >
       {isError && (
         <pre className="max-h-48 overflow-auto p-2 text-[12px] whitespace-pre-wrap text-[var(--bad)]" style={{ fontFamily: 'var(--font-mono)' }}>

@@ -33,13 +33,15 @@ export function PermissionDialog({ sessionId }: Props) {
   const bashCommand = isBash ? (request.input.command as string || '') : ''
 
   return (
-    <div className="mb-3 border border-[var(--border)] bg-[var(--surface-2)] border-l-4 border-l-[var(--warn)] rounded-[8px]">
-      <div className="flex items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-[0.1em]">
-        <span className="inline-block h-2 w-2 rounded-full bg-[var(--warn)] animate-pulse" />
-        <span className="text-[var(--warn)]">PERMISSION REQUEST</span>
-        <span className="text-[var(--text)]">{request.toolName}</span>
+    <div className="aux-card mb-3" data-tone="warn">
+      <div className="aux-card-header">
+        <div className="aux-card-title">
+          <span className="aux-card-dot is-live" />
+          <span className="aux-card-label">PERMISSION REQUEST</span>
+          <span className="aux-card-muted">{request.toolName}</span>
+        </div>
       </div>
-      <div className="border-t border-[var(--border)] px-3 py-2">
+      <div className="aux-card-body">
         {isBash ? (
           <pre className="text-xs text-[var(--good)] whitespace-pre-wrap break-all mb-3 max-h-[120px] overflow-y-auto" style={{ fontFamily: 'var(--font-mono)' }}>
             $ {bashCommand}
@@ -49,16 +51,16 @@ export function PermissionDialog({ sessionId }: Props) {
             {JSON.stringify(request.input, null, 2)}
           </pre>
         )}
-        <div className="flex items-center gap-3">
+        <div className="aux-card-actions">
           <button
             onClick={() => respond(true)}
-            className="text-[12px] text-[var(--good)] hover:opacity-80 transition-colors"
+            className="aux-card-action is-good"
           >
             Allow
           </button>
           <button
             onClick={() => respond(false)}
-            className="text-[12px] text-[var(--bad)] hover:opacity-80 transition-colors"
+            className="aux-card-action is-danger"
           >
             Deny
           </button>

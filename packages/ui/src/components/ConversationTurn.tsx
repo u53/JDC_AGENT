@@ -6,18 +6,18 @@ import type { ContentBlock, Message, ToolResultContent, ToolExecutionEvent } fro
 function ThinkingBlock({ content, streaming }: { content: string; streaming?: boolean }) {
   const [expanded, setExpanded] = useState(false)
   return (
-    <div className="mb-3 border border-[var(--border)] rounded-[8px] bg-[var(--surface-2)] overflow-hidden">
+    <div className="aux-card mb-3" data-tone="plan">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-[var(--muted)] hover:bg-[var(--surface-3)] transition-colors"
+        className="aux-card-header"
       >
-        <span className={`w-1.5 h-1.5 rounded-full bg-[var(--plan)] ${streaming ? 'animate-pulse' : ''}`} />
-        <span>{expanded ? '▼' : '▶'}</span>
-        <span>{streaming ? '思考中...' : '思考过程'}</span>
-        <span className="ml-auto">{content.length} 字</span>
+        <span className={`aux-card-dot ${streaming ? 'is-live' : ''}`} />
+        <span className="aux-card-caret">{expanded ? '▼' : '▶'}</span>
+        <span className="aux-card-label">{streaming ? '思考中...' : '思考过程'}</span>
+        <span className="aux-card-chip">{content.length} 字</span>
       </button>
       {expanded && (
-        <div className="border-t border-[var(--border)] px-3 py-2 text-[12px] text-[var(--muted)] whitespace-pre-wrap max-h-[300px] overflow-y-auto">
+        <div className="aux-card-body whitespace-pre-wrap max-h-[300px] overflow-y-auto">
           {content}
         </div>
       )}
@@ -160,11 +160,12 @@ export function ConversationTurn({
         {isActive && streamingText && !expanded && (
           <button
             onClick={() => setExpanded(true)}
-            className="flex items-center gap-2 w-full border border-[var(--border)] rounded-[8px] px-3 py-2 text-[12px] text-[var(--muted)] hover:bg-[var(--surface-2)] transition-colors"
+            className="aux-card aux-card-header w-full"
+            data-tone="accent"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
-            <span>正在生成... {streamingText.length} 字</span>
-            <span className="ml-auto text-[10px]">点击展开</span>
+            <span className="aux-card-dot is-live" />
+            <span className="aux-card-label">正在生成... {streamingText.length} 字</span>
+            <span className="aux-card-chip">点击展开</span>
           </button>
         )}
 

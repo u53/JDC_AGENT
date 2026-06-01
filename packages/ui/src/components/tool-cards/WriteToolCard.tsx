@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import type { ToolCardRouterProps } from './ToolCardRouter'
 import { ToolCardShell } from './ToolCardShell'
+import { deriveToolStatus, getToolVariant, shouldShowToolRail } from './tool-card-meta'
 
-export function WriteToolCard({ event, input, result }: ToolCardRouterProps) {
-  const status = event
-    ? (event.type === 'complete' ? 'done' : event.type === 'error' ? 'error' : 'running')
-    : (result?.is_error ? 'error' : 'done')
+export function WriteToolCard({ event, input, result, name }: ToolCardRouterProps) {
+  const status = deriveToolStatus(event, result)
+  const toolName = event?.toolName || name || 'Write'
 
   const toolInput = event?.input || input || {}
   const filePath = (toolInput.file_path || '') as string
@@ -24,6 +24,8 @@ export function WriteToolCard({ event, input, result }: ToolCardRouterProps) {
       detail={`${filePath} (${lines.length} lines)`}
       status={status}
       defaultExpanded={status === 'running'}
+      rail={shouldShowToolRail(toolName, status)}
+      variant={getToolVariant(toolName)}
     >
       {isError && (
         <pre className="max-h-48 overflow-auto p-2 text-[12px] whitespace-pre-wrap text-[var(--bad)]" style={{ fontFamily: 'var(--font-mono)' }}>
@@ -31,7 +33,7 @@ export function WriteToolCard({ event, input, result }: ToolCardRouterProps) {
         </pre>
       )}
       {!isError && lines.length > 0 && (
-        <div className="max-h-[400px] overflow-auto text-[12px]" style={{ fontFamily: 'var(--font-mono)' }}>
+        <div className="tool-code-frame max-h-[400px] overflow-auto text-[12px]" style={{ fontFamily: 'var(--font-mono)' }}>
           <table className="w-full border-collapse">
             <tbody>
               {displayLines.map((line, i) => (

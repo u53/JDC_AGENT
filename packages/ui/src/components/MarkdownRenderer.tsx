@@ -1,8 +1,8 @@
-import { useState, isValidElement, type ComponentPropsWithoutRef, type ReactNode } from 'react'
+import { isValidElement, type ComponentPropsWithoutRef, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
-import { copyToClipboard } from '../lib/clipboard'
+import { ToolCopyButton } from './tool-cards/ToolCopyButton'
 
 /**
  * react-markdown sometimes hands `code` an array of children (raw text mixed
@@ -26,28 +26,22 @@ interface Props {
 }
 
 function CodeBlock({ className, children }: { className?: string; children: string }) {
-  const [copied, setCopied] = useState(false)
   const language = className?.replace('language-', '') || ''
 
-  const handleCopy = () => {
-    copyToClipboard(children)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
   return (
-    <div className="relative my-3 border border-[var(--border)] bg-[var(--surface-2)] rounded-[8px] overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-1 border-b border-[var(--border)] text-[10px] uppercase tracking-wider text-[var(--muted)]">
+    <div className="markdown-code-block relative my-3 overflow-hidden">
+      <div className="markdown-code-head">
         <span>{language || 'code'}</span>
-        <button
-          onClick={handleCopy}
-          className="text-[var(--muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
-          aria-label="Copy code"
-        >
-          {copied ? 'copied' : 'copy'}
-        </button>
+        <ToolCopyButton
+          text={children}
+          label="Copy"
+          copiedLabel="Copied"
+          title="Copy code"
+          toastLabel="Code"
+          className="markdown-code-copy"
+        />
       </div>
-      <pre className="overflow-x-auto p-3 text-xs leading-relaxed">
+      <pre className="markdown-code-pre overflow-x-auto">
         <code className={className}>{children}</code>
       </pre>
     </div>

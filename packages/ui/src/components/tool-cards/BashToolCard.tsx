@@ -1,29 +1,35 @@
 import type { ToolCardRouterProps } from './ToolCardRouter'
 import { ToolCardShell } from './ToolCardShell'
+import { ToolCopyButton } from './ToolCopyButton'
 import { truncateText } from './shared'
-import { copyToClipboard } from '../../lib/clipboard'
+import { deriveToolStatus, formatToolLabel, getToolVariant, shouldShowToolRail } from './tool-card-meta'
 
-export function BashToolCard({ event, input, result }: ToolCardRouterProps) {
-  const status = event
-    ? (event.type === 'complete' ? 'done' : event.type === 'error' ? 'error' : 'running')
-    : (result?.is_error ? 'error' : 'done')
+export function BashToolCard({ event, input, result, name }: ToolCardRouterProps) {
+  const status = deriveToolStatus(event, result)
+  const toolName = event?.toolName || name || 'Bash'
 
   const command = (event?.input?.command || input?.command || '') as string
+  const description = (event?.input?.description || input?.description || '') as string
   const output = event?.result?.content || result?.content || ''
   const isError = event?.result?.isError || result?.is_error
 
   const displayCommand = truncateText(command, 60)
+  const detail = toolName === 'Monitor' && description
+    ? `${description} · ${displayCommand}`
+    : `$ ${displayCommand}`
 
   return (
     <ToolCardShell
-      label="BASH"
-      detail={`$ ${displayCommand}`}
+      label={formatToolLabel(toolName)}
+      detail={detail}
       status={status}
       defaultExpanded={status === 'running'}
+      rail={shouldShowToolRail(toolName, status)}
+      variant={getToolVariant(toolName)}
       actions={status === 'done' ? (
         <div className="flex items-center gap-1">
-          <button onClick={(e) => { e.stopPropagation(); copyToClipboard(command) }} className="px-1.5 py-0.5 rounded-[4px] text-[11px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-3)] transition-colors">Copy cmd</button>
-          {output && <button onClick={(e) => { e.stopPropagation(); copyToClipboard(output) }} className="px-1.5 py-0.5 rounded-[4px] text-[11px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-3)] transition-colors">Copy output</button>}
+          <ToolCopyButton text={command} label="Cmd" copiedLabel="Copied" title="Copy command" toastLabel="Command" />
+          {output && <ToolCopyButton text={output} label="Output" copiedLabel="Copied" title="Copy output" toastLabel="Output" />}
         </div>
       ) : undefined}
     >

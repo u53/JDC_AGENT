@@ -30,28 +30,28 @@ export function AgentDetailPanel() {
   }
 
   return (
-    <div className="flex flex-col h-full border-l border-[var(--border)] bg-[var(--surface)]">
+    <div className="agent-detail-panel">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
-        <div className="flex items-center gap-2">
-          <span className="text-[var(--accent)]">&#9670;</span>
-          <span className="text-[10px] uppercase tracking-[0.1em] text-[var(--accent)]">AGENT</span>
-          <span className="text-[11px] text-[var(--text)] truncate max-w-[200px]">
+      <div className="agent-detail-header">
+        <div className="agent-detail-title">
+          <span className="agent-detail-mark" />
+          <span>AGENT</span>
+          <strong>
             {agent.prompt.slice(0, 40)}
-          </span>
+          </strong>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="agent-detail-actions">
           {agent.status === 'running' && (
             <>
               <button
                 onClick={handleBackground}
-                className="text-[10px] uppercase tracking-[0.05em] text-[var(--accent)] hover:opacity-80 transition-opacity"
+                className="agent-detail-action"
               >
                 [BG]
               </button>
               <button
                 onClick={handleAbort}
-                className="text-[10px] uppercase tracking-[0.05em] text-[var(--bad)] hover:opacity-80 transition-opacity"
+                className="agent-detail-action is-danger"
               >
                 [ABORT]
               </button>
@@ -59,7 +59,7 @@ export function AgentDetailPanel() {
           )}
           <button
             onClick={handleClose}
-            className="text-[var(--muted)] hover:text-[var(--text)] text-xs transition-colors"
+            className="agent-detail-action"
           >
             [X]
           </button>
@@ -67,9 +67,9 @@ export function AgentDetailPanel() {
       </div>
 
       {/* Status bar */}
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-[var(--border)] text-[10px] text-[var(--muted)]">
+      <div className="agent-detail-status">
         {agent.status === 'running' && (
-          <span className="inline-block h-2 w-2 rounded-full bg-[var(--accent)] animate-pulse" />
+          <span className="agent-detail-live" />
         )}
         <span>{agent.status === 'running' ? `Running ${elapsed}s` : agent.status.toUpperCase()}</span>
         <span>|</span>
@@ -83,7 +83,7 @@ export function AgentDetailPanel() {
       </div>
 
       {/* Tool events list */}
-      <div className="flex-1 overflow-y-auto px-4 py-3">
+      <div className="agent-detail-tools">
         {agent.toolEvents.map((te, i) => (
           <ToolCardRouter
             key={i}
@@ -93,7 +93,7 @@ export function AgentDetailPanel() {
           />
         ))}
         {agent.status === 'running' && agent.toolEvents.length === 0 && (
-          <div className="text-[10px] text-[var(--muted)] uppercase tracking-[0.1em]">
+          <div className="tool-empty-state">
             Initializing...
           </div>
         )}
@@ -101,9 +101,9 @@ export function AgentDetailPanel() {
 
       {/* Text output */}
       {agent.textOutput && (
-        <div className="border-t border-[var(--border)] px-4 py-3 max-h-[200px] overflow-y-auto">
-          <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--muted)] mb-1">Output</div>
-          <pre className="text-xs text-[var(--text)] whitespace-pre-wrap">{agent.textOutput}</pre>
+        <div className="agent-detail-output">
+          <div>Output</div>
+          <pre>{agent.textOutput}</pre>
         </div>
       )}
     </div>

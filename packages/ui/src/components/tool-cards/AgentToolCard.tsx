@@ -5,11 +5,11 @@ import { truncateText } from './shared'
 import { useAgentStore } from '../../stores/agent-store'
 import { useSessionStore } from '../../stores/session-store'
 import { ipc } from '../../lib/ipc-client'
+import { deriveToolStatus, getToolVariant, shouldShowToolRail } from './tool-card-meta'
 
-export function AgentToolCard({ event, input, result }: ToolCardRouterProps) {
-  const status = event
-    ? (event.type === 'complete' ? 'done' : event.type === 'error' ? 'error' : 'running')
-    : (result?.is_error ? 'error' : 'done')
+export function AgentToolCard({ event, input, result, name }: ToolCardRouterProps) {
+  const status = deriveToolStatus(event, result)
+  const toolName = event?.toolName || name || 'Agent'
 
   const toolInput = event?.input || input || {}
   const prompt = (toolInput.prompt || '') as string
@@ -55,6 +55,9 @@ export function AgentToolCard({ event, input, result }: ToolCardRouterProps) {
         status={status}
         defaultExpanded={status === 'running'}
         collapsible={status !== 'running'}
+        rail={shouldShowToolRail(toolName, status)}
+        variant={getToolVariant(toolName)}
+        className="agent-launch-card"
         actions={
           status === 'running' ? (
             <button

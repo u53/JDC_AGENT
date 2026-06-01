@@ -304,7 +304,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
             } else {
               const paths = files.map((f: any) => f.filePath)
               const msg = `git add ${paths.join(' ')}`
-              copyToClipboard(msg)
+              void copyToClipboard(msg)
               showToast(`${files.length} files copied to clipboard`)
             }
           })
@@ -375,10 +375,10 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
 
             {/* Processing indicator when no content yet */}
             {isStreaming && !streamingText && !isThinking && toolEvents.length === 0 && !isLastTurnActive && (
-              <div className="mb-3 border border-[var(--border)] rounded-[8px]">
-                <div className="flex items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-[0.1em]">
-                  <span className="inline-block h-2 w-2 rounded-full bg-[var(--text)] animate-pulse" />
-                  <span className="text-[var(--text)]">PROCESSING...</span>
+              <div className="aux-card mb-3" data-tone="accent">
+                <div className="aux-card-header">
+                  <span className="aux-card-dot is-live" />
+                  <span className="aux-card-label">PROCESSING...</span>
                 </div>
               </div>
             )}

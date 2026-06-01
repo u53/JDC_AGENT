@@ -1,10 +1,14 @@
-export function copyToClipboard(text: string): void {
+export async function copyToClipboard(text: string): Promise<void> {
+  if (!text) {
+    throw new Error('Nothing to copy')
+  }
+
   if ((window as any).electronAPI?.writeClipboard) {
-    (window as any).electronAPI.writeClipboard(text)
+    await Promise.resolve((window as any).electronAPI.writeClipboard(text))
     return
   }
   if (navigator.clipboard?.writeText) {
-    navigator.clipboard.writeText(text)
+    await navigator.clipboard.writeText(text)
     return
   }
   const ta = document.createElement('textarea')
@@ -13,6 +17,10 @@ export function copyToClipboard(text: string): void {
   ta.style.opacity = '0'
   document.body.appendChild(ta)
   ta.select()
-  document.execCommand('copy')
+  const copied = document.execCommand('copy')
   document.body.removeChild(ta)
+
+  if (!copied) {
+    throw new Error('Copy command failed')
+  }
 }

@@ -7,6 +7,9 @@ interface Props {
   status: 'running' | 'done' | 'error'
   defaultExpanded?: boolean
   collapsible?: boolean
+  className?: string
+  variant?: string
+  rail?: boolean
   children?: ReactNode
   actions?: ReactNode
 }
@@ -23,6 +26,9 @@ export function ToolCardShell({
   status,
   defaultExpanded = false,
   collapsible = true,
+  className,
+  variant = 'generic',
+  rail = false,
   children,
   actions,
 }: Props) {
@@ -53,9 +59,17 @@ export function ToolCardShell({
     }
   }
 
+  const cardClassName = ['jdc-event-card mb-2', className].filter(Boolean).join(' ')
+
   return (
-    <div className="jdc-event-card mb-2" data-status={status} data-expanded={showContent ? 'true' : 'false'}>
-      <div className="jdc-event-rail" aria-hidden="true" />
+    <div
+      className={cardClassName}
+      data-status={status}
+      data-expanded={showContent ? 'true' : 'false'}
+      data-rail={rail ? 'true' : 'false'}
+      data-variant={variant}
+    >
+      {rail && <div className="jdc-event-rail" aria-hidden="true" />}
       <div
         className={`jdc-event-card-header ${canToggle ? 'is-toggleable' : ''}`}
         onClick={toggle}
@@ -79,10 +93,12 @@ export function ToolCardShell({
             {expanded ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />}
           </span>
         )}
-        <span className="jdc-event-label">{label}</span>
-        <span className="jdc-event-detail" title={detail}>{detail}</span>
+        <span className="jdc-event-title">
+          <span className="jdc-event-label">{label}</span>
+          <span className="jdc-event-detail" title={detail}>{detail}</span>
+        </span>
         <span className="jdc-event-chip">{cfg.label}</span>
-        {actions && <div className="flex items-center gap-1 flex-shrink-0">{actions}</div>}
+        {actions && <div className="jdc-event-actions">{actions}</div>}
       </div>
       {showContent && (
         <div className="jdc-event-content">

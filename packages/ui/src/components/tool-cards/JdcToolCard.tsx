@@ -2,9 +2,9 @@ import type { ToolCardRouterProps } from './ToolCardRouter'
 import { ToolCardShell } from './ToolCardShell'
 import {
   IconJdcGraph, IconJdcSearch, IconJdcCallers, IconJdcCallees,
-  IconJdcImpact, IconJdcTrace, IconFiles, IconCopy,
+  IconJdcImpact, IconJdcTrace, IconFiles,
 } from '../icons'
-import { copyToClipboard } from '../../lib/clipboard'
+import { ToolCopyButton } from './ToolCopyButton'
 import type { ComponentType } from 'react'
 import { deriveToolStatus } from './tool-card-meta'
 
@@ -93,13 +93,7 @@ export function JdcToolCard({ event, input, result, name }: ToolCardRouterProps)
       className="jdc-engine-card"
       actions={
         content ? (
-          <button
-            className="jdc-tc-copy"
-            title="复制结果"
-            onClick={(e) => { e.stopPropagation(); void copyToClipboard(content) }}
-          >
-            <IconCopy size={13} />
-          </button>
+          <ToolCopyButton text={content} label="Result" title="复制结果" iconOnly />
         ) : undefined
       }
     >

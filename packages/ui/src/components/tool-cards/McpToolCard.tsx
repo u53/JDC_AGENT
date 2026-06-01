@@ -1,11 +1,10 @@
 import type { ToolCardRouterProps } from './ToolCardRouter'
 import { ToolCardShell } from './ToolCardShell'
 import { parseMcpToolName } from './shared'
+import { deriveToolStatus, getToolVariant, shouldShowToolRail } from './tool-card-meta'
 
 export function McpToolCard({ event, input, result, name }: ToolCardRouterProps) {
-  const status = event
-    ? (event.type === 'complete' ? 'done' : event.type === 'error' ? 'error' : 'running')
-    : (result?.is_error ? 'error' : 'done')
+  const status = deriveToolStatus(event, result)
 
   const toolName = event?.toolName || name || ''
   const parsed = parseMcpToolName(toolName)
@@ -23,20 +22,22 @@ export function McpToolCard({ event, input, result, name }: ToolCardRouterProps)
       detail={displayName}
       status={status}
       defaultExpanded={status === 'running'}
+      rail={shouldShowToolRail(toolName, status)}
+      variant={getToolVariant(toolName)}
     >
       {inputEntries.length > 0 && (
-        <div className="text-[12px] text-[var(--muted)] mb-2" style={{ fontFamily: 'var(--font-mono)' }}>
+        <div className="tool-kv-grid">
           {inputEntries.map(([key, val]) => (
             <div key={key}>
-              <span className="text-[var(--text)]">{key}</span>: {typeof val === 'string' ? val.slice(0, 80) : JSON.stringify(val).slice(0, 80)}
+              <span>{key}</span>
+              <strong>{typeof val === 'string' ? val : JSON.stringify(val)}</strong>
             </div>
           ))}
         </div>
       )}
       {content && (
-        <pre className={`max-h-48 overflow-auto p-2 text-[12px] whitespace-pre-wrap ${isError ? 'text-[var(--bad)]' : 'text-[var(--text)]'}`} style={{ fontFamily: 'var(--font-mono)' }}>
-          {content.slice(0, 500)}
-          {content.length > 500 && '\n...'}
+        <pre className={`tool-result-pre ${isError ? 'text-[var(--bad)]' : 'text-[var(--text)]'}`} style={{ fontFamily: 'var(--font-mono)' }}>
+          {content}
         </pre>
       )}
     </ToolCardShell>

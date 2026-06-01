@@ -35,33 +35,33 @@ export function ErrorCard({ message, category, retrying, retryAttempt, retryIn, 
   }, [retrying, retryIn])
 
   return (
-    <div className="mb-3 border border-[var(--border)] bg-[var(--surface-2)] border-l-4 border-l-[var(--bad)] rounded-[8px]">
-      <div className="flex items-center justify-between px-3 py-2">
-        <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.1em]">
-          <span className="inline-block h-2 w-2 rounded-full bg-[var(--bad)]" />
-          <span className="text-[var(--bad)]">{categoryLabels[category] || 'ERROR'}</span>
+    <div className="aux-card mb-3" data-tone="bad">
+      <div className="aux-card-header">
+        <div className="aux-card-title">
+          <span className="aux-card-dot" />
+          <span className="aux-card-label">{categoryLabels[category] || 'ERROR'}</span>
           {retrying && retryAttempt && (
-            <span className="text-[var(--muted)]">Retry #{retryAttempt}{countdown > 0 ? ` in ${countdown}s` : '...'}</span>
+            <span className="aux-card-muted">Retry #{retryAttempt}{countdown > 0 ? ` in ${countdown}s` : '...'}</span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="aux-card-actions">
           {!retrying && (
             <button
               onClick={onRetry}
-              className="text-[12px] text-[var(--good)] hover:opacity-80 transition-colors"
+              className="aux-card-action is-good"
             >
               Retry
             </button>
           )}
           <button
             onClick={onDismiss}
-            className="text-[12px] text-[var(--muted)] hover:text-[var(--text)] transition-colors"
+            className="aux-card-action"
           >
             Dismiss
           </button>
         </div>
       </div>
-      <div className="border-t border-[var(--border)] px-3 py-2">
+      <div className="aux-card-body">
         <pre className="text-xs text-[var(--bad)] whitespace-pre-wrap">{message}</pre>
       </div>
     </div>
