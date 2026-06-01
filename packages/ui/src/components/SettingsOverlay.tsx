@@ -4,6 +4,7 @@ import { useModelStore, type ApiProtocol, type ModelGroup } from '../stores/mode
 import { useSessionStore } from '../stores/session-store'
 import { IconX } from './icons'
 import type { McpServerState } from '../lib/ipc-client'
+import { ipc } from '../lib/ipc-client'
 
 function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
   const [show, setShow] = useState(false)
@@ -68,6 +69,7 @@ function ProtocolSelect({ value, onChange }: { value: ApiProtocol; onChange: (v:
 const TABS: { key: SettingsTab; label: string }[] = [
   { key: 'models', label: '模型' },
   { key: 'mcp', label: 'MCP' },
+  { key: 'tools', label: '工具' },
   { key: 'shortcuts', label: '快捷键' },
   { key: 'advanced', label: '版本信息' },
 ]
@@ -114,6 +116,7 @@ export function SettingsOverlay() {
 
           {activeTab === 'models' && <ModelsTab />}
           {activeTab === 'mcp' && <McpTab />}
+          {activeTab === 'tools' && <ToolsTab />}
           {activeTab === 'shortcuts' && <ShortcutsTab />}
           {activeTab === 'advanced' && <AdvancedTab />}
         </div>
@@ -676,6 +679,97 @@ function McpTab() {
           )}
         </div>
       ))}
+    </div>
+  )
+}
+
+/* ─── Tools ─── */
+const SEARCH_PROVIDERS = [
+  { value: 'brave', label: 'Brave Search', keyField: 'braveApiKey', placeholder: 'BSA...' },
+  { value: 'tavily', label: 'Tavily', keyField: 'tavilyApiKey', placeholder: 'tvly-...' },
+  { value: 'serper', label: 'Serper (Google)', keyField: 'serperApiKey', placeholder: 'Your Serper key' },
+] as const
+
+function ToolsTab() {
+  const [provider, setProvider] = useState<string>('brave')
+  const [keys, setKeys] = useState<Record<string, string>>({})
+  const [proxy, setProxy] = useState('')
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    ipc.config.get().then((cfg: any) => {
+      const ws = cfg?.webSearch || {}
+      setProvider(ws.provider || 'brave')
+      setKeys({
+        braveApiKey: ws.braveApiKey || '',
+        tavilyApiKey: ws.tavilyApiKey || '',
+        serperApiKey: ws.serperApiKey || '',
+      })
+      setProxy(ws.proxy || '')
+    })
+  }, [])
+
+  const handleSave = async () => {
+    await ipc.config.set({
+      webSearch: { provider, ...keys, proxy: proxy || undefined },
+    })
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  const inputCls = 'w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-[6px] px-3 py-2 text-[13px] text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]'
+  const labelCls = 'text-[12px] text-[var(--muted)] mb-1'
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-[14px] font-medium text-[var(--text)] mb-3">联网搜索</h3>
+
+        <div className="mb-4">
+          <div className={labelCls}>搜索引擎</div>
+          <select
+            value={provider}
+            onChange={(e) => setProvider(e.target.value)}
+            className={inputCls}
+          >
+            {SEARCH_PROVIDERS.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {SEARCH_PROVIDERS.map((p) => (
+          <div key={p.value} className="mb-3">
+            <div className={labelCls}>{p.label} API Key</div>
+            <input
+              type="password"
+              value={keys[p.keyField] || ''}
+              onChange={(e) => setKeys({ ...keys, [p.keyField]: e.target.value })}
+              placeholder={p.placeholder}
+              className={inputCls}
+            />
+          </div>
+        ))}
+
+        <div className="mb-4">
+          <div className={labelCls}>HTTP 代理（可选）</div>
+          <input
+            type="text"
+            value={proxy}
+            onChange={(e) => setProxy(e.target.value)}
+            placeholder="http://127.0.0.1:7890"
+            className={inputCls}
+          />
+          <div className="text-[11px] text-[var(--muted)] mt-1">留空则直连，配置后所有搜索请求走代理</div>
+        </div>
+
+        <button
+          onClick={handleSave}
+          className="px-4 py-2 text-[13px] rounded-[6px] bg-[var(--accent)] text-[var(--accent-ink)] hover:opacity-90 transition-opacity"
+        >
+          {saved ? '已保存 ✓' : '保存'}
+        </button>
+      </div>
     </div>
   )
 }

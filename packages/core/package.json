@@ -16,6 +16,7 @@
     "@mozilla/readability": "^0.6.0",
     "fast-glob": "^3.3.3",
     "gray-matter": "^4.0.3",
+    "https-proxy-agent": "^9.0.0",
     "linkedom": "^0.18.12",
     "openai": "^6.37.0",
     "picomatch": "^4.0.4",
