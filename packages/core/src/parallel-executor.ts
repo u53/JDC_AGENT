@@ -20,9 +20,25 @@ const READ_TOOLS = new Set([
   'ListMcpResources', 'ReadMcpResource', 'skill',
 ])
 
+const JDC_READ_TOOLS = new Set([
+  'JdcContext',
+  'JdcSearch',
+  'JdcNode',
+  'JdcCallers',
+  'JdcCallees',
+  'JdcImpact',
+  'JdcTrace',
+  'JdcExplore',
+  'JdcFiles',
+])
+
 const LONG_RUNNING_TOOLS = new Set(['Agent', 'Bash', 'Monitor'])
 
 const MAX_CONCURRENCY = 5
+
+function isReadTool(name: string): boolean {
+  return READ_TOOLS.has(name) || JDC_READ_TOOLS.has(name) || name.startsWith('Jdc')
+}
 
 class Semaphore {
   private queue: Array<() => void> = []
@@ -98,7 +114,7 @@ export class ParallelExecutor {
     const writeIndices: number[] = []
 
     for (let i = 0; i < blocks.length; i++) {
-      if (READ_TOOLS.has(blocks[i].name)) {
+      if (isReadTool(blocks[i].name)) {
         readIndices.push(i)
       } else {
         writeIndices.push(i)
@@ -106,6 +122,7 @@ export class ParallelExecutor {
     }
 
     // Execute reads in parallel
+    let readHadError = false
     if (readIndices.length > 0) {
       const semaphore = new Semaphore(MAX_CONCURRENCY)
       const readPromises = readIndices.map(async (idx) => {
@@ -127,13 +144,17 @@ export class ParallelExecutor {
           )
           results[idx] = { tool_use_id: raced.tool_use_id, content: raced.content, is_error: raced.is_error }
           if (raced.is_error && !raced.aborted) {
-            batchAbort.abort()
+            readHadError = true
           }
         } finally {
           semaphore.release()
         }
       })
       await Promise.all(readPromises)
+    }
+
+    if (readHadError) {
+      batchAbort.abort()
     }
 
     // Execute writes serially

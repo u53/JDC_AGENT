@@ -120,7 +120,7 @@ describe('ParallelExecutor', () => {
     expect(results[3]).toEqual({ tool_use_id: 'd', content: 'w-D', is_error: false })
   })
 
-  it('should abort remaining tools when one fails', async () => {
+  it('should let read siblings finish when one read fails but skip writes', async () => {
     const registry = new ToolRegistry()
     const executed: string[] = []
 
@@ -157,15 +157,44 @@ describe('ParallelExecutor', () => {
       () => {}
     )
 
-    // The failing read should have aborted the slow read and the write
+    // Independent reads should still return useful results; writes are skipped
+    // after a read failure so mutations do not proceed on incomplete context.
     expect(results[0].is_error).toBe(true)
     expect(results[0].content).toBe('Error: not found')
-    // Slow read was cancelled (either aborted or cancelled message)
-    expect(results[1].is_error).toBe(true)
+    expect(results[1].is_error).toBe(false)
+    expect(results[1].content).toBe('ok-slow')
     // Write was never started
     expect(results[2].is_error).toBe(true)
     expect(results[2].content).toBe('Cancelled: sibling tool failed')
     expect(executed).not.toContain('write-X')
+  })
+
+  it('treats JDC engine tools as read-only siblings', async () => {
+    const registry = new ToolRegistry()
+
+    registry.register({
+      definition: { name: 'Read', description: 'Read', inputSchema: { type: 'object', properties: {} } },
+      execute: async () => ({ content: 'Error: failed read', isError: true }),
+    })
+    registry.register({
+      definition: { name: 'JdcNode', description: 'Symbol detail', inputSchema: { type: 'object', properties: {} } },
+      execute: async () => {
+        await new Promise(r => setTimeout(r, 20))
+        return { content: 'symbol detail' }
+      },
+    })
+
+    const executor = new ParallelExecutor(createRunner(registry))
+    const results = await executor.executeBatch(
+      [
+        { type: 'tool_use', id: 'read', name: 'Read', input: {} },
+        { type: 'tool_use', id: 'node', name: 'JdcNode', input: { symbol: 'runLoop' } },
+      ],
+      () => {}
+    )
+
+    expect(results[0]).toEqual({ tool_use_id: 'read', content: 'Error: failed read', is_error: true })
+    expect(results[1]).toEqual({ tool_use_id: 'node', content: 'symbol detail', is_error: false })
   })
 
   it('should treat unknown tools as write (serial)', async () => {
