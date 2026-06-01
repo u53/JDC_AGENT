@@ -1107,5 +1107,31 @@ export class Session {
 }
 
 function reorderAssistantContent(content: any[]): any[] {
-  return content
+  const thinkingBlocks: any[] = []
+  const toolUseBlocks: any[] = []
+  const otherBlocks: any[] = []
+  let text = ''
+
+  for (const block of content) {
+    if (block.type === 'thinking') {
+      const lastThinking = thinkingBlocks[thinkingBlocks.length - 1]
+      if (lastThinking?.type === 'thinking') {
+        lastThinking.thinking += block.thinking || ''
+        if (block.signature) lastThinking.signature = block.signature
+      } else {
+        thinkingBlocks.push({ ...block })
+      }
+    } else if (block.type === 'text') {
+      text += block.text || ''
+    } else if (block.type === 'tool_use') {
+      toolUseBlocks.push(block)
+    } else {
+      otherBlocks.push(block)
+    }
+  }
+
+  const reordered = [...thinkingBlocks]
+  if (text) reordered.push({ type: 'text', text })
+  reordered.push(...toolUseBlocks, ...otherBlocks)
+  return reordered
 }
