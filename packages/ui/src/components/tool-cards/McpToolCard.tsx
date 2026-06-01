@@ -1,5 +1,6 @@
 import type { ToolCardRouterProps } from './ToolCardRouter'
 import { ToolCardShell } from './ToolCardShell'
+import { ToolCopyButton } from './ToolCopyButton'
 import { parseMcpToolName } from './shared'
 import { deriveToolStatus, getToolVariant, shouldShowToolRail } from './tool-card-meta'
 
@@ -24,6 +25,9 @@ export function McpToolCard({ event, input, result, name }: ToolCardRouterProps)
       defaultExpanded={status === 'running'}
       rail={shouldShowToolRail(toolName, status)}
       variant={getToolVariant(toolName)}
+      actions={content ? (
+        <ToolCopyButton text={content} label="Result" title="Copy result" iconOnly />
+      ) : undefined}
     >
       {inputEntries.length > 0 && (
         <div className="tool-kv-grid">

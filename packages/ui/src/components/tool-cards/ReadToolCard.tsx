@@ -23,7 +23,7 @@ export function ReadToolCard({ event, input, result, name }: ToolCardRouterProps
       defaultExpanded={false}
       rail={shouldShowToolRail(toolName, status)}
       variant={getToolVariant(toolName)}
-      actions={status === 'done' ? (
+      actions={status === 'done' && filePath ? (
         <ToolCopyButton text={filePath} label="Path" title="Copy path" iconOnly />
       ) : undefined}
     >

@@ -1,5 +1,6 @@
 import type { ToolExecutionEvent } from '@jdcagnet/core'
 import { ToolCardShell } from './ToolCardShell'
+import { ToolCopyButton } from './ToolCopyButton'
 import { deriveToolStatus, formatToolLabel, getToolVariant, shouldShowToolRail } from './tool-card-meta'
 
 interface Props {
@@ -24,6 +25,9 @@ export function GenericToolCard({ event, name, input, result }: Props) {
       defaultExpanded={status === 'running'}
       rail={shouldShowToolRail(toolName, status)}
       variant={getToolVariant(toolName)}
+      actions={content ? (
+        <ToolCopyButton text={content} label="Result" title="Copy result" iconOnly />
+      ) : undefined}
     >
       {toolInput && Object.keys(toolInput).length > 0 && (
         <pre className="tool-result-pre text-[var(--text)] mb-2" style={{ fontFamily: 'var(--font-mono)' }}>

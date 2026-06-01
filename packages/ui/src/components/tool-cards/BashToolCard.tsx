@@ -28,16 +28,16 @@ export function BashToolCard({ event, input, result, name }: ToolCardRouterProps
       variant={getToolVariant(toolName)}
       actions={status === 'done' ? (
         <div className="flex items-center gap-1">
-          <ToolCopyButton text={command} label="Cmd" copiedLabel="Copied" title="Copy command" toastLabel="Command" />
+          {command && <ToolCopyButton text={command} label="Cmd" copiedLabel="Copied" title="Copy command" toastLabel="Command" />}
           {output && <ToolCopyButton text={output} label="Output" copiedLabel="Copied" title="Copy output" toastLabel="Output" />}
         </div>
       ) : undefined}
     >
       {status === 'running' && !output && (
-        <div className="text-[10px] text-[var(--muted)] uppercase tracking-[0.1em]">Running...</div>
+        <div className="text-[10.5px] text-[var(--muted)]">Running...</div>
       )}
       {output && (
-        <pre className={`max-h-[300px] overflow-auto p-2 text-[12px] whitespace-pre-wrap ${isError ? 'text-[var(--bad)]' : 'text-[var(--text)]'}`} style={{ fontFamily: 'var(--font-mono)' }}>
+        <pre className={`max-h-[220px] overflow-auto p-1.5 text-[11px] leading-[1.45] whitespace-pre-wrap ${isError ? 'text-[var(--bad)]' : 'text-[var(--text)]'}`} style={{ fontFamily: 'var(--font-mono)' }}>
           {output}
         </pre>
       )}

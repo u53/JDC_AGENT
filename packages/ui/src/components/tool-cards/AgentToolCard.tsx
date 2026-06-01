@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import type { ToolCardRouterProps } from './ToolCardRouter'
 import { ToolCardShell } from './ToolCardShell'
+import { ToolCopyButton } from './ToolCopyButton'
 import { truncateText } from './shared'
 import { useAgentStore } from '../../stores/agent-store'
 import { useSessionStore } from '../../stores/session-store'
@@ -61,11 +62,13 @@ export function AgentToolCard({ event, input, result, name }: ToolCardRouterProp
         actions={
           status === 'running' ? (
             <button
-              className="text-[10px] uppercase tracking-[0.05em] text-[var(--bad)] hover:opacity-80 transition-opacity ml-2"
+              className="text-[10px] text-[var(--bad)] hover:opacity-80 transition-opacity ml-2"
               onClick={handleAbort}
             >
               Abort
             </button>
+          ) : resultContent ? (
+            <ToolCopyButton text={resultContent} label="Result" title="Copy result" iconOnly />
           ) : undefined
         }
       >
@@ -83,7 +86,7 @@ export function AgentToolCard({ event, input, result, name }: ToolCardRouterProp
           </div>
         )}
         {status === 'running' && recentTools.length === 0 && (
-          <div className="text-[10px] text-[var(--accent)] uppercase tracking-[0.1em]">
+          <div className="text-[10.5px] text-[var(--accent)]">
             <span className="inline-block h-2 w-2 rounded-full bg-[var(--accent)] animate-pulse mr-2" />
             Initializing...
           </div>
@@ -93,7 +96,7 @@ export function AgentToolCard({ event, input, result, name }: ToolCardRouterProp
         )}
         {status !== 'running' && prompt && (
           <div className="mb-2">
-            <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--muted)] mb-1">Input</div>
+            <div className="text-[10.5px] text-[var(--muted)] mb-1">Input</div>
             <pre className="max-h-32 overflow-auto p-2 text-[12px] whitespace-pre-wrap text-[var(--text)] rounded-[4px]" style={{ fontFamily: 'var(--font-mono)' }}>
               {truncateText(prompt, 500)}
             </pre>
@@ -101,7 +104,7 @@ export function AgentToolCard({ event, input, result, name }: ToolCardRouterProp
         )}
         {status !== 'running' && resultContent && (
           <div>
-            <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--muted)] mb-1">Output</div>
+            <div className="text-[10.5px] text-[var(--muted)] mb-1">Output</div>
             <pre className={`max-h-48 overflow-auto p-2 text-[12px] whitespace-pre-wrap ${isError ? 'text-[var(--bad)]' : 'text-[var(--text)]'}`} style={{ fontFamily: 'var(--font-mono)' }}>
               {truncateText(resultContent, 500)}
             </pre>

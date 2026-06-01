@@ -305,7 +305,8 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
               const paths = files.map((f: any) => f.filePath)
               const msg = `git add ${paths.join(' ')}`
               void copyToClipboard(msg)
-              showToast(`${files.length} files copied to clipboard`)
+                .then(() => showToast(`${files.length} files copied to clipboard`))
+                .catch(() => showToast('Copy failed', 'error'))
             }
           })
         }

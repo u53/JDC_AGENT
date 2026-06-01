@@ -1,7 +1,13 @@
-import { isValidElement, type ComponentPropsWithoutRef, type ReactNode } from 'react'
+import { isValidElement, useState, type ComponentPropsWithoutRef, type KeyboardEvent, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
+import { IconChevronDown, IconChevronRight } from './icons'
+import {
+  createMarkdownCodeBlockKey,
+  getRememberedCodeExpansion,
+  rememberCodeExpansion,
+} from './markdown-code-state'
 import { ToolCopyButton } from './tool-cards/ToolCopyButton'
 
 /**
@@ -23,17 +29,70 @@ function extractText(node: ReactNode): string {
 
 interface Props {
   content: string
+  defaultCodeExpanded?: boolean
 }
 
-function CodeBlock({ className, children }: { className?: string; children: string }) {
-  const language = className?.replace('language-', '') || ''
+function codeLineCount(text: string): number {
+  return Math.max(1, text.split('\n').length)
+}
+
+function codePreview(text: string): string {
+  const firstMeaningfulLine = text.split('\n').find((line) => line.trim()) || ''
+  return firstMeaningfulLine.trim().slice(0, 120)
+}
+
+function CodeBlock({
+  className,
+  copyText,
+  defaultExpanded = false,
+  positionKey = '',
+  children,
+}: {
+  className?: string
+  copyText: string
+  defaultExpanded?: boolean
+  positionKey?: string
+  children: ReactNode
+}) {
+  const language = className?.match(/language-([\w-]+)/)?.[1] || ''
+  const blockKey = createMarkdownCodeBlockKey(language, copyText, positionKey)
+  const [expanded, setExpanded] = useState(() => getRememberedCodeExpansion(blockKey, defaultExpanded))
+  const lines = codeLineCount(copyText)
+  const preview = codePreview(copyText)
+  const toggle = () => {
+    setExpanded((value) => {
+      const next = !value
+      rememberCodeExpansion(blockKey, next)
+      return next
+    })
+  }
+
+  const handleToggleKey = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      toggle()
+    }
+  }
 
   return (
-    <div className="markdown-code-block relative my-3 overflow-hidden">
+    <div className="markdown-code-block relative my-3 overflow-hidden" data-expanded={expanded ? 'true' : 'false'}>
       <div className="markdown-code-head">
-        <span>{language || 'code'}</span>
+        <button
+          type="button"
+          className="markdown-code-toggle"
+          aria-expanded={expanded}
+          onClick={toggle}
+          onKeyDown={handleToggleKey}
+        >
+          <span className="markdown-code-chevron">
+            {expanded ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />}
+          </span>
+          <span className="markdown-code-lang">{language || 'code'}</span>
+          <span className="markdown-code-lines">{lines} {lines === 1 ? 'line' : 'lines'}</span>
+          {!expanded && preview && <span className="markdown-code-preview">{preview}</span>}
+        </button>
         <ToolCopyButton
-          text={children}
+          text={copyText}
           label="Copy"
           copiedLabel="Copied"
           title="Copy code"
@@ -41,33 +100,47 @@ function CodeBlock({ className, children }: { className?: string; children: stri
           className="markdown-code-copy"
         />
       </div>
-      <pre className="markdown-code-pre overflow-x-auto">
-        <code className={className}>{children}</code>
-      </pre>
+      {expanded && (
+        <pre className="markdown-code-pre overflow-x-auto">
+          <code className={className}>{children}</code>
+        </pre>
+      )}
     </div>
   )
 }
 
-export function MarkdownRenderer({ content }: Props) {
+export function MarkdownRenderer({ content, defaultCodeExpanded = false }: Props) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[rehypeHighlight]}
       className="prose"
       components={{
-        code(props: ComponentPropsWithoutRef<'code'>) {
-          const { className, children, ...rest } = props
+        code(props: ComponentPropsWithoutRef<'code'> & { node?: { position?: { start?: { line?: number; column?: number; offset?: number } } } }) {
+          const { className, children, node, ...rest } = props
           const text = extractText(children)
+          const start = node?.position?.start
+          const positionKey = start ? `${start.offset ?? ''}:${start.line ?? ''}:${start.column ?? ''}` : ''
           const trimmed = text.trim()
           const looksStructured = /^[{\[]/.test(trimmed) && /[}\]]\s*$/.test(trimmed)
           const isBlock =
-            className?.startsWith('language-') ||
+            className?.includes('language-') ||
+            className?.includes('hljs') ||
             text.includes('\n') ||
             text.length > 120 ||
             (looksStructured && text.length > 60)
 
           if (isBlock) {
-            return <CodeBlock className={className}>{text.replace(/\n$/, '')}</CodeBlock>
+            return (
+              <CodeBlock
+                className={className}
+                copyText={text.replace(/\n$/, '')}
+                defaultExpanded={defaultCodeExpanded}
+                positionKey={positionKey}
+              >
+                {children}
+              </CodeBlock>
+            )
           }
 
           return (

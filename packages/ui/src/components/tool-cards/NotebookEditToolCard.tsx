@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ToolCardRouterProps } from './ToolCardRouter'
 import { ToolCardShell } from './ToolCardShell'
+import { ToolCopyButton } from './ToolCopyButton'
 import { deriveToolStatus, getToolVariant, shouldShowToolRail } from './tool-card-meta'
 
 export function NotebookEditToolCard({ event, input, result, name }: ToolCardRouterProps) {
@@ -33,6 +34,9 @@ export function NotebookEditToolCard({ event, input, result, name }: ToolCardRou
       defaultExpanded={status === 'running'}
       rail={shouldShowToolRail(toolName, status)}
       variant={getToolVariant(toolName)}
+      actions={newSource ? (
+        <ToolCopyButton text={newSource} label="Source" title="Copy source" iconOnly />
+      ) : undefined}
     >
       <div className="tool-chip-row">
         <span>{editMode}</span>
@@ -52,7 +56,7 @@ export function NotebookEditToolCard({ event, input, result, name }: ToolCardRou
       )}
 
       {!isError && editMode !== 'DELETE' && newSource && (
-        <div className="tool-code-frame max-h-[360px] overflow-auto text-[12px]" style={{ fontFamily: 'var(--font-mono)' }}>
+        <div className="tool-code-frame max-h-[240px] overflow-auto text-[11px]" style={{ fontFamily: 'var(--font-mono)' }}>
           <table className="w-full border-collapse">
             <tbody>
               {displayLines.map((line, index) => (

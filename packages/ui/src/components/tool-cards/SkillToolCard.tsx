@@ -1,5 +1,6 @@
 import type { ToolCardRouterProps } from './ToolCardRouter'
 import { ToolCardShell } from './ToolCardShell'
+import { ToolCopyButton } from './ToolCopyButton'
 import { deriveToolStatus, getToolVariant, shouldShowToolRail } from './tool-card-meta'
 
 export function SkillToolCard({ event, input, result, name }: ToolCardRouterProps) {
@@ -18,6 +19,9 @@ export function SkillToolCard({ event, input, result, name }: ToolCardRouterProp
       defaultExpanded={false}
       rail={shouldShowToolRail(toolName, status)}
       variant={getToolVariant(toolName)}
+      actions={content ? (
+        <ToolCopyButton text={content} label="Skill" title="Copy skill content" iconOnly />
+      ) : undefined}
     >
       {content && (
         <pre className="tool-result-pre text-[var(--text)]" style={{ fontFamily: 'var(--font-mono)' }}>
