@@ -34,9 +34,6 @@ jobs:
 
       - run: pnpm build
 
-      - name: Fetch CodeGraph binaries
-        run: pnpm fetch-codegraph
-
       - name: Import signing certificate
         run: |
           echo "$CSC_LINK" | base64 --decode > cert.p12
@@ -92,9 +89,6 @@ jobs:
       - run: pnpm install
 
       - run: pnpm build
-
-      - name: Fetch CodeGraph binaries
-        run: pnpm fetch-codegraph
 
       - name: Package
         run: pnpm package
