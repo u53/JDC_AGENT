@@ -77,12 +77,23 @@ function renderStructuredInput(toolName: string, input: Record<string, unknown>)
   if (entries.length === 0) return null
   return (
     <div className="tool-kv-grid">
-      {entries.slice(0, 8).map(([key, value]) => (
-        <div key={key}>
-          <span>{key}</span>
-          <strong>{typeof value === 'string' ? value : JSON.stringify(value)}</strong>
-        </div>
-      ))}
+      {entries.slice(0, 8).map(([key, value]) => {
+        const text = typeof value === 'string' ? value : JSON.stringify(value)
+        const isLong = text.length > 60
+        return (
+          <div key={key} className="relative group">
+            <span>{key}</span>
+            <strong className={isLong ? 'truncate block max-w-[300px]' : ''}>
+              {text}
+            </strong>
+            {isLong && (
+              <div className="absolute left-0 bottom-full mb-1 z-50 hidden group-hover:block max-w-[400px] p-2 text-[12px] text-[var(--text)] bg-[var(--surface-3)] border border-[var(--border)] rounded-[6px] shadow-lg whitespace-pre-wrap break-words">
+                {text}
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
