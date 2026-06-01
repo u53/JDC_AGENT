@@ -24,7 +24,8 @@ export function createSkillTool(loader: SkillLoader): ToolHandler {
       },
     },
     async execute(input: Record<string, unknown>, _context: ToolContext): Promise<ToolResult> {
-      const name = input.skill as string
+      const raw = input.skill as string
+      const name = raw.startsWith('/') ? raw.slice(1) : raw
       const args = input.args as string | undefined
       const skill = loader.get(name)
       if (!skill) {
