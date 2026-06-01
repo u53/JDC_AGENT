@@ -4,6 +4,7 @@ import type { ModelProvider } from '../model-provider.js'
 import type { ContentBlock, Message, ModelConfig, PromptSegment, ReasoningEffort, StreamChunk, ToolDefinition } from '../types.js'
 import { joinSegments } from '../context.js'
 import { ThinkTagStreamParser } from './think-parser.js'
+import { withStreamRetry } from './stream-retry.js'
 
 const CC_VERSION = '2.1.139'
 const FINGERPRINT_SALT = '59cf53e54c78'
@@ -287,7 +288,15 @@ export class AnthropicProvider implements ModelProvider {
     }
   }
 
-  private async *streamRaw(params: any, signal?: AbortSignal): AsyncIterable<StreamChunk> {
+  // A streaming response cannot be resumed once it has emitted content
+  // (Anthropic SSE has no replay), so retries only apply before the first
+  // chunk — see withStreamRetry. Mid-flight failures surface to the caller
+  // (the PM layer already counts consecutive failures and falls back).
+  private streamRaw(params: any, signal?: AbortSignal): AsyncIterable<StreamChunk> {
+    return withStreamRetry(() => this.streamRawOnce(params, signal), signal)
+  }
+
+  private async *streamRawOnce(params: any, signal?: AbortSignal): AsyncIterable<StreamChunk> {
     const url = this.baseURL.replace(/\/$/, '') + '/v1/messages?beta=true'
     const betaHeaders = [
       'interleaved-thinking-2025-05-14',

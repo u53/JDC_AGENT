@@ -113,4 +113,54 @@ describe('AnthropicProvider', () => {
     expect(dynamicBlocks).toHaveLength(1)
     expect(dynamicBlocks[0]).not.toHaveProperty('cache_control')
   })
+
+  it('retries a transient connection drop before the first chunk', async () => {
+    const fetchMock = vi.fn()
+      // First attempt: undici-style bare "terminated" while opening the stream.
+      .mockRejectedValueOnce(new TypeError('terminated'))
+      // Second attempt: succeeds.
+      .mockResolvedValueOnce(new Response(anthropicSse([
+        { type: 'message_start', message: { usage: { input_tokens: 1, output_tokens: 0 } } },
+        { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+        { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'hi' } },
+        { type: 'content_block_stop', index: 0 },
+        { type: 'message_stop' },
+      ]), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const provider = new AnthropicProvider('test-key')
+    const chunks = await collect(provider.stream(streamMessages, streamTools, streamConfig))
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(chunks.some(c => c.type === 'text_delta' && c.text === 'hi')).toBe(true)
+  })
+
+  it('does not retry once chunks have already been emitted', async () => {
+    // Stream delivers a few SSE lines across reads, then the reader throws
+    // mid-flight. Because content was already yielded, retry is unsafe.
+    const encoder = new TextEncoder()
+    const queued = [
+      `data: ${JSON.stringify({ type: 'message_start', message: { usage: { input_tokens: 1, output_tokens: 0 } } })}\n\n`,
+      `data: ${JSON.stringify({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } })}\n\n`,
+      `data: ${JSON.stringify({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'a long partial response that is well past any tag-prefix buffer threshold' } })}\n\n`,
+    ]
+    const fetchMock = vi.fn(async () => {
+      let i = 0
+      const stream = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (i < queued.length) {
+            controller.enqueue(encoder.encode(queued[i++]))
+          } else {
+            controller.error(new TypeError('terminated'))
+          }
+        },
+      })
+      return new Response(stream, { status: 200 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const provider = new AnthropicProvider('test-key')
+    await expect(collect(provider.stream(streamMessages, streamTools, streamConfig))).rejects.toThrow()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
 })

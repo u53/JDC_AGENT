@@ -1416,7 +1416,7 @@ export class TeamManagerAI extends TeamManager {
       this.pmConsecutiveFailures++
       this.opts.onEvent?.({
         type: 'manager_decision',
-        text: `PM AI 错误 (#${this.pmConsecutiveFailures}): ${err instanceof Error ? err.message : String(err)}`,
+        text: `PM AI 错误 (#${this.pmConsecutiveFailures}): ${this.describeError(err)}`,
         timestamp: Date.now(),
       })
       if (this.pmConsecutiveFailures >= 3) {
@@ -1429,6 +1429,23 @@ export class TeamManagerAI extends TeamManager {
       }
       return []
     }
+  }
+
+  /**
+   * Render an error for the manager_decision log. undici hides the real reason
+   * (e.g. "other side closed", ECONNRESET) in err.cause, so a bare err.message
+   * is often just "terminated". Unwrap the cause so the log is diagnosable.
+   */
+  private describeError(err: unknown): string {
+    if (!(err instanceof Error)) return String(err)
+    const cause = (err as any).cause
+    if (cause) {
+      const causeMsg = cause instanceof Error ? cause.message : (cause.code ?? String(cause))
+      if (causeMsg && !err.message.includes(String(causeMsg))) {
+        return `${err.message} (${causeMsg})`
+      }
+    }
+    return err.message
   }
 
   /**
@@ -1497,7 +1514,7 @@ export class TeamManagerAI extends TeamManager {
       this.pmConsecutiveFailures++
       this.opts.onEvent?.({
         type: 'manager_decision',
-        text: `PM AI 错误 (#${this.pmConsecutiveFailures}): ${err instanceof Error ? err.message : String(err)}`,
+        text: `PM AI 错误 (#${this.pmConsecutiveFailures}): ${this.describeError(err)}`,
         timestamp: Date.now(),
       })
       if (this.pmConsecutiveFailures >= 3) {
@@ -1553,7 +1570,7 @@ export class TeamManagerAI extends TeamManager {
       this.pmConsecutiveFailures++
       this.opts.onEvent?.({
         type: 'manager_decision',
-        text: `PM AI 错误 (#${this.pmConsecutiveFailures}): ${err instanceof Error ? err.message : String(err)}`,
+        text: `PM AI 错误 (#${this.pmConsecutiveFailures}): ${this.describeError(err)}`,
         timestamp: Date.now(),
       })
       if (this.pmConsecutiveFailures >= 3) {
