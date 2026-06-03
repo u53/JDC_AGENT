@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { __anthropicPromptTest } from './anthropic.js'
+import { __openAiChatPromptTest } from './openai-chat.js'
+import { __openAiResponsesPromptTest } from './openai-responses.js'
 import type { PromptSegment } from '../types.js'
 
 describe('provider prompt contracts', () => {
@@ -29,5 +31,25 @@ describe('provider prompt contracts', () => {
 
     expect(streamBlocks.map((block: any) => block.text).join('\n')).toContain('<jdc-context-engine>')
     expect(chatBlocks.map((block: any) => block.text).join('\n')).toContain('<jdc-context-engine>')
+  })
+
+  it('preserves JDC context in OpenAI Chat system prompt', () => {
+    const prompt = __openAiChatPromptTest.resolveSystemPrompt([
+      { content: '# Identity\nYou are JDCAGNET.', cacheable: true },
+      { content: '<jdc-context-engine>项目上下文</jdc-context-engine>', cacheable: false },
+    ])
+
+    expect(prompt).toContain('You are JDCAGNET')
+    expect(prompt).toContain('<jdc-context-engine>')
+  })
+
+  it('preserves JDC context in OpenAI Responses instructions', () => {
+    const prompt = __openAiResponsesPromptTest.resolveSystemPrompt([
+      { content: '# Identity\nYou are JDCAGNET.', cacheable: true },
+      { content: '<jdc-context-engine>项目上下文</jdc-context-engine>', cacheable: false },
+    ])
+
+    expect(prompt).toContain('You are JDCAGNET')
+    expect(prompt).toContain('<jdc-context-engine>')
   })
 })

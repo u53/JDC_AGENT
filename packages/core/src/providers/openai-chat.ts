@@ -12,6 +12,10 @@ function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): string | 
   return joinSegments(systemPrompt)
 }
 
+export const __openAiChatPromptTest = {
+  resolveSystemPrompt,
+}
+
 function effortToOpenAI(effort: ReasoningEffort): 'low' | 'medium' | 'high' | 'xhigh' {
   if (effort === 'max') return 'xhigh'
   return effort
