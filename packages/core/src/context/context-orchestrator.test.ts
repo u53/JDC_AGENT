@@ -60,6 +60,34 @@ describe('JDC Context orchestrator', () => {
     expect(store.saveBundleSnapshot).toHaveBeenCalledWith(result.bundle)
   })
 
+  it('does not drop large relevant sections when no explicit token caps are configured', async () => {
+    const largeProjectSection = section({
+      id: 'project_large',
+      kind: 'project_profile',
+      title: 'Project Primer',
+      content: 'JDC Context Engine '.repeat(1200),
+      tokenEstimate: 6000,
+      priority: 90,
+      sourceProvider: 'ProjectSignalProvider',
+    })
+    const store = makeStore({ facts: [] })
+
+    const result = await buildContextBundle({ ...request, tokenBudget: undefined }, {
+      injectionEnabled: true,
+      store,
+      providers: [{ id: 'project', collect: async () => providerResult([largeProjectSection]) }],
+      maxSectionTokens: undefined,
+      maxCodeTokens: undefined,
+      now: () => 1_000,
+      id: () => 'bundle_no_cap',
+    })
+
+    expect(result.dropped).toEqual([])
+    expect(result.renderedPrompt).toContain('JDC Context Engine')
+    expect(result.bundle.budget.maxTokens).toBeUndefined()
+    expect(result.bundle.budget.usedTokens).toBeGreaterThanOrEqual(6000)
+  })
+
   it('keeps high-value stale facts visible while suppressing stale low-value durable facts', async () => {
     const store = makeStore({
       facts: [

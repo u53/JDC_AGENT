@@ -15,9 +15,7 @@ export const DEFAULT_CONTEXT_ENGINE_CONFIG: ContextEngineConfig = {
     ide: true,
   },
   tokenBudget: {
-    maxBundleTokens: 2500,
-    maxSectionTokens: 700,
-    maxCodeTokens: 900,
+    providerOverflowPolicy: 'degrade_and_retry',
   },
   harvest: {
     maxJobsPerSession: 50,
@@ -26,8 +24,8 @@ export const DEFAULT_CONTEXT_ENGINE_CONFIG: ContextEngineConfig = {
     minIntervalMs: 15_000,
   },
   performance: {
-    providerTimeoutMs: 120,
-    degradedProviderTimeoutMs: 200,
+    providerTimeoutMs: 1_200,
+    degradedProviderTimeoutMs: 1_800,
     maxBackgroundJobsPerProject: 1,
     harvestMinIntervalMs: 30_000,
     contextPanelMaxRows: 50,

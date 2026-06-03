@@ -55,7 +55,7 @@ export const ContextRequestSchema = z.object({
   recentMessages: z.array(MessageSchema),
   mode: ContextModeSchema,
   model: nonEmptyStringSchema,
-  tokenBudget: z.number().int().positive(),
+  tokenBudget: z.number().int().positive().optional(),
   runtime: RuntimeSnapshotSchema,
   ide: IdeSnapshotSchema.optional(),
   createdAt: timestampSchema,
@@ -121,9 +121,11 @@ export const ContextBundleSchema = z.object({
   citations: z.array(ContextCitationSchema),
   diagnostics: z.array(ContextDiagnosticSchema),
   budget: z.object({
-    maxTokens: z.number().int().nonnegative(),
+    maxTokens: z.number().int().nonnegative().optional(),
     usedTokens: z.number().int().nonnegative(),
     droppedTokens: z.number().int().nonnegative(),
+    providerLimitObserved: z.number().int().positive().optional(),
+    retryReason: z.string().optional(),
   }),
 }) satisfies z.ZodType<ContextBundle>
 
@@ -187,9 +189,10 @@ export const ContextConfigSchema = z.object({
   inspectEnabled: z.boolean(),
   providerToggles: z.object(Object.fromEntries(ContextProviderIdSchema.options.map((id) => [id, z.boolean()])) as Record<ContextProviderId, z.ZodBoolean>),
   tokenBudget: z.object({
-    maxBundleTokens: z.number().int().positive(),
-    maxSectionTokens: z.number().int().positive(),
-    maxCodeTokens: z.number().int().positive(),
+    maxBundleTokens: z.number().int().positive().optional(),
+    maxSectionTokens: z.number().int().positive().optional(),
+    maxCodeTokens: z.number().int().positive().optional(),
+    providerOverflowPolicy: z.enum(['degrade_and_retry', 'diagnostic_only']),
   }),
   harvest: z.object({
     maxJobsPerSession: z.number().int().nonnegative(),

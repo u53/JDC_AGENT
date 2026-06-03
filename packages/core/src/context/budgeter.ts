@@ -1,9 +1,9 @@
 import type { ContextSection, ContextTokenBudget } from './types.js'
 
 export interface ContextBudgetLimits {
-  maxTokens: number
-  maxSectionTokens: number
-  maxCodeTokens: number
+  maxTokens?: number
+  maxSectionTokens?: number
+  maxCodeTokens?: number
 }
 
 export type DroppedContextReason = 'section_truncated' | 'bundle_token_budget_exceeded'
@@ -28,7 +28,7 @@ export function budgetContextSections(sections: ContextSection[], limits: Contex
   let droppedTokens = dropped.reduce((total, drop) => total + drop.tokenEstimate, 0)
 
   for (const section of resized) {
-    if (usedTokens + section.tokenEstimate > limits.maxTokens) {
+    if (limits.maxTokens !== undefined && usedTokens + section.tokenEstimate > limits.maxTokens) {
       dropped.push({ section, reason: 'bundle_token_budget_exceeded', tokenEstimate: section.tokenEstimate })
       droppedTokens += section.tokenEstimate
       continue
@@ -46,6 +46,7 @@ export function budgetContextSections(sections: ContextSection[], limits: Contex
 
 function enforceSectionLimit(section: ContextSection, limits: ContextBudgetLimits, dropped: DroppedContextSection[]): ContextSection {
   const maxTokens = section.kind === 'relevant_code' ? limits.maxCodeTokens : limits.maxSectionTokens
+  if (maxTokens === undefined) return section
   if (section.tokenEstimate <= maxTokens) return section
 
   const droppedTokens = section.tokenEstimate - maxTokens

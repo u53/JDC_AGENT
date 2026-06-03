@@ -20,7 +20,8 @@ export type ContextProviderStatus = 'enabled' | 'disabled' | 'fresh' | 'cached' 
 export interface RuntimeSnapshot { [key: string]: unknown }
 export interface IdeSnapshot { [key: string]: unknown }
 export interface ToolExecutionEvent { id: string; name?: string; status?: string; [key: string]: unknown }
-export interface ContextTokenBudget { maxTokens: number; usedTokens: number; droppedTokens: number }
+export type ContextProviderOverflowPolicy = 'degrade_and_retry' | 'diagnostic_only'
+export interface ContextTokenBudget { maxTokens?: number; usedTokens: number; droppedTokens: number; providerLimitObserved?: number; retryReason?: string }
 export interface ContextTokenCost { tokenEstimate: number; source?: string; actualTokens?: number; droppedTokens?: number }
 
 export interface ContextCitation {
@@ -40,7 +41,7 @@ export interface ContextRequest {
   recentMessages: Message[]
   mode: ContextMode
   model: string
-  tokenBudget: number
+  tokenBudget?: number
   runtime: RuntimeSnapshot
   ide?: IdeSnapshot
   signal?: AbortSignal
@@ -250,9 +251,10 @@ export interface ContextEngineConfig {
   inspectEnabled: boolean
   providerToggles: Record<ContextProviderId, boolean>
   tokenBudget: {
-    maxBundleTokens: number
-    maxSectionTokens: number
-    maxCodeTokens: number
+    maxBundleTokens?: number
+    maxSectionTokens?: number
+    maxCodeTokens?: number
+    providerOverflowPolicy: ContextProviderOverflowPolicy
   }
   harvest: {
     maxJobsPerSession: number

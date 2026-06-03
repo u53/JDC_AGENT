@@ -50,8 +50,6 @@ export interface BuildContextBundleResult {
   providerHealth: ProviderHealth[]
 }
 
-const DEFAULT_MAX_SECTION_TOKENS = 700
-const DEFAULT_MAX_CODE_TOKENS = 900
 const DEFAULT_PROVIDER_TIMEOUT_MS = 120
 const DEFAULT_STORE_FACT_LIMIT = 200
 const FOCUSED_STORE_FACT_LIMIT = 75
@@ -264,8 +262,8 @@ function shouldPersistDiagnostic(item: ContextDiagnostic): boolean {
 function budgetLimits(request: ContextRequest, options: BuildContextBundleOptions): ContextBudgetLimits {
   return {
     maxTokens: request.tokenBudget,
-    maxSectionTokens: options.maxSectionTokens ?? DEFAULT_MAX_SECTION_TOKENS,
-    maxCodeTokens: options.maxCodeTokens ?? DEFAULT_MAX_CODE_TOKENS,
+    maxSectionTokens: options.maxSectionTokens,
+    maxCodeTokens: options.maxCodeTokens,
   }
 }
 
