@@ -298,10 +298,11 @@ function factFromAcceptedEnvelope(envelope: DistillerEnvelope, job: HarvestJob, 
 }
 
 function originFromHarvestJob(job: HarvestJob): ContextOrigin | undefined {
-  if (!job.candidate.origin?.projectKey) return undefined
   const candidateOrigin = job.candidate.origin
+  const projectKey = candidateOrigin?.projectKey
+  if (!candidateOrigin || !projectKey) return undefined
   return {
-    projectKey: candidateOrigin.projectKey,
+    projectKey,
     actor: candidateOrigin.actor ?? 'main_session',
     sessionId: candidateOrigin.sessionId ?? job.sessionId,
     runLoopId: candidateOrigin.runLoopId ?? job.runLoopId,
