@@ -34,6 +34,24 @@ export interface ContextOrigin {
   modelId?: string
 }
 
+export interface ActorContextProfile {
+  actor: ContextActor
+  sessionId: string
+  cwd: string
+  mode: ContextMode
+  objective: string
+  subSessionId?: string
+  teamId?: string
+  memberId?: string
+  taskId?: string
+  fileScope?: string[]
+  preferredFactCount?: number
+  explicitTokenCap?: number
+  explicitCodeTokenCap?: number
+  includeTeamState: boolean
+  includeWorkerLogs: false
+}
+
 export interface RuntimeSnapshot { [key: string]: unknown }
 export interface IdeSnapshot { [key: string]: unknown }
 export interface ToolExecutionEvent { id: string; name?: string; status?: string; [key: string]: unknown }
