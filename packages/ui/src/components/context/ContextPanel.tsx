@@ -4,7 +4,7 @@ import { useContextStore } from '../../stores/context-store'
 import { ContextPanelLayout, type ContextTab } from './ContextPanelLayout'
 
 export function ContextPanel({ sessionId }: { sessionId: string | null }) {
-  const [tab, setTab] = useState<ContextTab>('status')
+  const [tab, setTab] = useState<ContextTab>('understanding')
   const inspect = useContextStore((state) => state.inspect)
   const harvest = useContextStore((state) => state.harvest)
   const memoryReview = useContextStore((state) => state.memoryReview)
@@ -17,7 +17,7 @@ export function ContextPanel({ sessionId }: { sessionId: string | null }) {
   const reset = useContextStore((state) => state.reset)
 
   useEffect(() => {
-    setTab('status')
+    setTab('understanding')
     if (!sessionId) {
       reset()
       return

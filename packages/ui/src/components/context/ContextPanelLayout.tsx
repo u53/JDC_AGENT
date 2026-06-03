@@ -4,8 +4,9 @@ import { ContextAdvancedDiagnosticsPanel } from './ContextAdvancedDiagnosticsPan
 import { ContextCurrentPanel } from './ContextCurrentPanel'
 import { ContextFactsPanel } from './ContextFactsPanel'
 import { ContextInspectPanel } from './ContextInspectPanel'
+import { PanelFrame, PanelState } from './ContextPanelPrimitives'
 
-export type ContextTab = 'status' | 'facts' | 'current' | 'advanced'
+export type ContextTab = 'understanding' | 'facts' | 'current' | 'team' | 'status' | 'advanced'
 
 export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect, harvest, memoryReview, providerHealth, refresh, onReloadDiagnostics, onReindexCode, onReadProviderStatus }: {
   sessionId: string | null
@@ -54,9 +55,11 @@ export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect,
       </div>
 
       <div className="context-panel-scroll min-h-0 flex-1 overflow-y-auto p-3">
-        {activeTab === 'status' && <ContextInspectPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
+        {activeTab === 'understanding' && <ContextProjectUnderstandingPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
         {activeTab === 'facts' && <ContextFactsPanel acceptedMemory={memoryReview.data?.accepted ?? null} projectFacts={inspect.data?.acceptedProjectFacts ?? []} loading={memoryReview.loading || inspect.loading} error={memoryReview.error ?? inspect.error} />}
         {activeTab === 'current' && <ContextCurrentPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
+        {activeTab === 'team' && <ContextTeamPlaceholder loading={inspect.loading} error={inspect.error} />}
+        {activeTab === 'status' && <ContextInspectPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
         {activeTab === 'advanced' && (
           <ContextAdvancedDiagnosticsPanel
             inspect={inspect}
@@ -76,11 +79,52 @@ export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect,
 
 function contextTabs(inspect: ContextInspectPayload | null, memoryReview: ContextMemoryReview | null, providerHealth: ContextProviderHealth | null) {
   const factCount = (memoryReview?.accepted?.results.length ?? 0) + (inspect?.acceptedProjectFacts.length ?? 0)
-  const diagnosticsCount = (inspect?.diagnostics.length ?? 0) + (inspect?.bundle?.diagnostics.length ?? 0) + (inspect?.advancedDiagnostics?.diagnostics.length ?? 0)
+  const teamCount = (inspect?.acceptedProjectFacts ?? []).filter((fact) => isTeamFactKind(fact.kind)).length
   return [
-    { id: 'status' as const, label: '当前状态', badge: inspect?.status === 'available' ? '可用' : inspect?.status ? null : null },
+    { id: 'understanding' as const, label: '项目理解', badge: inspect?.acceptedProjectFacts.length || null },
     { id: 'facts' as const, label: '项目记忆', badge: factCount || null },
     { id: 'current' as const, label: '当前上下文', badge: inspect?.bundle?.sections.length ?? null },
-    { id: 'advanced' as const, label: '高级诊断', badge: diagnosticsCount || providerHealth?.length || null },
+    { id: 'team' as const, label: '团队沉淀', badge: teamCount || null },
+    { id: 'status' as const, label: '引擎状态', badge: providerHealth?.length || null },
   ]
+}
+
+function ContextProjectUnderstandingPanel({ payload, loading, error }: {
+  payload: ContextInspectPayload | null
+  loading: boolean
+  error: string | null
+}) {
+  if (loading) return <PanelState title="正在读取项目理解" message="正在读取已接受的项目事实。" />
+  if (error) return <PanelState title="项目理解暂不可用" message={error} />
+  const facts = payload?.acceptedProjectFacts ?? []
+  return (
+    <PanelFrame title="项目理解" subtitle={`${facts.length} 条已接受项目事实`}>
+      {facts.length === 0 ? (
+        <PanelState title="暂无项目理解" message="当前项目还没有可展示的持久事实。" />
+      ) : (
+        <div className="space-y-2">
+          {facts.map((fact) => (
+            <article key={fact.id} className="rounded-[8px] border border-[var(--border)] bg-[var(--bg)] p-2">
+              <div className="text-[10px] text-[var(--muted)]">{fact.kind}</div>
+              <div className="mt-1 text-[12px] leading-relaxed text-[var(--text)]">{fact.content}</div>
+            </article>
+          ))}
+        </div>
+      )}
+    </PanelFrame>
+  )
+}
+
+function ContextTeamPlaceholder({ loading, error }: { loading: boolean; error: string | null }) {
+  if (loading) return <PanelState title="正在读取团队沉淀" message="正在读取 Team/PM/Worker 产生的项目事实。" />
+  if (error) return <PanelState title="团队沉淀暂不可用" message={error} />
+  return (
+    <PanelFrame title="团队沉淀" subtitle="已接受团队事实">
+      <PanelState title="暂无团队沉淀" message="Team/PM/Worker 还没有产出可复用的项目事实。" />
+    </PanelFrame>
+  )
+}
+
+function isTeamFactKind(kind: string): boolean {
+  return kind === 'team_decision' || kind === 'task_result' || kind === 'artifact_summary' || kind === 'qa_issue'
 }
