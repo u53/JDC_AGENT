@@ -1,9 +1,12 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { buildContextBundle } from './orchestrator.js'
 import { closeContextStore, openContextStore } from './store.js'
+import { makeEvalFact, makeEvalRequest, makeEvalSection, makeEvalStore } from './evals/assertions.js'
+import { collectMemoryContext } from './providers/memory-provider.js'
+import { collectProjectContext } from './providers/project-provider.js'
 import type { ContextProvider, ContextProviderResult } from './orchestrator.js'
 import type { ContextRequest } from './types.js'
 
@@ -95,6 +98,66 @@ describe('JDC Context Engine product evals', () => {
     expect(Date.now() - started).toBeLessThan(220)
     expect(result.renderedPrompt).not.toContain('undefined')
     expect(result.providerHealth[0]).toMatchObject({ id: 'code', status: 'timeout' })
+  })
+
+  it('keeps a large relevant project primer when no explicit cap is configured', async () => {
+    const primer = makeEvalSection({
+      id: 'large_project_primer',
+      kind: 'project_profile',
+      title: 'Large Project Primer',
+      content: 'JDCAGNET 项目背景 '.repeat(3_000),
+      tokenEstimate: 15_000,
+      priority: 100,
+      sourceProvider: 'ProjectSignalProvider',
+    })
+
+    const result = await buildContextBundle(makeEvalRequest({ tokenBudget: undefined, userMessage: '解释 JDCAGNET 项目背景' }), {
+      injectionEnabled: true,
+      store: makeEvalStore(),
+      providers: [{
+        id: 'project',
+        collect: async () => ({ evidence: [], sections: [primer], diagnostics: [], health: { id: 'project', status: 'enabled', updatedAt: 1 } }),
+      }],
+      id: () => 'ctx_large_project_primer',
+    })
+
+    expect(result.renderedPrompt).toContain('JDCAGNET 项目背景')
+    expect(result.bundle.budget.droppedTokens).toBe(0)
+    expect(result.dropped).toEqual([])
+  })
+
+  it('injects accepted project memory through the memory provider', async () => {
+    const store = makeEvalStore({
+      facts: [makeEvalFact({
+        id: 'release_rule',
+        kind: 'workflow_rule',
+        content: '发布前必须运行 pnpm build。',
+        confidence: 0.95,
+      })],
+    })
+
+    const memory = await collectMemoryContext(makeEvalRequest({ userMessage: '发布流程是什么' }), { store })
+
+    expect(memory.sections.map((section) => section.content).join('\n')).toContain('pnpm build')
+  })
+
+  it('preserves project documentation content beyond the first three non-empty lines', async () => {
+    const cwd = tempProject()
+    writeFileSync(path.join(cwd, 'JDCAGNET.md'), [
+      '# JDCAGNET',
+      '第一行简介。',
+      '第二行简介。',
+      '第三行简介。',
+      '',
+      '## 发布流程',
+      '生产发布前必须运行 pnpm build 并确认 Context Engine eval 通过。',
+    ].join('\n'))
+
+    const project = await collectProjectContext(makeEvalRequest({ cwd, userMessage: '发布流程是什么' }))
+
+    expect(project.sections[0]?.content).toContain('发布流程')
+    expect(project.sections[0]?.content).toContain('pnpm build')
+    expect(project.sections[0]?.content).toContain('Context Engine eval')
   })
 })
 
