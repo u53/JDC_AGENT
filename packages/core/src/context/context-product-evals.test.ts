@@ -7,6 +7,7 @@ import { closeContextStore, openContextStore } from './store.js'
 import { makeEvalFact, makeEvalRequest, makeEvalSection, makeEvalStore } from './evals/assertions.js'
 import { collectMemoryContext } from './providers/memory-provider.js'
 import { collectProjectContext } from './providers/project-provider.js'
+import { recordTeamArtifactEvidence } from './team-ledger.js'
 import type { ContextProvider, ContextProviderResult } from './orchestrator.js'
 import type { ContextRequest } from './types.js'
 
@@ -287,6 +288,56 @@ describe('JDC Context Engine product evals', () => {
     expect(project.sections[0]?.content).toContain('发布流程')
     expect(project.sections[0]?.content).toContain('pnpm build')
     expect(project.sections[0]?.content).toContain('Context Engine eval')
+  })
+
+  it('reuses Team artifact summaries across same-project sessions without leaking to another project', async () => {
+    const cwd = tempProject()
+    const otherCwd = tempProject()
+    const storeA = await openContextStore({ cwd, now: () => 1_000 })
+    await recordTeamArtifactEvidence({
+      artifactId: 'report',
+      artifactKind: 'artifact',
+      artifactType: 'report',
+      taskId: 'task_checkout',
+      memberId: 'member_api',
+      summary: 'Checkout task fixed validation handling and documented regression notes.',
+      path: '.team/tasks/task_checkout/artifacts/report.md',
+    }, {
+      store: storeA,
+      cwd,
+      sessionId: 'session_team_a',
+      teamId: 'team_alpha',
+      now: () => 1_000,
+    })
+
+    const storeB = await openContextStore({ cwd, now: () => 2_000 })
+    const sameProject = await buildContextBundle(request({
+      cwd,
+      sessionId: 'session_team_b',
+      userMessage: 'checkout task 做了什么',
+    }), {
+      injectionEnabled: true,
+      store: storeB,
+      providers: [],
+      now: () => 2_000,
+      id: () => 'ctx_team_cross_session',
+    })
+
+    const otherStore = await openContextStore({ cwd: otherCwd, now: () => 2_000 })
+    const otherProject = await buildContextBundle(request({
+      cwd: otherCwd,
+      sessionId: 'session_other',
+      userMessage: 'checkout task 做了什么',
+    }), {
+      injectionEnabled: true,
+      store: otherStore,
+      providers: [],
+      now: () => 2_000,
+      id: () => 'ctx_team_other_project',
+    })
+
+    expect(sameProject.renderedPrompt).toContain('Checkout task fixed validation handling')
+    expect(otherProject.renderedPrompt).not.toContain('Checkout task fixed validation handling')
   })
 })
 
