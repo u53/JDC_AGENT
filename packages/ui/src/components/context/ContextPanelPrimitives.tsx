@@ -152,6 +152,10 @@ export function kindLabel(kind: string): string {
     project_convention: '项目约定',
     workflow_rule: '工作流规则',
     workflow_hint: '工作流提示',
+    team_decision: '团队决策',
+    task_result: '任务结果',
+    artifact_summary: '产物摘要',
+    qa_issue: '质量问题',
   }
   return labels[kind] ?? titleCase(kind)
 }

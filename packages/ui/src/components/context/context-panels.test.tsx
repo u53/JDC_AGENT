@@ -50,6 +50,18 @@ const payload: ContextInspectPayload = {
       createdAt: 1_700_000_000_000,
       updatedAt: 1_700_000_000_100,
     },
+    {
+      id: 'team-result-1',
+      kind: 'artifact_summary',
+      scope: 'project',
+      content: 'Checkout task fixed validation handling.',
+      citations: [{ id: 'cite-team-1', type: 'task', ref: 'task_checkout' }],
+      confidence: 0.94,
+      freshness: 'recent',
+      sourceProvider: 'TeamLedger',
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_100,
+    },
   ],
   droppedSections: [],
   providerHealth: [
@@ -275,6 +287,31 @@ describe('context inspectability panels', () => {
     expect(html).not.toContain('git unavailable')
     expect(html).not.toContain('IdeSignalProvider')
     expect(html).not.toContain('Provider code exceeded context budget')
+  })
+
+  it('renders team-derived project facts in a dedicated team panel', () => {
+    const html = renderToStaticMarkup(
+      <ContextPanelLayout
+        sessionId="sess-1"
+        activeTab="team"
+        onTabChange={() => {}}
+        inspect={request(payload)}
+        harvest={request(payload.harvestQueue)}
+        memoryReview={request({ accepted: acceptedMemory, rejected: payload.memoryReview.rejected })}
+        providerHealth={request(extendedProviders)}
+        refresh={request(null)}
+        onReloadDiagnostics={() => {}}
+        onReindexCode={() => {}}
+        onReadProviderStatus={() => {}}
+      />,
+    )
+
+    expect(html).toContain('团队沉淀')
+    expect(html).toContain('Checkout task fixed validation handling.')
+    expect(html).toContain('产物摘要')
+    expect(html).toContain('94%')
+    expect(html).not.toContain('发布前运行 pnpm build。')
+    expect(html).not.toContain('candidate-1')
   })
 
   it('renders current injected context sections in Chinese with citations and suppressed count', () => {

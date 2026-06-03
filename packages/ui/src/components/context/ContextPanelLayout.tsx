@@ -5,6 +5,7 @@ import { ContextCurrentPanel } from './ContextCurrentPanel'
 import { ContextFactsPanel } from './ContextFactsPanel'
 import { ContextInspectPanel } from './ContextInspectPanel'
 import { Badge, formatPercent, freshnessLabel, kindLabel, PanelFrame, PanelState } from './ContextPanelPrimitives'
+import { ContextTeamPanel } from './ContextTeamPanel'
 
 export type ContextTab = 'understanding' | 'facts' | 'current' | 'team' | 'status' | 'advanced'
 
@@ -58,7 +59,7 @@ export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect,
         {activeTab === 'understanding' && <ContextProjectUnderstandingPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
         {activeTab === 'facts' && <ContextFactsPanel acceptedMemory={memoryReview.data?.accepted ?? null} projectFacts={inspect.data?.acceptedProjectFacts ?? []} loading={memoryReview.loading || inspect.loading} error={memoryReview.error ?? inspect.error} />}
         {activeTab === 'current' && <ContextCurrentPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
-        {activeTab === 'team' && <ContextTeamPlaceholder loading={inspect.loading} error={inspect.error} />}
+        {activeTab === 'team' && <ContextTeamPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
         {activeTab === 'status' && <ContextInspectPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
         {activeTab === 'advanced' && (
           <ContextAdvancedDiagnosticsPanel
@@ -115,16 +116,6 @@ function ContextProjectUnderstandingPanel({ payload, loading, error }: {
           ))}
         </div>
       )}
-    </PanelFrame>
-  )
-}
-
-function ContextTeamPlaceholder({ loading, error }: { loading: boolean; error: string | null }) {
-  if (loading) return <PanelState title="正在读取团队沉淀" message="正在读取 Team/PM/Worker 产生的项目事实。" />
-  if (error) return <PanelState title="团队沉淀暂不可用" message={error} />
-  return (
-    <PanelFrame title="团队沉淀" subtitle="已接受团队事实">
-      <PanelState title="暂无团队沉淀" message="Team/PM/Worker 还没有产出可复用的项目事实。" />
     </PanelFrame>
   )
 }
