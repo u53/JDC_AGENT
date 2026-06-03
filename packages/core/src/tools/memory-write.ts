@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import path from 'node:path'
 import { z } from 'zod'
 import type { ToolContext, ToolHandler, ToolResult } from '../tool-registry.js'
 import { ContextCitationSchema, ContextDiagnosticSchema, EvidenceKindSchema, MemoryRecordKindSchema, MemoryRecordSchema } from '../context/schemas.js'
@@ -47,7 +48,7 @@ export async function writeMemoryRecord(input: unknown, options: MemoryWriteOpti
   if (containsRawReasoningData(parsed.data)) return rejectedPayload(now(), [diagnostic('Memory write rejected: raw thinking/reasoning data cannot become durable memory.', 'warning', now)])
 
   const writtenAt = now()
-  const fact = factFromMemoryInput(parsed.data, writtenAt)
+  const fact = factFromMemoryInput(parsed.data, writtenAt, options.cwd)
   try {
     const store = options.store ?? await openContextStore({ cwd: options.cwd })
     const syntheticEvidence = syntheticEvidenceFromInput(input, parsed.data.citations, options.cwd, writtenAt)
@@ -120,7 +121,7 @@ export function createMemoryWriteTool(options: MemoryWriteOptions = {}): ToolHan
   }
 }
 
-function factFromMemoryInput(input: MemoryWriteInput, now: number): ContextFact {
+function factFromMemoryInput(input: MemoryWriteInput, now: number, cwd: string | undefined): ContextFact {
   return {
     id: input.id ?? `memory_${hashMemoryInput(input).slice(0, 16)}`,
     kind: contextFactKindFromMemoryKind(input.kind),
@@ -133,6 +134,15 @@ function factFromMemoryInput(input: MemoryWriteInput, now: number): ContextFact 
     createdAt: now,
     updatedAt: now,
     expiresAt: input.expiresAt,
+    origin: memoryWriteOrigin(input, cwd),
+  }
+}
+
+function memoryWriteOrigin(input: MemoryWriteInput, cwd: string | undefined): ContextFact['origin'] {
+  const actor = input.citations.some((citation) => citation.type === 'message') ? 'user' : 'main_session'
+  return {
+    projectKey: path.resolve(cwd ?? process.cwd()),
+    actor,
   }
 }
 

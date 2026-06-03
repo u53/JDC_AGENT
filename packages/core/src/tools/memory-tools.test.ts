@@ -258,6 +258,25 @@ describe('JDC Context Engine memory tools', () => {
     }))
   })
 
+  it('writes explicit memory with user provenance in the project origin', async () => {
+    const store = makeStore()
+
+    const payload = await writeMemoryRecord({
+      kind: 'workflow_hint',
+      content: 'Run pnpm build before release.',
+      citation: '用户明确要求保存这条发布规则。',
+      confidence: 0.9,
+    }, { store, cwd: '/repo', now: () => 4_000 })
+
+    expect(payload.status).toBe('accepted')
+    expect(store.saveFact).toHaveBeenCalledWith(expect.objectContaining({
+      origin: expect.objectContaining({
+        projectKey: '/repo',
+        actor: 'user',
+      }),
+    }))
+  })
+
   it('finds a written memory by the original citation evidence even when fact content does not repeat the query', async () => {
     const cwd = mkdtempSync(path.join(os.tmpdir(), 'jdc-memory-search-'))
     try {
