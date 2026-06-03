@@ -16,7 +16,7 @@ import type { Message } from '../../types.js'
 import type { ContextProvider } from '../orchestrator.js'
 import type { ToolContext } from '../../tool-registry.js'
 
-export const GATE_F_CONTEXT_EVAL_COMMAND = 'pnpm --filter @jdcagnet/core exec vitest run src/context/context-evals.test.ts src/context/context-product-evals.test.ts src/context/store.test.ts src/tools/__tests__/context-engine-tools.test.ts tests/anthropic.test.ts tests/openai-chat.test.ts tests/openai-responses.test.ts src/session-context.test.ts src/context/context-harvest.test.ts src/context/context-redaction.test.ts src/context/context-safety.test.ts --no-file-parallelism'
+export const GATE_F_CONTEXT_EVAL_COMMAND = 'pnpm --filter @jdcagnet/core exec vitest run src/context/context-evals.test.ts src/context/context-product-evals.test.ts src/context/context-retriever.test.ts src/context/store.test.ts src/tools/__tests__/context-engine-tools.test.ts tests/anthropic.test.ts tests/openai-chat.test.ts tests/openai-responses.test.ts src/session-context.test.ts src/context/context-harvest.test.ts src/context/context-redaction.test.ts src/context/context-safety.test.ts --no-file-parallelism'
 
 export type ContextEvalCategory = 'context_quality' | 'regression' | 'safety' | 'feature_flags'
 

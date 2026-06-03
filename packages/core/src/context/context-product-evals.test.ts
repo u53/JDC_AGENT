@@ -141,6 +141,80 @@ describe('JDC Context Engine product evals', () => {
     expect(memory.sections.map((section) => section.content).join('\n')).toContain('pnpm build')
   })
 
+  it('retrieves a relevant old memory without injecting hundreds of recent memories', async () => {
+    const cwd = tempProject()
+    const store = await openContextStore({ cwd, now: () => 100_000 })
+
+    for (let index = 0; index < 500; index += 1) {
+      await store.saveRawEvidence({
+        id: `noise_${index}`,
+        sessionId: 'session_a',
+        cwd,
+        sourceProvider: 'ProductEval',
+        kind: 'message',
+        content: `Recent unrelated preference ${index}`,
+        metadata: { messageId: `noise_${index}` },
+        capturedAt: 50_000 + index,
+        hash: `hash_noise_${index}`,
+      })
+      await store.saveFact({
+        id: `recent_noise_${index}`,
+        kind: 'user_preference',
+        scope: 'project',
+        content: `Recent unrelated preference ${index}`,
+        citations: [{ id: `cit_noise_${index}`, type: 'message', ref: `noise_${index}` }],
+        confidence: 0.9,
+        freshness: 'recent',
+        sourceProvider: 'ProductEval',
+        sessionId: 'session_a',
+        createdAt: 50_000 + index,
+        updatedAt: 50_000 + index,
+      })
+    }
+
+    await store.saveRawEvidence({
+      id: 'release_flow_memory',
+      sessionId: 'session_a',
+      cwd,
+      sourceProvider: 'ProductEval',
+      kind: 'message',
+      content: '用户要求记住 JDCAGNET 发布流程：修改 package version，commit bump，tag vX.Y.Z，push tag 触发 release workflow。',
+      metadata: { messageId: 'release_flow_memory' },
+      capturedAt: 1,
+      hash: 'hash_release_flow_memory',
+    })
+    await store.saveFact({
+      id: 'release_flow_fact',
+      kind: 'workflow_rule',
+      scope: 'project',
+      content: 'JDCAGNET 发布流程：修改 package version，commit bump，tag vX.Y.Z，push tag 触发 release workflow。',
+      citations: [{ id: 'cit_release_flow', type: 'message', ref: 'release_flow_memory' }],
+      confidence: 1,
+      freshness: 'recent',
+      sourceProvider: 'ProductEval',
+      sessionId: 'session_a',
+      createdAt: 1,
+      updatedAt: 1,
+    })
+
+    const report = await buildContextBundle(request({
+      cwd,
+      sessionId: 'session_b',
+      userMessage: '我们的发布流程是咋样的',
+    }), {
+      injectionEnabled: true,
+      store,
+      providers: [],
+      now: () => 100_000,
+      id: () => 'ctx_release_retrieval',
+    })
+
+    expect(report.renderedPrompt).toContain('JDCAGNET 发布流程')
+    expect(report.renderedPrompt).not.toContain('Recent unrelated preference 499')
+    expect(report.bundle.sections.map((section) => section.id)).toEqual(['fact_release_flow_fact'])
+    expect(report.dropped).toEqual([])
+  })
+
   it('preserves project documentation content beyond the first three non-empty lines', async () => {
     const cwd = tempProject()
     writeFileSync(path.join(cwd, 'JDCAGNET.md'), [
