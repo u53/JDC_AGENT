@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace broad accepted-memory injection with query-aware top-K retrieval, and make `JdcMemorySearch` use the same retrieval path.
+**Goal:** Replace broad accepted-memory injection with query-aware relevance retrieval, and make `JdcMemorySearch` use the same retrieval path.
 
-**Architecture:** Add a focused `ContextRetriever` in `packages/core/src/context/retriever.ts`. The retriever reads accepted project facts from `ContextStore`, scores them with lexical/citation/path/kind/freshness signals, returns bounded top-K facts, and is used by both `buildContextBundle()` and `JdcMemorySearch`.
+**Architecture:** Add a focused `ContextRetriever` in `packages/core/src/context/retriever.ts`. The retriever reads accepted project facts from `ContextStore`, scores them with lexical/citation/path/kind/freshness signals, returns relevance-ranked facts with optional explicit caps, and is used by both `buildContextBundle()` and `JdcMemorySearch`.
 
 **Tech Stack:** TypeScript, Vitest, existing `ContextStore`, existing `ContextFact`/`ContextRequest` types, no new runtime dependency in Phase 1.
 
@@ -16,21 +16,35 @@ This plan implements only Phase 1 of the V2 design:
 
 - retrieval-first memory/project fact injection;
 - shared retrieval scoring for automatic injection and `JdcMemorySearch`;
-- tests for many-memory behavior and old relevant fact recall.
+- tests for many-memory relevance behavior and old relevant fact recall.
 
 This plan does not implement Team ledger ingestion, semantic embeddings, actor-specific Team PM/worker packs, UI redesign, or schema migrations beyond what this phase needs.
+
+## Phase 0 Prerequisite
+
+Do not execute this plan until `docs/superpowers/plans/2026-06-03-jdc-context-engine-v2-phase0-capacity-runtime-plan.md` has passed.
+
+Phase 1 assumes:
+
+- production defaults no longer impose `maxBundleTokens: 2500`, `maxSectionTokens: 700`, or `maxCodeTokens: 900`;
+- memory provider can emit accepted project facts instead of returning permanent empty sections;
+- project provider can preserve useful `JDCAGNET.md`, `AGENTS.md`, and `README.md` content beyond the first three lines;
+- provider timeouts are not the old `120ms/200ms` defaults;
+- Anthropic stream prompts keep JDC identity first and preserve official request block shape.
+
+Retrieval-first means "select relevant context"; it does not mean "cripple context capacity." If explicit debug/user caps are configured, retrieval must honor them. If no caps are configured, retrieval should not introduce a new arbitrary 8k/32k ceiling.
 
 ## File Structure
 
 - Create: `packages/core/src/context/retriever.ts`
   - Owns retrieval request types, scoring, token normalization, fact-to-section selection, and result diagnostics.
 - Create: `packages/core/src/context/context-retriever.test.ts`
-  - Unit tests for retrieval scoring, Chinese/English token matching, freshness handling, top-K limits, and old relevant memory recall.
+  - Unit tests for retrieval scoring, Chinese/English token matching, freshness handling, optional explicit result limits, and old relevant memory recall.
 - Modify: `packages/core/src/context/orchestrator.ts`
   - Replace broad `loadStoreFacts()` use with retriever output.
   - Preserve provider collection, ranking, budgeting, evidence persistence, bundle snapshots, and quota enforcement.
 - Modify: `packages/core/src/context/context-orchestrator.test.ts`
-  - Update expectations around store calls and add regression tests for memory top-K injection.
+  - Update expectations around store calls and add regression tests for relevance-selected memory injection.
 - Modify: `packages/core/src/tools/memory-search.ts`
   - Use `retrieveContextFacts()` for query searches while preserving payload schema and filters.
 - Modify: `packages/core/src/tools/memory-tools.test.ts`

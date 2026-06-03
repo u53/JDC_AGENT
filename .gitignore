@@ -10,7 +10,6 @@ packages/electron/ui
 tmp
 output
 packages/electron/resources/codegraph/
-docs
 
 # Build outputs
 .gradle/

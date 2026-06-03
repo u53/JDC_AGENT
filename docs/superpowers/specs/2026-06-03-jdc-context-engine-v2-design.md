@@ -25,12 +25,14 @@ The product promise is:
 - `sessionId`, `teamId`, `memberId`, and `taskId` are provenance fields, not isolation boundaries for accepted project facts.
 - The engine must not inject all memories.
 - The engine must not inject raw chat history except for short, bounded conversation state.
+- The engine must not use a tiny fixed prompt cap such as 2.5k tokens for production context. Context capacity should not be artificially limited by the engine; selection is relevance-based and final request sizing is handled by provider/model protocol constraints.
 - The engine must not store raw hidden reasoning or model thinking.
 - Durable facts must have citations, confidence, freshness, and provenance.
 - The engine must be useful without the user manually pressing refresh, reindex, inspect, or memory review buttons.
 - Foreground chat must not block on harvest, indexing, semantic search, or Team summarization.
 - Context failures must degrade silently and save diagnostics; they must not fail the user runLoop.
 - UI is Chinese-first for user-facing labels and must show useful final state, not internal garbage rows.
+- Prompt identity must be JDCAGNET/JDC Context Engine first. Provider adapters must not prepend a conflicting "Claude Code" identity unless an explicit compatibility mode asks for it.
 
 ## Current Baseline
 
@@ -61,9 +63,84 @@ V2 must split context into four layers:
    Indexed lookup over facts, evidence, code graph, citations, paths, Team artifacts, and project terms. This layer answers "what matters for this actor and this task?"
 
 4. **Context Pack Layer**
-   A compact role-aware prompt payload injected into the main session, PM, worker, or sub-agent. It contains only the top relevant facts and citations under a strict token budget.
+   A role-aware prompt payload injected into the main session, PM, worker, or sub-agent. It contains the top relevant facts and citations without an engine-level tiny token ceiling; relevance, protocol correctness, and provider request validity decide the final payload.
 
 The engine should store more than it injects. It should retrieve more than it stores in each prompt. It should show less than it knows.
+
+## Phase 0 Capacity And Runtime Baseline
+
+Before retrieval, Team ledger, or UI work, V2 must fix the current capacity/runtime floor. Otherwise the engine can collect useful data but still feel "dumb" because providers time out, project files are over-summarized, memories are never supplied, or prompt identity conflicts with the JDC product.
+
+### Context Capacity Contract
+
+The current hard defaults are too small for a production coding agent:
+
+```ts
+tokenBudget: {
+  maxBundleTokens: 2500,
+  maxSectionTokens: 700,
+  maxCodeTokens: 900,
+}
+```
+
+V2 must replace this with a no-artificial-cap capacity resolver:
+
+- Remove the engine-level 2.5k/700/900 ceilings from production defaults.
+- Do not hard-cap the JDC Context Engine pack at 8k, 32k, or any other arbitrary product number.
+- The pack builder should select all relevant, cited, non-stale context that the actor/task needs, then pass it through the provider adapter using that provider's valid request shape.
+- Provider adapters must preserve protocol correctness and prevent malformed requests. Anthropic system prompt blocks, cache breakpoints, content arrays, and tool/result structures must follow the official SDK/API shape to avoid 400 errors.
+- If a provider/model rejects oversize requests, the fallback path is protocol-safe degradation with diagnostics and retry, not a small default cap hidden inside the engine.
+- `maxSectionTokens` and `maxCodeTokens` must become optional safety controls or debug overrides, not normal production ceilings. Code/project/workflow sections should not be permanently trapped under 700-900 tokens.
+- The engine still must not inject all memories. Large capacity means better retrieval packs, not unbounded memory dumps.
+- Every injected pack records `budget.used`, `providerLimitObserved`, `droppedByReason`, and `retryReason` so the UI and evals can prove whether information was selected, excluded by relevance, or degraded by provider request limits.
+
+Production defaults should remove artificial limits:
+
+```ts
+{
+  maxBundleTokens: undefined,
+  maxSectionTokens: undefined,
+  maxCodeTokens: undefined,
+  selectionMode: 'relevance_first',
+  providerOverflowPolicy: 'degrade_and_retry',
+}
+```
+
+This is not permission to dump irrelevant data. It means JDC Context Engine no longer cripples itself before the provider/model even sees the project context.
+
+### Provider Runtime Contract
+
+The current provider timeouts are too aggressive for real project signals:
+
+```ts
+performance: {
+  providerTimeoutMs: 120,
+  degradedProviderTimeoutMs: 200,
+}
+```
+
+V2 must use a two-speed runtime:
+
+- Foreground provider reads use cached/indexed data and a realistic soft timeout, starting around 1-1.5s.
+- Foreground injection must never start full indexing or model harvest.
+- Background refresh/indexing can run longer, but must be scheduled, cancellable, and project-budgeted.
+- Provider health must distinguish "not indexed yet", "background indexing", "cached", "stale", and "failed" without making users click reindex.
+- Panel reads must not trigger heavy jobs.
+
+### Required Provider Fixes
+
+- `memory-provider.ts` cannot remain an empty provider. It must read accepted project facts through retrieval and emit relevance-selected `memory` sections with citations.
+- `project-provider.ts` cannot summarize `JDCAGNET.md`, `AGENTS.md`, or `README.md` using only the first three non-empty lines. It must parse structured headings, scripts, conventions, and relevant sections into meaningful project evidence.
+- `git-provider.ts` should keep its richer hot-file signals, but also include direct branch/status/log style facts so models see the same immediate repo state a CLI coding agent would see.
+- Code provider must serve from index/snapshot in foreground and schedule background indexing when needed instead of blocking the tool path.
+
+### Prompt And Model Adapter Contract
+
+- `resolveStreamSystemPrompt()` and `resolveSystemPrompt()` must be semantically equivalent for cacheable/dynamic context layout.
+- Anthropic provider must not prepend "You are Claude Code..." ahead of the JDC identity in normal JDCAGNET operation.
+- Anthropic request construction must follow the official Anthropic Messages API / SDK shape. This includes valid `system` blocks, cache control placement, content block arrays, tool result blocks, and dynamic context placement. Avoiding 400 errors is a hard acceptance criterion.
+- Existing adaptive thinking behavior is not part of this phase. Do not change it in Phase 0.
+- OpenAI Chat and OpenAI Responses must receive the same JDC Context Engine payload semantics, including project packs and non-cacheable dynamic context markers where applicable.
 
 ## High-Level Architecture
 
@@ -440,14 +517,16 @@ Memory retrieval rule:
 
 > Automatic injection may include only the top relevant accepted facts. All other accepted facts stay indexed and are retrieved through `JdcMemorySearch` or internal retrieval.
 
-Suggested default:
+Production selection default:
 
-- project primer: max 400 tokens;
-- active project state: max 350 tokens;
-- top project facts: max 5 facts or 700 tokens;
-- team/task context: max 600 tokens;
-- code context: max 900 tokens;
-- citations: compact list only.
+- project primer: include the useful structured project summary, not only a tiny fixed excerpt;
+- active project state: include current goals, workflow state, known blockers, and recent durable decisions when relevant;
+- project facts: retrieve by relevance and citations, not by recency or a fixed five-fact cap;
+- team/task context: include durable PM/worker/task summaries when relevant to the actor;
+- code context: include relevant indexed code/file/symbol context without the old 900-token ceiling;
+- citations: keep citations compact, but do not drop evidence-backed content only because a small local cap was reached.
+
+The retrieval layer must still reject irrelevant or stale data. "No artificial token cap" means no engine-imposed tiny ceiling; it does not mean every memory or every raw file enters the prompt.
 
 ## Context Packs
 
@@ -630,11 +709,12 @@ Manual controls should be diagnostic-only. Normal users should not need to click
 
 Foreground budget:
 
-- context pack assembly target: under 200 ms;
-- provider timeout default: under 120 ms;
+- context pack assembly should prefer cached/indexed data and avoid model calls;
+- provider soft timeout should be realistic for real project signals, starting around 1-1.5s rather than 120ms;
+- if foreground collection cannot finish in time, return a protocol-safe partial pack and schedule background refresh;
 - no model calls in foreground injection;
 - no full code indexing in foreground tool path;
-- no full memory scan in foreground beyond configured top-N and indexed lookup.
+- no full memory dump in foreground; retrieval/indexed lookup chooses relevant records.
 
 Background budget:
 
@@ -691,14 +771,15 @@ The main session should not redo Team work. It receives Team final synthesis and
 
 V2 migration should be incremental:
 
-1. Add provenance fields and retrieval records without breaking existing facts.
-2. Backfill old facts with project origin and tags.
-3. Replace broad memory injection with top-K retrieval.
-4. Add Team evidence ingestion.
-5. Add actor-aware context pack requests.
-6. Add workflow/release producer.
-7. Move UI to final-state Chinese-first surfaces.
-8. Add evals and performance budgets.
+1. Remove artificial context caps and fix provider/protocol runtime contracts.
+2. Add provenance fields and retrieval records without breaking existing facts.
+3. Backfill old facts with project origin and tags.
+4. Replace broad memory injection with retrieval-first project fact selection.
+5. Add Team evidence ingestion.
+6. Add actor-aware context pack requests.
+7. Add workflow/release producer.
+8. Move UI to final-state Chinese-first surfaces.
+9. Add evals and performance budgets.
 
 No migration should erase accepted facts. If a migration cannot classify a record, it keeps the record and marks origin as project/session provenance with low metadata detail.
 
@@ -708,6 +789,11 @@ Required test categories:
 
 - same-project cross-session accepted fact reuse;
 - different-project isolation;
+- context engine injection is not capped by the old 2.5k/700/900 defaults;
+- provider collection does not degrade to empty context because of a 120-200ms timeout;
+- `memory-provider.ts` emits accepted retrieved project facts instead of empty sections;
+- `project-provider.ts` preserves meaningful `JDCAGNET.md` / `AGENTS.md` / `README.md` content beyond the first three lines;
+- Anthropic system prompt construction follows valid official request shape and keeps JDC identity first;
 - memory top-K injection under many facts;
 - `JdcMemorySearch` retrieval for old but relevant facts;
 - stale file citation invalidation;
@@ -739,7 +825,7 @@ V2 is successful when:
 - PM and workers receive different, task-appropriate context packs;
 - context failures are invisible to normal user workflow;
 - UI reads like a helpful Chinese project understanding panel, not a manual debug console;
-- CPU and token usage remain bounded during normal chat and project startup;
+- CPU usage remains budgeted during normal chat and project startup, and token usage remains observable and protocol-safe without an artificial engine cap;
 - every durable fact can answer: "who produced this, from what evidence, when, and why is it still fresh?"
 
 ## Explicit Non-Goals
@@ -756,6 +842,7 @@ V2 is successful when:
 
 V2 should be delivered in phases, but the design contract is one system:
 
+0. Capacity, provider runtime, and protocol hardening.
 1. Retrieval-first memory injection.
 2. Provenance and schema expansion.
 3. Actor-aware context packs.
@@ -764,4 +851,4 @@ V2 should be delivered in phases, but the design contract is one system:
 6. Chinese-first production UI.
 7. Performance and eval hardening.
 
-The most important first change is retrieval-first memory injection. It prevents prompt bloat and establishes the correct mental model: the engine stores a project knowledge base, then injects only what this actor needs now.
+The most important first change is Phase 0. It makes sure the engine can actually deliver project context into model requests without crippling itself through tiny internal caps, empty providers, over-short timeouts, or invalid provider prompt construction. Retrieval-first memory injection comes immediately after that and prevents irrelevant memory dumps while preserving a large useful project pack.
