@@ -6,6 +6,7 @@ import { AUTO_ACCEPT_CONTEXT_FACT_KINDS, type ContextDiagnostic, type ContextFac
 import { HarvestCandidateSchema, HarvestJobSchema, HarvestModelBindingSchema } from './schemas.js'
 import { defaultHarvestDistillers, selectDistillerForDecision, validateDistillerOutput, type ContextDistiller, type DistillerContext, type DistillerModelClient } from './distillers/index.js'
 import { contextFactKindFromMemoryKind } from '../tools/memory-search.js'
+import type { ContextOperationStatus, ContextPerformanceRecorder } from './performance.js'
 
 export type HarvestDistiller = ContextDistiller
 export type { DistillerContext }
@@ -42,6 +43,8 @@ export interface RunHarvestJobOptions extends AcceptanceOptions {
   trustMode?: MemoryTrustMode
   timeoutMs?: number
   signal?: AbortSignal
+  recorder?: ContextPerformanceRecorder
+  projectKey?: string
   ambientModelBindingForTest?: HarvestModelBinding
 }
 
@@ -96,17 +99,22 @@ export async function enqueueHarvest(candidate: HarvestCandidate, modelBinding: 
 
 export async function runHarvestJob(job: HarvestJob, options: RunHarvestJobOptions = {}): Promise<HarvestRunResult> {
   const now = options.now ?? Date.now
+  const metricStartedAt = now()
   const diagnostics: ContextDiagnostic[] = []
+  const finish = (result: HarvestRunResult, metricStatus?: ContextOperationStatus, diagnosticMessage?: string): HarvestRunResult => {
+    recordHarvestMetric(job, result, options, metricStartedAt, now, metricStatus, diagnosticMessage)
+    return result
+  }
   const parsed = HarvestJobSchema.safeParse(job)
   if (!parsed.success) {
     diagnostics.push(makeHarvestDiagnostic(`Harvest job rejected before run: ${parsed.error.message}`, 'warning', now))
     await persistDiagnostics(options.store, diagnostics)
-    return { status: 'failed', diagnostics }
+    return finish({ status: 'failed', diagnostics }, 'failed', parsed.error.message)
   }
 
   const canonicalJob = job
 
-  if (job.status === 'skipped') return { status: 'skipped', job, diagnostics }
+  if (job.status === 'skipped') return finish({ status: 'skipped', job, diagnostics })
 
   let current = canonicalJob
   try {
@@ -117,12 +125,12 @@ export async function runHarvestJob(job: HarvestJob, options: RunHarvestJobOptio
     const decision = prepared.decision ?? classifyHarvestCandidate(prepared.candidate)
     current = { ...current, decision, updatedAt: now() }
     if (decision.action === 'skip') {
-      return await skipJob(current, decision.reason, `Harvest skipped: ${decision.reason}`, options.store, now)
+      return finish(await skipJob(current, decision.reason, `Harvest skipped: ${decision.reason}`, options.store, now))
     }
 
     const distiller = selectDistillerForDecision(decision, options.distillers ?? defaultHarvestDistillers)
     if (!distiller) {
-      return await rejectJob(current, prepared.candidate, `No distiller registered for ${decision.action}`, ['missing distiller'], options.store, now)
+      return finish(await rejectJob(current, prepared.candidate, `No distiller registered for ${decision.action}`, ['missing distiller'], options.store, now))
     }
 
     current = updateJob(current, 'distilling', now)
@@ -136,9 +144,9 @@ export async function runHarvestJob(job: HarvestJob, options: RunHarvestJobOptio
       signal: options.signal,
     })
     if (isDistillerSkipOutput(output)) {
-      return await skipJob(current, output.reason, output.diagnostic ?? `Harvest model skipped durable storage: ${output.reason}`, options.store, now, {
+      return finish(await skipJob(current, output.reason, output.diagnostic ?? `Harvest model skipped durable storage: ${output.reason}`, options.store, now, {
         visibleInPrimaryUi: false,
-      })
+      }))
     }
     const envelope = output
 
@@ -151,7 +159,7 @@ export async function runHarvestJob(job: HarvestJob, options: RunHarvestJobOptio
     })
 
     if (!validation.accepted) {
-      return await rejectJob(current, envelope, 'Distiller output rejected by schema/citation/confidence/safety validation', validation.errors, options.store, now)
+      return finish(await rejectJob(current, envelope, 'Distiller output rejected by schema/citation/confidence/safety validation', validation.errors, options.store, now))
     }
 
     const evidenceDiagnostics = await persistCandidateEvidence(options.store, prepared.candidate, now)
@@ -159,7 +167,7 @@ export async function runHarvestJob(job: HarvestJob, options: RunHarvestJobOptio
 
     const fact = factFromAcceptedEnvelope(envelope, current, now())
     if (fact.confidence < minConfidence) {
-      return await rejectJob(current, fact, 'Distiller output rejected by derived fact confidence policy', [`confidence ${fact.confidence} is below minimum ${minConfidence}`], options.store, now)
+      return finish(await rejectJob(current, fact, 'Distiller output rejected by derived fact confidence policy', [`confidence ${fact.confidence} is below minimum ${minConfidence}`], options.store, now))
     }
 
     const trustMode = options.trustMode ?? DEFAULT_CONTEXT_ENGINE_CONFIG.memory.trustMode
@@ -169,32 +177,63 @@ export async function runHarvestJob(job: HarvestJob, options: RunHarvestJobOptio
       await options.store?.rejectCandidate?.(envelope, 'pending_review', { sessionId: current.sessionId, createdAt: now(), status: 'pending_review' })
       await persistDiagnostics(options.store, [makeHarvestDiagnostic(pendingReviewDiagnostic(envelope, fact, trustMode), 'info', now)])
       await enforceQuotas(options.store)
-      return { status: 'pending_review', job: current, diagnostics }
+      return finish({ status: 'pending_review', job: current, diagnostics })
     }
 
     const savedFact = await options.store?.saveFact?.(fact)
     if (savedFact && !savedFact.ok) {
-      return await rejectJob(current, fact, 'Accepted harvest output could not be persisted as durable context', savedFact.diagnostics.map((diagnostic) => diagnostic.message), options.store, now)
+      return finish(await rejectJob(current, fact, 'Accepted harvest output could not be persisted as durable context', savedFact.diagnostics.map((diagnostic) => diagnostic.message), options.store, now))
     }
 
     current = updateJob(current, 'accepted', now)
     await options.store?.updateHarvestJob?.(current)
     await persistDiagnostics(options.store, [makeHarvestDiagnostic(`Harvest accepted ${envelope.distiller} output`, 'info', now)])
     await enforceQuotas(options.store)
-    return { status: 'accepted', job: current, diagnostics }
+    return finish({ status: 'accepted', job: current, diagnostics })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     if (isAbortLikeHarvestError(error)) {
-      const reason: SkipReason = isTimeoutLikeHarvestError(error) ? 'timeout' : 'cancelled'
-      return await skipJob(current, reason, `Harvest ${reason} without blocking foreground chat: ${message}`, options.store, now)
+      const metricStatus: ContextOperationStatus = isTimeoutLikeHarvestError(error) ? 'timeout' : 'cancelled'
+      const reason: SkipReason = metricStatus
+      return finish(await skipJob(current, reason, `Harvest ${reason} without blocking foreground chat: ${message}`, options.store, now), metricStatus, message)
     }
     const failed = updateJob(current, 'failed', now)
     const diagnostic = makeHarvestDiagnostic(`Harvest failed without blocking foreground chat: ${message}`, 'error', now)
     await options.store?.updateHarvestJob?.(failed)
     await persistDiagnostics(options.store, [diagnostic])
     await options.store?.rejectCandidate?.(canonicalJob.candidate, 'Harvest failed', { sessionId: canonicalJob.sessionId, createdAt: now(), validationErrors: [message] })
-    return { status: 'failed', job: failed, diagnostics: [diagnostic] }
+    return finish({ status: 'failed', job: failed, diagnostics: [diagnostic] }, 'failed', message)
   }
+}
+
+function recordHarvestMetric(job: HarvestJob, result: HarvestRunResult, options: RunHarvestJobOptions, startedAt: number, now: () => number, statusOverride?: ContextOperationStatus, diagnostic?: string): void {
+  if (!options.recorder) return
+  const finalJob = result.job ?? job
+  options.recorder.record({
+    name: 'context:harvest',
+    lane: 'background',
+    status: statusOverride ?? harvestMetricStatus(result),
+    startedAt,
+    completedAt: now(),
+    projectKey: options.projectKey ?? finalJob.candidate.origin?.projectKey,
+    diagnostic,
+    metadata: {
+      sessionId: finalJob.sessionId,
+      runLoopId: finalJob.runLoopId,
+      finalStatus: result.status,
+    },
+  })
+}
+
+function harvestMetricStatus(result: HarvestRunResult): ContextOperationStatus {
+  if (result.status === 'accepted') return 'success'
+  if (result.status === 'skipped') {
+    const reason = result.job?.decision?.action === 'skip' ? result.job.decision.reason : undefined
+    if (reason === 'timeout') return 'timeout'
+    if (reason === 'cancelled') return 'cancelled'
+    return 'rejected'
+  }
+  return 'failed'
 }
 
 function isDistillerSkipOutput(output: DistillerOutput): output is Extract<DistillerOutput, { action: 'skip' }> {

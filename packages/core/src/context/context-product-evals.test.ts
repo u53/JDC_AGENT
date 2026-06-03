@@ -10,6 +10,7 @@ import { collectProjectContext } from './providers/project-provider.js'
 import { collectWorkflowContext } from './providers/workflow-provider.js'
 import { hashContent } from './providers/shared.js'
 import { recordTeamArtifactEvidence } from './team-ledger.js'
+import { classifyHarvestCandidate } from './safety.js'
 import type { ContextProvider, ContextProviderResult } from './orchestrator.js'
 import type { ContextRequest } from './types.js'
 
@@ -85,6 +86,24 @@ describe('JDC Context Engine product evals', () => {
 
     expect(result.bundle.sections).toEqual([])
     expect(result.renderedPrompt).not.toContain('model_noop')
+  })
+
+  it('does not route small talk or continue-only turns into model harvest', () => {
+    for (const [userMessage, reason] of [
+      ['hi', 'greeting_or_smalltalk'],
+      ['ok', 'no_new_fact'],
+      ['继续', 'no_new_fact'],
+    ] as const) {
+      expect(classifyHarvestCandidate({
+        sessionId: 'session_noise',
+        runLoopId: `run_${userMessage}`,
+        userMessage,
+        assistantMessages: [],
+        toolEvents: [],
+        changedFiles: [],
+        createdAt: 1,
+      })).toEqual({ action: 'skip', reason })
+    }
   })
 
   it('returns foreground context quickly when a provider is slow', async () => {

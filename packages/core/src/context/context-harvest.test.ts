@@ -6,6 +6,7 @@ import { openContextStore } from './store.js'
 import type { ContextDiagnostic, ContextFact, DistillerEnvelope, HarvestCandidate, HarvestJob, HarvestModelBinding, RawEvidence } from './types.js'
 import { enqueueHarvest, runHarvestJob, type HarvestDistiller, type HarvestPersistence } from './harvest.js'
 import type { DistillerModelClient } from './distillers/index.js'
+import { createContextPerformanceRecorder } from './performance.js'
 
 const baseCandidate: HarvestCandidate = {
   sessionId: 'session_1',
@@ -125,6 +126,34 @@ describe('harvest queue safety chain', () => {
         providerProtocol: 'anthropic',
         modelId: 'claude-opus-4-5',
       },
+    })
+  })
+
+  it('records accepted harvest latency and final status in the performance recorder', async () => {
+    const store = makeStore()
+    const recorder = createContextPerformanceRecorder({ now: () => 100 })
+    const candidate: HarvestCandidate = {
+      ...baseCandidate,
+      origin: { projectKey: '/repo', actor: 'main_session', sessionId: 'session_1', runLoopId: 'run_1' },
+    }
+    const enqueued = await enqueueHarvest(candidate, makeBinding('anthropic'), { store, now: () => 90, createId: () => 'job_perf_accepted' })
+
+    const completed = await runHarvestJob(enqueued.job!, {
+      store,
+      recorder,
+      projectKey: '/repo',
+      distillers: [{ name: 'MemoryCuratorDistiller', distill: async () => memoryEnvelope('Run context performance tests.', 'cit_user_run_1', 0.96) }],
+      now: () => 100,
+    })
+
+    const metric = recorder.snapshot().operations.find((operation) => operation.name === 'context:harvest')
+    expect(completed.status).toBe('accepted')
+    expect(metric).toMatchObject({
+      name: 'context:harvest',
+      lane: 'background',
+      status: 'success',
+      projectKey: '/repo',
+      metadata: { sessionId: 'session_1', runLoopId: 'run_1', finalStatus: 'accepted' },
     })
   })
 
@@ -427,6 +456,39 @@ describe('harvest queue safety chain', () => {
     expect(store.rejectedCandidates).toEqual([])
     expect(store.jobs.at(-1)).toMatchObject({ status: 'skipped', decision: { action: 'skip', reason: 'timeout' } })
     expect(store.diagnostics.at(-1)?.message).toContain('timeout')
+  })
+
+  it('records timed-out harvest metrics without creating rejected memory candidates', async () => {
+    const store = makeStore()
+    const recorder = createContextPerformanceRecorder({ now: () => 6_600 })
+    const distiller: HarvestDistiller = {
+      name: 'MemoryCuratorDistiller',
+      distill: async () => {
+        await new Promise(resolve => setTimeout(resolve, 40))
+        return memoryEnvelope('This output arrived too late for metrics.', 'cit_user_run_1')
+      },
+    }
+    const enqueued = await enqueueHarvest(baseCandidate, makeBinding('openai-responses'), { store, now: () => 6_600, createId: () => 'job_timeout_metric' })
+
+    const completed = await runHarvestJob(enqueued.job!, {
+      store,
+      recorder,
+      projectKey: '/repo',
+      distillers: [distiller],
+      timeoutMs: 5,
+      now: () => 6_610,
+    })
+
+    const metric = recorder.snapshot().operations.find((operation) => operation.name === 'context:harvest')
+    expect(completed.status).toBe('skipped')
+    expect(store.rejectedCandidates).toEqual([])
+    expect(metric).toMatchObject({
+      name: 'context:harvest',
+      lane: 'background',
+      status: 'timeout',
+      projectKey: '/repo',
+      metadata: { sessionId: 'session_1', runLoopId: 'run_1', finalStatus: 'skipped' },
+    })
   })
 
   it('treats cancelled harvest model calls as quiet skips instead of rejected candidates', async () => {

@@ -505,6 +505,8 @@ function enqueueSubSessionHarvest(
           trustMode: contextConfig.memory.trustMode,
           timeoutMs: contextConfig.harvest.timeoutMs,
           signal,
+          recorder: contextScheduler.recorder,
+          projectKey: opts.cwd,
         })
       }
     } catch (error) {

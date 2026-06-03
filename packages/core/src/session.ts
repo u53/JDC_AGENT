@@ -1248,6 +1248,8 @@ export class Session {
           trustMode: this.contextConfig.memory.trustMode,
           timeoutMs: this.contextConfig.harvest.timeoutMs,
           signal,
+          recorder: this.contextScheduler.recorder,
+          projectKey: this.config.cwd,
         })
       }
     } catch (error) {
