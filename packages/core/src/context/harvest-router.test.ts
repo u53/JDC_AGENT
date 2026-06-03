@@ -35,6 +35,23 @@ describe('routeHarvestCandidate', () => {
     expect(decision.reason).toContain('changed file')
   })
 
+  it('routes workflow and package file changes to workflow rule distillation', () => {
+    expect(routeHarvestCandidate(candidate({
+      userMessage: '更新 release workflow',
+      changedFiles: ['.github/workflows/release.yml'],
+    })).action).toBe('distill_workflow_rule')
+
+    expect(routeHarvestCandidate(candidate({
+      userMessage: '更新 package scripts',
+      changedFiles: ['package.json'],
+    })).action).toBe('distill_workflow_rule')
+
+    expect(routeHarvestCandidate(candidate({
+      userMessage: '更新 extension package scripts',
+      changedFiles: ['packages/vscode-extension/package.json'],
+    })).action).toBe('distill_workflow_rule')
+  })
+
   it('routes explicit project conventions and memory requests to memory candidate distillation', () => {
     expect(routeHarvestCandidate(candidate({ userMessage: 'Remember: this project always runs vitest with --no-file-parallelism.' })).action).toBe('distill_memory_candidate')
     expect(routeHarvestCandidate(candidate({ userMessage: 'Project convention: context facts must cite stored evidence.' })).action).toBe('distill_memory_candidate')

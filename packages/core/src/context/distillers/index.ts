@@ -11,6 +11,7 @@ import {
   QaIssuePayloadSchema,
   RuntimeNarrativePayloadSchema,
   TeamLedgerPayloadSchema,
+  WorkflowRulePayloadSchema,
 } from '../schemas.js'
 import { runtimeNarrativeDistiller } from './runtime-narrative-distiller.js'
 import { conversationStateDistiller } from './conversation-state-distiller.js'
@@ -20,6 +21,7 @@ import { codeTaskDistiller } from './code-task-distiller.js'
 import { teamLedgerDistiller } from './team-ledger-distiller.js'
 import { artifactSummaryDistiller } from './artifact-summary-distiller.js'
 import { qaIssueDistiller } from './qa-issue-distiller.js'
+import { workflowRuleDistiller } from './workflow-rule-distiller.js'
 import type { DistillerModelClient } from './model-client.js'
 export type { DistillerModelClient } from './model-client.js'
 export { createProviderDistillerModelClient } from './model-client.js'
@@ -44,6 +46,7 @@ export const defaultHarvestDistillers: ContextDistiller[] = [
   teamLedgerDistiller,
   artifactSummaryDistiller,
   qaIssueDistiller,
+  workflowRuleDistiller,
 ]
 
 const payloadSchemas = {
@@ -55,6 +58,7 @@ const payloadSchemas = {
   TeamLedgerDistiller: TeamLedgerPayloadSchema,
   ArtifactSummaryDistiller: ArtifactSummaryPayloadSchema,
   QaIssueDistiller: QaIssuePayloadSchema,
+  WorkflowRuleDistiller: WorkflowRulePayloadSchema,
 } satisfies Record<string, ZodObject<ZodRawShape>>
 
 export function validateDistillerOutput(envelope: DistillerEnvelope, options: AcceptanceOptions = {}): AcceptanceResult<DistillerEnvelope> {
@@ -88,6 +92,8 @@ export function selectDistillerForDecision(decision: HarvestDecision, distillers
       return distillers.find((distiller) => distiller.name === 'ArtifactSummaryDistiller')
     case 'distill_qa_issue':
       return distillers.find((distiller) => distiller.name === 'QaIssueDistiller')
+    case 'distill_workflow_rule':
+      return distillers.find((distiller) => distiller.name === 'WorkflowRuleDistiller')
     case 'skip':
       return undefined
   }

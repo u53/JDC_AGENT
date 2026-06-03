@@ -336,8 +336,10 @@ export function kindFromEnvelope(envelope: DistillerEnvelope): ContextFact['kind
       return 'artifact_summary'
     case 'QaIssueDistiller':
       return 'qa_issue'
-    default:
+    case 'WorkflowRuleDistiller':
       return 'workflow_rule'
+    default:
+      return 'project_profile'
   }
 }
 

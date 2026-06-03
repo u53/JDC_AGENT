@@ -184,6 +184,7 @@ export const HarvestDecisionSchema: z.ZodType<HarvestDecision> = z.discriminated
   z.object({ action: z.literal('distill_team_ledger'), reason: nonEmptyStringSchema }),
   z.object({ action: z.literal('distill_artifact_summary'), reason: nonEmptyStringSchema }),
   z.object({ action: z.literal('distill_qa_issue'), reason: nonEmptyStringSchema }),
+  z.object({ action: z.literal('distill_workflow_rule'), reason: nonEmptyStringSchema }),
 ])
 
 export const HarvestModelBindingSchema = z.object({
@@ -305,6 +306,13 @@ export const QaIssuePayloadSchema = z.object({
   summary: nonEmptyStringSchema,
   teamId: nonEmptyStringSchema,
   taskId: nonEmptyStringSchema.optional(),
+  confidence: confidenceSchema.optional(),
+})
+export const WorkflowRulePayloadSchema = z.object({
+  content: nonEmptyStringSchema,
+  workflowType: z.enum(['release', 'build', 'test', 'package', 'ci']),
+  commands: z.array(nonEmptyStringSchema),
+  files: z.array(nonEmptyStringSchema),
   confidence: confidenceSchema.optional(),
 })
 

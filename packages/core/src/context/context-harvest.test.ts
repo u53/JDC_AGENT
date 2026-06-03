@@ -244,6 +244,32 @@ describe('harvest queue safety chain', () => {
     }
   })
 
+  it('distills workflow file changes into durable project workflow rules without a model call', async () => {
+    const store = makeStore()
+    const candidate: HarvestCandidate = {
+      ...baseCandidate,
+      userMessage: '更新 release workflow',
+      changedFiles: ['.github/workflows/release.yml', 'package.json', 'packages/vscode-extension/package.json'],
+    }
+    const enqueued = await enqueueHarvest(candidate, makeBinding('anthropic'), { store, now: () => 4_150, createId: () => 'job_workflow_rule' })
+
+    const completed = await runHarvestJob(enqueued.job!, { store, now: () => 4_160 })
+
+    expect(completed.status).toBe('accepted')
+    expect(store.facts.at(-1)).toMatchObject({
+      kind: 'workflow_rule',
+      scope: 'project',
+      sourceProvider: 'Harvest:WorkflowRuleDistiller',
+      confidence: 0.9,
+    })
+    expect(store.facts.at(-1)?.content).toContain('release workflow')
+    expect(store.facts.at(-1)?.citations.map((citation) => citation.ref)).toEqual([
+      '.github/workflows/release.yml',
+      'package.json',
+      'packages/vscode-extension/package.json',
+    ])
+  })
+
   it('distills structured Team artifact candidates without a model call', async () => {
     const store = makeStore()
     const candidate: HarvestCandidate = {

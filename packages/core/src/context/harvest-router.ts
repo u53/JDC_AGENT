@@ -21,6 +21,10 @@ export function routeHarvestCandidate(candidate: HarvestCandidate): HarvestDecis
   const teamDecision = routeTeamCandidate(candidate)
   if (teamDecision) return teamDecision
 
+  if (candidate.changedFiles.some(isWorkflowFile)) {
+    return { action: 'distill_workflow_rule', reason: 'workflow/package file evidence requires workflow rule distillation' }
+  }
+
   if (candidate.changedFiles.some(file => file.trim().length > 0)) {
     return { action: 'distill_project_update', reason: 'changed file evidence requires project update distillation' }
   }
@@ -110,4 +114,11 @@ function nestedToolInputString(record: Record<string, unknown>, key: string): st
     }
   }
   return ''
+}
+
+function isWorkflowFile(filePath: string): boolean {
+  const normalized = filePath.replace(/\\/g, '/').replace(/^\.\//, '')
+  return /^\.github\/workflows\/[^/]+\.ya?ml$/i.test(normalized) ||
+    normalized === 'package.json' ||
+    /^packages\/[^/]+\/package\.json$/i.test(normalized)
 }

@@ -9,6 +9,7 @@ import {
   QaIssuePayloadSchema,
   RuntimeNarrativePayloadSchema,
   TeamLedgerPayloadSchema,
+  WorkflowRulePayloadSchema,
   validateContextFact,
   validateDistillerEnvelope,
 } from './schemas.js'
@@ -165,6 +166,8 @@ function payloadSchemaForDistiller(distiller: string): ZodObject<ZodRawShape> | 
       return ArtifactSummaryPayloadSchema
     case 'QaIssueDistiller':
       return QaIssuePayloadSchema
+    case 'WorkflowRuleDistiller':
+      return WorkflowRulePayloadSchema
     default:
       return undefined
   }
