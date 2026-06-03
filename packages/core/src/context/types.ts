@@ -181,6 +181,9 @@ export type HarvestDecision =
   | { action: 'distill_conversation'; reason: string }
   | { action: 'distill_memory_candidate'; reason: string }
   | { action: 'distill_project_update'; reason: string }
+  | { action: 'distill_team_ledger'; reason: string }
+  | { action: 'distill_artifact_summary'; reason: string }
+  | { action: 'distill_qa_issue'; reason: string }
 
 export interface HarvestModelBinding {
   sessionId: string

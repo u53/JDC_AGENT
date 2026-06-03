@@ -4,16 +4,22 @@ import type { AcceptanceOptions, AcceptanceResult } from '../safety.js'
 import { validateDistillerEnvelopeForAcceptance } from '../safety.js'
 import {
   CodeTaskPayloadSchema,
+  ArtifactSummaryPayloadSchema,
   ConversationStatePayloadSchema,
   MemoryCandidatePayloadSchema,
   ProjectProfilePayloadSchema,
+  QaIssuePayloadSchema,
   RuntimeNarrativePayloadSchema,
+  TeamLedgerPayloadSchema,
 } from '../schemas.js'
 import { runtimeNarrativeDistiller } from './runtime-narrative-distiller.js'
 import { conversationStateDistiller } from './conversation-state-distiller.js'
 import { memoryCuratorDistiller } from './memory-curator-distiller.js'
 import { projectProfileDistiller } from './project-profile-distiller.js'
 import { codeTaskDistiller } from './code-task-distiller.js'
+import { teamLedgerDistiller } from './team-ledger-distiller.js'
+import { artifactSummaryDistiller } from './artifact-summary-distiller.js'
+import { qaIssueDistiller } from './qa-issue-distiller.js'
 import type { DistillerModelClient } from './model-client.js'
 export type { DistillerModelClient } from './model-client.js'
 export { createProviderDistillerModelClient } from './model-client.js'
@@ -35,6 +41,9 @@ export const defaultHarvestDistillers: ContextDistiller[] = [
   memoryCuratorDistiller,
   projectProfileDistiller,
   codeTaskDistiller,
+  teamLedgerDistiller,
+  artifactSummaryDistiller,
+  qaIssueDistiller,
 ]
 
 const payloadSchemas = {
@@ -43,6 +52,9 @@ const payloadSchemas = {
   MemoryCuratorDistiller: MemoryCandidatePayloadSchema,
   ProjectProfileDistiller: ProjectProfilePayloadSchema,
   CodeTaskDistiller: CodeTaskPayloadSchema,
+  TeamLedgerDistiller: TeamLedgerPayloadSchema,
+  ArtifactSummaryDistiller: ArtifactSummaryPayloadSchema,
+  QaIssueDistiller: QaIssuePayloadSchema,
 } satisfies Record<string, ZodObject<ZodRawShape>>
 
 export function validateDistillerOutput(envelope: DistillerEnvelope, options: AcceptanceOptions = {}): AcceptanceResult<DistillerEnvelope> {
@@ -70,6 +82,12 @@ export function selectDistillerForDecision(decision: HarvestDecision, distillers
       return distillers.find((distiller) => distiller.name === 'MemoryCuratorDistiller')
     case 'distill_project_update':
       return distillers.find((distiller) => distiller.name === 'ProjectProfileDistiller') ?? distillers.find((distiller) => distiller.name === 'CodeTaskDistiller')
+    case 'distill_team_ledger':
+      return distillers.find((distiller) => distiller.name === 'TeamLedgerDistiller')
+    case 'distill_artifact_summary':
+      return distillers.find((distiller) => distiller.name === 'ArtifactSummaryDistiller')
+    case 'distill_qa_issue':
+      return distillers.find((distiller) => distiller.name === 'QaIssueDistiller')
     case 'skip':
       return undefined
   }

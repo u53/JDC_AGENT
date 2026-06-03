@@ -49,6 +49,30 @@ describe('routeHarvestCandidate', () => {
     expect(routeHarvestCandidate(candidate({ userMessage: 'later' }))).toEqual({ action: 'skip', reason: 'no_new_fact' })
     expect(routeHarvestCandidate(candidate({ userMessage: 'use scheduler please' }))).toEqual({ action: 'distill_conversation', reason: expect.stringContaining('substantive') })
   })
+
+  it('routes structured Team candidates and skips raw worker chatter', () => {
+    expect(routeHarvestCandidate(candidate({
+      origin: { projectKey: '/repo', actor: 'team_pm', teamId: 'team_alpha' },
+      userMessage: 'Decision: checkout API keeps the existing response envelope.',
+    })).action).toBe('distill_team_ledger')
+
+    expect(routeHarvestCandidate(candidate({
+      origin: { projectKey: '/repo', actor: 'team_worker', teamId: 'team_alpha', taskId: 'task_checkout' },
+      toolEvents: [{ id: 'tool_1', name: 'team_artifact', status: 'complete', action: 'create_artifact', artifactId: 'report' }],
+      userMessage: 'Worker completed checkout artifact.',
+    })).action).toBe('distill_artifact_summary')
+
+    expect(routeHarvestCandidate(candidate({
+      origin: { projectKey: '/repo', actor: 'team_worker', teamId: 'team_alpha', taskId: 'task_checkout' },
+      toolEvents: [{ id: 'tool_2', name: 'team_artifact', status: 'complete', action: 'create_issue', issueId: 'ISSUE-001' }],
+      userMessage: 'Worker filed QA issue ISSUE-001.',
+    })).action).toBe('distill_qa_issue')
+
+    expect(routeHarvestCandidate(candidate({
+      origin: { projectKey: '/repo', actor: 'team_worker', teamId: 'team_alpha', taskId: 'task_checkout' },
+      userMessage: 'Worker is thinking through the checkout implementation and waiting.',
+    }))).toEqual({ action: 'skip', reason: 'no_new_fact' })
+  })
 })
 
 function candidate(overrides: Partial<HarvestCandidate> = {}): HarvestCandidate {

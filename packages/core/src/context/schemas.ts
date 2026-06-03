@@ -181,6 +181,9 @@ export const HarvestDecisionSchema: z.ZodType<HarvestDecision> = z.discriminated
   z.object({ action: z.literal('distill_conversation'), reason: nonEmptyStringSchema }),
   z.object({ action: z.literal('distill_memory_candidate'), reason: nonEmptyStringSchema }),
   z.object({ action: z.literal('distill_project_update'), reason: nonEmptyStringSchema }),
+  z.object({ action: z.literal('distill_team_ledger'), reason: nonEmptyStringSchema }),
+  z.object({ action: z.literal('distill_artifact_summary'), reason: nonEmptyStringSchema }),
+  z.object({ action: z.literal('distill_qa_issue'), reason: nonEmptyStringSchema }),
 ])
 
 export const HarvestModelBindingSchema = z.object({

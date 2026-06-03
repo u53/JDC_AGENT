@@ -18,6 +18,9 @@ export function routeHarvestCandidate(candidate: HarvestCandidate): HarvestDecis
     return { action: 'distill_runtime', reason: 'tool failure requires runtime narrative distillation' }
   }
 
+  const teamDecision = routeTeamCandidate(candidate)
+  if (teamDecision) return teamDecision
+
   if (candidate.changedFiles.some(file => file.trim().length > 0)) {
     return { action: 'distill_project_update', reason: 'changed file evidence requires project update distillation' }
   }
@@ -33,9 +36,78 @@ export function routeHarvestCandidate(candidate: HarvestCandidate): HarvestDecis
   return { action: 'skip', reason: 'no_new_fact' }
 }
 
+function routeTeamCandidate(candidate: HarvestCandidate): HarvestDecision | undefined {
+  if (!isTeamOrigin(candidate)) return undefined
+  const artifactEvents = candidate.toolEvents.filter(isTeamArtifactToolEvent)
+  const hasStructuredTeamEvidence = artifactEvents.length > 0
+
+  if (candidate.origin?.actor === 'team_pm' && isDurableTeamDecision(candidate.userMessage)) {
+    return { action: 'distill_team_ledger', reason: 'structured Team PM decision requires team ledger distillation' }
+  }
+
+  for (const event of artifactEvents) {
+    const action = toolEventString(event, ['action', 'toolAction'])
+    const status = toolEventString(event, ['new_status', 'newStatus', 'status'])
+    const target = toolEventString(event, ['target_id', 'targetId', 'issueId', 'issue_id'])
+    if (action === 'create_issue' || target.startsWith('ISSUE-') || status === 'resolved' || status === 'wontfix') {
+      return { action: 'distill_qa_issue', reason: 'structured Team QA issue candidate' }
+    }
+    if (action === 'update_status' && status === 'completed') {
+      return { action: 'distill_team_ledger', reason: 'structured Team task result candidate' }
+    }
+  }
+
+  if (hasStructuredTeamEvidence) {
+    return { action: 'distill_artifact_summary', reason: 'structured Team artifact candidate' }
+  }
+
+  if (candidate.origin?.actor === 'team_worker') {
+    return { action: 'skip', reason: 'no_new_fact' }
+  }
+
+  return undefined
+}
+
 function isFailedToolEvent(event: ToolExecutionEvent): boolean {
   const record = event as Record<string, unknown>
   const status = typeof event.status === 'string' ? event.status : typeof record.type === 'string' ? record.type : ''
   const result = record.result && typeof record.result === 'object' ? record.result as Record<string, unknown> : undefined
   return /^(?:error|failed|failure)$/i.test(status) || record.isError === true || result?.isError === true
+}
+
+function isTeamOrigin(candidate: HarvestCandidate): boolean {
+  return candidate.origin?.actor === 'team_pm' || candidate.origin?.actor === 'team_worker' || typeof candidate.origin?.teamId === 'string'
+}
+
+function isTeamArtifactToolEvent(event: ToolExecutionEvent): boolean {
+  return event.name === 'team_artifact' || toolEventString(event, ['toolName', 'name']) === 'team_artifact'
+}
+
+function isDurableTeamDecision(text: string): boolean {
+  const normalized = text.trim()
+  if (normalized.length < 12) return false
+  if (/(思考中|等待|处理中|reviewing|waiting|thinking|in progress|status update|heartbeat)/i.test(normalized)) return false
+  return /(decision|decided|must|keep|choose|chosen|adopt|决定|决策|必须|保持|采用|约定|选择)/i.test(normalized)
+}
+
+function toolEventString(event: ToolExecutionEvent, keys: string[]): string {
+  const record = event as Record<string, unknown>
+  for (const key of keys) {
+    const direct = record[key]
+    if (typeof direct === 'string') return direct
+    const nested = nestedToolInputString(record, key)
+    if (nested) return nested
+  }
+  return ''
+}
+
+function nestedToolInputString(record: Record<string, unknown>, key: string): string {
+  for (const holderKey of ['input', 'args', 'arguments', 'params']) {
+    const holder = record[holderKey]
+    if (holder && typeof holder === 'object' && !Array.isArray(holder)) {
+      const value = (holder as Record<string, unknown>)[key]
+      if (typeof value === 'string') return value
+    }
+  }
+  return ''
 }

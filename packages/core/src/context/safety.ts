@@ -2,10 +2,13 @@ import type { ZodObject, ZodRawShape } from 'zod'
 import { containsRawReasoningCitation, type CitationValidationSources, validateCitations } from './citations.js'
 import {
   CodeTaskPayloadSchema,
+  ArtifactSummaryPayloadSchema,
   ConversationStatePayloadSchema,
   MemoryCandidatePayloadSchema,
   ProjectProfilePayloadSchema,
+  QaIssuePayloadSchema,
   RuntimeNarrativePayloadSchema,
+  TeamLedgerPayloadSchema,
   validateContextFact,
   validateDistillerEnvelope,
 } from './schemas.js'
@@ -156,6 +159,12 @@ function payloadSchemaForDistiller(distiller: string): ZodObject<ZodRawShape> | 
       return ProjectProfilePayloadSchema
     case 'CodeTaskDistiller':
       return CodeTaskPayloadSchema
+    case 'TeamLedgerDistiller':
+      return TeamLedgerPayloadSchema
+    case 'ArtifactSummaryDistiller':
+      return ArtifactSummaryPayloadSchema
+    case 'QaIssueDistiller':
+      return QaIssuePayloadSchema
     default:
       return undefined
   }

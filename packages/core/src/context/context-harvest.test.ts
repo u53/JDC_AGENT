@@ -244,6 +244,41 @@ describe('harvest queue safety chain', () => {
     }
   })
 
+  it('distills structured Team artifact candidates without a model call', async () => {
+    const store = makeStore()
+    const candidate: HarvestCandidate = {
+      ...baseCandidate,
+      userMessage: 'Worker completed checkout artifact.',
+      origin: { projectKey: '/repo', actor: 'team_worker', sessionId: 'session_1', teamId: 'team_alpha', memberId: 'member_api', taskId: 'task_checkout' },
+      toolEvents: [{
+        id: 'tool_team_artifact_1',
+        name: 'team_artifact',
+        status: 'complete',
+        action: 'create_artifact',
+        artifact_id: 'report',
+        type: 'report',
+        summary: 'Checkout report lists validation changes.',
+      }],
+    }
+    const enqueued = await enqueueHarvest(candidate, makeBinding('anthropic'), { store, now: () => 4_200, createId: () => 'job_team_artifact' })
+
+    const completed = await runHarvestJob(enqueued.job!, { store, now: () => 4_300 })
+
+    expect(completed.status).toBe('accepted')
+    expect(store.facts.at(-1)).toMatchObject({
+      kind: 'artifact_summary',
+      scope: 'project',
+      content: 'Checkout report lists validation changes.',
+      sourceProvider: 'Harvest:ArtifactSummaryDistiller',
+      origin: {
+        actor: 'team_worker',
+        teamId: 'team_alpha',
+        memberId: 'member_api',
+        taskId: 'task_checkout',
+      },
+    })
+  })
+
   it('uses the high-confidence default threshold when validating model output', async () => {
     const store = makeStore()
     const enqueued = await enqueueHarvest(baseCandidate, makeBinding('anthropic'), { store, now: () => 4_500, createId: () => 'job_default_min_confidence' })

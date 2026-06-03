@@ -330,6 +330,12 @@ export function kindFromEnvelope(envelope: DistillerEnvelope): ContextFact['kind
       return 'project_profile'
     case 'CodeTaskDistiller':
       return 'code_entrypoint'
+    case 'TeamLedgerDistiller':
+      return (envelope.payload as { kind?: ContextFact['kind'] }).kind === 'task_result' ? 'task_result' : 'team_decision'
+    case 'ArtifactSummaryDistiller':
+      return 'artifact_summary'
+    case 'QaIssueDistiller':
+      return 'qa_issue'
     default:
       return 'workflow_rule'
   }
