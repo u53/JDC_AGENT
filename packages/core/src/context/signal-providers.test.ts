@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ContextEngine } from '../context-engine/engine.js'
 import { validateCitations } from './citations.js'
 import { RawEvidenceSchema, ContextSectionSchema } from './schemas.js'
-import type { ContextCitation, ContextRequest, RawEvidence } from './types.js'
+import type { ContextCitation, ContextFact, ContextRequest, RawEvidence } from './types.js'
 import { collectCodeContext } from './providers/code-provider.js'
 import { collectConversationContext } from './providers/conversation-provider.js'
 import { collectGitContext } from './providers/git-provider.js'
@@ -174,6 +174,41 @@ describe('context signal providers', () => {
     expectCitationsValid(sectionCitations(project), { cwd, ...evidenceProofSources(project.evidence) })
     expectCitationsValid(sectionCitations(git), { gitEvidence: gitEvidenceSources(git.evidence) })
     expect(sectionCitations(project).every((citation) => citation.hash === undefined)).toBe(true)
+  })
+
+  it('collects accepted project memories as cited memory context', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'jdc-memory-provider-store-'))
+    const releaseFact: ContextFact = {
+      id: 'fact_release',
+      kind: 'workflow_rule',
+      scope: 'project',
+      content: '发布前必须运行 pnpm build。',
+      citations: [{ id: 'cit_release', type: 'memory', ref: 'memory_release' }],
+      confidence: 0.95,
+      freshness: 'recent',
+      sourceProvider: 'JdcMemoryWrite',
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const store = {
+      listAcceptedProjectFacts: vi.fn(async () => ({ ok: true, value: [releaseFact], diagnostics: [] })),
+    }
+
+    const result = await collectMemoryContext(request(cwd, { userMessage: '发布流程是什么' }), { store: store as any })
+
+    expect(store.listAcceptedProjectFacts).toHaveBeenCalledWith(expect.objectContaining({
+      minConfidence: 0.01,
+      includeStale: false,
+      includeExpired: false,
+      orderBy: 'updated_desc',
+    }))
+    expect(result.sections).toHaveLength(1)
+    expect(result.sections[0]?.kind).toBe('memory')
+    expect(result.sections[0]?.content).toContain('发布前必须运行 pnpm build')
+    expect(result.sections[0]?.citations[0]?.ref).toBe('memory_release')
+    expect(result.health.status).toBe('cached')
+    expectGateARecords(result)
+    expectCitationsValid(sectionCitations(result), { memoryRecords: [{ id: 'memory_release' }] })
   })
 
   it('collects conversation, runtime, and IDE signals without persisting raw thinking', async () => {

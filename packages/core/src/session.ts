@@ -490,7 +490,7 @@ export class Session {
       { id: 'conversation', collect: (request) => Promise.resolve(collectConversationContext(request, { enabled: toggles.conversation })) },
       { id: 'runtime', collect: (request) => Promise.resolve(collectRuntimeContext(request, { enabled: toggles.runtime })) },
       { id: 'ide', collect: (request) => Promise.resolve(collectIdeContext(request, { enabled: toggles.ide })) },
-      { id: 'memory', collect: (request) => collectMemoryContext(request, { enabled: toggles.memory }) },
+      { id: 'memory', collect: async (request) => collectMemoryContext(request, { enabled: toggles.memory, store: await this.getContextStore() }) },
       { id: 'git', collect: (request) => collectGitContext(request, { enabled: toggles.git }) },
       { id: 'project', collect: (request) => collectProjectContext(request, { enabled: toggles.project }) },
       { id: 'code', collect: (request) => collectCodeContext(request, { enabled: toggles.code, scheduler: this.contextScheduler }) },

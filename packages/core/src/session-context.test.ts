@@ -17,7 +17,7 @@ import { runSubSession } from './sub-session.js'
 import { ToolRegistry } from './tool-registry.js'
 import type { Message, ModelConfig, StreamChunk, ToolDefinition } from './types.js'
 import { closeAllContextStores, type ContextStoreResult } from './context/store.js'
-import type { HarvestJob } from './context/types.js'
+import type { ContextRequest, HarvestJob } from './context/types.js'
 import type { ContextScheduler } from './context/scheduler.js'
 
 const tmpDirs: string[] = []
@@ -120,23 +120,26 @@ describe('Session JDC Context Engine runtime integration', () => {
       contextStore: makeContextStore(),
       contextProviders: [{
         id: 'runtime',
-        collect: async () => ({
-          evidence: [],
-          sections: [{
-            id: 'section_runtime',
-            kind: 'runtime_state',
-            title: 'Runtime context',
-            content: 'Runtime context',
-            citations: [{ id: 'cit_tool', type: 'tool_event', ref: 'tool_1' }],
-            priority: 90,
-            confidence: 0.9,
-            freshness: 'live',
-            sourceProvider: 'RuntimeSignalProvider',
-            tokenEstimate: 4,
-          }],
-          diagnostics: [],
-          health: { id: 'runtime', status: 'enabled', updatedAt: 1 },
-        }),
+        collect: async (request: ContextRequest) => {
+          expect(request.tokenBudget).toBeUndefined()
+          return {
+            evidence: [],
+            sections: [{
+              id: 'section_runtime',
+              kind: 'runtime_state',
+              title: 'Runtime context',
+              content: 'Runtime context',
+              citations: [{ id: 'cit_tool', type: 'tool_event', ref: 'tool_1' }],
+              priority: 90,
+              confidence: 0.9,
+              freshness: 'live',
+              sourceProvider: 'RuntimeSignalProvider',
+              tokenEstimate: 4,
+            }],
+            diagnostics: [],
+            health: { id: 'runtime', status: 'enabled', updatedAt: 1 },
+          }
+        },
       }],
       contextId: () => 'ctx_test',
     })
