@@ -18,12 +18,12 @@ export function ContextInspectPanel({ payload, loading, error }: {
   const providerSummary = summarizeProviders(payload.providerHealth)
 
   return (
-    <PanelFrame title="当前状态" subtitle={`最近读取 ${formatDate(payload.inspectedAt)}`}>
+    <PanelFrame title="引擎状态" subtitle={`最近读取 ${formatDate(payload.inspectedAt)}`}>
       <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(120px,1fr))]">
         <Metric label="引擎状态" value={statusLabel(payload.status)} />
-        <Metric label="注入段落" value={sectionCount} />
-        <Metric label="项目记忆" value={payload.acceptedProjectFacts.length} />
-        <Metric label="提供方" value={providerSummary} />
+        <Metric label="本轮已注入" value={`${sectionCount} 段`} />
+        <Metric label="项目事实" value={payload.acceptedProjectFacts.length} />
+        <Metric label="提供方可用" value={providerSummary} />
       </div>
 
       <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(120px,1fr))]">

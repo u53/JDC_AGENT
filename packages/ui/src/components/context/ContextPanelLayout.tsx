@@ -4,7 +4,7 @@ import { ContextAdvancedDiagnosticsPanel } from './ContextAdvancedDiagnosticsPan
 import { ContextCurrentPanel } from './ContextCurrentPanel'
 import { ContextFactsPanel } from './ContextFactsPanel'
 import { ContextInspectPanel } from './ContextInspectPanel'
-import { PanelFrame, PanelState } from './ContextPanelPrimitives'
+import { Badge, formatPercent, freshnessLabel, kindLabel, PanelFrame, PanelState } from './ContextPanelPrimitives'
 
 export type ContextTab = 'understanding' | 'facts' | 'current' | 'team' | 'status' | 'advanced'
 
@@ -105,7 +105,11 @@ function ContextProjectUnderstandingPanel({ payload, loading, error }: {
         <div className="space-y-2">
           {facts.map((fact) => (
             <article key={fact.id} className="rounded-[8px] border border-[var(--border)] bg-[var(--bg)] p-2">
-              <div className="text-[10px] text-[var(--muted)]">{fact.kind}</div>
+              <div className="flex flex-wrap items-center gap-1">
+                <Badge tone="accent">{kindLabel(fact.kind)}</Badge>
+                <Badge>可信度 {formatPercent(fact.confidence)}</Badge>
+                <Badge>新鲜度 {freshnessLabel(fact.freshness)}</Badge>
+              </div>
               <div className="mt-1 text-[12px] leading-relaxed text-[var(--text)]">{fact.content}</div>
             </article>
           ))}

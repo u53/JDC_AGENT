@@ -208,6 +208,75 @@ describe('context inspectability panels', () => {
     expect(html).toContain('reindex-1')
   })
 
+  it('renders accepted project understanding facts with confidence and freshness', () => {
+    const html = renderToStaticMarkup(
+      <ContextPanelLayout
+        sessionId="sess-1"
+        activeTab="understanding"
+        onTabChange={() => {}}
+        inspect={request(payload)}
+        harvest={request(payload.harvestQueue)}
+        memoryReview={request({ accepted: acceptedMemory, rejected: payload.memoryReview.rejected })}
+        providerHealth={request(extendedProviders)}
+        refresh={request(null)}
+        onReloadDiagnostics={() => {}}
+        onReindexCode={() => {}}
+        onReadProviderStatus={() => {}}
+      />,
+    )
+
+    expect(html).toContain('项目理解')
+    expect(html).toContain('发布前运行 pnpm build。')
+    expect(html).toContain('工作流规则')
+    expect(html).toContain('可信度')
+    expect(html).toContain('91%')
+    expect(html).toContain('新鲜度')
+    expect(html).toContain('已缓存')
+    expect(html).not.toContain('Missing citations')
+    expect(html).not.toContain('Provider code exceeded context budget')
+  })
+
+  it('renders aggregate engine status without raw provider diagnostics', () => {
+    const noisyPayload: ContextInspectPayload = {
+      ...payload,
+      providerHealth: payload.providerHealth,
+      diagnostics: [
+        { id: 'diag-ide', level: 'warning', source: 'IdeSignalProvider', message: 'IDE snapshot is unavailable; IDE provider returned stale degraded context.', createdAt: 1_700_000_000_000 },
+      ],
+      bundle: payload.bundle
+        ? {
+            ...payload.bundle,
+            diagnostics: [
+              { id: 'diag-code', level: 'warning', source: 'ContextProvider:code', message: 'Provider code exceeded context budget; returning degraded context.', createdAt: 1_700_000_000_000 },
+            ],
+          }
+        : null,
+    }
+    const html = renderToStaticMarkup(
+      <ContextPanelLayout
+        sessionId="sess-1"
+        activeTab="status"
+        onTabChange={() => {}}
+        inspect={request(noisyPayload)}
+        harvest={request(noisyPayload.harvestQueue)}
+        memoryReview={request({ accepted: acceptedMemory, rejected: noisyPayload.memoryReview.rejected })}
+        providerHealth={request(extendedProviders)}
+        refresh={request(null)}
+        onReloadDiagnostics={() => {}}
+        onReindexCode={() => {}}
+        onReadProviderStatus={() => {}}
+      />,
+    )
+
+    expect(html).toContain('引擎状态')
+    expect(html).toContain('本轮已注入')
+    expect(html).toContain('项目事实')
+    expect(html).toContain('提供方可用')
+    expect(html).not.toContain('git unavailable')
+    expect(html).not.toContain('IdeSignalProvider')
+    expect(html).not.toContain('Provider code exceeded context budget')
+  })
+
   it('renders current injected context sections in Chinese with citations and suppressed count', () => {
     const html = renderToStaticMarkup(<ContextCurrentPanel payload={{ ...payload, droppedSections: [{ section: { ...payload.bundle!.sections[0], id: 'dropped-1', title: 'Dropped', content: 'model_noop rejected candidate' }, reason: 'token budget', tokenEstimate: 25 }] }} loading={false} error={null} />)
 
