@@ -29,6 +29,7 @@ describe('JDC Context orchestrator', () => {
 
     expect(provider).not.toHaveBeenCalled()
     expect(store.queryFacts).not.toHaveBeenCalled()
+    expect(store.listAcceptedProjectFacts).not.toHaveBeenCalled()
     expect(result.renderedPrompt).toBe('')
     expect(result.bundle.sections).toEqual([])
     expect(result.bundle.diagnostics[0]?.message).toContain('context injection disabled')
@@ -37,7 +38,7 @@ describe('JDC Context orchestrator', () => {
 
   it('builds a ranked, budgeted bundle from live providers and stored facts, then persists evidence and snapshots', async () => {
     const runtime = section({ id: 'runtime_live', kind: 'runtime_state', content: 'live runtime error', priority: 10, freshness: 'live', confidence: 0.7, sourceProvider: 'RuntimeSignalProvider', tokenEstimate: 30 })
-    const memory = fact({ id: 'memory_fact', content: 'cached preference', freshness: 'cached', confidence: 0.95 })
+    const memory = fact({ id: 'memory_fact', kind: 'project_convention', content: 'cached preference', freshness: 'cached', confidence: 0.95 })
     const evidence = rawEvidence({ id: 'raw_runtime' })
     const store = makeStore({ facts: [memory] })
 
@@ -87,7 +88,7 @@ describe('JDC Context orchestrator', () => {
   it('keeps high-value stale facts visible while suppressing stale low-value durable facts', async () => {
     const store = makeStore({
       facts: [
-        fact({ id: 'fact_recent', content: 'recent project convention', freshness: 'recent' }),
+        fact({ id: 'fact_recent', kind: 'project_convention', content: 'recent project convention', freshness: 'recent' }),
         fact({ id: 'fact_known_issue', kind: 'known_issue', content: 'stale known issue still relevant', freshness: 'stale' }),
         fact({ id: 'fact_stale', kind: 'user_preference', content: 'stale old convention', freshness: 'stale' }),
       ],
@@ -107,12 +108,57 @@ describe('JDC Context orchestrator', () => {
     expect(result.renderedPrompt).toContain('[stale]')
     expect(result.bundle.sections.map((item) => item.id)).toEqual(['fact_fact_recent', 'fact_fact_known_issue'])
     expect(result.bundle.diagnostics).toContainEqual(expect.objectContaining({
-      source: 'ContextPlanner',
-      message: 'Suppressed context section fact_fact_stale (memory "User Preference"): stale_low_value.',
+      source: 'ContextRetriever',
+      message: 'Suppressed stale low-value fact fact_stale.',
       visibleInPrimaryUi: false,
     }))
-    expect(store.queryFacts).toHaveBeenCalledWith({ minConfidence: 0.01, includeStale: true, orderBy: 'updated_desc' })
+    expect(store.listAcceptedProjectFacts).toHaveBeenCalledWith(expect.objectContaining({
+      minConfidence: 0.01,
+      includeStale: true,
+      includeExpired: false,
+      orderBy: 'updated_desc',
+    }))
+    expect(store.listAcceptedProjectFacts).toHaveBeenCalledWith(expect.not.objectContaining({
+      limit: expect.any(Number),
+    }))
     expect(store.enforceQuotas).toHaveBeenCalledTimes(1)
+  })
+
+  it('injects query-relevant memory instead of recent irrelevant memory through retrieval', async () => {
+    const facts = [
+      ...Array.from({ length: 20 }, (_, index) => fact({
+        id: `recent_irrelevant_${index}`,
+        kind: 'user_preference',
+        content: `Recent unrelated preference ${index}`,
+        updatedAt: 10_000 + index,
+      })),
+      fact({
+        id: 'release_process',
+        kind: 'workflow_rule',
+        content: 'JDCAGNET 发布流程：bump version，commit，tag vX.Y.Z，然后 push tag 触发 release workflow。',
+        updatedAt: 1,
+        confidence: 1,
+      }),
+    ]
+    const store = makeStore({ facts })
+
+    const result = await buildContextBundle({ ...request, userMessage: '我们的发布流程是咋样的' }, {
+      injectionEnabled: true,
+      store,
+      providers: [],
+      now: () => 20_000,
+      id: () => 'bundle_release_memory',
+    })
+
+    expect(result.renderedPrompt).toContain('JDCAGNET 发布流程')
+    expect(result.renderedPrompt).not.toContain('Recent unrelated preference')
+    expect(store.listAcceptedProjectFacts).toHaveBeenCalledWith(expect.objectContaining({
+      minConfidence: 0.01,
+      includeStale: true,
+      includeExpired: false,
+      orderBy: 'updated_desc',
+    }))
+    expect(store.queryFacts).not.toHaveBeenCalled()
   })
 
   it('persists hidden planner suppression diagnostics for advanced inspection', async () => {
@@ -169,8 +215,9 @@ describe('JDC Context orchestrator', () => {
 
     expect(result.bundle.sections.map((item) => item.id)).toContain('fact_goal_recent')
     expect(result.renderedPrompt).toContain('Finish the task-aware context planner')
-    expect(store.queryFacts).toHaveBeenCalledTimes(1)
-    expect(store.queryFacts).toHaveBeenCalledWith(expect.not.objectContaining({
+    expect(store.queryFacts).not.toHaveBeenCalled()
+    expect(store.listAcceptedProjectFacts).toHaveBeenCalledTimes(1)
+    expect(store.listAcceptedProjectFacts).toHaveBeenCalledWith(expect.not.objectContaining({
       limit: expect.any(Number),
       kinds: expect.any(Array),
     }))
@@ -196,9 +243,10 @@ describe('JDC Context orchestrator', () => {
     })
 
     expect(result.renderedPrompt).toContain('Project convention 239')
-    for (const [query] of store.queryFacts.mock.calls) {
+    for (const [query] of store.listAcceptedProjectFacts.mock.calls) {
       expect(query).not.toHaveProperty('limit')
     }
+    expect(store.queryFacts).not.toHaveBeenCalled()
   })
 
   it('adds provider diagnostics and continues when one provider fails', async () => {

@@ -3,6 +3,7 @@ import { budgetContextSections, type ContextBudgetLimits, type DroppedContextSec
 import { planContext } from './planner.js'
 import { renderContextBundle } from './prompt-renderer.js'
 import { rankContextSections } from './ranker.js'
+import { retrieveContextFacts } from './retriever.js'
 import { createContextScheduler, type ContextScheduler } from './scheduler.js'
 import type { ContextStore, ContextStoreResult } from './store.js'
 import type {
@@ -61,7 +62,7 @@ export async function buildContextBundle(request: ContextRequest, options: Build
   }
 
   try {
-    const storeFacts = await loadStoreFacts(options.store)
+    const storeFacts = await loadStoreFacts(request, options.store, now)
     throwIfAborted(request.signal)
     const providerResults = await collectProviderResults(request, options.providers ?? [], now, scheduler, options.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS)
     throwIfAborted(request.signal)
@@ -106,14 +107,12 @@ export async function buildContextBundle(request: ContextRequest, options: Build
   }
 }
 
-async function loadStoreFacts(store: ContextStore): Promise<ContextFact[] & { diagnostics: ContextDiagnostic[] }> {
-  // Product contract: project facts are loaded without a hidden row window.
-  // Relevance/planning decides what reaches the prompt; a default 200/75 store
-  // cap would break same-project cross-session learning for larger projects.
-  const general = await store.queryFacts({ minConfidence: 0.01, includeStale: true, orderBy: 'updated_desc' })
-  if (!general.ok) throw new Error(general.diagnostics[0]?.message || 'context store queryFacts failed')
-
-  return Object.assign(dedupeFacts(general.value), { diagnostics: general.diagnostics })
+async function loadStoreFacts(request: ContextRequest, store: ContextStore, now: () => number): Promise<ContextFact[] & { diagnostics: ContextDiagnostic[] }> {
+  // Product contract: durable project facts are retrieval-ranked without a
+  // hidden row/result window. Explicit debug caps can be passed by callers in
+  // future, but the Engine must not silently forget large projects.
+  const retrieved = await retrieveContextFacts(request, { store, now })
+  return Object.assign(dedupeFacts(retrieved.facts.map((item) => item.fact)), { diagnostics: retrieved.diagnostics })
 }
 
 function dedupeFacts(facts: ContextFact[]): ContextFact[] {
