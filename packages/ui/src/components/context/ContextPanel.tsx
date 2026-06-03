@@ -50,6 +50,7 @@ export function ContextPanel({ sessionId }: { sessionId: string | null }) {
       memoryReview={memoryReview}
       providerHealth={providerHealth}
       refresh={refresh}
+      advancedVisible={import.meta.env.DEV === true}
       onReloadDiagnostics={reloadDiagnostics}
       onReindexCode={reindexCode}
       onReadProviderStatus={readProviderStatus}

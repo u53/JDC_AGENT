@@ -9,7 +9,7 @@ import { ContextTeamPanel } from './ContextTeamPanel'
 
 export type ContextTab = 'understanding' | 'facts' | 'current' | 'team' | 'status' | 'advanced'
 
-export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect, harvest, memoryReview, providerHealth, refresh, onReloadDiagnostics, onReindexCode, onReadProviderStatus }: {
+export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect, harvest, memoryReview, providerHealth, refresh, advancedVisible = false, onReloadDiagnostics, onReindexCode, onReadProviderStatus }: {
   sessionId: string | null
   activeTab: ContextTab
   onTabChange: (tab: ContextTab) => void
@@ -18,6 +18,7 @@ export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect,
   memoryReview: ContextRequestState<ContextMemoryReview>
   providerHealth: ContextRequestState<ContextProviderHealth>
   refresh: ContextRequestState<ContextRefreshState>
+  advancedVisible?: boolean
   onReloadDiagnostics: () => void
   onReindexCode: () => void
   onReadProviderStatus: () => void
@@ -31,6 +32,7 @@ export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect,
   }
 
   const tabs = contextTabs(inspect.data, memoryReview.data, providerHealth.data)
+  const effectiveTab = activeTab === 'advanced' && !advancedVisible ? 'status' : activeTab
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--panel)]">
@@ -47,7 +49,7 @@ export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect,
             key={item.id}
             type="button"
             onClick={() => onTabChange(item.id)}
-            className={`min-w-0 shrink-0 whitespace-nowrap border-b-2 px-2 py-2 text-[11px] transition-colors ${activeTab === item.id ? 'border-[var(--accent)] text-[var(--text)]' : 'border-transparent text-[var(--muted)] hover:text-[var(--text)]'}`}
+            className={`min-w-0 shrink-0 whitespace-nowrap border-b-2 px-2 py-2 text-[11px] transition-colors ${effectiveTab === item.id ? 'border-[var(--accent)] text-[var(--text)]' : 'border-transparent text-[var(--muted)] hover:text-[var(--text)]'}`}
           >
             {item.label}
             {item.badge != null && <span className="ml-1 opacity-60">{item.badge}</span>}
@@ -56,12 +58,12 @@ export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect,
       </div>
 
       <div className="context-panel-scroll min-h-0 flex-1 overflow-y-auto p-3">
-        {activeTab === 'understanding' && <ContextProjectUnderstandingPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
-        {activeTab === 'facts' && <ContextFactsPanel acceptedMemory={memoryReview.data?.accepted ?? null} projectFacts={inspect.data?.acceptedProjectFacts ?? []} loading={memoryReview.loading || inspect.loading} error={memoryReview.error ?? inspect.error} />}
-        {activeTab === 'current' && <ContextCurrentPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
-        {activeTab === 'team' && <ContextTeamPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
-        {activeTab === 'status' && <ContextInspectPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
-        {activeTab === 'advanced' && (
+        {effectiveTab === 'understanding' && <ContextProjectUnderstandingPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
+        {effectiveTab === 'facts' && <ContextFactsPanel acceptedMemory={memoryReview.data?.accepted ?? null} projectFacts={inspect.data?.acceptedProjectFacts ?? []} loading={memoryReview.loading || inspect.loading} error={memoryReview.error ?? inspect.error} />}
+        {effectiveTab === 'current' && <ContextCurrentPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
+        {effectiveTab === 'team' && <ContextTeamPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
+        {effectiveTab === 'status' && <ContextInspectPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
+        {advancedVisible && activeTab === 'advanced' && (
           <ContextAdvancedDiagnosticsPanel
             inspect={inspect}
             harvest={harvest}

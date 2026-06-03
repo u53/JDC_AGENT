@@ -170,6 +170,7 @@ describe('context inspectability panels', () => {
         memoryReview={request({ accepted: acceptedMemory, rejected: payload.memoryReview.rejected })}
         providerHealth={request(extendedProviders)}
         refresh={request(null)}
+        advancedVisible
         onReloadDiagnostics={() => {}}
         onReindexCode={() => {}}
         onReadProviderStatus={() => {}}
@@ -206,6 +207,7 @@ describe('context inspectability panels', () => {
         memoryReview={request({ accepted: acceptedMemory, rejected: payload.memoryReview.rejected })}
         providerHealth={request(extendedProviders)}
         refresh={request(null)}
+        advancedVisible
         onReloadDiagnostics={() => {}}
         onReindexCode={() => {}}
         onReadProviderStatus={() => {}}
@@ -218,6 +220,50 @@ describe('context inspectability panels', () => {
     expect(html).toContain('已折叠空结果记录')
     expect(html).toContain('job-1')
     expect(html).toContain('reindex-1')
+  })
+
+  it('gates advanced diagnostics behind an explicit advanced flag', () => {
+    const hidden = renderToStaticMarkup(
+      <ContextPanelLayout
+        sessionId="sess-1"
+        activeTab="advanced"
+        onTabChange={() => {}}
+        inspect={request({ ...payload, advancedDiagnostics: { rejected: payload.memoryReview.rejected, diagnostics: payload.diagnostics, harvestJobs: payload.harvestQueue.jobs, noop: { rejected: 2, diagnostics: 3, harvestJobs: 4 } } })}
+        harvest={request(payload.harvestQueue)}
+        memoryReview={request({ accepted: acceptedMemory, rejected: payload.memoryReview.rejected })}
+        providerHealth={request(extendedProviders)}
+        refresh={request(null)}
+        advancedVisible={false}
+        onReloadDiagnostics={() => {}}
+        onReindexCode={() => {}}
+        onReadProviderStatus={() => {}}
+      />,
+    )
+
+    expect(hidden).not.toContain('高级诊断')
+    expect(hidden).not.toContain('重新读取诊断')
+    expect(hidden).not.toContain('job-1')
+    expect(hidden).not.toContain('candidate-1')
+
+    const visible = renderToStaticMarkup(
+      <ContextPanelLayout
+        sessionId="sess-1"
+        activeTab="advanced"
+        onTabChange={() => {}}
+        inspect={request({ ...payload, advancedDiagnostics: { rejected: payload.memoryReview.rejected, diagnostics: payload.diagnostics, harvestJobs: payload.harvestQueue.jobs, noop: { rejected: 2, diagnostics: 3, harvestJobs: 4 } } })}
+        harvest={request(payload.harvestQueue)}
+        memoryReview={request({ accepted: acceptedMemory, rejected: payload.memoryReview.rejected })}
+        providerHealth={request(extendedProviders)}
+        refresh={request(null)}
+        advancedVisible
+        onReloadDiagnostics={() => {}}
+        onReindexCode={() => {}}
+        onReadProviderStatus={() => {}}
+      />,
+    )
+
+    expect(visible).toContain('高级诊断')
+    expect(visible).toContain('重新读取诊断')
   })
 
   it('renders accepted project understanding facts with confidence and freshness', () => {
