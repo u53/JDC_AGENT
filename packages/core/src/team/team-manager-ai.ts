@@ -4,6 +4,12 @@ import type { TeamMessage, TeamEvent, TeamMemberState, TeamTask } from './team-t
 import type { TeamWorkspace } from './team-workspace.js'
 import type { ModelProvider } from '../model-provider.js'
 import type { ModelConfig, Message } from '../types.js'
+import { buildContextBundle, type ContextProvider } from '../context/orchestrator.js'
+import { teamPmProfile } from '../context/actor-profile.js'
+import { DEFAULT_CONTEXT_ENGINE_CONFIG, resolveContextEngineConfig, type ContextEngineConfigInput } from '../context/config.js'
+import { createContextScheduler, type ContextScheduler } from '../context/scheduler.js'
+import type { ContextStore } from '../context/store.js'
+import type { ProviderProtocol } from '../context/types.js'
 
 /**
  * Structured proactive trigger reasons. PM gets richer context than a bare string.
@@ -19,6 +25,8 @@ export interface TeamManagerAIOptions extends TeamManagerOptions {
   provider: ModelProvider
   modelConfig: ModelConfig
   memberStates: () => TeamMemberState[]
+  cwd: string
+  teamId: string
   objective: string
   /**
    * Called when AI produces new actions ready to be consumed.
@@ -41,6 +49,44 @@ export interface TeamManagerAIOptions extends TeamManagerOptions {
    * cycles) up to the host session so it can aggregate into sub-agent usage.
    */
   onUsage?: (usage: { inputTokens: number; outputTokens: number; cacheCreationInputTokens?: number; cacheReadInputTokens?: number }) => void
+  contextEngine?: {
+    sessionId?: string
+    config?: ContextEngineConfigInput
+    store: ContextStore
+    providers?: ContextProvider[]
+    scheduler?: ContextScheduler
+    id?: () => string
+    protocol?: ProviderProtocol | 'openai'
+    modelGroupId?: string
+    baseUrl?: string
+  }
+}
+
+function contextPerformanceConfig(contextConfig: ReturnType<typeof resolveContextEngineConfig>): NonNullable<ReturnType<typeof resolveContextEngineConfig>['performance']> {
+  return contextConfig.performance ?? DEFAULT_CONTEXT_ENGINE_CONFIG.performance!
+}
+
+function appendContextPromptSegment(systemPrompt: ModelConfig['systemPrompt'], renderedPrompt: string): ModelConfig['systemPrompt'] {
+  const segment = { content: renderedPrompt, cacheable: false, jdcContextEngine: true }
+  if (Array.isArray(systemPrompt)) return [...removeContextPromptSegments(systemPrompt) as NonNullable<ModelConfig['systemPrompt']> & Array<{ content: string; cacheable: boolean }>, segment]
+  if (typeof systemPrompt === 'string' && systemPrompt.length > 0) return [{ content: systemPrompt, cacheable: true }, segment]
+  return [segment]
+}
+
+function removeContextPromptSegments(systemPrompt: ModelConfig['systemPrompt']): ModelConfig['systemPrompt'] {
+  if (!Array.isArray(systemPrompt)) return systemPrompt
+  return systemPrompt.filter(segment => !(segment as { jdcContextEngine?: boolean }).jdcContextEngine)
+}
+
+function makeTeamPmContextDiagnostic(message: string, error: unknown) {
+  const suffix = error instanceof Error ? `: ${error.message}` : `: ${String(error)}`
+  return {
+    id: `diagnostic_team_pm_context_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    level: 'error' as const,
+    source: 'TeamPmContextRuntime',
+    message: `${message}${suffix}`,
+    createdAt: Date.now(),
+  }
 }
 
 // =============================================================================
@@ -817,10 +863,13 @@ export class TeamManagerAI extends TeamManager {
   private provider: ModelProvider
   private modelConfig: ModelConfig
   private getMemberStates: () => TeamMemberState[]
+  private cwd: string
+  private teamId: string
   private objective: string
   private recentEvents?: (n: number) => TeamEvent[]
   private workspace?: () => TeamWorkspace | undefined
   private skillContent?: string
+  private contextEngine?: TeamManagerAIOptions['contextEngine']
   private conversationHistory: Message[] = []
   private aiEnabled = true
   private aiProcessing = false
@@ -853,10 +902,13 @@ export class TeamManagerAI extends TeamManager {
     this.provider = opts.provider
     this.modelConfig = opts.modelConfig
     this.getMemberStates = opts.memberStates
+    this.cwd = opts.cwd
+    this.teamId = opts.teamId
     this.objective = opts.objective
     this.recentEvents = opts.recentEvents
     this.workspace = opts.workspace
     this.skillContent = opts.skillContent
+    this.contextEngine = opts.contextEngine
   }
 
   /**
@@ -896,6 +948,59 @@ export class TeamManagerAI extends TeamManager {
       segments.push({ content: extraNote, cacheable: false })
     }
     return segments
+  }
+
+  private async buildPMSystemPrompt(extraNote: string | undefined, userText: string, recentMessages: Message[]): Promise<ModelConfig['systemPrompt']> {
+    const systemPrompt = this.buildPMSystemSegments(extraNote)
+    const engine = this.contextEngine
+    if (!engine) return systemPrompt
+
+    const contextConfig = resolveContextEngineConfig(engine.config)
+    if (!contextConfig.enabled) return systemPrompt
+    const scheduler = engine.scheduler ?? createContextScheduler({ maxBackgroundPerProject: contextPerformanceConfig(contextConfig).maxBackgroundJobsPerProject })
+    const performance = contextPerformanceConfig(contextConfig)
+    const contextSessionId = engine.sessionId ?? `team_pm_${this.teamId}`
+
+    try {
+      return await scheduler.runForeground(
+        'context:team-pm-inject',
+        performance.degradedProviderTimeoutMs,
+        async (signal) => {
+          const actorProfile = teamPmProfile({
+            sessionId: contextSessionId,
+            cwd: this.cwd,
+            mode: 'plan',
+            objective: this.objective,
+            teamId: this.teamId,
+          })
+          const result = await buildContextBundle({
+            sessionId: contextSessionId,
+            cwd: this.cwd,
+            userMessage: userText,
+            recentMessages: recentMessages.slice(-8),
+            mode: 'plan',
+            model: this.modelConfig.model,
+            runtime: { teamId: this.teamId, memberStates: this.getMemberStates() },
+            signal,
+            createdAt: Date.now(),
+          }, {
+            injectionEnabled: contextConfig.injectionEnabled,
+            store: engine.store,
+            providers: engine.providers ?? [],
+            providerTimeoutMs: performance.providerTimeoutMs,
+            scheduler,
+            actorProfile,
+            id: engine.id,
+          })
+          if (!result.renderedPrompt) return systemPrompt
+          return appendContextPromptSegment(systemPrompt, result.renderedPrompt)
+        },
+        systemPrompt,
+      )
+    } catch (error) {
+      void engine.store.saveDiagnostic(makeTeamPmContextDiagnostic('Team PM context injection failed without blocking PM decisions', error)).catch(() => undefined)
+      return systemPrompt
+    }
   }
 
   setAIEnabled(enabled: boolean): void {
@@ -1367,7 +1472,7 @@ export class TeamManagerAI extends TeamManager {
         : ''
       const config: ModelConfig = {
         ...this.modelConfig,
-        systemPrompt: this.buildPMSystemSegments(replySuppression || undefined),
+        systemPrompt: await this.buildPMSystemPrompt(replySuppression || undefined, userText, this.conversationHistory),
         cacheKey: this.modelConfig.cacheKey ?? 'pm',
         maxTokens: 32768,
       }
@@ -1480,17 +1585,19 @@ export class TeamManagerAI extends TeamManager {
     const userText = `${dump}\n\n${frame}\n\nDecide actions now.`
 
     try {
+      const messages: Message[] = [
+        { id: uuid(), role: 'user', content: [{ type: 'text', text: userText }], timestamp: Date.now() },
+      ]
       const config: ModelConfig = {
         ...this.modelConfig,
-        systemPrompt: this.buildPMSystemSegments(
-          `\n\nNote: proactive cycle. NEVER use type="reply" — no user is asking. If you genuinely need user input (taste/preference question, destructive sign-off, real deadlock), use type="escalate_to_user" — it bypasses this restriction. Use it sparingly.`
+        systemPrompt: await this.buildPMSystemPrompt(
+          `\n\nNote: proactive cycle. NEVER use type="reply" — no user is asking. If you genuinely need user input (taste/preference question, destructive sign-off, real deadlock), use type="escalate_to_user" — it bypasses this restriction. Use it sparingly.`,
+          userText,
+          messages,
         ),
         cacheKey: this.modelConfig.cacheKey ?? 'pm',
         maxTokens: 32768,
       }
-      const messages: Message[] = [
-        { id: uuid(), role: 'user', content: [{ type: 'text', text: userText }], timestamp: Date.now() },
-      ]
       let responseText = ''
       const stream = this.provider.stream(messages, [], config, undefined)
       for await (const chunk of stream) {
@@ -1542,17 +1649,19 @@ export class TeamManagerAI extends TeamManager {
     const userText = `${dump}\n\n${FRAME_STAFFING_FOLLOWUP}\n\n${trigger}\n\nDecide assign_task / cancel_task only.`
 
     try {
+      const messages: Message[] = [
+        { id: uuid(), role: 'user', content: [{ type: 'text', text: userText }], timestamp: Date.now() },
+      ]
       const config: ModelConfig = {
         ...this.modelConfig,
-        systemPrompt: this.buildPMSystemSegments(
-          `\n\nNote: focused follow-up. Output ONLY assign_task or cancel_task. No other action types.`
+        systemPrompt: await this.buildPMSystemPrompt(
+          `\n\nNote: focused follow-up. Output ONLY assign_task or cancel_task. No other action types.`,
+          userText,
+          messages,
         ),
         cacheKey: this.modelConfig.cacheKey ?? 'pm',
         maxTokens: 32768,
       }
-      const messages: Message[] = [
-        { id: uuid(), role: 'user', content: [{ type: 'text', text: userText }], timestamp: Date.now() },
-      ]
       let responseText = ''
       const stream = this.provider.stream(messages, [], config, undefined)
       for await (const chunk of stream) {

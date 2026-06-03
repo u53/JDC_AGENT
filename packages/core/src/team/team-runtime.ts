@@ -120,12 +120,15 @@ export class TeamRuntime {
         provider: opts.aiPM.provider,
         modelConfig: opts.aiPM.modelConfig,
         memberStates: () => this.getMembers(),
+        cwd: opts.subSessionDeps.cwd,
+        teamId: this.id,
         objective: opts.objective,
         onActionsReady: () => this.scheduleTick(),
         recentEvents: (n) => this.events.tail(n),
         workspace: () => this.workspace,
         skillContent: opts.skillInjection?.pmContent,
         onUsage: opts.onUsage,
+        contextEngine: opts.subSessionDeps.contextEngine,
       })
       this.manager = aiManager
     }
@@ -140,6 +143,8 @@ export class TeamRuntime {
       const member = new TeamMember({
         spec,
         taskPrompt: '', // assigned later
+        teamId: this.id,
+        teamObjective: this.objective,
         subSessionDeps: opts.subSessionDeps,
         resolveModel: opts.resolveModel,
         onEvent: (e) => this.recordEvent(e),
@@ -230,6 +235,8 @@ export class TeamRuntime {
     const member = new TeamMember({
       spec: resolvedSpec,
       taskPrompt: '',
+      teamId: this.id,
+      teamObjective: this.objective,
       subSessionDeps: this.opts.subSessionDeps,
       resolveModel: this.opts.resolveModel,
       onEvent: (e) => this.recordEvent(e),
@@ -367,6 +374,8 @@ export class TeamRuntime {
         spec: memberSpec,
         taskPrompt: '',
         id: memberId,
+        teamId: this.id,
+        teamObjective: this.objective,
         subSessionDeps: this.opts.subSessionDeps,
         resolveModel: this.opts.resolveModel,
         onEvent: (e) => this.recordEvent(e),
@@ -861,6 +870,8 @@ export class TeamRuntime {
       taskPrompt,
       taskId,
       id: memberId,
+      teamId: this.id,
+      teamObjective: this.objective,
       existingMailbox: member.getMailbox(),
       teamMailbox: { push: (msg: any) => this.sendMessage(msg) },
       workspace: this.workspace,
@@ -1004,6 +1015,8 @@ export class TeamRuntime {
       },
       taskPrompt: '',
       id: memberId,
+      teamId: this.id,
+      teamObjective: this.objective,
       subSessionDeps: this.opts.subSessionDeps,
       resolveModel: this.opts.resolveModel,
       onEvent: (e) => this.recordEvent(e),
@@ -1419,4 +1432,3 @@ function buildWorkerTaskPrompt(args: WorkerTaskPromptArgs): string {
 
   return sections.join('\n\n')
 }
-

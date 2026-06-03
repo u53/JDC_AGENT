@@ -47,6 +47,7 @@ import { createBackgroundEventsTool } from './tools/background-events.js'
 import { createTeamListTool } from './tools/team-list.js'
 import { createTeamAddTaskTool } from './tools/team-add-task.js'
 import { buildContextBundle, type ContextProvider } from './context/orchestrator.js'
+import { mainSessionProfile } from './context/actor-profile.js'
 import { DEFAULT_CONTEXT_ENGINE_CONFIG, resolveContextEngineConfig, type ContextEngineConfigInput } from './context/config.js'
 import { openContextStore, type ContextStore } from './context/store.js'
 import { enqueueHarvest, runHarvestJob } from './context/harvest.js'
@@ -1104,6 +1105,7 @@ export class Session {
             providers: this.getContextProviders(),
             providerTimeoutMs: performance.providerTimeoutMs,
             scheduler: this.contextScheduler,
+            actorProfile: mainSessionProfile(request, userMessage),
             id: this.contextId,
           })
           return result.renderedPrompt

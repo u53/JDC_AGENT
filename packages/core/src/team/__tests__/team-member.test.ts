@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { TeamMember } from '../team-member.js'
+import { runSubSession } from '../../sub-session.js'
 import type { SubSessionOptions, SubSessionResult } from '../../sub-session.js'
 
 // Mock runSubSession
@@ -70,6 +71,30 @@ describe('TeamMember', () => {
     })
     await member.start()
     expect(onComplete).toHaveBeenCalledWith(member.id, expect.objectContaining({ summary: 'task complete' }))
+  })
+
+  it('passes team worker actor metadata to the sub-session context engine', async () => {
+    vi.mocked(runSubSession).mockClear()
+    const member = new TeamMember({
+      spec: { role: 'api worker', agentType: 'general' },
+      taskPrompt: 'Update src/api/checkout.ts and keep package.json unchanged.',
+      taskId: 'task_checkout',
+      teamId: 'team_alpha',
+      teamObjective: 'Fix checkout flow',
+      id: 'member_api',
+      subSessionDeps: mockDeps,
+    })
+
+    await member.start()
+
+    expect(runSubSession).toHaveBeenCalledWith(expect.objectContaining({
+      contextActor: 'team_worker',
+      teamId: 'team_alpha',
+      memberId: 'member_api',
+      taskId: 'task_checkout',
+      parentObjective: 'Fix checkout flow',
+      fileScope: expect.arrayContaining(['src/api/checkout.ts']),
+    }))
   })
 
   it('sendMessage adds to mailbox', () => {

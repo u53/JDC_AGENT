@@ -30,6 +30,8 @@ export interface TeamMemberOptions {
   spec: TeamMemberSpec
   taskPrompt: string
   taskId?: string
+  teamId?: string
+  teamObjective?: string
   id?: string
   existingMailbox?: Mailbox
   teamMailbox?: { push(msg: any): void }
@@ -241,6 +243,12 @@ export class TeamMember {
         modelConfig: effectiveModelConfig,
         prompt: this.opts.taskPrompt,
         agentType: this.agentType,
+        contextActor: this.opts.taskId ? 'team_worker' : undefined,
+        teamId: this.opts.teamId,
+        memberId: this.id,
+        taskId: this.opts.taskId,
+        parentObjective: this.opts.teamObjective,
+        fileScope: inferFileScope(this.opts.taskPrompt),
         signal: this.abortController.signal,
         mailbox: this.mailbox,
         extraTools: extraTools.length > 0 ? extraTools : undefined,
@@ -351,4 +359,15 @@ export class TeamMember {
       this.opts.onFail?.(this.id, errorMsg)
     }
   }
+}
+
+function inferFileScope(prompt: string): string[] | undefined {
+  const matches = prompt.match(/(?:^|[\s("'`])((?!\.team\/)[\w@./-]+\.[A-Za-z0-9]{1,12})(?=$|[\s)"'`,:;])/g) ?? []
+  const files = new Set<string>()
+  for (const match of matches) {
+    const cleaned = match.trim().replace(/^["'`(]+|["'`),:;]+$/g, '')
+    if (!cleaned || cleaned.startsWith('http://') || cleaned.startsWith('https://')) continue
+    if (cleaned.includes('/')) files.add(cleaned.replace(/^\.\//, ''))
+  }
+  return files.size ? [...files] : undefined
 }

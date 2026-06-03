@@ -9,6 +9,7 @@ import { PermissionChecker } from './permissions.js'
 import type { ToolExecutionEvent, PermissionCallback } from './tool-runner.js'
 import { getAgentType, filterToolsForAgent, isWriteAllowedForPlanAgent, isBashAllowedForAuditor } from './agent-types.js'
 import { buildContextBundle, type ContextProvider } from './context/orchestrator.js'
+import { subAgentProfile, teamWorkerProfile } from './context/actor-profile.js'
 import { DEFAULT_CONTEXT_ENGINE_CONFIG, resolveContextEngineConfig, type ContextEngineConfigInput } from './context/config.js'
 import type { ContextStore } from './context/store.js'
 import { enqueueHarvest, runHarvestJob } from './context/harvest.js'
@@ -54,6 +55,13 @@ export interface SubSessionOptions {
   onStreamHeartbeat?: () => void
   mailbox?: { drain(): Array<{ id: string; from: string; content: string; intent?: string; priority: string; createdAt: number }> }
   extraTools?: Array<{ definition: ToolDefinition; execute: (input: Record<string, unknown>, ctx: any) => Promise<{ content: string; isError?: boolean }> }>
+  contextActor?: 'subagent' | 'team_worker'
+  subSessionId?: string
+  teamId?: string
+  memberId?: string
+  taskId?: string
+  fileScope?: string[]
+  parentObjective?: string
   contextEngine?: {
     sessionId?: string
     config?: ContextEngineConfigInput
@@ -386,6 +394,7 @@ async function buildSubSessionContextPrompt(
           providerTimeoutMs: performance.providerTimeoutMs,
           scheduler: contextScheduler,
           id: opts.contextEngine!.id,
+          actorProfile: buildSubSessionActorProfile(opts, contextSessionId, prompt),
         })
         if (!result.renderedPrompt) return systemPrompt
         return appendContextPromptSegment(systemPrompt, result.renderedPrompt)
@@ -396,6 +405,30 @@ async function buildSubSessionContextPrompt(
     void opts.contextEngine.store.saveDiagnostic(makeSubSessionContextDiagnostic('Sub-session context injection failed without blocking foreground chat', error)).catch(() => undefined)
     return systemPrompt
   }
+}
+
+function buildSubSessionActorProfile(opts: SubSessionOptions, contextSessionId: string, prompt: string) {
+  if (opts.contextActor === 'team_worker') {
+    return teamWorkerProfile({
+      sessionId: contextSessionId,
+      cwd: opts.cwd,
+      mode: 'code_edit',
+      objective: opts.parentObjective ? `${opts.parentObjective}\n${prompt}` : prompt,
+      teamId: opts.teamId,
+      memberId: opts.memberId,
+      taskId: opts.taskId,
+      fileScope: opts.fileScope,
+    })
+  }
+  return subAgentProfile({
+    sessionId: contextSessionId,
+    cwd: opts.cwd,
+    mode: 'chat',
+    objective: prompt,
+    subSessionId: opts.subSessionId ?? contextSessionId,
+    parentObjective: opts.parentObjective,
+    fileScope: opts.fileScope,
+  })
 }
 
 function enqueueSubSessionHarvest(
@@ -439,10 +472,13 @@ function enqueueSubSessionHarvest(
     createdAt,
     origin: {
       projectKey: path.resolve(opts.cwd),
-      actor: 'subagent',
+      actor: opts.contextActor === 'team_worker' ? 'team_worker' : 'subagent',
       sessionId: contextSessionId,
       runLoopId,
       subSessionId: runLoopId,
+      teamId: opts.teamId,
+      memberId: opts.memberId,
+      taskId: opts.taskId,
     },
   }
 
