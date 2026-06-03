@@ -27,7 +27,7 @@ export const HarvestStatusSchema = z.enum(['queued', 'classified', 'distilling',
 export const ProviderProtocolSchema = z.enum(['anthropic', 'openai-chat', 'openai-responses'])
 export const ContextActorSchema = z.enum(['main_session', 'subagent', 'team_pm', 'team_worker', 'system', 'user'])
 export const MemoryRecordKindSchema = z.enum(['user_preference', 'project_convention', 'architecture_decision', 'known_issue', 'workflow_hint'])
-export const ContextProviderIdSchema = z.enum(['code', 'project', 'git', 'conversation', 'memory', 'runtime', 'ide'])
+export const ContextProviderIdSchema = z.enum(['code', 'project', 'workflow', 'git', 'conversation', 'memory', 'runtime', 'ide'])
 
 export const ContextOriginSchema = z.object({
   projectKey: nonEmptyStringSchema,

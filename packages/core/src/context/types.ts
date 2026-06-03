@@ -15,7 +15,7 @@ export type ProviderProtocol = 'anthropic' | 'openai-chat' | 'openai-responses'
 export type ContextActor = 'main_session' | 'subagent' | 'team_pm' | 'team_worker' | 'system' | 'user'
 export type MemoryTrustMode = 'manual_review' | 'auto_accept_high_confidence'
 export type MemoryRecordKind = 'user_preference' | 'project_convention' | 'architecture_decision' | 'known_issue' | 'workflow_hint'
-export type ContextProviderId = 'code' | 'project' | 'git' | 'conversation' | 'memory' | 'runtime' | 'ide'
+export type ContextProviderId = 'code' | 'project' | 'workflow' | 'git' | 'conversation' | 'memory' | 'runtime' | 'ide'
 export type ContextProviderStatus = 'enabled' | 'disabled' | 'fresh' | 'cached' | 'stale' | 'not_indexed' | 'indexing' | 'timeout' | 'failed' | 'rate_limited'
 
 export interface ContextOrigin {

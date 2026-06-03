@@ -8,6 +8,7 @@ export const DEFAULT_CONTEXT_ENGINE_CONFIG: ContextEngineConfig = {
   providerToggles: {
     code: true,
     project: true,
+    workflow: true,
     git: true,
     conversation: true,
     memory: true,
