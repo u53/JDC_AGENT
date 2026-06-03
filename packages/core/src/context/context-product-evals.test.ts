@@ -215,6 +215,61 @@ describe('JDC Context Engine product evals', () => {
     expect(report.dropped).toEqual([])
   })
 
+  it('keeps provenance metadata while sharing accepted project facts across sessions', async () => {
+    const cwd = tempProject()
+    const storeA = await openContextStore({ cwd, now: () => 1_000 })
+    await storeA.saveRawEvidence({
+      id: 'raw_provenance_rule',
+      sessionId: 'session_a',
+      cwd,
+      sourceProvider: 'ProductEval',
+      kind: 'message',
+      content: '记住：发布前必须跑 pnpm build。',
+      metadata: { messageId: 'session_a/provenance_rule' },
+      capturedAt: 1_000,
+      hash: 'hash_provenance_rule',
+    })
+    await storeA.saveFact({
+      id: 'project_rule_with_origin',
+      kind: 'workflow_rule',
+      scope: 'project',
+      content: '发布前必须跑 pnpm build。',
+      citations: [{ id: 'cit_provenance_rule', type: 'message', ref: 'session_a/provenance_rule' }],
+      confidence: 0.95,
+      freshness: 'recent',
+      sourceProvider: 'ProductEval',
+      sessionId: 'session_a',
+      origin: {
+        projectKey: cwd,
+        actor: 'user',
+        sessionId: 'session_a',
+        messageId: 'session_a/provenance_rule',
+      },
+      tags: ['release'],
+      relatedFiles: ['package.json'],
+      relatedSymbols: [],
+      relatedTasks: [],
+      createdAt: 1_000,
+      updatedAt: 1_000,
+    })
+
+    const storeB = await openContextStore({ cwd, now: () => 2_000 })
+    const facts = await storeB.listAcceptedProjectFacts()
+
+    expect(facts.value).toMatchObject([{
+      id: 'project_rule_with_origin',
+      sessionId: 'session_a',
+      origin: {
+        projectKey: cwd,
+        actor: 'user',
+        sessionId: 'session_a',
+        messageId: 'session_a/provenance_rule',
+      },
+      tags: ['release'],
+      relatedFiles: ['package.json'],
+    }])
+  })
+
   it('preserves project documentation content beyond the first three non-empty lines', async () => {
     const cwd = tempProject()
     writeFileSync(path.join(cwd, 'JDCAGNET.md'), [
