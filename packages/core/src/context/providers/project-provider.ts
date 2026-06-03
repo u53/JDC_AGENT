@@ -73,16 +73,55 @@ async function readProjectFile(filePath: string): Promise<string | null> {
 }
 
 function summarizeProjectFile(fileName: string, content: string): string {
-  if (fileName === 'package.json') {
-    try {
-      const pkg = JSON.parse(content) as { name?: string; scripts?: Record<string, string>; workspaces?: unknown }
-      const scripts = pkg.scripts ? Object.entries(pkg.scripts).map(([name, command]) => `${name}: ${command}`).join(', ') : 'no scripts'
-      return `package.json ${pkg.name ? `name=${pkg.name}` : `name=${basename(fileName)}`} scripts=[${scripts}]`
-    } catch {
-      return 'package.json is present but could not be parsed'
+  if (fileName === 'package.json') return summarizePackageJson(content)
+  if (fileName.endsWith('.md')) return summarizeMarkdownProjectFile(fileName, content)
+  if (fileName.endsWith('.yaml') || fileName.endsWith('.yml')) return summarizePlainProjectFile(fileName, content, 80)
+  return summarizePlainProjectFile(fileName, content, 20)
+}
+
+function summarizePackageJson(content: string): string {
+  try {
+    const pkg = JSON.parse(content) as {
+      name?: string
+      version?: string
+      scripts?: Record<string, string>
+      dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+      workspaces?: unknown
     }
+    const scripts = Object.entries(pkg.scripts ?? {}).map(([name, command]) => `${name}: ${command}`).join('\n')
+    const deps = Object.keys({ ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) }).slice(0, 80).join(', ')
+    return [
+      `package.json name=${pkg.name ?? basename('package.json')} version=${pkg.version ?? 'unknown'}`,
+      scripts ? `scripts:\n${scripts}` : 'scripts: none',
+      pkg.workspaces ? `workspaces=${JSON.stringify(pkg.workspaces)}` : 'workspaces: none',
+      deps ? `dependencies=${deps}` : 'dependencies: none',
+    ].join('\n')
+  } catch {
+    return 'package.json is present but could not be parsed'
+  }
+}
+
+function summarizeMarkdownProjectFile(fileName: string, content: string): string {
+  const kept: string[] = []
+  let currentHeading = ''
+
+  for (const rawLine of content.split('\n')) {
+    const line = rawLine.trim()
+    if (!line) continue
+    if (/^#{1,3}\s+/.test(line)) {
+      currentHeading = line.replace(/^#{1,3}\s+/, '')
+      kept.push(`## ${currentHeading}`)
+      continue
+    }
+    if (kept.length >= 120) break
+    kept.push(currentHeading ? `${currentHeading}: ${line}` : line)
   }
 
-  const firstLines = content.split('\n').map((line) => line.trim()).filter(Boolean).slice(0, 3).join(' / ')
-  return `${fileName}: ${firstLines}`
+  return `${fileName}:\n${kept.join('\n')}`
+}
+
+function summarizePlainProjectFile(fileName: string, content: string, maxLines: number): string {
+  const lines = content.split('\n').map((line) => line.trim()).filter(Boolean).slice(0, maxLines)
+  return `${fileName}:\n${lines.join('\n')}`
 }

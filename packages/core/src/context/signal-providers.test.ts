@@ -211,6 +211,30 @@ describe('context signal providers', () => {
     expectCitationsValid(sectionCitations(result), { memoryRecords: [{ id: 'memory_release' }] })
   })
 
+  it('keeps meaningful project docs beyond the first three non-empty lines', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'jdc-project-doc-provider-'))
+    writeFileSync(join(cwd, 'JDCAGNET.md'), [
+      '# JDCAGNET',
+      '',
+      '第一行简介。',
+      '第二行简介。',
+      '第三行简介。',
+      '',
+      '## 发布流程',
+      '必须先运行 pnpm build，再打 tag。',
+      '',
+      '## 上下文引擎约定',
+      'JDC Context Engine 数据必须按项目持久化。',
+    ].join('\n'))
+
+    const result = await collectProjectContext(request(cwd))
+
+    expect(result.sections[0]?.content).toContain('发布流程')
+    expect(result.sections[0]?.content).toContain('pnpm build')
+    expect(result.sections[0]?.content).toContain('上下文引擎约定')
+    expectGateARecords(result)
+  })
+
   it('collects conversation, runtime, and IDE signals without persisting raw thinking', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'jdc-live-provider-'))
     const liveRequest = request(cwd, {
