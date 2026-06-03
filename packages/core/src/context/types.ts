@@ -157,6 +157,7 @@ export interface ContextBundle {
   sessionId: string
   requestHash: string
   createdAt: number
+  actorProfile?: Pick<ActorContextProfile, 'actor' | 'sessionId' | 'subSessionId' | 'teamId' | 'memberId' | 'taskId' | 'objective'>
   sections: ContextSection[]
   citations: ContextCitation[]
   diagnostics: ContextDiagnostic[]

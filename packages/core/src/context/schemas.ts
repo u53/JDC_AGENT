@@ -136,11 +136,22 @@ export const ContextDiagnosticSchema = z.object({
   visibleInPrimaryUi: z.boolean().optional(),
 })
 
+const ContextBundleActorProfileSchema = z.object({
+  actor: ContextActorSchema,
+  sessionId: nonEmptyStringSchema,
+  subSessionId: z.string().optional(),
+  teamId: z.string().optional(),
+  memberId: z.string().optional(),
+  taskId: z.string().optional(),
+  objective: z.string(),
+})
+
 export const ContextBundleSchema = z.object({
   id: nonEmptyStringSchema,
   sessionId: nonEmptyStringSchema,
   requestHash: nonEmptyStringSchema,
   createdAt: timestampSchema,
+  actorProfile: ContextBundleActorProfileSchema.optional(),
   sections: z.array(ContextSectionSchema),
   citations: z.array(ContextCitationSchema),
   diagnostics: z.array(ContextDiagnosticSchema),

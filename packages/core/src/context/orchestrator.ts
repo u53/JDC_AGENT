@@ -7,6 +7,7 @@ import { retrieveContextFacts } from './retriever.js'
 import { createContextScheduler, type ContextScheduler } from './scheduler.js'
 import type { ContextStore, ContextStoreResult } from './store.js'
 import type {
+  ActorContextProfile,
   ContextBundle,
   ContextDiagnostic,
   ContextFact,
@@ -36,6 +37,7 @@ export interface BuildContextBundleOptions {
   providers?: ContextProvider[]
   providerTimeoutMs?: number
   scheduler?: ContextScheduler
+  actorProfile?: ActorContextProfile
   now?: () => number
   id?: () => string
   render?: (bundle: ContextBundle, options?: { injectionEnabled?: boolean }) => string
@@ -62,7 +64,7 @@ export async function buildContextBundle(request: ContextRequest, options: Build
   }
 
   try {
-    const storeFacts = await loadStoreFacts(request, options.store, now)
+    const storeFacts = await loadStoreFacts(request, options.store, now, options.actorProfile)
     throwIfAborted(request.signal)
     const providerResults = await collectProviderResults(request, options.providers ?? [], now, scheduler, options.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS)
     throwIfAborted(request.signal)
@@ -79,7 +81,7 @@ export async function buildContextBundle(request: ContextRequest, options: Build
       ...providerResults.diagnostics,
       ...storeFacts.diagnostics,
       ...diagnosticsFromPlan(plan, rawSections, now()),
-    ], budgeted.budget)
+    ], budgeted.budget, options.actorProfile)
 
     throwIfAborted(request.signal)
     const persistenceDiagnostics = await persistProviderEvidence(options.store, providerResults.evidence, now, request.signal)
@@ -107,11 +109,11 @@ export async function buildContextBundle(request: ContextRequest, options: Build
   }
 }
 
-async function loadStoreFacts(request: ContextRequest, store: ContextStore, now: () => number): Promise<ContextFact[] & { diagnostics: ContextDiagnostic[] }> {
+async function loadStoreFacts(request: ContextRequest, store: ContextStore, now: () => number, actorProfile?: ActorContextProfile): Promise<ContextFact[] & { diagnostics: ContextDiagnostic[] }> {
   // Product contract: durable project facts are retrieval-ranked without a
   // hidden row/result window. Explicit debug caps can be passed by callers in
   // future, but the Engine must not silently forget large projects.
-  const retrieved = await retrieveContextFacts(request, { store, now })
+  const retrieved = await retrieveContextFacts(request, { store, now, actorProfile })
   return Object.assign(dedupeFacts(retrieved.facts.map((item) => item.fact)), { diagnostics: retrieved.diagnostics })
 }
 
@@ -327,12 +329,14 @@ function makeBundle(
   citations: ContextBundle['citations'],
   diagnostics: ContextDiagnostic[],
   budget: ContextBundle['budget'],
+  actorProfile?: ActorContextProfile,
 ): ContextBundle {
   return {
     id,
     sessionId: request.sessionId,
     requestHash: requestHash(request),
     createdAt,
+    ...(actorProfile ? { actorProfile: bundleActorProfile(actorProfile) } : {}),
     sections,
     citations,
     diagnostics,
@@ -342,6 +346,18 @@ function makeBundle(
 
 function emptyBundle(request: ContextRequest, id: string, createdAt: number, diagnostics: ContextDiagnostic[]): ContextBundle {
   return makeBundle(request, id, createdAt, [], [], diagnostics, { maxTokens: request.tokenBudget, usedTokens: 0, droppedTokens: 0 })
+}
+
+function bundleActorProfile(profile: ActorContextProfile): NonNullable<ContextBundle['actorProfile']> {
+  return Object.fromEntries(Object.entries({
+    actor: profile.actor,
+    sessionId: profile.sessionId,
+    subSessionId: profile.subSessionId,
+    teamId: profile.teamId,
+    memberId: profile.memberId,
+    taskId: profile.taskId,
+    objective: profile.objective,
+  }).filter(([, value]) => value !== undefined)) as NonNullable<ContextBundle['actorProfile']>
 }
 
 function uniqueCitations(sections: ContextSection[]): ContextBundle['citations'] {

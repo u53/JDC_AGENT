@@ -9,12 +9,25 @@ export function renderContextBundle(bundle: ContextBundle, options: PromptRender
   if (options.injectionEnabled === false || bundle.sections.length === 0) return ''
 
   const lines: string[] = [`<jdc-context-engine bundle="${escapeAttribute(bundle.id)}">`]
+  if (bundle.actorProfile) lines.push(renderActorProfile(bundle.actorProfile))
   for (const section of bundle.sections) {
     lines.push(renderSection(section))
   }
   if (bundle.citations.length) lines.push(renderCitations(bundle.citations))
   lines.push('</jdc-context-engine>')
   return lines.join('\n')
+}
+
+function renderActorProfile(profile: NonNullable<ContextBundle['actorProfile']>): string {
+  const lines = [
+    `    <actor>${sanitizeForPrompt(profile.actor)}</actor>`,
+    `    <objective>${sanitizeForPrompt(profile.objective)}</objective>`,
+  ]
+  if (profile.teamId) lines.push(`    <team>${sanitizeForPrompt(profile.teamId)}</team>`)
+  if (profile.memberId) lines.push(`    <member>${sanitizeForPrompt(profile.memberId)}</member>`)
+  if (profile.taskId) lines.push(`    <task>${sanitizeForPrompt(profile.taskId)}</task>`)
+  if (profile.subSessionId) lines.push(`    <sub-session>${sanitizeForPrompt(profile.subSessionId)}</sub-session>`)
+  return ['  <profile>', ...lines, '  </profile>'].join('\n')
 }
 
 function renderSection(section: ContextSection): string {
