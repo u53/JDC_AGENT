@@ -1,5 +1,6 @@
 import type { ActorContextProfile, ContextDiagnostic, ContextFact, ContextFactKind, ContextRequest } from './types.js'
 import type { ContextStore } from './store.js'
+import type { ContextPerformanceRecorder } from './performance.js'
 
 const HIGH_VALUE_KINDS = new Set<ContextFactKind>([
   'workflow_rule',
@@ -36,45 +37,89 @@ export interface ContextRetrievalOptions {
   citationType?: string
   citationTextLookup?: Map<string, string[]>
   actorProfile?: ActorContextProfile
+  recorder?: ContextPerformanceRecorder
+  projectKey?: string
   now?: () => number
 }
 
 export async function retrieveContextFacts(request: ContextRequest, options: ContextRetrievalOptions): Promise<ContextRetrievalResult> {
   const now = options.now ?? Date.now
+  const startedAt = now()
   const diagnostics: ContextDiagnostic[] = []
-  const query = normalizeSearchText([request.userMessage, request.mode, options.actorProfile?.objective].filter(Boolean).join(' '))
-  const storeQuery = {
-    minConfidence: options.minConfidence ?? 0.01,
-    includeStale: true,
-    includeExpired: false,
-    orderBy: 'updated_desc' as const,
-    ...(options.citationRef === undefined ? {} : { citationRef: options.citationRef }),
-    ...(options.citationType === undefined ? {} : { citationType: options.citationType }),
-    ...(options.candidateLimit === undefined ? {} : { limit: options.candidateLimit }),
-  }
-  const loaded = await options.store.listAcceptedProjectFacts(storeQuery)
-  if (!loaded.ok) return { facts: [], diagnostics: loaded.diagnostics, unavailable: true }
+  let candidateCount = 0
+  let returnedCount = 0
+  let queryPresent = false
+  try {
+    const query = normalizeSearchText([request.userMessage, request.mode, options.actorProfile?.objective].filter(Boolean).join(' '))
+    queryPresent = Boolean(query)
+    const storeQuery = {
+      minConfidence: options.minConfidence ?? 0.01,
+      includeStale: true,
+      includeExpired: false,
+      orderBy: 'updated_desc' as const,
+      ...(options.citationRef === undefined ? {} : { citationRef: options.citationRef }),
+      ...(options.citationType === undefined ? {} : { citationType: options.citationType }),
+      ...(options.candidateLimit === undefined ? {} : { limit: options.candidateLimit }),
+    }
+    const loaded = await options.store.listAcceptedProjectFacts(storeQuery)
+    if (!loaded.ok) {
+      options.recorder?.record({
+        name: 'context:retrieve-facts',
+        lane: 'foreground',
+        status: 'failed',
+        startedAt,
+        completedAt: now(),
+        projectKey: options.projectKey ?? request.cwd,
+        metadata: { candidateCount, returnedCount, queryPresent },
+        diagnostic: loaded.diagnostics.map((diagnostic) => diagnostic.message).join('; ') || 'context fact retrieval unavailable',
+      })
+      return { facts: [], diagnostics: loaded.diagnostics, unavailable: true }
+    }
+    candidateCount = loaded.value.length
 
-  const scored = loaded.value
-    .map((fact) => scoreFact(fact, query, now, options.citationTextLookup, options.actorProfile))
-    .filter((item) => {
-      const actorSuppression = suppressForActor(item.fact, options.actorProfile)
-      if (actorSuppression) {
-        diagnostics.push(makeDiagnostic(actorSuppression, now()))
-        return false
-      }
-      if (item.fact.freshness === 'stale' && !isHighValueStaleFact(item.fact)) {
-        diagnostics.push(makeDiagnostic(`Suppressed stale low-value fact ${item.fact.id}.`, now()))
-        return false
-      }
-      if (!query) return true
-      return item.score > 0 && (item.reasons.length > 0 || HIGH_VALUE_KINDS.has(item.fact.kind))
+    const scored = loaded.value
+      .map((fact) => scoreFact(fact, query, now, options.citationTextLookup, options.actorProfile))
+      .filter((item) => {
+        const actorSuppression = suppressForActor(item.fact, options.actorProfile)
+        if (actorSuppression) {
+          diagnostics.push(makeDiagnostic(actorSuppression, now()))
+          return false
+        }
+        if (item.fact.freshness === 'stale' && !isHighValueStaleFact(item.fact)) {
+          diagnostics.push(makeDiagnostic(`Suppressed stale low-value fact ${item.fact.id}.`, now()))
+          return false
+        }
+        if (!query) return true
+        return item.score > 0 && (item.reasons.length > 0 || HIGH_VALUE_KINDS.has(item.fact.kind))
+      })
+      .sort(compareRetrievedFacts)
+
+    const explicitLimit = options.limit ?? options.actorProfile?.preferredFactCount
+    const facts = explicitLimit === undefined ? scored : scored.slice(0, explicitLimit)
+    returnedCount = facts.length
+    options.recorder?.record({
+      name: 'context:retrieve-facts',
+      lane: 'foreground',
+      status: 'success',
+      startedAt,
+      completedAt: now(),
+      projectKey: options.projectKey ?? request.cwd,
+      metadata: { candidateCount, returnedCount, queryPresent },
     })
-    .sort(compareRetrievedFacts)
-
-  const explicitLimit = options.limit ?? options.actorProfile?.preferredFactCount
-  const facts = explicitLimit === undefined ? scored : scored.slice(0, explicitLimit)
-  return { facts, diagnostics: [...loaded.diagnostics, ...diagnostics] }
+    return { facts, diagnostics: [...loaded.diagnostics, ...diagnostics] }
+  } catch (error) {
+    options.recorder?.record({
+      name: 'context:retrieve-facts',
+      lane: 'foreground',
+      status: 'failed',
+      startedAt,
+      completedAt: now(),
+      projectKey: options.projectKey ?? request.cwd,
+      metadata: { candidateCount, returnedCount, queryPresent },
+      diagnostic: error instanceof Error ? error.message : String(error),
+    })
+    throw error
+  }
 }
 
 function scoreFact(fact: ContextFact, query: string, now: () => number, citationTextLookup: Map<string, string[]> | undefined, actorProfile: ActorContextProfile | undefined): RetrievedContextFact {

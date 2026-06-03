@@ -64,7 +64,7 @@ export async function buildContextBundle(request: ContextRequest, options: Build
   }
 
   try {
-    const storeFacts = await loadStoreFacts(request, options.store, now, options.actorProfile)
+    const storeFacts = await loadStoreFacts(request, options.store, now, scheduler, options.actorProfile)
     throwIfAborted(request.signal)
     const providerResults = await collectProviderResults(request, options.providers ?? [], now, scheduler, options.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS)
     throwIfAborted(request.signal)
@@ -72,11 +72,28 @@ export async function buildContextBundle(request: ContextRequest, options: Build
       ...providerResults.sections,
       ...storeFacts.map((fact) => sectionFromFact(fact)),
     ]
+    const packStartedAt = now()
     const plan = planContext(request, rawSections)
     const plannedSectionIds = new Set(plan.relevantSections)
     const plannedSections = rawSections.filter((section) => plannedSectionIds.has(section.id))
     const ranked = rankContextSections(plannedSections)
     const budgeted = budgetContextSections(ranked, budgetLimits(request, options))
+    scheduler.recorder.record({
+      name: 'context:pack-assemble',
+      lane: 'foreground',
+      status: 'success',
+      startedAt: packStartedAt,
+      completedAt: now(),
+      projectKey: request.cwd,
+      metadata: {
+        rawSectionCount: rawSections.length,
+        plannedSectionCount: plannedSections.length,
+        sectionCount: budgeted.sections.length,
+        usedTokens: budgeted.budget.usedTokens,
+        droppedTokens: budgeted.budget.droppedTokens,
+        droppedSectionCount: budgeted.dropped.length,
+      },
+    })
     const bundle = makeBundle(request, createId(), now(), budgeted.sections, uniqueCitations(budgeted.sections), [
       ...providerResults.diagnostics,
       ...storeFacts.diagnostics,
@@ -109,11 +126,11 @@ export async function buildContextBundle(request: ContextRequest, options: Build
   }
 }
 
-async function loadStoreFacts(request: ContextRequest, store: ContextStore, now: () => number, actorProfile?: ActorContextProfile): Promise<ContextFact[] & { diagnostics: ContextDiagnostic[] }> {
+async function loadStoreFacts(request: ContextRequest, store: ContextStore, now: () => number, scheduler: ContextScheduler, actorProfile?: ActorContextProfile): Promise<ContextFact[] & { diagnostics: ContextDiagnostic[] }> {
   // Product contract: durable project facts are retrieval-ranked without a
   // hidden row/result window. Explicit debug caps can be passed by callers in
   // future, but the Engine must not silently forget large projects.
-  const retrieved = await retrieveContextFacts(request, { store, now, actorProfile })
+  const retrieved = await retrieveContextFacts(request, { store, now, actorProfile, recorder: scheduler.recorder, projectKey: request.cwd })
   return Object.assign(dedupeFacts(retrieved.facts.map((item) => item.fact)), { diagnostics: retrieved.diagnostics })
 }
 
