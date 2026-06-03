@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_CONTEXT_ENGINE_CONFIG } from './config.js'
 import { collectWorkflowContext } from './providers/workflow-provider.js'
 import { ContextProviderIdSchema } from './schemas.js'
+import { createDefaultRefreshProviders } from '../tools/context-refresh.js'
 import type { ContextRequest } from './types.js'
 
 const dirs: string[] = []
@@ -71,6 +72,23 @@ describe('WorkflowSignalProvider', () => {
       'packages/vscode-extension/package.json',
     ]))
     expect(result.sections[0]?.citations.every((citation) => typeof citation.hash === 'string' && citation.hash.length > 0)).toBe(true)
+  })
+
+  it('wires workflow into default context refresh providers and respects toggles', async () => {
+    const cwd = tempProject()
+    writeProjectFile(cwd, 'package.json', JSON.stringify({ scripts: { build: 'pnpm build' } }, null, 2))
+
+    const providers = createDefaultRefreshProviders()
+    expect(providers.map((provider) => provider.id)).toContain('workflow')
+    const workflowProvider = providers.find((provider) => provider.id === 'workflow')
+    await expect(workflowProvider?.collect(request({ cwd }))).resolves.toMatchObject({
+      health: { id: 'workflow', status: 'enabled' },
+    })
+
+    const disabledProvider = createDefaultRefreshProviders({ providerToggles: { workflow: false } }).find((provider) => provider.id === 'workflow')
+    await expect(disabledProvider?.collect(request({ cwd }))).resolves.toMatchObject({
+      health: { id: 'workflow', status: 'disabled' },
+    })
   })
 })
 

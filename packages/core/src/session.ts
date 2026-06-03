@@ -65,6 +65,7 @@ import {
   collectMemoryContext,
   collectProjectContext,
   collectRuntimeContext,
+  collectWorkflowContext,
 } from './context/providers/index.js'
 
 export interface SessionEvents {
@@ -494,6 +495,7 @@ export class Session {
       { id: 'memory', collect: async (request) => collectMemoryContext(request, { enabled: toggles.memory, store: await this.getContextStore() }) },
       { id: 'git', collect: (request) => collectGitContext(request, { enabled: toggles.git }) },
       { id: 'project', collect: (request) => collectProjectContext(request, { enabled: toggles.project }) },
+      { id: 'workflow', collect: (request) => collectWorkflowContext(request, { enabled: toggles.workflow }) },
       { id: 'code', collect: (request) => collectCodeContext(request, { enabled: toggles.code, scheduler: this.contextScheduler }) },
     ]
   }

@@ -10,6 +10,7 @@ import {
   collectMemoryContext,
   collectProjectContext,
   collectRuntimeContext,
+  collectWorkflowContext,
   getCodeProviderHealth,
 } from '../context/providers/index.js'
 import { openContextStore, type ContextStore } from '../context/store.js'
@@ -193,6 +194,7 @@ export function createDefaultRefreshProviders(configInput: ContextEngineConfigIn
     { id: 'memory', collect: (request) => collectMemoryContext(request, { enabled: toggles.memory, store: options.store }), health: (request) => providerHealth('memory', toggles.memory ? 'enabled' : 'disabled', nowFromRequest(request)) },
     { id: 'git', collect: (request) => collectGitContext(request, { enabled: toggles.git }), health: (request) => providerHealth('git', toggles.git ? 'enabled' : 'disabled', nowFromRequest(request)) },
     { id: 'project', collect: (request) => collectProjectContext(request, { enabled: toggles.project }), health: (request) => providerHealth('project', toggles.project ? 'enabled' : 'disabled', nowFromRequest(request)) },
+    { id: 'workflow', collect: (request) => collectWorkflowContext(request, { enabled: toggles.workflow }), health: (request) => providerHealth('workflow', toggles.workflow ? 'enabled' : 'disabled', nowFromRequest(request)) },
     { id: 'code', collect: (request) => collectCodeContext(request, { enabled: toggles.code }), health: (request) => getCodeProviderHealth(request, { enabled: toggles.code }) },
   ]
 }
