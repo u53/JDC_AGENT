@@ -83,6 +83,38 @@ describe('JDC Context Store persistence', () => {
     ])
   })
 
+  it('validates provenance and related metadata on context facts', async () => {
+    const projectDir = makeTempDir()
+    const store = await openContextStore({ cwd: projectDir, now: () => 1_000 })
+    await saveFileEvidence(store, { cwd: projectDir })
+
+    const fact = makeFact({
+      id: 'fact_with_origin',
+      sessionId: 'session_a',
+      origin: {
+        projectKey: projectDir,
+        actor: 'main_session',
+        sessionId: 'session_a',
+        runLoopId: 'run_1',
+        providerProtocol: 'anthropic',
+        modelId: 'claude-opus-4-5',
+      },
+      tags: ['release', 'workflow'],
+      relatedFiles: ['package.json', '.github/workflows/release.yml'],
+      relatedSymbols: ['runRelease'],
+      relatedTasks: ['task_release'],
+    } as any)
+
+    await expectOk(store.saveFact(fact))
+
+    const saved = (await store.queryFacts()).value[0]!
+    expect(saved.origin).toEqual(fact.origin)
+    expect(saved.tags).toEqual(['release', 'workflow'])
+    expect(saved.relatedFiles).toEqual(['package.json', '.github/workflows/release.yml'])
+    expect(saved.relatedSymbols).toEqual(['runRelease'])
+    expect(saved.relatedTasks).toEqual(['task_release'])
+  })
+
   it('keeps same-cwd stores live-consistent when both are opened before a write', async () => {
     const projectDir = makeTempDir()
     const sessionAStore = await openContextStore({ cwd: projectDir, now: () => 1_000 })

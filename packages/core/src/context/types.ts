@@ -12,10 +12,27 @@ export type ContextSectionKind = 'user_intent' | 'project_profile' | 'code_map' 
 export type SkipReason = 'greeting_or_smalltalk' | 'no_new_fact' | 'too_short' | 'duplicate_of_existing_context' | 'low_confidence' | 'sensitive_content' | 'rate_limited' | 'model_noop' | 'cancelled' | 'timeout'
 export type HarvestStatus = 'queued' | 'classified' | 'distilling' | 'validating' | 'accepted' | 'pending_review' | 'rejected' | 'skipped' | 'failed'
 export type ProviderProtocol = 'anthropic' | 'openai-chat' | 'openai-responses'
+export type ContextActor = 'main_session' | 'subagent' | 'team_pm' | 'team_worker' | 'system' | 'user'
 export type MemoryTrustMode = 'manual_review' | 'auto_accept_high_confidence'
 export type MemoryRecordKind = 'user_preference' | 'project_convention' | 'architecture_decision' | 'known_issue' | 'workflow_hint'
 export type ContextProviderId = 'code' | 'project' | 'git' | 'conversation' | 'memory' | 'runtime' | 'ide'
 export type ContextProviderStatus = 'enabled' | 'disabled' | 'fresh' | 'cached' | 'stale' | 'not_indexed' | 'indexing' | 'timeout' | 'failed' | 'rate_limited'
+
+export interface ContextOrigin {
+  projectKey: string
+  actor: ContextActor
+  sessionId?: string
+  runLoopId?: string
+  subSessionId?: string
+  teamId?: string
+  memberId?: string
+  taskId?: string
+  artifactId?: string
+  toolUseId?: string
+  messageId?: string
+  providerProtocol?: ProviderProtocol
+  modelId?: string
+}
 
 export interface RuntimeSnapshot { [key: string]: unknown }
 export interface IdeSnapshot { [key: string]: unknown }
@@ -73,6 +90,11 @@ export interface ContextFact {
   createdAt: number
   updatedAt: number
   expiresAt?: number
+  origin?: ContextOrigin
+  tags?: string[]
+  relatedFiles?: string[]
+  relatedSymbols?: string[]
+  relatedTasks?: string[]
 }
 
 export type ContextItem = ContextFact
@@ -131,6 +153,7 @@ export interface HarvestCandidate {
   toolEvents: ToolExecutionEvent[]
   changedFiles: string[]
   createdAt: number
+  origin?: Partial<ContextOrigin>
 }
 
 export type HarvestDecision =

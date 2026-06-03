@@ -25,8 +25,27 @@ export const ContextSectionKindSchema = z.enum(['user_intent', 'project_profile'
 export const SkipReasonSchema = z.enum(['greeting_or_smalltalk', 'no_new_fact', 'too_short', 'duplicate_of_existing_context', 'low_confidence', 'sensitive_content', 'rate_limited', 'model_noop', 'cancelled', 'timeout'])
 export const HarvestStatusSchema = z.enum(['queued', 'classified', 'distilling', 'validating', 'accepted', 'pending_review', 'rejected', 'skipped', 'failed'])
 export const ProviderProtocolSchema = z.enum(['anthropic', 'openai-chat', 'openai-responses'])
+export const ContextActorSchema = z.enum(['main_session', 'subagent', 'team_pm', 'team_worker', 'system', 'user'])
 export const MemoryRecordKindSchema = z.enum(['user_preference', 'project_convention', 'architecture_decision', 'known_issue', 'workflow_hint'])
 export const ContextProviderIdSchema = z.enum(['code', 'project', 'git', 'conversation', 'memory', 'runtime', 'ide'])
+
+export const ContextOriginSchema = z.object({
+  projectKey: nonEmptyStringSchema,
+  actor: ContextActorSchema,
+  sessionId: z.string().optional(),
+  runLoopId: z.string().optional(),
+  subSessionId: z.string().optional(),
+  teamId: z.string().optional(),
+  memberId: z.string().optional(),
+  taskId: z.string().optional(),
+  artifactId: z.string().optional(),
+  toolUseId: z.string().optional(),
+  messageId: z.string().optional(),
+  providerProtocol: ProviderProtocolSchema.optional(),
+  modelId: z.string().optional(),
+})
+
+const stringListSchema = z.array(nonEmptyStringSchema)
 
 export const ContextCitationSchema = z
   .object({
@@ -86,6 +105,11 @@ export const ContextFactSchema = z.object({
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   expiresAt: timestampSchema.optional(),
+  origin: ContextOriginSchema.optional(),
+  tags: stringListSchema.optional(),
+  relatedFiles: stringListSchema.optional(),
+  relatedSymbols: stringListSchema.optional(),
+  relatedTasks: stringListSchema.optional(),
 }) satisfies z.ZodType<ContextFact>
 
 export const ContextSectionSchema = z.object({
@@ -137,6 +161,7 @@ export const HarvestCandidateSchema = z.object({
   toolEvents: z.array(ToolExecutionEventSchema),
   changedFiles: z.array(z.string()),
   createdAt: timestampSchema,
+  origin: ContextOriginSchema.partial().optional(),
 })
 
 export const HarvestDecisionSchema: z.ZodType<HarvestDecision> = z.discriminatedUnion('action', [
