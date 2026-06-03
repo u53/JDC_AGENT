@@ -54,6 +54,8 @@ describe('TeamManagerAI scheduling', () => {
       provider,
       modelConfig: { model: 'test-model', maxTokens: 1000 },
       memberStates: () => [],
+      cwd: '/tmp/team-manager-ai-test',
+      teamId: 'team_test',
       objective: 'Test objective',
       onActionsReady: () => actionsReady.push('ready'),
     })
