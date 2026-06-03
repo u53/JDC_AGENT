@@ -1,4 +1,4 @@
-import type { ContextDiagnostic, ContextFact, ContextFactKind, ContextRequest } from './types.js'
+import type { ActorContextProfile, ContextDiagnostic, ContextFact, ContextFactKind, ContextRequest } from './types.js'
 import type { ContextStore } from './store.js'
 
 const HIGH_VALUE_KINDS = new Set<ContextFactKind>([
@@ -31,13 +31,14 @@ export interface ContextRetrievalOptions {
   citationRef?: string
   citationType?: string
   citationTextLookup?: Map<string, string[]>
+  actorProfile?: ActorContextProfile
   now?: () => number
 }
 
 export async function retrieveContextFacts(request: ContextRequest, options: ContextRetrievalOptions): Promise<ContextRetrievalResult> {
   const now = options.now ?? Date.now
   const diagnostics: ContextDiagnostic[] = []
-  const query = normalizeSearchText([request.userMessage, request.mode].filter(Boolean).join(' '))
+  const query = normalizeSearchText([request.userMessage, request.mode, options.actorProfile?.objective].filter(Boolean).join(' '))
   const storeQuery = {
     minConfidence: options.minConfidence ?? 0.01,
     includeStale: true,
@@ -51,8 +52,13 @@ export async function retrieveContextFacts(request: ContextRequest, options: Con
   if (!loaded.ok) return { facts: [], diagnostics: loaded.diagnostics, unavailable: true }
 
   const scored = loaded.value
-    .map((fact) => scoreFact(fact, query, now, options.citationTextLookup))
+    .map((fact) => scoreFact(fact, query, now, options.citationTextLookup, options.actorProfile))
     .filter((item) => {
+      const actorSuppression = suppressForActor(item.fact, options.actorProfile)
+      if (actorSuppression) {
+        diagnostics.push(makeDiagnostic(actorSuppression, now()))
+        return false
+      }
       if (item.fact.freshness === 'stale' && !isHighValueStaleFact(item.fact)) {
         diagnostics.push(makeDiagnostic(`Suppressed stale low-value fact ${item.fact.id}.`, now()))
         return false
@@ -62,11 +68,12 @@ export async function retrieveContextFacts(request: ContextRequest, options: Con
     })
     .sort(compareRetrievedFacts)
 
-  const facts = options.limit === undefined ? scored : scored.slice(0, options.limit)
+  const explicitLimit = options.limit ?? options.actorProfile?.preferredFactCount
+  const facts = explicitLimit === undefined ? scored : scored.slice(0, explicitLimit)
   return { facts, diagnostics: [...loaded.diagnostics, ...diagnostics] }
 }
 
-function scoreFact(fact: ContextFact, query: string, now: () => number, citationTextLookup: Map<string, string[]> | undefined): RetrievedContextFact {
+function scoreFact(fact: ContextFact, query: string, now: () => number, citationTextLookup: Map<string, string[]> | undefined, actorProfile: ActorContextProfile | undefined): RetrievedContextFact {
   const reasons: string[] = []
   let score = 0
 
@@ -101,6 +108,9 @@ function scoreFact(fact: ContextFact, query: string, now: () => number, citation
       reasons.push('citation_match')
     }
   }
+  const actorScore = scoreActorProfile(fact, actorProfile)
+  score += actorScore.score
+  reasons.push(...actorScore.reasons)
 
   return { fact, score, reasons: [...new Set(reasons)] }
 }
@@ -123,6 +133,14 @@ function searchableFactText(fact: ContextFact, citationTextLookup: Map<string, s
     fact.scope,
     fact.content,
     fact.sourceProvider,
+    fact.origin?.actor ?? '',
+    fact.origin?.teamId ?? '',
+    fact.origin?.memberId ?? '',
+    fact.origin?.taskId ?? '',
+    ...(fact.tags ?? []),
+    ...(fact.relatedFiles ?? []),
+    ...(fact.relatedSymbols ?? []),
+    ...(fact.relatedTasks ?? []),
     ...fact.citations.flatMap((citation) => [citation.id, citation.type, citation.ref, citation.hash ?? '']),
   ]
   if (citationTextLookup) {
@@ -133,6 +151,119 @@ function searchableFactText(fact: ContextFact, citationTextLookup: Map<string, s
     }
   }
   return parts.join(' ')
+}
+
+function scoreActorProfile(fact: ContextFact, profile: ActorContextProfile | undefined): { score: number; reasons: string[] } {
+  if (!profile) return { score: 0, reasons: [] }
+
+  const reasons: string[] = []
+  let score = 0
+  const teamMatch = Boolean(profile.teamId && fact.origin?.teamId === profile.teamId)
+  const memberMatch = Boolean(profile.memberId && fact.origin?.memberId === profile.memberId)
+  const taskMatch = Boolean(profile.taskId && (fact.origin?.taskId === profile.taskId || fact.relatedTasks?.includes(profile.taskId)))
+  const fileMatch = matchesFileScope(fact, profile.fileScope)
+
+  if (teamMatch) {
+    score += 35
+    reasons.push('actor_team_match')
+  }
+  if (memberMatch) {
+    score += 25
+    reasons.push('actor_member_match')
+  }
+  if (taskMatch) {
+    score += 40
+    reasons.push('actor_task_match')
+  }
+  if (fileMatch) {
+    score += 55
+    reasons.push('actor_file_scope_match')
+  }
+
+  switch (profile.actor) {
+    case 'team_pm':
+      if (teamMatch || isTeamStateFact(fact) || fact.kind === 'known_issue' || fact.kind === 'architecture_decision') {
+        score += 45
+        reasons.push('actor_pm_priority')
+      }
+      break
+    case 'team_worker':
+      if (taskMatch || memberMatch || fileMatch || fact.origin?.actor === 'team_worker' || isWorkerBaselineFact(fact)) {
+        score += isWorkerBaselineFact(fact) ? 150 : 45
+        reasons.push('actor_worker_priority')
+      }
+      if (fact.origin?.actor === 'team_pm' && !fileMatch) {
+        score -= 120
+        reasons.push('actor_worker_deprioritized_pm_state')
+      }
+      break
+    case 'subagent':
+      if (fileMatch || fact.kind === 'code_entrypoint' || fact.kind === 'module_boundary' || fact.kind === 'project_profile' || fact.kind === 'architecture_decision' || fact.kind === 'project_convention' || fact.kind === 'workflow_rule') {
+        score += 35
+        reasons.push('actor_subagent_project_priority')
+      }
+      break
+    case 'main_session':
+      if (fact.kind === 'project_convention' || fact.kind === 'workflow_rule' || fact.kind === 'user_preference' || fact.kind === 'architecture_decision') {
+        score += 20
+        reasons.push('actor_main_project_priority')
+      }
+      break
+    case 'system':
+    case 'user':
+      break
+  }
+
+  return { score, reasons }
+}
+
+function suppressForActor(fact: ContextFact, profile: ActorContextProfile | undefined): string | undefined {
+  if (!profile) return undefined
+  if (profile.actor === 'main_session' && isRawWorkerLogFact(fact)) {
+    return `Suppressed raw worker log fact ${fact.id} for main-session context pack.`
+  }
+  if (profile.actor === 'subagent' && isConversationOnlyGoal(fact) && !matchesFileScope(fact, profile.fileScope)) {
+    return `Suppressed unrelated conversation fact ${fact.id} for subagent context pack.`
+  }
+  return undefined
+}
+
+function isTeamStateFact(fact: ContextFact): boolean {
+  return fact.origin?.actor === 'team_pm' ||
+    fact.origin?.actor === 'team_worker' ||
+    includesAny(fact.tags, ['team_issue', 'team_decision', 'task_result', 'qa_issue']) ||
+    fact.citations.some((citation) => citation.ref.startsWith('.team/'))
+}
+
+function isWorkerBaselineFact(fact: ContextFact): boolean {
+  return fact.kind === 'project_convention' || fact.kind === 'workflow_rule'
+}
+
+function isRawWorkerLogFact(fact: ContextFact): boolean {
+  return includesAny(fact.tags, ['worker_log', 'raw_worker_log']) ||
+    (fact.origin?.actor === 'team_worker' && (fact.kind === 'current_goal' || fact.kind === 'runtime_error_chain') && fact.citations.some((citation) => citation.ref.includes('.team/log')))
+}
+
+function isConversationOnlyGoal(fact: ContextFact): boolean {
+  return (fact.kind === 'current_goal' || fact.kind === 'runtime_error_chain') &&
+    (includesAny(fact.tags, ['conversation', 'chat']) || fact.citations.some((citation) => citation.type === 'message'))
+}
+
+function includesAny(values: string[] | undefined, needles: string[]): boolean {
+  if (!values?.length) return false
+  const normalized = new Set(values.map((value) => value.toLowerCase()))
+  return needles.some((needle) => normalized.has(needle))
+}
+
+function matchesFileScope(fact: ContextFact, fileScope: string[] | undefined): boolean {
+  if (!fileScope?.length) return false
+  const factRefs = [
+    ...(fact.relatedFiles ?? []),
+    ...fact.citations.filter((citation) => citation.type === 'file').map((citation) => citation.ref),
+  ].map(normalizePathText)
+  if (!factRefs.length) return false
+  const scopes = fileScope.map(normalizePathText)
+  return factRefs.some((ref) => scopes.some((scope) => ref === scope || ref.endsWith(`/${scope}`) || scope.endsWith(`/${ref}`)))
 }
 
 function isHighValueStaleFact(fact: ContextFact): boolean {
@@ -158,6 +289,10 @@ function normalizeSearchText(text: string): string {
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function normalizePathText(text: string): string {
+  return text.replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase()
 }
 
 function searchTokens(text: string): string[] {
