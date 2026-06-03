@@ -289,9 +289,13 @@ function sectionKindFromFact(fact: ContextFact): ContextSection['kind'] {
     case 'module_boundary':
     case 'project_convention':
     case 'workflow_rule':
+    case 'team_decision':
+    case 'task_result':
+    case 'artifact_summary':
       return 'project_profile'
     case 'user_preference':
     case 'known_issue':
+    case 'qa_issue':
       return 'memory'
   }
 }
@@ -308,10 +312,18 @@ function priorityFromFact(fact: ContextFact): number {
       return 90
     case 'code_entrypoint':
       return 80
+    case 'qa_issue':
+      return 76
+    case 'team_decision':
+      return 75
+    case 'task_result':
+      return 72
     case 'architecture_decision':
     case 'project_convention':
     case 'workflow_rule':
       return 70
+    case 'artifact_summary':
+      return 68
     case 'project_profile':
     case 'module_boundary':
       return 60

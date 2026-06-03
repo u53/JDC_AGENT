@@ -9,6 +9,10 @@ const HIGH_VALUE_KINDS = new Set<ContextFactKind>([
   'current_goal',
   'runtime_error_chain',
   'code_entrypoint',
+  'team_decision',
+  'task_result',
+  'artifact_summary',
+  'qa_issue',
 ])
 
 export interface RetrievedContextFact {

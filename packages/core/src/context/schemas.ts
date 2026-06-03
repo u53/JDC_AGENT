@@ -20,7 +20,7 @@ export const ContextFreshnessSchema = z.enum(['live', 'recent', 'cached', 'stale
 export const ContextScopeSchema = z.enum(['global', 'project', 'repo', 'session', 'turn'])
 export const MemoryScopeSchema = z.enum(['global', 'project', 'repo', 'session'])
 export const EvidenceKindSchema = z.enum(['file', 'git', 'tool_event', 'message', 'memory', 'ide', 'config', 'task', 'diagnostic'])
-export const ContextFactKindSchema = z.enum(['project_profile', 'architecture_decision', 'module_boundary', 'user_preference', 'current_goal', 'runtime_error_chain', 'code_entrypoint', 'known_issue', 'project_convention', 'workflow_rule'])
+export const ContextFactKindSchema = z.enum(['project_profile', 'architecture_decision', 'module_boundary', 'user_preference', 'current_goal', 'runtime_error_chain', 'code_entrypoint', 'known_issue', 'project_convention', 'workflow_rule', 'team_decision', 'task_result', 'artifact_summary', 'qa_issue'])
 export const ContextSectionKindSchema = z.enum(['user_intent', 'project_profile', 'code_map', 'relevant_code', 'git_state', 'memory', 'conversation_state', 'runtime_state', 'ide_state', 'diagnostics'])
 export const SkipReasonSchema = z.enum(['greeting_or_smalltalk', 'no_new_fact', 'too_short', 'duplicate_of_existing_context', 'low_confidence', 'sensitive_content', 'rate_limited', 'model_noop', 'cancelled', 'timeout'])
 export const HarvestStatusSchema = z.enum(['queued', 'classified', 'distilling', 'validating', 'accepted', 'pending_review', 'rejected', 'skipped', 'failed'])
@@ -277,6 +277,33 @@ export const ConversationStatePayloadSchema = z.object({ currentGoal: nonEmptySt
 export const MemoryCandidatePayloadSchema = z.object({ kind: MemoryRecordKindSchema, scope: MemoryScopeSchema, content: nonEmptyStringSchema, confidence: confidenceSchema, expiresAt: timestampSchema.optional() })
 export const ProjectProfilePayloadSchema = z.object({ projectPurpose: nonEmptyStringSchema, packageBoundaries: z.array(z.object({ name: nonEmptyStringSchema, path: nonEmptyStringSchema, responsibility: nonEmptyStringSchema })), commands: z.array(z.object({ name: nonEmptyStringSchema, command: nonEmptyStringSchema, purpose: nonEmptyStringSchema })), architectureNotes: z.array(z.string()) })
 export const CodeTaskPayloadSchema = z.object({ relevantSymbols: z.array(z.object({ name: nonEmptyStringSchema, file: nonEmptyStringSchema, line: z.number().int().positive().optional(), reason: nonEmptyStringSchema })), relevantFiles: z.array(z.object({ file: nonEmptyStringSchema, reason: nonEmptyStringSchema })), suggestedTools: z.array(z.object({ tool: nonEmptyStringSchema, input: z.record(z.unknown()), reason: nonEmptyStringSchema })) })
+export const TeamLedgerPayloadSchema = z.object({
+  kind: z.enum(['team_decision', 'task_result']),
+  summary: nonEmptyStringSchema,
+  teamId: nonEmptyStringSchema,
+  taskId: z.string().optional(),
+  memberId: z.string().optional(),
+  confidence: confidenceSchema.optional(),
+})
+export const ArtifactSummaryPayloadSchema = z.object({
+  artifactId: nonEmptyStringSchema,
+  summary: nonEmptyStringSchema,
+  artifactType: z.string().optional(),
+  teamId: nonEmptyStringSchema,
+  taskId: nonEmptyStringSchema.optional(),
+  memberId: nonEmptyStringSchema.optional(),
+  confidence: confidenceSchema.optional(),
+})
+export const QaIssuePayloadSchema = z.object({
+  issueId: nonEmptyStringSchema,
+  title: nonEmptyStringSchema,
+  status: z.enum(['open', 'in_progress', 'resolved', 'wontfix']),
+  severity: z.enum(['low', 'medium', 'high', 'critical']),
+  summary: nonEmptyStringSchema,
+  teamId: nonEmptyStringSchema,
+  taskId: nonEmptyStringSchema.optional(),
+  confidence: confidenceSchema.optional(),
+})
 
 export function validateContextFact(input: unknown) { return ContextFactSchema.safeParse(input) }
 export function validateContextBundle(input: unknown) { return ContextBundleSchema.safeParse(input) }
