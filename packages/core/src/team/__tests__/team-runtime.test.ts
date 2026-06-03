@@ -3,6 +3,7 @@ import { mkdirSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import type { SubSessionOptions, SubSessionResult } from '../../sub-session.js'
+import type { RawEvidence } from '../../context/types.js'
 
 // Mock runSubSession to simulate quick member completion
 vi.mock('../../sub-session.js', async () => {
@@ -157,6 +158,64 @@ describe('TeamRuntime', () => {
     expect(events.some(e => e.type === 'task_created')).toBe(true)
   })
 
+  it('captures runtime events into Context Engine ledger without blocking Team completion', async () => {
+    const store = {
+      saveRawEvidence: vi.fn(async () => ({ ok: true, value: undefined, diagnostics: [] })),
+      saveFact: vi.fn(async () => ({ ok: true, value: undefined, diagnostics: [] })),
+      saveDiagnostic: vi.fn(async () => ({ ok: true, value: undefined, diagnostics: [] })),
+    }
+    const team = new TeamRuntime({
+      id: 'team_alpha',
+      objective: 'Test',
+      plan: {
+        members: [{ role: 'explorer', agentType: 'explore' }],
+        tasks: [{ title: 'A', description: 'a' }],
+      },
+      subSessionDeps: {
+        ...mockDeps,
+        contextEngine: {
+          store,
+          sessionId: 'session_team_runtime',
+        },
+      },
+    })
+
+    await team.start()
+    await delay(50)
+
+    const eventTypes = mockFirstArgs<RawEvidence>(store.saveRawEvidence).map((evidence) => evidence.metadata.eventType)
+    expect(eventTypes).toContain('team_started')
+    expect(eventTypes.some((type) => type === 'task_created' || type === 'task_assigned')).toBe(true)
+
+    const onComplete = vi.fn()
+    const failingStore = {
+      saveRawEvidence: vi.fn(async () => { throw new Error('context store unavailable') }),
+      saveFact: vi.fn(async () => ({ ok: true, value: undefined, diagnostics: [] })),
+      saveDiagnostic: vi.fn(async () => ({ ok: true, value: undefined, diagnostics: [] })),
+    }
+    const failOpenTeam = new TeamRuntime({
+      id: 'team_fail_open',
+      objective: 'Test fail open',
+      plan: {
+        members: [{ role: 'explorer', agentType: 'explore' }],
+        tasks: [{ title: 'A', description: 'a' }],
+      },
+      subSessionDeps: {
+        ...mockDeps,
+        contextEngine: {
+          store: failingStore,
+          sessionId: 'session_team_runtime',
+        },
+      },
+      onComplete,
+    })
+
+    await failOpenTeam.start()
+    await delay(50)
+    expect(onComplete).toHaveBeenCalled()
+    expect(failingStore.saveDiagnostic).toHaveBeenCalled()
+  })
+
   it('stop aborts all members', () => {
     const team = new TeamRuntime({
       objective: 'Test',
@@ -170,3 +229,11 @@ describe('TeamRuntime', () => {
     expect(team.getStatus()).toBe('stopped')
   })
 })
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function mockFirstArgs<T>(mock: { mock: { calls: unknown[][] } }): T[] {
+  return mock.mock.calls.map((call) => call[0] as T)
+}

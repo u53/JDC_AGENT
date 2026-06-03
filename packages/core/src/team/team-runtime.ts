@@ -20,6 +20,7 @@ import {
   type TeamMessageIntent,
 } from './team-types.js'
 import { resolveExpertPrompt } from './expert-prompts.js'
+import { recordTeamEventEvidence, recordTeamTaskResultEvidence, type TeamLedgerContext } from '../context/team-ledger.js'
 import type { SubSessionOptions } from '../sub-session.js'
 import type { ModelProvider } from '../model-provider.js'
 import type { ModelConfig } from '../types.js'
@@ -518,7 +519,18 @@ export class TeamRuntime {
   private recordEvent(event: TeamEvent): void {
     this.lastTeamActivity = Date.now()
     this.events.push(event)
+    void recordTeamEventEvidence(event, this.ledgerContext()).catch(() => undefined)
     this.opts.onEvent?.(event)
+  }
+
+  private ledgerContext(): TeamLedgerContext {
+    const engine = this.opts.subSessionDeps.contextEngine
+    return {
+      ...(engine?.store ? { store: engine.store } : {}),
+      cwd: this.opts.subSessionDeps.cwd,
+      ...(engine?.sessionId ? { sessionId: engine.sessionId } : {}),
+      teamId: this.id,
+    }
   }
 
   private scheduleTick(): void {
@@ -885,6 +897,12 @@ export class TeamRuntime {
         this.manager.markTaskCompleted(taskId, result)
         this.concurrency.markDone(memberId)
         this.fallbackWriteResult(taskId, memberId, result.summary).catch(() => {})
+        void recordTeamTaskResultEvidence({
+          taskId,
+          memberId,
+          summary: result.summary,
+          path: `.team/tasks/${taskId}/result.md`,
+        }, this.ledgerContext()).catch(() => undefined)
         this.recycleMember(memberId, memberSpec)
         this.triggerProactive({ kind: 'task_completed', taskId })
         this.scheduleTick()
