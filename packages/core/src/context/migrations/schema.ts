@@ -29,7 +29,12 @@ export const CREATE_CONTEXT_STORE_TABLES = [
     session_id TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
-    expires_at INTEGER
+    expires_at INTEGER,
+    origin_json TEXT,
+    tags_json TEXT,
+    related_files_json TEXT,
+    related_symbols_json TEXT,
+    related_tasks_json TEXT
   )`,
   `CREATE TABLE IF NOT EXISTS context_bundles(
     id TEXT PRIMARY KEY,

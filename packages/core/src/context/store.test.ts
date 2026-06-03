@@ -115,6 +115,73 @@ describe('JDC Context Store persistence', () => {
     expect(saved.relatedTasks).toEqual(['task_release'])
   })
 
+  it('backfills origin for legacy context facts without session isolation', async () => {
+    const projectDir = makeTempDir()
+    const dbPath = makeDbPath()
+    const SQL = await initSqlJs()
+    const db = new SQL.Database()
+    db.run('CREATE TABLE schema_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)')
+    db.run("INSERT INTO schema_meta(key, value) VALUES('context_schema_version', '1')")
+    db.run(`CREATE TABLE context_facts(
+      id TEXT PRIMARY KEY,
+      project_key TEXT,
+      fact_id TEXT,
+      kind TEXT NOT NULL,
+      scope TEXT NOT NULL,
+      content TEXT NOT NULL,
+      citations_json TEXT NOT NULL,
+      confidence REAL NOT NULL,
+      freshness TEXT NOT NULL,
+      source_provider TEXT NOT NULL,
+      session_id TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      expires_at INTEGER
+    )`)
+    db.run(`CREATE TABLE raw_evidence(
+      id TEXT PRIMARY KEY,
+      project_key TEXT,
+      evidence_id TEXT,
+      session_id TEXT NOT NULL,
+      cwd TEXT NOT NULL,
+      source_provider TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      content TEXT NOT NULL,
+      metadata_json TEXT NOT NULL,
+      captured_at INTEGER NOT NULL,
+      hash TEXT NOT NULL
+    )`)
+    db.run(`INSERT INTO raw_evidence(id, project_key, evidence_id, session_id, cwd, source_provider, kind, content, metadata_json, captured_at, hash)
+      VALUES('raw_legacy', ?, 'raw_legacy', 'session_legacy', ?, 'Legacy', 'file', 'legacy file', ?, 1, 'hash_1')`, [
+      projectDir,
+      projectDir,
+      JSON.stringify({ file: 'src/file.ts' }),
+    ])
+    db.run(`INSERT INTO context_facts(id, project_key, fact_id, kind, scope, content, citations_json, confidence, freshness, source_provider, session_id, created_at, updated_at, expires_at)
+      VALUES('fact_legacy', ?, 'fact_legacy', 'workflow_rule', 'project', 'Legacy release rule', ?, 0.9, 'recent', 'LegacyProvider', 'session_legacy', 1, 1, NULL)`, [
+      projectDir,
+      JSON.stringify([citation]),
+    ])
+    writeFileSync(dbPath, Buffer.from(db.export()))
+    db.close()
+
+    const store = await openContextStore({ dbPath, cwd: projectDir, now: () => 2_000 })
+    const facts = await store.listAcceptedProjectFacts()
+
+    expect(facts.value).toMatchObject([{
+      id: 'fact_legacy',
+      sessionId: 'session_legacy',
+      origin: {
+        projectKey: projectDir,
+        actor: 'main_session',
+        sessionId: 'session_legacy',
+      },
+    }])
+
+    const sameProjectOtherSession = await openContextStore({ dbPath, cwd: path.join(projectDir, '.'), now: () => 3_000 })
+    expect((await sameProjectOtherSession.listAcceptedProjectFacts()).value.map((fact) => fact.id)).toEqual(['fact_legacy'])
+  })
+
   it('keeps same-cwd stores live-consistent when both are opened before a write', async () => {
     const projectDir = makeTempDir()
     const sessionAStore = await openContextStore({ cwd: projectDir, now: () => 1_000 })

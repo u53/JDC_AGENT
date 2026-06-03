@@ -17,6 +17,7 @@ import type {
   ContextFact,
   ContextFactKind,
   ContextFreshness,
+  ContextOrigin,
   ContextScope,
   HarvestJob,
   RawEvidence,
@@ -328,6 +329,11 @@ function ensureProjectIsolationSchema(db: Database, projectKey: string, fallback
   ensureColumn(db, 'raw_evidence', 'evidence_id', 'TEXT')
   ensureColumn(db, 'context_facts', 'fact_id', 'TEXT')
   ensureColumn(db, 'context_facts', 'session_id', 'TEXT')
+  ensureColumn(db, 'context_facts', 'origin_json', 'TEXT')
+  ensureColumn(db, 'context_facts', 'tags_json', 'TEXT')
+  ensureColumn(db, 'context_facts', 'related_files_json', 'TEXT')
+  ensureColumn(db, 'context_facts', 'related_symbols_json', 'TEXT')
+  ensureColumn(db, 'context_facts', 'related_tasks_json', 'TEXT')
   ensureColumn(db, 'context_bundles', 'bundle_id', 'TEXT')
   ensureColumn(db, 'harvest_jobs', 'job_id', 'TEXT')
   ensureColumn(db, 'memory_records', 'memory_id', 'TEXT')
@@ -337,6 +343,7 @@ function ensureProjectIsolationSchema(db: Database, projectKey: string, fallback
   ensureColumn(db, 'rejected_candidates', 'visible_in_primary_ui', 'INTEGER DEFAULT 1')
   ensureColumn(db, 'harvest_jobs', 'visible_in_primary_ui', 'INTEGER DEFAULT 1')
   backfillProjectIsolationRows(db, fallbackUnknownProjectRows ? projectKey : undefined)
+  backfillFactProvenanceRows(db, projectKey)
   applyStatements(db, [...PROJECT_SCOPED_INDEXES])
 }
 
@@ -400,6 +407,20 @@ function backfillUnownedRows(db: Database, fallbackProjectKey?: string): void {
   const unownedTables = ['memory_records', 'context_diagnostics'] as const
   for (const table of unownedTables) {
     db.run(`UPDATE ${table} SET project_key = ? WHERE project_key IS NULL OR project_key = ''`, [fallbackProjectKey])
+  }
+}
+
+function backfillFactProvenanceRows(db: Database, fallbackProjectKey: string): void {
+  for (const row of selectDbRows(db, 'SELECT id, project_key, session_id, origin_json FROM context_facts WHERE origin_json IS NULL OR origin_json = ?', [''])) {
+    const id = String(row.id)
+    const projectKey = stringOrUndefined(row.project_key) ?? fallbackProjectKey
+    const sessionId = stringOrUndefined(row.session_id)
+    const origin: ContextOrigin = {
+      projectKey,
+      actor: 'main_session',
+      ...(sessionId ? { sessionId } : {}),
+    }
+    db.run('UPDATE context_facts SET origin_json = ? WHERE id = ?', [JSON.stringify(origin), id])
   }
 }
 
@@ -498,9 +519,14 @@ class SqlJsContextStore implements ContextStore {
     }
 
     return this.write('saveFact', undefined, () => {
+      const origin = parsed.data.origin ?? defaultOriginForFact(parsed.data, this.projectKey)
+      const tags = parsed.data.tags ?? []
+      const relatedFiles = parsed.data.relatedFiles ?? []
+      const relatedSymbols = parsed.data.relatedSymbols ?? []
+      const relatedTasks = parsed.data.relatedTasks ?? []
       this.db.run(
-        `INSERT OR REPLACE INTO context_facts(id, project_key, fact_id, kind, scope, content, citations_json, confidence, freshness, source_provider, session_id, created_at, updated_at, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR REPLACE INTO context_facts(id, project_key, fact_id, kind, scope, content, citations_json, confidence, freshness, source_provider, session_id, created_at, updated_at, expires_at, origin_json, tags_json, related_files_json, related_symbols_json, related_tasks_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           scopedId(this.projectKey, parsed.data.id),
           this.projectKey,
@@ -516,6 +542,11 @@ class SqlJsContextStore implements ContextStore {
           parsed.data.createdAt,
           parsed.data.updatedAt,
           parsed.data.expiresAt ?? null,
+          JSON.stringify(origin),
+          JSON.stringify(tags),
+          JSON.stringify(relatedFiles),
+          JSON.stringify(relatedSymbols),
+          JSON.stringify(relatedTasks),
         ]
       )
     })
@@ -1035,7 +1066,36 @@ function parseFactRow(row: Record<string, unknown>): ContextFact {
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
     expiresAt: row.expires_at === null || row.expires_at === undefined ? undefined : Number(row.expires_at),
+    origin: parseJsonColumn<ContextOrigin | undefined>(row.origin_json, undefined),
+    tags: parseStringArrayColumn(row.tags_json),
+    relatedFiles: parseStringArrayColumn(row.related_files_json),
+    relatedSymbols: parseStringArrayColumn(row.related_symbols_json),
+    relatedTasks: parseStringArrayColumn(row.related_tasks_json),
   })
+}
+
+function defaultOriginForFact(fact: ContextFact, projectKey: string): ContextOrigin {
+  return {
+    projectKey,
+    actor: 'main_session',
+    ...(fact.sessionId ? { sessionId: fact.sessionId } : {}),
+  }
+}
+
+function parseJsonColumn<T>(value: unknown, fallback: T): T {
+  if (value === null || value === undefined || value === '') return fallback
+  try {
+    return JSON.parse(String(value)) as T
+  } catch {
+    return fallback
+  }
+}
+
+function parseStringArrayColumn(value: unknown): string[] | undefined {
+  const parsed = parseJsonColumn<unknown>(value, undefined)
+  if (!Array.isArray(parsed)) return undefined
+  const strings = parsed.filter((item): item is string => typeof item === 'string' && item.length > 0)
+  return strings.length ? strings : []
 }
 
 function parseRawEvidenceRow(row: Record<string, unknown>): RawEvidence {
