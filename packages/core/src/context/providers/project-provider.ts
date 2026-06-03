@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { join } from 'node:path'
 import type { ContextRequest } from '../types.js'
 import {
   citationFor,
@@ -37,7 +37,7 @@ export async function collectProjectContext(request: ContextRequest, options: Pr
       const content = await readProjectFile(filePath)
       if (content === null) continue
 
-      const summary = summarizeProjectFile(fileName, content)
+      const summary = projectFileContext(fileName, content)
       summaries.push(summary)
       evidence.push(rawEvidence(request, SOURCE, fileName.endsWith('.json') || fileName.endsWith('.yaml') ? 'config' : 'file', summary, { file: fileName }, capturedAt))
     }
@@ -72,56 +72,9 @@ async function readProjectFile(filePath: string): Promise<string | null> {
   }
 }
 
-function summarizeProjectFile(fileName: string, content: string): string {
-  if (fileName === 'package.json') return summarizePackageJson(content)
-  if (fileName.endsWith('.md')) return summarizeMarkdownProjectFile(fileName, content)
-  if (fileName.endsWith('.yaml') || fileName.endsWith('.yml')) return summarizePlainProjectFile(fileName, content, 80)
-  return summarizePlainProjectFile(fileName, content, 20)
-}
-
-function summarizePackageJson(content: string): string {
-  try {
-    const pkg = JSON.parse(content) as {
-      name?: string
-      version?: string
-      scripts?: Record<string, string>
-      dependencies?: Record<string, string>
-      devDependencies?: Record<string, string>
-      workspaces?: unknown
-    }
-    const scripts = Object.entries(pkg.scripts ?? {}).map(([name, command]) => `${name}: ${command}`).join('\n')
-    const deps = Object.keys({ ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) }).slice(0, 80).join(', ')
-    return [
-      `package.json name=${pkg.name ?? basename('package.json')} version=${pkg.version ?? 'unknown'}`,
-      scripts ? `scripts:\n${scripts}` : 'scripts: none',
-      pkg.workspaces ? `workspaces=${JSON.stringify(pkg.workspaces)}` : 'workspaces: none',
-      deps ? `dependencies=${deps}` : 'dependencies: none',
-    ].join('\n')
-  } catch {
-    return 'package.json is present but could not be parsed'
-  }
-}
-
-function summarizeMarkdownProjectFile(fileName: string, content: string): string {
-  const kept: string[] = []
-  let currentHeading = ''
-
-  for (const rawLine of content.split('\n')) {
-    const line = rawLine.trim()
-    if (!line) continue
-    if (/^#{1,3}\s+/.test(line)) {
-      currentHeading = line.replace(/^#{1,3}\s+/, '')
-      kept.push(`## ${currentHeading}`)
-      continue
-    }
-    if (kept.length >= 120) break
-    kept.push(currentHeading ? `${currentHeading}: ${line}` : line)
-  }
-
-  return `${fileName}:\n${kept.join('\n')}`
-}
-
-function summarizePlainProjectFile(fileName: string, content: string, maxLines: number): string {
-  const lines = content.split('\n').map((line) => line.trim()).filter(Boolean).slice(0, maxLines)
-  return `${fileName}:\n${lines.join('\n')}`
+// Project metadata files are a first-class project signal. Do not summarize or
+// truncate them here for local token budgeting; provider adapters own any
+// protocol-safe fallback if a model request later rejects the full payload.
+function projectFileContext(fileName: string, content: string): string {
+  return `${fileName}:\n${content.trimEnd()}`
 }

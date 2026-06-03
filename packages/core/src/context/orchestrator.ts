@@ -9,7 +9,6 @@ import type {
   ContextBundle,
   ContextDiagnostic,
   ContextFact,
-  ContextFactKind,
   ContextPlan,
   ContextProviderId,
   ContextRequest,
@@ -34,8 +33,6 @@ export interface BuildContextBundleOptions {
   injectionEnabled?: boolean
   store: ContextStore
   providers?: ContextProvider[]
-  maxSectionTokens?: number
-  maxCodeTokens?: number
   providerTimeoutMs?: number
   scheduler?: ContextScheduler
   now?: () => number
@@ -50,11 +47,8 @@ export interface BuildContextBundleResult {
   providerHealth: ProviderHealth[]
 }
 
-const DEFAULT_PROVIDER_TIMEOUT_MS = 120
-const DEFAULT_STORE_FACT_LIMIT = 200
-const FOCUSED_STORE_FACT_LIMIT = 75
+const DEFAULT_PROVIDER_TIMEOUT_MS = 1_200
 const MAX_PLAN_SUPPRESSION_DIAGNOSTICS = 25
-const HIGH_VALUE_STORE_FACT_KINDS: ContextFactKind[] = ['current_goal', 'known_issue', 'project_convention', 'architecture_decision', 'runtime_error_chain']
 
 export async function buildContextBundle(request: ContextRequest, options: BuildContextBundleOptions): Promise<BuildContextBundleResult> {
   const now = options.now ?? Date.now
@@ -113,13 +107,13 @@ export async function buildContextBundle(request: ContextRequest, options: Build
 }
 
 async function loadStoreFacts(store: ContextStore): Promise<ContextFact[] & { diagnostics: ContextDiagnostic[] }> {
-  const general = await store.queryFacts({ minConfidence: 0.01, includeStale: true, limit: DEFAULT_STORE_FACT_LIMIT, orderBy: 'updated_desc' })
+  // Product contract: project facts are loaded without a hidden row window.
+  // Relevance/planning decides what reaches the prompt; a default 200/75 store
+  // cap would break same-project cross-session learning for larger projects.
+  const general = await store.queryFacts({ minConfidence: 0.01, includeStale: true, orderBy: 'updated_desc' })
   if (!general.ok) throw new Error(general.diagnostics[0]?.message || 'context store queryFacts failed')
 
-  const focused = await store.queryFacts({ minConfidence: 0.01, includeStale: true, limit: FOCUSED_STORE_FACT_LIMIT, kinds: HIGH_VALUE_STORE_FACT_KINDS, orderBy: 'updated_desc' })
-  if (!focused.ok) throw new Error(focused.diagnostics[0]?.message || 'context store focused queryFacts failed')
-
-  return Object.assign(dedupeFacts([...general.value, ...focused.value]), { diagnostics: [...general.diagnostics, ...focused.diagnostics] })
+  return Object.assign(dedupeFacts(general.value), { diagnostics: general.diagnostics })
 }
 
 function dedupeFacts(facts: ContextFact[]): ContextFact[] {
@@ -262,8 +256,6 @@ function shouldPersistDiagnostic(item: ContextDiagnostic): boolean {
 function budgetLimits(request: ContextRequest, options: BuildContextBundleOptions): ContextBudgetLimits {
   return {
     maxTokens: request.tokenBudget,
-    maxSectionTokens: options.maxSectionTokens,
-    maxCodeTokens: options.maxCodeTokens,
   }
 }
 

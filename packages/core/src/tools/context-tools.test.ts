@@ -219,6 +219,26 @@ describe('JDC Context Engine inspect and refresh tools', () => {
     expect(ContextRefreshPayloadSchema.parse(payload).providerHealth[0]?.status).toBe('indexing')
   })
 
+  it('does not invent a legacy 2500 token budget for invalid refresh payloads', async () => {
+    const payload = await refreshContextProviders({ sessionId: '' })
+
+    expect(payload.status).toBe('unavailable')
+    expect(payload.bundle.budget.maxTokens).toBeUndefined()
+    expect(payload.bundle.budget.droppedTokens).toBe(0)
+  })
+
+  it('does not invent a legacy 2500 token budget for refresh bundles', async () => {
+    const payload = await refreshContextProviders({ sessionId: 'session_1', cwd: '/repo', providers: [] }, {
+      store: makeStore(),
+      now: () => 1_000,
+      id: () => 'ctx_refresh_no_cap',
+    })
+
+    expect(payload.status).toBe('refreshed')
+    expect(payload.bundle.budget.maxTokens).toBeUndefined()
+    expect(payload.bundle.budget.droppedTokens).toBe(0)
+  })
+
   it('returns cached-only refresh state for an unindexed code provider without starting indexing', async () => {
     const releaseIndex = deferred<void>()
     const engine = {
@@ -316,7 +336,6 @@ describe('JDC Context Engine inspect and refresh tools', () => {
       userMessage: 'refresh runtime',
       providers: ['runtime'],
       model: 'test-model',
-      tokenBudget: 100,
     }, {
       store,
       providers: [
@@ -384,7 +403,7 @@ function bundle(overrides: Partial<ContextBundle> = {}): ContextBundle {
     sections: [section()],
     citations: [{ id: 'cit_1', type: 'tool_event', ref: 'tool_1' }],
     diagnostics: [],
-    budget: { maxTokens: 100, usedTokens: 12, droppedTokens: 0 },
+    budget: { usedTokens: 12, droppedTokens: 0 },
     ...overrides,
   }
 }

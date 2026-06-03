@@ -34,7 +34,6 @@ describe('core context protocol types', () => {
       recentMessages: [message],
       mode: 'code_edit',
       model: 'gpt-5.5',
-      tokenBudget: 2500,
       runtime: { runLoopId: 'run_1' },
       createdAt: 1,
     }
@@ -85,7 +84,7 @@ describe('core context protocol types', () => {
       sections: [section],
       citations: [citation],
       diagnostics: [diagnostic],
-      budget: { maxTokens: 2500, usedTokens: 12, droppedTokens: 0 },
+      budget: { usedTokens: 12, droppedTokens: 0 },
     }
 
     expect(bundle.sections[0].tokenEstimate).toBe(12)

@@ -9,7 +9,7 @@ describe('Context Engine config defaults', () => {
     expect(DEFAULT_CONTEXT_ENGINE_CONFIG.tokenBudget.providerOverflowPolicy).toBe('degrade_and_retry')
   })
 
-  it('keeps explicit debug caps when the user config asks for them', () => {
+  it('parses legacy compatibility caps without making them production defaults', () => {
     const config = resolveContextEngineConfig({
       tokenBudget: {
         maxBundleTokens: 4096,

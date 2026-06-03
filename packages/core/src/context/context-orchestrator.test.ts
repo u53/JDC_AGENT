@@ -10,7 +10,6 @@ const request: ContextRequest = {
   recentMessages: [],
   mode: 'code_edit',
   model: 'test-model',
-  tokenBudget: 200,
   runtime: {},
   createdAt: 1_000,
 }
@@ -33,7 +32,7 @@ describe('JDC Context orchestrator', () => {
     expect(result.renderedPrompt).toBe('')
     expect(result.bundle.sections).toEqual([])
     expect(result.bundle.diagnostics[0]?.message).toContain('context injection disabled')
-    expect(result.bundle.budget).toEqual({ maxTokens: 200, usedTokens: 0, droppedTokens: 0 })
+    expect(result.bundle.budget).toEqual({ usedTokens: 0, droppedTokens: 0 })
   })
 
   it('builds a ranked, budgeted bundle from live providers and stored facts, then persists evidence and snapshots', async () => {
@@ -46,14 +45,13 @@ describe('JDC Context orchestrator', () => {
       injectionEnabled: true,
       store,
       providers: [{ id: 'runtime', collect: async () => providerResult([runtime], [evidence]) }],
-      maxSectionTokens: 100,
       now: () => 1_000,
       id: () => 'bundle_1',
     })
 
     expect(result.bundle.id).toBe('bundle_1')
     expect(result.bundle.sections.map((item) => item.id)).toEqual(['runtime_live', 'fact_memory_fact'])
-    expect(result.bundle.budget).toEqual({ maxTokens: 200, usedTokens: 35, droppedTokens: 0 })
+    expect(result.bundle.budget).toEqual({ usedTokens: 35, droppedTokens: 0 })
     expect(result.renderedPrompt).toContain('<jdc-context-engine bundle="bundle_1">')
     expect(result.renderedPrompt).not.toContain(request.userMessage)
     expect(store.saveRawEvidence).toHaveBeenCalledWith(evidence)
@@ -76,8 +74,6 @@ describe('JDC Context orchestrator', () => {
       injectionEnabled: true,
       store,
       providers: [{ id: 'project', collect: async () => providerResult([largeProjectSection]) }],
-      maxSectionTokens: undefined,
-      maxCodeTokens: undefined,
       now: () => 1_000,
       id: () => 'bundle_no_cap',
     })
@@ -115,7 +111,7 @@ describe('JDC Context orchestrator', () => {
       message: 'Suppressed context section fact_fact_stale (memory "User Preference"): stale_low_value.',
       visibleInPrimaryUi: false,
     }))
-    expect(store.queryFacts).toHaveBeenCalledWith({ minConfidence: 0.01, includeStale: true, limit: 200, orderBy: 'updated_desc' })
+    expect(store.queryFacts).toHaveBeenCalledWith({ minConfidence: 0.01, includeStale: true, orderBy: 'updated_desc' })
     expect(store.enforceQuotas).toHaveBeenCalledTimes(1)
   })
 
@@ -145,7 +141,7 @@ describe('JDC Context orchestrator', () => {
     }))
   })
 
-  it('keeps recent high-value goals beyond the general store fact window', async () => {
+  it('keeps recent high-value goals without relying on a focused store fact window', async () => {
     const genericFacts = Array.from({ length: 225 }, (_, index) => fact({
       id: `generic_${index}`,
       kind: 'user_preference',
@@ -163,7 +159,7 @@ describe('JDC Context orchestrator', () => {
     })
     const store = makeStore({ facts: [...genericFacts, currentGoal] })
 
-    const result = await buildContextBundle({ ...request, tokenBudget: 80 }, {
+    const result = await buildContextBundle(request, {
       injectionEnabled: true,
       store,
       providers: [],
@@ -173,10 +169,36 @@ describe('JDC Context orchestrator', () => {
 
     expect(result.bundle.sections.map((item) => item.id)).toContain('fact_goal_recent')
     expect(result.renderedPrompt).toContain('Finish the task-aware context planner')
-    expect(store.queryFacts).toHaveBeenCalledWith(expect.objectContaining({
-      kinds: ['current_goal', 'known_issue', 'project_convention', 'architecture_decision', 'runtime_error_chain'],
-      includeStale: true,
+    expect(store.queryFacts).toHaveBeenCalledTimes(1)
+    expect(store.queryFacts).toHaveBeenCalledWith(expect.not.objectContaining({
+      limit: expect.any(Number),
+      kinds: expect.any(Array),
     }))
+  })
+
+  it('does not impose a default project fact query window before planning', async () => {
+    const genericFacts = Array.from({ length: 240 }, (_, index) => fact({
+      id: `generic_${index}`,
+      kind: 'project_convention',
+      content: `Project convention ${index}`,
+      confidence: 0.9,
+      createdAt: index,
+      updatedAt: index,
+    }))
+    const store = makeStore({ facts: genericFacts })
+
+    const result = await buildContextBundle({ ...request, userMessage: 'Project convention 239' }, {
+      injectionEnabled: true,
+      store,
+      providers: [],
+      now: () => 1_000,
+      id: () => 'bundle_without_store_limit',
+    })
+
+    expect(result.renderedPrompt).toContain('Project convention 239')
+    for (const [query] of store.queryFacts.mock.calls) {
+      expect(query).not.toHaveProperty('limit')
+    }
   })
 
   it('adds provider diagnostics and continues when one provider fails', async () => {

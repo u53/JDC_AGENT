@@ -34,7 +34,6 @@ function request(cwd: string, overrides: Partial<ContextRequest> = {}): ContextR
     ],
     mode: 'code_edit',
     model: 'gpt-5.5',
-    tokenBudget: 1200,
     runtime: {},
     createdAt: 3,
     ...overrides,
@@ -211,6 +210,30 @@ describe('context signal providers', () => {
     expectCitationsValid(sectionCitations(result), { memoryRecords: [{ id: 'memory_release' }] })
   })
 
+  it('does not impose a default accepted-memory count cap in the provider', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'jdc-memory-provider-unlimited-store-'))
+    const facts = Array.from({ length: 75 }, (_, index): ContextFact => ({
+      id: `fact_memory_${index}`,
+      kind: 'project_convention',
+      scope: 'project',
+      content: `项目级上下文规则 ${index}`,
+      citations: [{ id: `cit_memory_${index}`, type: 'memory', ref: `memory_${index}` }],
+      confidence: 0.9,
+      freshness: 'recent',
+      sourceProvider: 'JdcMemoryWrite',
+      createdAt: index,
+      updatedAt: index,
+    }))
+    const store = {
+      listAcceptedProjectFacts: vi.fn(async () => ({ ok: true, value: facts, diagnostics: [] })),
+    }
+
+    const result = await collectMemoryContext(request(cwd, { userMessage: '项目规则是什么' }), { store: store as any })
+
+    expect(store.listAcceptedProjectFacts).toHaveBeenCalledWith(expect.not.objectContaining({ limit: expect.any(Number) }))
+    expect(result.sections[0]?.content).toContain('项目级上下文规则 74')
+  })
+
   it('keeps meaningful project docs beyond the first three non-empty lines', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'jdc-project-doc-provider-'))
     writeFileSync(join(cwd, 'JDCAGNET.md'), [
@@ -233,6 +256,21 @@ describe('context signal providers', () => {
     expect(result.sections[0]?.content).toContain('pnpm build')
     expect(result.sections[0]?.content).toContain('上下文引擎约定')
     expectGateARecords(result)
+  })
+
+  it('does not truncate project metadata files for local token budgeting', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'jdc-project-doc-full-provider-'))
+    writeFileSync(join(cwd, 'JDCAGNET.md'), [
+      '# JDCAGNET',
+      ...Array.from({ length: 180 }, (_, index) => `项目规则 ${index}: 保留完整项目上下文。`),
+      '最终规则: provider 不因为 token budget 截断项目文档。',
+    ].join('\n'))
+
+    const result = await collectProjectContext(request(cwd))
+
+    expect(result.sections[0]?.content).toContain('项目规则 150')
+    expect(result.sections[0]?.content).toContain('最终规则')
+    expect(result.sections[0]?.content).not.toContain('truncated')
   })
 
   it('collects conversation, runtime, and IDE signals without persisting raw thinking', async () => {

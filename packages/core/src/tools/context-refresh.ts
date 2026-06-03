@@ -50,8 +50,6 @@ export interface RefreshContextOptions {
   providers?: RefreshProvider[]
   now?: () => number
   id?: () => string
-  maxSectionTokens?: number
-  maxCodeTokens?: number
   config?: ContextEngineConfigInput
 }
 
@@ -65,7 +63,7 @@ export async function refreshContextProviders(input: unknown, options: RefreshCo
       status: 'unavailable',
       refreshedAt,
       requestedProviders: [],
-      bundle: inspectableBundle({ id: `ctx_refresh_invalid_${refreshedAt}`, sessionId: 'unknown', requestHash: 'refresh_invalid', createdAt: refreshedAt, sections: [], citations: [], diagnostics: [diagnostic], budget: { maxTokens: 2500, usedTokens: 0, droppedTokens: 0 } }),
+      bundle: inspectableBundle({ id: `ctx_refresh_invalid_${refreshedAt}`, sessionId: 'unknown', requestHash: 'refresh_invalid', createdAt: refreshedAt, sections: [], citations: [], diagnostics: [diagnostic], budget: { usedTokens: 0, droppedTokens: 0 } }),
       providerHealth: [],
       providerTimings: [],
       diagnostics: [diagnostic],
@@ -74,7 +72,7 @@ export async function refreshContextProviders(input: unknown, options: RefreshCo
   const parsed = parsedInput.data
   const store = options.store ?? await openContextStore({ cwd: parsed.cwd ?? options.cwd })
   const config = resolveContextEngineConfig(options.config)
-  const configuredProviders = options.providers ?? createDefaultRefreshProviders(config)
+  const configuredProviders = options.providers ?? createDefaultRefreshProviders(config, { store })
   const requestedProviders = parsed.providers ?? providerIds(configuredProviders)
   const providers = filterProviders(configuredProviders, requestedProviders)
   const timedProviders = providers.map((provider) => withTiming(provider, now))
@@ -88,8 +86,6 @@ export async function refreshContextProviders(input: unknown, options: RefreshCo
       providers: timedProviders,
       now,
       id: options.id,
-      maxSectionTokens: options.maxSectionTokens,
-      maxCodeTokens: options.maxCodeTokens,
     })
     return ContextRefreshPayloadSchema.parse({
       status: 'refreshed',
@@ -106,7 +102,7 @@ export async function refreshContextProviders(input: unknown, options: RefreshCo
       status: 'unavailable',
       refreshedAt,
       requestedProviders,
-      bundle: inspectableBundle({ id: `ctx_refresh_failed_${refreshedAt}`, sessionId: parsed.sessionId, requestHash: 'refresh_failed', createdAt: refreshedAt, sections: [], citations: [], diagnostics: [diagnostic], budget: { maxTokens: parsed.tokenBudget ?? 2500, usedTokens: 0, droppedTokens: 0 } }),
+      bundle: inspectableBundle({ id: `ctx_refresh_failed_${refreshedAt}`, sessionId: parsed.sessionId, requestHash: 'refresh_failed', createdAt: refreshedAt, sections: [], citations: [], diagnostics: [diagnostic], budget: { ...(parsed.tokenBudget === undefined ? {} : { maxTokens: parsed.tokenBudget }), usedTokens: 0, droppedTokens: 0 } }),
       providerHealth: [],
       providerTimings: timings,
       diagnostics: [diagnostic],
@@ -121,7 +117,7 @@ export async function getContextProviderHealth(input: unknown, options: RefreshC
 
   const parsed = parsedInput.data
   const config = resolveContextEngineConfig(options.config)
-  const configuredProviders = options.providers ?? createDefaultRefreshProviders(config)
+  const configuredProviders = options.providers ?? createDefaultRefreshProviders(config, options.store ? { store: options.store } : undefined)
   const requestedProviders = parsed.providers ?? providerIds(configuredProviders)
   const providers = filterProviders(configuredProviders, requestedProviders)
   const request = createRefreshRequest({ ...parsed, cwd: parsed.cwd ?? options.cwd, reindex: false }, now(), true)
@@ -181,20 +177,20 @@ function createRefreshRequest(input: ContextRefreshInput, createdAt: number, hea
     recentMessages: [],
     mode: input.mode ?? 'debug',
     model: input.model ?? 'unknown',
-    tokenBudget: input.tokenBudget ?? 2500,
+    tokenBudget: input.tokenBudget,
     runtime: { contextRefresh: { reindex: input.reindex === true, healthOnly } },
     createdAt,
   }
 }
 
-export function createDefaultRefreshProviders(configInput: ContextEngineConfigInput = {}): RefreshProvider[] {
+export function createDefaultRefreshProviders(configInput: ContextEngineConfigInput = {}, options: { store?: ContextStore } = {}): RefreshProvider[] {
   const config = resolveContextEngineConfig(configInput)
   const toggles = config.providerToggles
   return [
     { id: 'conversation', collect: (request) => Promise.resolve(collectConversationContext(request, { enabled: toggles.conversation })), health: (request) => providerHealth('conversation', toggles.conversation ? 'enabled' : 'disabled', nowFromRequest(request)) },
     { id: 'runtime', collect: (request) => Promise.resolve(collectRuntimeContext(request, { enabled: toggles.runtime })), health: (request) => providerHealth('runtime', toggles.runtime ? 'enabled' : 'disabled', nowFromRequest(request)) },
     { id: 'ide', collect: (request) => Promise.resolve(collectIdeContext(request, { enabled: toggles.ide })), health: (request) => providerHealth('ide', toggles.ide ? 'enabled' : 'disabled', nowFromRequest(request)) },
-    { id: 'memory', collect: (request) => collectMemoryContext(request, { enabled: toggles.memory }), health: (request) => providerHealth('memory', toggles.memory ? 'enabled' : 'disabled', nowFromRequest(request)) },
+    { id: 'memory', collect: (request) => collectMemoryContext(request, { enabled: toggles.memory, store: options.store }), health: (request) => providerHealth('memory', toggles.memory ? 'enabled' : 'disabled', nowFromRequest(request)) },
     { id: 'git', collect: (request) => collectGitContext(request, { enabled: toggles.git }), health: (request) => providerHealth('git', toggles.git ? 'enabled' : 'disabled', nowFromRequest(request)) },
     { id: 'project', collect: (request) => collectProjectContext(request, { enabled: toggles.project }), health: (request) => providerHealth('project', toggles.project ? 'enabled' : 'disabled', nowFromRequest(request)) },
     { id: 'code', collect: (request) => collectCodeContext(request, { enabled: toggles.code }), health: (request) => getCodeProviderHealth(request, { enabled: toggles.code }) },

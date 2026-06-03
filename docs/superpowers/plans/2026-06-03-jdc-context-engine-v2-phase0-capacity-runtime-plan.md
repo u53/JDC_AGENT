@@ -8,6 +8,12 @@
 
 **Tech Stack:** TypeScript, Vitest, existing `ContextStore`, sql.js, Context Engine providers, Anthropic SDK Messages API, OpenAI Chat/Responses adapters, existing prompt segment system.
 
+## Updated Hard Constraint
+
+JDC Context Engine implementation must not enforce local artificial capacity limits. Legacy fields such as `maxBundleTokens`, `maxSectionTokens`, and `maxCodeTokens` may stay parseable for backward compatibility, but production code must not use them to truncate, drop, summarize, or window Engine bundles, sections, code context, project docs, accepted memory, or same-project durable facts.
+
+Selection is allowed and required, but it must be based on relevance, freshness, citations, and provider protocol safety. If a provider/model rejects an oversized request, the fix belongs in a protocol-safe adapter fallback with diagnostics, not in a hidden Engine cap.
+
 ---
 
 ## Scope
@@ -103,7 +109,7 @@ describe('Context Engine config defaults', () => {
     expect(DEFAULT_CONTEXT_ENGINE_CONFIG.tokenBudget.providerOverflowPolicy).toBe('degrade_and_retry')
   })
 
-  it('keeps explicit debug caps when the user config asks for them', () => {
+  it('parses legacy compatibility caps without making them production defaults', () => {
     const config = resolveContextEngineConfig({
       tokenBudget: {
         maxBundleTokens: 4096,
@@ -299,15 +305,17 @@ export interface ContextBudgetLimits {
 }
 ```
 
-When `limits.maxTokens`, `limits.maxSectionTokens`, or `limits.maxCodeTokens` are `undefined`, do not drop sections for that cap:
+Even when `limits.maxTokens`, `limits.maxSectionTokens`, or `limits.maxCodeTokens` are present for backward compatibility, do not drop or truncate sections locally:
 
 ```ts
-const hasBundleCap = typeof limits.maxTokens === 'number'
-const hasSectionCap = typeof limits.maxSectionTokens === 'number'
-const hasCodeCap = typeof limits.maxCodeTokens === 'number'
+return {
+  sections,
+  dropped: [],
+  budget: { maxTokens: limits.maxTokens, usedTokens, droppedTokens: 0 },
+}
 ```
 
-Use these booleans before any comparison that currently assumes a number.
+Do not add `hasBundleCap`, `hasSectionCap`, or `hasCodeCap` comparisons. Provider/model overflow belongs in adapter fallback logic, not local Engine budgeting.
 
 - [ ] **Step 3: Update orchestrator defaults**
 
@@ -318,14 +326,12 @@ const DEFAULT_MAX_SECTION_TOKENS = 700
 const DEFAULT_MAX_CODE_TOKENS = 900
 ```
 
-Change `budgetLimits()` so it returns optional caps:
+Change `budgetLimits()` so it returns observed compatibility metadata only:
 
 ```ts
 function budgetLimits(request: ContextRequest, options: BuildContextBundleOptions): ContextBudgetLimits {
   return {
     maxTokens: request.tokenBudget,
-    maxSectionTokens: options.maxSectionTokens,
-    maxCodeTokens: options.maxCodeTokens,
   }
 }
 ```
@@ -385,14 +391,14 @@ In `packages/core/src/session-context.test.ts`, add assertions around the existi
 ```ts
 expect(buildContextBundleSpy).toHaveBeenCalledWith(
   expect.objectContaining({ tokenBudget: undefined }),
-  expect.objectContaining({
-    maxSectionTokens: undefined,
-    maxCodeTokens: undefined,
+  expect.not.objectContaining({
+    maxSectionTokens: expect.any(Number),
+    maxCodeTokens: expect.any(Number),
   }),
 )
 ```
 
-Add a second test with explicit config caps:
+Add a second test proving explicit legacy config caps are parsed but not forwarded as production limits:
 
 ```ts
 const harness = createSessionHarness({
@@ -406,10 +412,10 @@ const harness = createSessionHarness({
 })
 
 expect(buildContextBundleSpy).toHaveBeenCalledWith(
-  expect.objectContaining({ tokenBudget: 8192 }),
-  expect.objectContaining({
-    maxSectionTokens: 2048,
-    maxCodeTokens: 4096,
+  expect.not.objectContaining({ tokenBudget: 8192 }),
+  expect.not.objectContaining({
+    maxSectionTokens: expect.any(Number),
+    maxCodeTokens: expect.any(Number),
   }),
 )
 ```

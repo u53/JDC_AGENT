@@ -90,7 +90,7 @@ V2 must replace this with a no-artificial-cap capacity resolver:
 - The pack builder should select all relevant, cited, non-stale context that the actor/task needs, then pass it through the provider adapter using that provider's valid request shape.
 - Provider adapters must preserve protocol correctness and prevent malformed requests. Anthropic system prompt blocks, cache breakpoints, content arrays, and tool/result structures must follow the official SDK/API shape to avoid 400 errors.
 - If a provider/model rejects oversize requests, the fallback path is protocol-safe degradation with diagnostics and retry, not a small default cap hidden inside the engine.
-- `maxSectionTokens` and `maxCodeTokens` must become optional safety controls or debug overrides, not normal production ceilings. Code/project/workflow sections should not be permanently trapped under 700-900 tokens.
+- Legacy fields such as `maxBundleTokens`, `maxSectionTokens`, and `maxCodeTokens` may remain parseable for backward compatibility, but JDC Context Engine must not enforce them as local bundle, section, code, project-doc, fact, or memory limits.
 - The engine still must not inject all memories. Large capacity means better retrieval packs, not unbounded memory dumps.
 - Every injected pack records `budget.used`, `providerLimitObserved`, `droppedByReason`, and `retryReason` so the UI and evals can prove whether information was selected, excluded by relevance, or degraded by provider request limits.
 
@@ -98,9 +98,9 @@ Production defaults should remove artificial limits:
 
 ```ts
 {
-  maxBundleTokens: undefined,
-  maxSectionTokens: undefined,
-  maxCodeTokens: undefined,
+  maxBundleTokens: undefined, // compatibility field only; not enforced
+  maxSectionTokens: undefined, // compatibility field only; not enforced
+  maxCodeTokens: undefined, // compatibility field only; not enforced
   selectionMode: 'relevance_first',
   providerOverflowPolicy: 'degrade_and_retry',
 }

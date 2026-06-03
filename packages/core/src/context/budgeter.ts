@@ -1,11 +1,15 @@
 import type { ContextSection, ContextTokenBudget } from './types.js'
 
 export interface ContextBudgetLimits {
+  /** Legacy compatibility only. This value is observed in budget metadata but never enforced locally. */
   maxTokens?: number
+  /** @deprecated JDC Context Engine never truncates individual sections by a local token ceiling. */
   maxSectionTokens?: number
+  /** @deprecated JDC Context Engine never truncates code context by a local token ceiling. */
   maxCodeTokens?: number
 }
 
+/** @deprecated Kept for old diagnostics/tests; production budgeting no longer drops sections locally. */
 export type DroppedContextReason = 'section_truncated' | 'bundle_token_budget_exceeded'
 
 export interface DroppedContextSection {
@@ -20,46 +24,15 @@ export interface ContextBudgetResult {
   budget: ContextTokenBudget
 }
 
+// Product contract: JDC Context Engine does not enforce local token, section,
+// or code caps. Selection happens before this step via relevance/planning; this
+// step only records observed token usage so future maintainers do not quietly
+// reintroduce the old 2.5k/700/900 truncation behavior.
 export function budgetContextSections(sections: ContextSection[], limits: ContextBudgetLimits): ContextBudgetResult {
-  const dropped: DroppedContextSection[] = []
-  const resized = sections.map((section) => enforceSectionLimit(section, limits, dropped))
-  const kept: ContextSection[] = []
-  let usedTokens = 0
-  let droppedTokens = dropped.reduce((total, drop) => total + drop.tokenEstimate, 0)
-
-  for (const section of resized) {
-    if (limits.maxTokens !== undefined && usedTokens + section.tokenEstimate > limits.maxTokens) {
-      dropped.push({ section, reason: 'bundle_token_budget_exceeded', tokenEstimate: section.tokenEstimate })
-      droppedTokens += section.tokenEstimate
-      continue
-    }
-    kept.push(section)
-    usedTokens += section.tokenEstimate
-  }
-
+  const usedTokens = sections.reduce((total, section) => total + section.tokenEstimate, 0)
   return {
-    sections: kept,
-    dropped,
-    budget: { maxTokens: limits.maxTokens, usedTokens, droppedTokens },
+    sections,
+    dropped: [],
+    budget: { maxTokens: limits.maxTokens, usedTokens, droppedTokens: 0 },
   }
-}
-
-function enforceSectionLimit(section: ContextSection, limits: ContextBudgetLimits, dropped: DroppedContextSection[]): ContextSection {
-  const maxTokens = section.kind === 'relevant_code' ? limits.maxCodeTokens : limits.maxSectionTokens
-  if (maxTokens === undefined) return section
-  if (section.tokenEstimate <= maxTokens) return section
-
-  const droppedTokens = section.tokenEstimate - maxTokens
-  dropped.push({ section, reason: 'section_truncated', tokenEstimate: droppedTokens })
-  return {
-    ...section,
-    content: truncateToTokenEstimate(section.content, maxTokens),
-    tokenEstimate: maxTokens,
-  }
-}
-
-function truncateToTokenEstimate(content: string, maxTokens: number): string {
-  const maxChars = Math.max(0, maxTokens * 4)
-  if (content.length <= maxChars) return `${content}\n[truncated by JDC Context Engine]`
-  return `${content.slice(0, maxChars).trimEnd()}\n[truncated by JDC Context Engine]`
 }

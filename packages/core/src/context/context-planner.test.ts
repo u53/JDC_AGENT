@@ -88,7 +88,6 @@ function makeRequest(overrides: Partial<ContextRequest>): ContextRequest {
     recentMessages: [],
     mode: 'chat',
     model: 'gpt-test',
-    tokenBudget: 2500,
     runtime: {},
     createdAt: 1_700_000_000_000,
     ...overrides,

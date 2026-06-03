@@ -8,6 +8,11 @@ export interface MemoryProviderOptions {
   enabled?: boolean
   store?: Pick<ContextStore, 'listAcceptedProjectFacts'>
   memoryDir?: string
+  /**
+   * Debug-only override for targeted tests or explicit UI filtering. The
+   * provider deliberately has no production default cap: accepted project memory
+   * is selected by retrieval/planning, not by a hidden count limit.
+   */
   maxMemories?: number
 }
 
@@ -28,7 +33,7 @@ export async function collectMemoryContext(request: ContextRequest, options: Mem
       minConfidence: 0.01,
       includeStale: false,
       includeExpired: false,
-      limit: options.maxMemories ?? 50,
+      ...(options.maxMemories === undefined ? {} : { limit: options.maxMemories }),
       orderBy: 'updated_desc',
     })
     if (!result.ok) {

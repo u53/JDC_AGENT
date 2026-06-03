@@ -250,6 +250,9 @@ export interface ContextEngineConfig {
   harvestEnabled: boolean
   inspectEnabled: boolean
   providerToggles: Record<ContextProviderId, boolean>
+  // Optional legacy/debug overrides only. Production Engine paths must not
+  // default these values because context selection is relevance-based, not
+  // governed by a local bundle/section/code token ceiling.
   tokenBudget: {
     maxBundleTokens?: number
     maxSectionTokens?: number

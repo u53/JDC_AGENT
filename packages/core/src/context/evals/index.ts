@@ -95,22 +95,22 @@ export function createGateFContextEvalCases(): ContextEvalCase[] {
     {
       id: 'context-token-budget',
       category: 'context_quality',
-      name: 'Context bundle enforces token budget and records dropped tokens',
+      name: 'Context bundle records token usage without local dropping',
       run: async () => {
         const large = makeEvalSection({ id: 'large_context', content: 'x'.repeat(400), tokenEstimate: 100 })
         const small = makeEvalSection({ id: 'small_context', content: 'important runtime evidence', tokenEstimate: 6, priority: 100 })
-        const report = await buildContextBundle(makeEvalRequest({ tokenBudget: 20 }), {
+        const report = await buildContextBundle(makeEvalRequest(), {
           injectionEnabled: true,
           store: makeEvalStore(),
           providers: [makeEvalProvider([small, large])],
-          maxSectionTokens: 80,
           now: () => 1,
           id: () => 'ctx_budget',
         })
-        assert.deepEqual(report.bundle.sections.map((section) => section.id), ['small_context'])
-        assert.equal(report.bundle.budget.usedTokens, 6)
-        assert.ok(report.bundle.budget.droppedTokens > 0)
-        assert.equal(report.dropped.at(-1)?.reason, 'bundle_token_budget_exceeded')
+        assert.deepEqual(report.bundle.sections.map((section) => section.id), ['small_context', 'large_context'])
+        assert.equal(report.bundle.budget.usedTokens, 106)
+        assert.equal(report.bundle.budget.maxTokens, undefined)
+        assert.equal(report.bundle.budget.droppedTokens, 0)
+        assert.deepEqual(report.dropped, [])
       },
     },
     {
@@ -207,6 +207,7 @@ export function createGateFContextEvalCases(): ContextEvalCase[] {
                 return { evidence: [], sections: [], diagnostics: [], health: { id: 'code', status: 'enabled', updatedAt: 1_000 } }
               },
             }],
+            providerTimeoutMs: 80,
             now: () => Date.now(),
             id: () => 'ctx_product_perf',
           })
@@ -523,7 +524,7 @@ function makeEvalStoreBundleWithSecret(secret: string) {
     sections: [makeEvalSection({ id: 'secret_section', content: `token=${secret}`, citations: [makeEvalCitation({ id: 'cit_secret', type: 'message', ref: 'msg_eval_user' })] })],
     citations: [makeEvalCitation({ id: 'cit_secret', type: 'message', ref: 'msg_eval_user' })],
     diagnostics: [],
-    budget: { maxTokens: 400, usedTokens: 5, droppedTokens: 0 },
+    budget: { usedTokens: 5, droppedTokens: 0 },
   }
 }
 

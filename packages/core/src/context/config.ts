@@ -14,6 +14,9 @@ export const DEFAULT_CONTEXT_ENGINE_CONFIG: ContextEngineConfig = {
     runtime: true,
     ide: true,
   },
+  // Product contract: production JDC Context Engine must not carry hidden
+  // local token/section/code ceilings. Keep this object cap-free unless a
+  // caller explicitly opts into a debug override.
   tokenBudget: {
     providerOverflowPolicy: 'degrade_and_retry',
   },

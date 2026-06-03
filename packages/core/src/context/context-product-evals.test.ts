@@ -88,6 +88,7 @@ describe('JDC Context Engine product evals', () => {
     const result = await buildContextBundle(request({ cwd, userMessage: '修复性能' }), {
       store,
       providers: [slowProvider()],
+      providerTimeoutMs: 80,
       id: () => 'ctx_perf',
     })
 
@@ -111,7 +112,6 @@ function request(overrides: Partial<ContextRequest>): ContextRequest {
     recentMessages: [],
     mode: 'chat',
     model: 'gpt-test',
-    tokenBudget: 2_500,
     runtime: {},
     createdAt: 1_700_000_000_000,
     ...overrides,

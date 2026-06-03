@@ -80,7 +80,7 @@ function makeBundle(overrides: Partial<ContextBundle> = {}): ContextBundle {
     sections: [section],
     citations: section.citations,
     diagnostics: [],
-    budget: { maxTokens: 100, usedTokens: 10, droppedTokens: 0 },
+    budget: { usedTokens: 10, droppedTokens: 0 },
     ...overrides,
   }
 }

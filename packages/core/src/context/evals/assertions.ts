@@ -83,7 +83,6 @@ export function makeEvalRequest(overrides: Partial<ContextRequest> = {}): Contex
     recentMessages: [makeEvalMessage()],
     mode: 'code_edit',
     model: 'eval-model',
-    tokenBudget: 400,
     runtime: {},
     createdAt: 1_000,
     ...overrides,
@@ -146,7 +145,7 @@ export function makeEvalBundle(overrides: Partial<ContextBundle> = {}): ContextB
     sections: [],
     citations: [],
     diagnostics: [],
-    budget: { maxTokens: 400, usedTokens: 0, droppedTokens: 0 },
+    budget: { usedTokens: 0, droppedTokens: 0 },
     ...overrides,
   }
 }
