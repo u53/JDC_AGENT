@@ -175,6 +175,32 @@ describe('context signal providers', () => {
     expect(sectionCitations(project).every((citation) => citation.hash === undefined)).toBe(true)
   })
 
+  it('includes direct branch, short status, and recent log signals while preserving hot files', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'jdc-git-direct-provider-'))
+    mkdirSync(join(cwd, 'packages/core/src/context'), { recursive: true })
+    writeFileSync(join(cwd, 'packages/core/src/context/config.ts'), 'export const version = 1\n')
+    execFileSync('git', ['init'], { cwd, stdio: 'ignore' })
+    execFileSync('git', ['checkout', '-b', 'main'], { cwd, stdio: 'ignore' })
+    execFileSync('git', ['config', 'user.email', 'test@example.invalid'], { cwd, stdio: 'ignore' })
+    execFileSync('git', ['config', 'user.name', 'JDC Test'], { cwd, stdio: 'ignore' })
+    execFileSync('git', ['add', 'packages/core/src/context/config.ts'], { cwd, stdio: 'ignore' })
+    execFileSync('git', ['commit', '-m', 'initial context config'], { cwd, stdio: 'ignore' })
+    writeFileSync(join(cwd, 'packages/core/src/context/config.ts'), 'export const version = 2\n')
+
+    const result = await collectGitContext(request(cwd))
+    const content = result.sections[0]?.content ?? ''
+
+    expect(content).toContain('branch: main')
+    expect(content).toContain('status:')
+    expect(content).toContain('M packages/core/src/context/config.ts')
+    expect(content).toContain('recent commits:')
+    expect(content).toContain('initial context config')
+    expect(content).toContain('Hot files:')
+    expect(content).toContain('packages/core/src/context/config.ts')
+    expectGateARecords(result)
+    expectCitationsValid(sectionCitations(result), { gitEvidence: gitEvidenceSources(result.evidence) })
+  })
+
   it('collects accepted project memories as cited memory context', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'jdc-memory-provider-store-'))
     const releaseFact: ContextFact = {
