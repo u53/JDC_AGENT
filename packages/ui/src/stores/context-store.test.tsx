@@ -250,6 +250,44 @@ describe('context store', () => {
     expect(useContextStore.getState().harvest.data?.jobs[0]?.sessionId).toBe('session_b')
   })
 
+  it('ignores stale project context responses after switching sessions', async () => {
+    const sessionAInspect = deferred<ContextInspectPayload>()
+    const sessionBInspect = deferred<ContextInspectPayload>()
+    const sessionAMemory = deferred<MemorySearchPayload>()
+    const sessionBMemory = deferred<MemorySearchPayload>()
+    const sessionAHealth = deferred<ContextProviderHealth>()
+    const sessionBHealth = deferred<ContextProviderHealth>()
+    installInvoke((channel: string, input?: unknown) => {
+      const sessionId = (input as any)?.sessionId
+      if (channel === 'context:inspect') return sessionId === 'session_a' ? sessionAInspect.promise : sessionBInspect.promise
+      if (channel === 'context:memory:list') return sessionId === 'session_a' ? sessionAMemory.promise : sessionBMemory.promise
+      if (channel === 'context:providers:health') return sessionId === 'session_a' ? sessionAHealth.promise : sessionBHealth.promise
+      throw new Error(`unexpected channel ${channel}`)
+    })
+
+    const loadA = useContextStore.getState().loadProjectContext({ sessionId: 'session_a' })
+    const loadB = useContextStore.getState().loadProjectContext({ sessionId: 'session_b' })
+
+    sessionBInspect.resolve(inspectForSession('session_b', 'bundle-b'))
+    sessionBMemory.resolve(memoryForSession('session_b', 'session-b-fact', 'Project memory from session B.'))
+    sessionBHealth.resolve([{ id: 'code', status: 'fresh', updatedAt: 1_700_000_004_000 }])
+    await loadB
+
+    expect(useContextStore.getState().inspect.data?.bundle?.id).toBe('bundle-b')
+    expect(useContextStore.getState().memoryReview.data?.accepted?.results[0]?.id).toBe('session-b-fact')
+    expect(useContextStore.getState().providerHealth.data?.[0]?.status).toBe('fresh')
+
+    sessionAInspect.resolve(inspectForSession('session_a', 'bundle-a'))
+    sessionAMemory.resolve(memoryForSession('session_a', 'session-a-fact', 'Stale project memory from session A.'))
+    sessionAHealth.resolve([{ id: 'code', status: 'stale', updatedAt: 1_700_000_003_000 }])
+    await loadA
+
+    expect(useContextStore.getState().inspect.data?.bundle?.id).toBe('bundle-b')
+    expect(useContextStore.getState().harvest.data?.jobs[0]?.sessionId).toBe('session_b')
+    expect(useContextStore.getState().memoryReview.data?.accepted?.results[0]?.id).toBe('session-b-fact')
+    expect(useContextStore.getState().providerHealth.data?.[0]?.status).toBe('fresh')
+  })
+
   it('ignores stale refresh responses after inspect switches to a newer session', async () => {
     const sessionARefresh = deferred<ContextRefreshPayload>()
     const sessionBInspect = deferred<ContextInspectPayload>()
@@ -449,6 +487,18 @@ function inspectForSession(sessionId: string, bundleId: string): ContextInspectP
     memoryReview: {
       rejected: inspectPayload.memoryReview.rejected.map((candidate) => ({ ...candidate, sessionId })),
     },
+  }
+}
+
+function memoryForSession(sessionId: string, id: string, content: string): MemorySearchPayload {
+  return {
+    ...acceptedMemoryPayload,
+    results: acceptedMemoryPayload.results.map((result) => ({
+      ...result,
+      id,
+      content,
+      citations: result.citations.map((citation) => ({ ...citation, ref: `${sessionId}/run-1` })),
+    })),
   }
 }
 
