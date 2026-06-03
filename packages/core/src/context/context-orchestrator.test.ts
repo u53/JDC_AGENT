@@ -407,9 +407,14 @@ function makeStore(options: { facts?: ContextFact[]; queryError?: Error; saveRaw
       if (query.limit !== undefined) facts = facts.slice(0, query.limit)
       return { ok: true, value: facts, diagnostics: [] }
     }),
-    listAcceptedProjectFacts: vi.fn(async () => {
+    listAcceptedProjectFacts: vi.fn(async (query: { minConfidence?: number; citationRef?: string; citationType?: string; limit?: number } = {}) => {
       if (options.queryError) throw options.queryError
-      return { ok: true, value: (options.facts ?? []).filter((fact) => fact.scope === 'project' || fact.scope === 'repo' || fact.scope === 'global'), diagnostics: [] }
+      let facts = (options.facts ?? []).filter((fact) => fact.scope === 'project' || fact.scope === 'repo' || fact.scope === 'global')
+      if (query.minConfidence !== undefined) facts = facts.filter((fact) => fact.confidence >= query.minConfidence!)
+      if (query.citationRef) facts = facts.filter((fact) => fact.citations.some((citation) => citation.ref === query.citationRef))
+      if (query.citationType) facts = facts.filter((fact) => fact.citations.some((citation) => citation.type === query.citationType))
+      if (query.limit !== undefined) facts = facts.slice(0, query.limit)
+      return { ok: true, value: facts, diagnostics: [] }
     }),
     listAdvancedDiagnostics: vi.fn(async () => ({ ok: true, value: { rejected: [], diagnostics: [], harvestJobs: [] }, diagnostics: [] })),
     invalidateByFileHash: vi.fn(async () => ({ ok: true, value: { invalidatedFacts: 0 }, diagnostics: [] })),
