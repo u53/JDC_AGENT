@@ -9,6 +9,12 @@ import type {
   IssueStatus,
   TaskStatus,
 } from '../team/team-types.js'
+import {
+  recordTeamArtifactEvidence,
+  recordTeamIssueEvidence,
+  recordTeamTaskResultEvidence,
+  type TeamLedgerContext,
+} from '../context/team-ledger.js'
 
 export interface TeamArtifactDeps {
   memberId: string
@@ -26,6 +32,7 @@ export interface TeamArtifactDeps {
   onSelfComplete?: (summary: string) => void
   /** Same as onSelfComplete but for new_status=failed on the worker's own task. */
   onSelfFail?: (reason: string) => void
+  contextLedger?: TeamLedgerContext
 }
 
 export function createTeamArtifactTool(deps: TeamArtifactDeps): ToolHandler {
@@ -124,6 +131,15 @@ export function createTeamArtifactTool(deps: TeamArtifactDeps): ToolHandler {
             await deps.workspace.appendLog(
               `artifact ${aid} by ${deps.memberId} on ${taskId}: ${summary}`,
             )
+            await recordArtifactLedger(deps, {
+              artifactId: aid,
+              artifactKind: 'artifact',
+              artifactType: type,
+              taskId,
+              memberId: deps.memberId,
+              summary,
+              path: `.team/tasks/${taskId}/artifacts/${aid}.md`,
+            })
             return { content: `Artifact saved: tasks/${taskId}/artifacts/${aid}.md` }
           }
 
@@ -151,6 +167,17 @@ export function createTeamArtifactTool(deps: TeamArtifactDeps): ToolHandler {
                 issueStatus,
                 (input.resolution as string) ?? undefined,
               )
+              const issue = await deps.workspace.readIssue(target).catch(() => null)
+              await recordIssueLedger(deps, {
+                issueId: target,
+                title: issue?.frontmatter.title ?? target,
+                status: issueStatus,
+                severity: issue?.frontmatter.severity ?? 'medium',
+                summary: ((input.resolution as string) ?? '').trim() || `Issue ${target} updated to ${issueStatus}.`,
+                taskId: issue?.frontmatter.on_task ?? deps.taskId,
+                memberId: deps.memberId,
+                path: `.team/issues/${target}.md`,
+              })
               await deps.workspace.appendLog(
                 `issue ${target} -> ${issueStatus} by ${deps.memberId}`,
               )
@@ -176,6 +203,12 @@ export function createTeamArtifactTool(deps: TeamArtifactDeps): ToolHandler {
                 resultFm,
                 `## Result\n\n${summary}\n`,
               )
+              await recordTaskResultLedger(deps, {
+                taskId: target,
+                memberId: deps.memberId,
+                summary,
+                path: `.team/tasks/${target}/result.md`,
+              })
               // If the worker is declaring its OWN task done, signal the runtime so
               // it can mark the manager state, abort the sub-session, and stop the
               // model from streaming filler text after the work is logically done.
@@ -224,6 +257,15 @@ export function createTeamArtifactTool(deps: TeamArtifactDeps): ToolHandler {
             await deps.workspace.appendLog(
               `contract ${name} v${version} locked by ${taskId} (${deps.memberId}): ${summary}`,
             )
+            await recordArtifactLedger(deps, {
+              artifactId: name,
+              artifactKind: 'contract',
+              artifactType: 'contract',
+              taskId,
+              memberId: deps.memberId,
+              summary,
+              path: `.team/contracts/${name}.md`,
+            })
             return {
               content: `Contract locked: contracts/${name}.md (v${version}). Downstream tasks must comply.`,
             }
@@ -261,6 +303,16 @@ export function createTeamArtifactTool(deps: TeamArtifactDeps): ToolHandler {
             await deps.workspace.appendLog(
               `issue ${issueId} opened by ${deps.memberId} on ${onTask} (${severity}): ${title}`,
             )
+            await recordIssueLedger(deps, {
+              issueId,
+              title,
+              status: 'open',
+              severity,
+              summary,
+              taskId: onTask,
+              memberId: deps.memberId,
+              path: `.team/issues/${issueId}.md`,
+            })
             // Notify PM via mailbox so it can decide on rework
             if (deps.teamMailbox) {
               deps.teamMailbox.push({
@@ -294,4 +346,19 @@ export function createTeamArtifactTool(deps: TeamArtifactDeps): ToolHandler {
       }
     },
   }
+}
+
+async function recordArtifactLedger(deps: TeamArtifactDeps, input: Parameters<typeof recordTeamArtifactEvidence>[0]): Promise<void> {
+  if (!deps.contextLedger) return
+  await recordTeamArtifactEvidence(input, deps.contextLedger)
+}
+
+async function recordIssueLedger(deps: TeamArtifactDeps, input: Parameters<typeof recordTeamIssueEvidence>[0]): Promise<void> {
+  if (!deps.contextLedger) return
+  await recordTeamIssueEvidence(input, deps.contextLedger)
+}
+
+async function recordTaskResultLedger(deps: TeamArtifactDeps, input: Parameters<typeof recordTeamTaskResultEvidence>[0]): Promise<void> {
+  if (!deps.contextLedger) return
+  await recordTeamTaskResultEvidence(input, deps.contextLedger)
 }

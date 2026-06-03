@@ -186,11 +186,13 @@ export class TeamMember {
       }
 
       if (this.opts.workspace && this.opts.taskId) {
+        const contextLedger = this.contextLedger()
         const artifactTool = createTeamArtifactTool({
           memberId: this.id,
           taskId: this.opts.taskId,
           workspace: this.opts.workspace,
           teamMailbox: this.opts.teamMailbox,
+          ...(contextLedger ? { contextLedger } : {}),
           onSelfComplete: (summary) => {
             // Worker just declared its own task complete via update_status.
             // Capture the summary for run()'s catch block to forward to onComplete,
@@ -357,6 +359,17 @@ export class TeamMember {
       this.status = 'failed'
       this.lastActivityAt = Date.now()
       this.opts.onFail?.(this.id, errorMsg)
+    }
+  }
+
+  private contextLedger() {
+    const engine = this.opts.subSessionDeps.contextEngine
+    if (!engine?.store || !this.opts.teamId) return undefined
+    return {
+      store: engine.store,
+      cwd: this.opts.subSessionDeps.cwd,
+      ...(engine.sessionId ? { sessionId: engine.sessionId } : {}),
+      teamId: this.opts.teamId,
     }
   }
 }

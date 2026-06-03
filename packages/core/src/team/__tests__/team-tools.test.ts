@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
 import os from 'node:os'
 import path from 'node:path'
+import { mkdirSync, rmSync } from 'node:fs'
 import type { SubSessionOptions, SubSessionResult } from '../../sub-session.js'
+import type { ContextFact, RawEvidence } from '../../context/types.js'
 
 vi.mock('../../sub-session.js', async () => {
   const actual = await vi.importActual<typeof import('../../sub-session.js')>('../../sub-session.js')
@@ -20,6 +22,8 @@ import { createTeamTool } from '../../tools/team.js'
 import { createBackgroundSendTool } from '../../tools/background-send.js'
 import { createBackgroundStatusTool } from '../../tools/background-status.js'
 import { createBackgroundEventsTool } from '../../tools/background-events.js'
+import { createTeamArtifactTool } from '../../tools/team-artifact.js'
+import { TeamWorkspace } from '../team-workspace.js'
 
 const mockDeps: any = { provider: {}, toolRegistry: {}, modelConfig: {} }
 const buildSubSessionDeps = () => {
@@ -30,6 +34,89 @@ const buildSubSessionDeps = () => {
 }
 
 describe('Team tools', () => {
+  it('team_artifact captures artifacts, contracts, issues, and task results into Context Engine ledger', async () => {
+    const cwd = path.join(os.tmpdir(), `team-artifact-ledger-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    mkdirSync(cwd, { recursive: true })
+    try {
+      const workspace = new TeamWorkspace({ rootDir: cwd, teamId: 'team_alpha' })
+      await workspace.init('Ledger test')
+      await workspace.writeTask('T001', {
+        id: 'T001',
+        title: 'Checkout task',
+        status: 'running',
+        created_at: new Date(1_000).toISOString(),
+        updated_at: new Date(1_000).toISOString(),
+      }, 'Fix checkout')
+      const store = {
+        saveRawEvidence: vi.fn(async () => ({ ok: true, value: undefined, diagnostics: [] })),
+        saveFact: vi.fn(async () => ({ ok: true, value: undefined, diagnostics: [] })),
+        saveDiagnostic: vi.fn(async () => ({ ok: true, value: undefined, diagnostics: [] })),
+      }
+      const tool = createTeamArtifactTool({
+        memberId: 'member_api',
+        taskId: 'T001',
+        workspace,
+        contextLedger: {
+          store,
+          cwd,
+          sessionId: 'session_team_tools',
+          teamId: 'team_alpha',
+        },
+      })
+
+      await tool.execute({
+        action: 'create_artifact',
+        artifact_id: 'report',
+        type: 'report',
+        summary: 'Checkout report lists validation changes.',
+        content: 'Report body',
+      }, {} as any)
+      await tool.execute({
+        action: 'create_contract',
+        contract_name: 'checkout-api',
+        summary: 'Checkout API keeps the existing response envelope.',
+        content: 'Contract body',
+      }, {} as any)
+      await tool.execute({
+        action: 'create_issue',
+        issue_title: 'Checkout response missing validation detail',
+        summary: 'Checkout response omits validation detail.',
+        severity: 'high',
+        on_task: 'T001',
+      }, {} as any)
+      await tool.execute({
+        action: 'update_status',
+        target_id: 'ISSUE-001',
+        new_status: 'resolved',
+        resolution: 'Validation detail restored.',
+      }, {} as any)
+      await tool.execute({
+        action: 'update_status',
+        target_id: 'T001',
+        new_status: 'completed',
+        summary: 'Checkout validation is fixed.',
+      }, {} as any)
+
+      const facts = mockFirstArgs<ContextFact>(store.saveFact)
+      expect(facts.map((fact) => [fact.id, fact.kind, fact.freshness])).toEqual([
+        ['artifact_summary_team_alpha_T001_report', 'artifact_summary', 'recent'],
+        ['artifact_summary_team_alpha_T001_checkout_api', 'artifact_summary', 'recent'],
+        ['qa_issue_team_alpha_ISSUE_001', 'qa_issue', 'recent'],
+        ['qa_issue_team_alpha_ISSUE_001', 'qa_issue', 'stale'],
+        ['task_result_team_alpha_T001', 'task_result', 'recent'],
+      ])
+      expect(mockFirstArgs<RawEvidence>(store.saveRawEvidence).map((evidence) => evidence.metadata.eventType)).toEqual([
+        'team_artifact_written',
+        'team_contract_written',
+        'team_issue_created',
+        'team_issue_resolved',
+        'task_completed',
+      ])
+    } finally {
+      rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it('Team tool creates a team and registers it', async () => {
     const bg = new BackgroundTaskManager(path.join(os.tmpdir(), 'team-tools-' + Date.now()))
     const registry = new TeamRegistry()
@@ -135,3 +222,7 @@ describe('Team tools', () => {
     expect(result.content).toMatch(/team_started|task_created|member_created/)
   })
 })
+
+function mockFirstArgs<T>(mock: { mock: { calls: unknown[][] } }): T[] {
+  return mock.mock.calls.map((call) => call[0] as T)
+}
