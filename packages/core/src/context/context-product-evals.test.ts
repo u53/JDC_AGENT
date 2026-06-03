@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -7,6 +7,8 @@ import { closeContextStore, openContextStore } from './store.js'
 import { makeEvalFact, makeEvalRequest, makeEvalSection, makeEvalStore } from './evals/assertions.js'
 import { collectMemoryContext } from './providers/memory-provider.js'
 import { collectProjectContext } from './providers/project-provider.js'
+import { collectWorkflowContext } from './providers/workflow-provider.js'
+import { hashContent } from './providers/shared.js'
 import { recordTeamArtifactEvidence } from './team-ledger.js'
 import type { ContextProvider, ContextProviderResult } from './orchestrator.js'
 import type { ContextRequest } from './types.js'
@@ -290,6 +292,102 @@ describe('JDC Context Engine product evals', () => {
     expect(project.sections[0]?.content).toContain('Context Engine eval')
   })
 
+  it('answers release-flow questions from cited workflow files automatically', async () => {
+    const cwd = tempProject()
+    writeProjectFile(cwd, '.github/workflows/release.yml', [
+      'name: Release',
+      'jobs:',
+      '  release:',
+      '    steps:',
+      '      - run: pnpm install',
+      '      - run: pnpm build',
+      '      - name: Package desktop app',
+      '        run: |',
+      '          pnpm package',
+      '          pnpm --filter @jdcagnet/vscode-extension package',
+    ].join('\n'))
+    writeProjectFile(cwd, 'package.json', JSON.stringify({
+      scripts: {
+        build: 'pnpm -r build',
+        package: 'pnpm build && electron-builder --publish never',
+      },
+    }, null, 2))
+
+    const store = await openContextStore({ cwd, now: () => 1_000 })
+    const result = await buildContextBundle(request({
+      cwd,
+      sessionId: 'session_release_question',
+      userMessage: '我们的发布流程是咋样的',
+    }), {
+      injectionEnabled: true,
+      store,
+      providers: [{ id: 'workflow', collect: (contextRequest) => collectWorkflowContext(contextRequest) }],
+      now: () => 1_000,
+      id: () => 'ctx_release_workflow_provider',
+    })
+
+    expect(result.renderedPrompt).toContain('.github/workflows/release.yml')
+    expect(result.renderedPrompt).toContain('pnpm build')
+    expect(result.renderedPrompt).toContain('pnpm package')
+    expect(result.renderedPrompt).toContain('pnpm --filter @jdcagnet/vscode-extension package')
+    expect(result.bundle.citations.some((citation) => citation.ref === '.github/workflows/release.yml' && citation.hash)).toBe(true)
+  })
+
+  it('invalidates changed workflow-file facts and suppresses stale release instructions from injection', async () => {
+    const cwd = tempProject()
+    const store = await openContextStore({ cwd, now: () => 1_000 })
+    const oldContent = 'name: Release\nsteps:\n  - run: pnpm package\n'
+    const oldHash = hashContent(oldContent)
+    await store.saveRawEvidence({
+      id: 'raw_release_workflow_old',
+      sessionId: 'session_a',
+      cwd,
+      sourceProvider: 'WorkflowSignalProvider',
+      kind: 'file',
+      content: oldContent,
+      metadata: { file: '.github/workflows/release.yml' },
+      capturedAt: 1_000,
+      hash: oldHash,
+    })
+    await store.saveFact({
+      id: 'release_workflow_old_fact',
+      kind: 'workflow_rule',
+      scope: 'project',
+      content: '旧发布流程：只运行 pnpm package。',
+      citations: [{ id: 'cit_release_workflow_old', type: 'file', ref: '.github/workflows/release.yml', hash: oldHash }],
+      confidence: 0.95,
+      freshness: 'recent',
+      sourceProvider: 'Harvest:WorkflowRuleDistiller',
+      sessionId: 'session_a',
+      createdAt: 1_000,
+      updatedAt: 1_000,
+    })
+
+    const invalidated = await store.invalidateByFileHash('.github/workflows/release.yml', hashContent('name: Release\nsteps:\n  - run: pnpm build\n  - run: pnpm package\n'))
+    expect(invalidated.value.invalidatedFacts).toBe(1)
+    const staleFacts = await store.queryFacts({ includeStale: true, citationRef: '.github/workflows/release.yml' })
+    expect(staleFacts.value[0]).toMatchObject({ id: 'release_workflow_old_fact', freshness: 'stale' })
+
+    const result = await buildContextBundle(request({
+      cwd,
+      sessionId: 'session_b',
+      userMessage: '发布流程是什么',
+    }), {
+      injectionEnabled: true,
+      store,
+      providers: [],
+      now: () => 2_000,
+      id: () => 'ctx_release_stale_suppressed',
+    })
+
+    expect(result.renderedPrompt).not.toContain('旧发布流程')
+    expect(result.bundle.diagnostics).toContainEqual(expect.objectContaining({
+      source: 'ContextRetriever',
+      message: expect.stringContaining('release_workflow_old_fact'),
+      visibleInPrimaryUi: false,
+    }))
+  })
+
   it('reuses Team artifact summaries across same-project sessions without leaking to another project', async () => {
     const cwd = tempProject()
     const otherCwd = tempProject()
@@ -345,6 +443,12 @@ function tempProject(): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'jdc-context-product-eval-'))
   dirs.push(dir)
   return dir
+}
+
+function writeProjectFile(cwd: string, relativePath: string, content: string): void {
+  const filePath = path.join(cwd, relativePath)
+  mkdirSync(path.dirname(filePath), { recursive: true })
+  writeFileSync(filePath, content)
 }
 
 function request(overrides: Partial<ContextRequest>): ContextRequest {
