@@ -1163,6 +1163,12 @@ export class Session {
       toolEvents: input.toolEvents.map(toHarvestToolEvent),
       changedFiles: this.fileTracker.getChangedFiles().map(change => change.filePath).filter(p => !this.runLoopFileSnapshot.has(p)),
       createdAt: input.createdAt,
+      origin: {
+        projectKey: path.resolve(this.config.cwd),
+        actor: 'main_session',
+        sessionId: this.id,
+        runLoopId: input.runLoopId,
+      },
     }
 
     const preflight = classifyHarvestCandidate(candidate)

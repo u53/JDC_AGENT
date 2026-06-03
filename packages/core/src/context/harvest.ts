@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { DEFAULT_CONTEXT_ENGINE_CONFIG } from './config.js'
 import { classifyHarvestCandidate, prepareCandidateForDistillation } from './safety.js'
 import type { AcceptanceOptions } from './safety.js'
-import { AUTO_ACCEPT_CONTEXT_FACT_KINDS, type ContextDiagnostic, type ContextFact, type DistillerEnvelope, type DistillerOutput, type HarvestCandidate, type HarvestJob, type HarvestModelBinding, type HarvestStatus, type MemoryCandidatePayload, type MemoryTrustMode, type RawEvidence, type SkipReason } from './types.js'
+import { AUTO_ACCEPT_CONTEXT_FACT_KINDS, type ContextDiagnostic, type ContextFact, type ContextOrigin, type DistillerEnvelope, type DistillerOutput, type HarvestCandidate, type HarvestJob, type HarvestModelBinding, type HarvestStatus, type MemoryCandidatePayload, type MemoryTrustMode, type RawEvidence, type SkipReason } from './types.js'
 import { HarvestCandidateSchema, HarvestJobSchema, HarvestModelBindingSchema } from './schemas.js'
 import { defaultHarvestDistillers, selectDistillerForDecision, validateDistillerOutput, type ContextDistiller, type DistillerContext, type DistillerModelClient } from './distillers/index.js'
 import { contextFactKindFromMemoryKind } from '../tools/memory-search.js'
@@ -293,6 +293,27 @@ function factFromAcceptedEnvelope(envelope: DistillerEnvelope, job: HarvestJob, 
     createdAt: now,
     updatedAt: now,
     expiresAt: typeof payload.expiresAt === 'number' ? payload.expiresAt : undefined,
+    origin: originFromHarvestJob(job),
+  }
+}
+
+function originFromHarvestJob(job: HarvestJob): ContextOrigin | undefined {
+  if (!job.candidate.origin?.projectKey) return undefined
+  const candidateOrigin = job.candidate.origin
+  return {
+    projectKey: candidateOrigin.projectKey,
+    actor: candidateOrigin.actor ?? 'main_session',
+    sessionId: candidateOrigin.sessionId ?? job.sessionId,
+    runLoopId: candidateOrigin.runLoopId ?? job.runLoopId,
+    subSessionId: candidateOrigin.subSessionId,
+    teamId: candidateOrigin.teamId,
+    memberId: candidateOrigin.memberId,
+    taskId: candidateOrigin.taskId,
+    artifactId: candidateOrigin.artifactId,
+    toolUseId: candidateOrigin.toolUseId,
+    messageId: candidateOrigin.messageId,
+    providerProtocol: job.modelBinding.providerProtocol,
+    modelId: job.modelBinding.modelId,
   }
 }
 

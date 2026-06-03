@@ -95,6 +95,39 @@ describe('harvest queue safety chain', () => {
     }
   })
 
+  it('persists accepted harvest facts with candidate and model provenance', async () => {
+    const store = makeStore()
+    const candidate: HarvestCandidate = {
+      ...baseCandidate,
+      origin: {
+        projectKey: '/repo',
+        actor: 'main_session',
+        sessionId: 'session_1',
+        runLoopId: 'run_1',
+      },
+    }
+    const binding = makeBinding('anthropic', 'claude-opus-4-5')
+    const enqueued = await enqueueHarvest(candidate, binding, { store, now: () => 40, createId: () => 'job_origin' })
+
+    const completed = await runHarvestJob(enqueued.job!, {
+      store,
+      distillers: [{ name: 'MemoryCuratorDistiller', distill: async () => memoryEnvelope('Run pnpm build before release.', 'cit_user_run_1', 0.96) }],
+      now: () => 50,
+    })
+
+    expect(completed.status).toBe('accepted')
+    expect(store.facts.at(-1)).toMatchObject({
+      origin: {
+        projectKey: '/repo',
+        actor: 'main_session',
+        sessionId: 'session_1',
+        runLoopId: 'run_1',
+        providerProtocol: 'anthropic',
+        modelId: 'claude-opus-4-5',
+      },
+    })
+  })
+
   it('skips disabled, greeting, acknowledgement, and no-new-fact turns without invoking distillers', async () => {
     const store = makeStore()
     const distiller = { name: 'MemoryCuratorDistiller', distill: vi.fn() }

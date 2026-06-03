@@ -1,5 +1,6 @@
 import { v4 as uuid } from 'uuid'
 import { createHash } from 'node:crypto'
+import path from 'node:path'
 import type { Message, StreamChunk, ModelConfig, ContentBlock, ToolDefinition } from './types.js'
 import type { ModelProvider } from './model-provider.js'
 import type { ToolRegistry } from './tool-registry.js'
@@ -436,6 +437,13 @@ function enqueueSubSessionHarvest(
     toolEvents: toolEvents.map(event => ({ id: event.toolUseId, name: event.toolName, status: event.type, ...event })),
     changedFiles: [],
     createdAt,
+    origin: {
+      projectKey: path.resolve(opts.cwd),
+      actor: 'subagent',
+      sessionId: contextSessionId,
+      runLoopId,
+      subSessionId: runLoopId,
+    },
   }
 
   if (classifyHarvestCandidate(candidate).action === 'skip') return
