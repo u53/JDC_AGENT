@@ -20,12 +20,17 @@ export interface RetrievedContextFact {
 export interface ContextRetrievalResult {
   facts: RetrievedContextFact[]
   diagnostics: ContextDiagnostic[]
+  unavailable?: boolean
 }
 
 export interface ContextRetrievalOptions {
   store: Pick<ContextStore, 'listAcceptedProjectFacts'>
   limit?: number
   candidateLimit?: number
+  minConfidence?: number
+  citationRef?: string
+  citationType?: string
+  citationTextLookup?: Map<string, string[]>
   now?: () => number
 }
 
@@ -34,17 +39,19 @@ export async function retrieveContextFacts(request: ContextRequest, options: Con
   const diagnostics: ContextDiagnostic[] = []
   const query = normalizeSearchText([request.userMessage, request.mode].filter(Boolean).join(' '))
   const storeQuery = {
-    minConfidence: 0.01,
+    minConfidence: options.minConfidence ?? 0.01,
     includeStale: true,
     includeExpired: false,
     orderBy: 'updated_desc' as const,
+    ...(options.citationRef === undefined ? {} : { citationRef: options.citationRef }),
+    ...(options.citationType === undefined ? {} : { citationType: options.citationType }),
     ...(options.candidateLimit === undefined ? {} : { limit: options.candidateLimit }),
   }
   const loaded = await options.store.listAcceptedProjectFacts(storeQuery)
-  if (!loaded.ok) return { facts: [], diagnostics: loaded.diagnostics }
+  if (!loaded.ok) return { facts: [], diagnostics: loaded.diagnostics, unavailable: true }
 
   const scored = loaded.value
-    .map((fact) => scoreFact(fact, query, now))
+    .map((fact) => scoreFact(fact, query, now, options.citationTextLookup))
     .filter((item) => {
       if (item.fact.freshness === 'stale' && !isHighValueStaleFact(item.fact)) {
         diagnostics.push(makeDiagnostic(`Suppressed stale low-value fact ${item.fact.id}.`, now()))
@@ -59,7 +66,7 @@ export async function retrieveContextFacts(request: ContextRequest, options: Con
   return { facts, diagnostics: [...loaded.diagnostics, ...diagnostics] }
 }
 
-function scoreFact(fact: ContextFact, query: string, now: () => number): RetrievedContextFact {
+function scoreFact(fact: ContextFact, query: string, now: () => number, citationTextLookup: Map<string, string[]> | undefined): RetrievedContextFact {
   const reasons: string[] = []
   let score = 0
 
@@ -77,7 +84,7 @@ function scoreFact(fact: ContextFact, query: string, now: () => number): Retriev
   score += Math.max(0, 5 - ageMs / (7 * 24 * 60 * 60 * 1000))
 
   if (query) {
-    const text = normalizeSearchText(searchableFactText(fact))
+    const text = normalizeSearchText(searchableFactText(fact, citationTextLookup))
     const queryTokens = searchTokens(query)
     const textTokens = new Set(searchTokens(text))
     if (text.includes(query)) {
@@ -109,15 +116,23 @@ function citationMatches(fact: ContextFact, query: string, queryTokens: string[]
   })
 }
 
-function searchableFactText(fact: ContextFact): string {
-  return [
+function searchableFactText(fact: ContextFact, citationTextLookup: Map<string, string[]> | undefined): string {
+  const parts = [
     fact.id,
     fact.kind,
     fact.scope,
     fact.content,
     fact.sourceProvider,
     ...fact.citations.flatMap((citation) => [citation.id, citation.type, citation.ref, citation.hash ?? '']),
-  ].join(' ')
+  ]
+  if (citationTextLookup) {
+    for (const citation of fact.citations) {
+      parts.push(...(citationTextLookup.get(citation.id.toLowerCase()) ?? []))
+      parts.push(...(citationTextLookup.get(citation.ref.toLowerCase()) ?? []))
+      if (citation.hash) parts.push(...(citationTextLookup.get(citation.hash.toLowerCase()) ?? []))
+    }
+  }
+  return parts.join(' ')
 }
 
 function isHighValueStaleFact(fact: ContextFact): boolean {

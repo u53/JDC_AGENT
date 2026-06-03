@@ -60,7 +60,12 @@ describe('JDC Context Engine memory tools', () => {
       freshness: 'recent',
       citations: [citation],
     })
-    expect(store.listAcceptedProjectFacts).toHaveBeenCalledWith({ minConfidence: 0.8 })
+    expect(store.listAcceptedProjectFacts).toHaveBeenCalledWith(expect.objectContaining({
+      minConfidence: 0.8,
+      includeStale: true,
+      includeExpired: false,
+      orderBy: 'updated_desc',
+    }))
     expect(store.queryFacts).not.toHaveBeenCalled()
   })
 
@@ -74,7 +79,12 @@ describe('JDC Context Engine memory tools', () => {
     const payload = await searchMemoryRecords({ sessionId: 'session_b', query: 'normalized cwd' } as any, { store })
 
     expect(payload.results.map((item) => item.id)).toEqual(['session_a_memory'])
-    expect(store.listAcceptedProjectFacts).toHaveBeenCalledWith({})
+    expect(store.listAcceptedProjectFacts).toHaveBeenCalledWith(expect.objectContaining({
+      minConfidence: 0.01,
+      includeStale: true,
+      includeExpired: false,
+      orderBy: 'updated_desc',
+    }))
   })
 
   it('passes citation filters to accepted project fact search', async () => {
@@ -88,7 +98,7 @@ describe('JDC Context Engine memory tools', () => {
     const payload = await searchMemoryRecords({ citationRef: 'msg_2', citationType: 'message' }, { store })
 
     expect(payload.results.map((item) => item.id)).toEqual(['matching_citation'])
-    expect(store.listAcceptedProjectFacts).toHaveBeenCalledWith({ citationRef: 'msg_2', citationType: 'message' })
+    expect(store.listAcceptedProjectFacts).toHaveBeenCalledWith(expect.objectContaining({ citationRef: 'msg_2', citationType: 'message' }))
   })
 
   it('rejects unsupported session scope searches before touching the store', async () => {
@@ -112,7 +122,59 @@ describe('JDC Context Engine memory tools', () => {
     const payload = await searchMemoryRecords({ query: 'test-first', scope: 'project', kind: 'workflow_hint', limit: 1 }, { store })
 
     expect(payload.results.map((item) => item.id)).toEqual(['older_matching'])
-    expect(store.listAcceptedProjectFacts).toHaveBeenCalledWith({})
+    expect(store.listAcceptedProjectFacts).toHaveBeenCalledWith(expect.objectContaining({
+      minConfidence: 0.01,
+      includeStale: true,
+      includeExpired: false,
+      orderBy: 'updated_desc',
+    }))
+  })
+
+  it('uses retrieval ranking so an old relevant workflow beats newer irrelevant facts', async () => {
+    const store = makeStore({
+      facts: [
+        ...Array.from({ length: 30 }, (_, index) => fact({
+          id: `recent_irrelevant_${index}`,
+          kind: 'user_preference',
+          content: `Recent unrelated memory ${index}`,
+          updatedAt: 10_000 + index,
+        })),
+        fact({
+          id: 'old_release_workflow',
+          content: 'JDCAGNET 发布流程：bump version，commit，tag，然后 push tag 触发 release workflow。',
+          updatedAt: 1,
+        }),
+      ],
+    })
+
+    const payload = await searchMemoryRecords({ query: '发布流程', limit: 3 }, { store, now: () => 20_000 })
+
+    expect(payload.status).toBe('available')
+    expect(payload.results.map((item) => item.id)).toEqual(['old_release_workflow'])
+    expect(store.listAcceptedProjectFacts).toHaveBeenCalledWith(expect.objectContaining({
+      minConfidence: 0.01,
+      includeStale: true,
+      includeExpired: false,
+      orderBy: 'updated_desc',
+    }))
+  })
+
+  it('does not impose a default memory search result limit', async () => {
+    const store = makeStore({
+      facts: Array.from({ length: 25 }, (_, index) => fact({
+        id: `workflow_${index}`,
+        kind: 'workflow_rule',
+        content: `Workflow fact ${index}`,
+        updatedAt: index,
+      })),
+    })
+
+    const payload = await searchMemoryRecords({}, { store, now: () => 20_000 })
+
+    expect(payload.results).toHaveLength(25)
+    expect(store.listAcceptedProjectFacts).toHaveBeenCalledWith(expect.not.objectContaining({
+      limit: expect.any(Number),
+    }))
   })
 
   it('rejects memory writes without citations before touching the store', async () => {

@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import type { ToolContext, ToolHandler, ToolResult } from '../tool-registry.js'
 import { ContextCitationSchema, ContextDiagnosticSchema, ContextFactKindSchema, ContextFreshnessSchema, MemoryRecordKindSchema, MemoryScopeSchema } from '../context/schemas.js'
-import { openContextStore, type ContextFactQuery, type ContextStore } from '../context/store.js'
+import { retrieveContextFacts } from '../context/retriever.js'
+import { openContextStore, type ContextStore } from '../context/store.js'
 import type { ContextDiagnostic, ContextFact, MemoryRecord, MemoryRecordKind, RawEvidence } from '../context/types.js'
 
 const DurableMemorySearchScopeSchema = z.enum(['global', 'project', 'repo'])
@@ -75,25 +76,35 @@ export async function searchMemoryRecords(input: unknown = {}, options: MemorySe
   const parsed = parsedInput.data
   try {
     const store = options.store ?? await openContextStore({ cwd: options.cwd })
-    const limit = parsed.limit ?? 20
-    const query = compactFactQuery({ minConfidence: parsed.minConfidence, citationRef: parsed.citationRef, citationType: parsed.citationType })
-    // Accepted durable memory is shared by normalized project root; sessionId is only an IPC cwd resolver.
-    const result = await store.listAcceptedProjectFacts(query)
-    if (!result.ok) return MemorySearchPayloadSchema.parse({ status: 'unavailable', searchedAt: now(), query: parsed, results: [], diagnostics: result.diagnostics })
     const evidence = parsed.query ? await loadEvidenceLookup(store, now) : { lookup: new Map<string, string[]>(), diagnostics: [] as ContextDiagnostic[] }
+    const retrieval = await retrieveContextFacts({
+      sessionId: 'memory_search',
+      cwd: options.cwd ?? process.cwd(),
+      userMessage: parsed.query ?? '',
+      recentMessages: [],
+      mode: 'chat',
+      model: 'memory-search',
+      runtime: {},
+      createdAt: now(),
+    }, {
+      store,
+      minConfidence: parsed.minConfidence,
+      citationRef: parsed.citationRef,
+      citationType: parsed.citationType,
+      citationTextLookup: evidence.lookup,
+      now,
+    })
+    if (retrieval.unavailable) return MemorySearchPayloadSchema.parse({ status: 'unavailable', searchedAt: now(), query: parsed, results: [], diagnostics: [...retrieval.diagnostics, ...evidence.diagnostics] })
 
-    const matches = result.value
+    const matches = retrieval.facts
+      .map((item) => item.fact)
       .filter((fact) => fact.scope === 'project' || fact.scope === 'repo' || fact.scope === 'global')
       .filter((fact) => isMemoryFact(fact))
-      .filter((fact) => !parsed.scope || fact.scope === parsed.scope)
-      .filter((fact) => !parsed.kind || memoryKindFromFact(fact) === parsed.kind)
-      .map((fact) => ({ fact, score: memoryQueryScore(fact, parsed.query, evidence.lookup) }))
-      .filter((item) => !parsed.query || item.score > 0)
-      .sort((a, b) => parsed.query ? b.score - a.score : 0)
-      .slice(0, limit)
-      .map((item) => memorySearchResultFromFact(item.fact))
+      .filter((fact) => matchesMemoryFilters(fact, parsed))
+    const limited = parsed.limit === undefined ? matches : matches.slice(0, parsed.limit)
+    const results = limited.map(memorySearchResultFromFact)
 
-    return MemorySearchPayloadSchema.parse({ status: matches.length ? 'available' : 'empty', searchedAt: now(), query: parsed, results: matches, diagnostics: [...result.diagnostics, ...evidence.diagnostics] })
+    return MemorySearchPayloadSchema.parse({ status: results.length ? 'available' : 'empty', searchedAt: now(), query: parsed, results, diagnostics: [...retrieval.diagnostics, ...evidence.diagnostics] })
   } catch (error) {
     return MemorySearchPayloadSchema.parse({ status: 'unavailable', searchedAt: now(), query: parsed, results: [], diagnostics: [{ id: `diag_memory_search_${now()}`, level: 'error', source: 'JdcMemorySearch', message: error instanceof Error ? error.message : String(error), createdAt: now() }] })
   }
@@ -158,12 +169,17 @@ export function memoryRecordFromFact(fact: ContextFact): MemoryRecord {
   }
 }
 
-function compactFactQuery(query: ContextFactQuery): ContextFactQuery {
-  return Object.fromEntries(Object.entries(query).filter(([, value]) => value !== undefined)) as ContextFactQuery
-}
-
 function isMemoryFact(fact: ContextFact): boolean {
   return ['user_preference', 'architecture_decision', 'known_issue', 'project_convention', 'workflow_rule'].includes(fact.kind)
+}
+
+function matchesMemoryFilters(fact: ContextFact, parsed: MemorySearchInput): boolean {
+  if (parsed.citationRef && !fact.citations.some((citation) => citation.ref === parsed.citationRef)) return false
+  if (parsed.citationType && !fact.citations.some((citation) => citation.type === parsed.citationType)) return false
+  if (parsed.scope && fact.scope !== parsed.scope) return false
+  if (parsed.kind && memoryKindFromFact(fact) !== parsed.kind) return false
+  if (parsed.minConfidence !== undefined && fact.confidence < parsed.minConfidence) return false
+  return true
 }
 
 async function loadEvidenceLookup(store: ContextStore, now: () => number): Promise<{ lookup: Map<string, string[]>; diagnostics: ContextDiagnostic[] }> {
@@ -201,58 +217,6 @@ function evidenceKeys(evidence: RawEvidence): string[] {
     if (typeof value === 'string' && value) keys.push(value)
   }
   return keys
-}
-
-function memoryQueryScore(fact: ContextFact, query: string | undefined, lookup: Map<string, string[]>): number {
-  if (!query) return 1
-  const queryText = normalizeSearchText(query)
-  if (!queryText) return 1
-  const haystackText = normalizeSearchText(searchableMemoryText(fact, lookup))
-  if (!haystackText) return 0
-  if (haystackText.includes(queryText)) return 100 + queryText.length
-  const queryTokens = searchTokens(queryText)
-  if (!queryTokens.length) return 0
-  const haystackTokens = new Set(searchTokens(haystackText))
-  const matched = queryTokens.filter((token) => haystackTokens.has(token))
-  if (!matched.length) return 0
-  const coverage = matched.length / queryTokens.length
-  const rareBonus = matched.some((token) => token.length >= 5) ? 2 : 0
-  return matched.length + coverage * 10 + rareBonus
-}
-
-function searchableMemoryText(fact: ContextFact, lookup: Map<string, string[]>): string {
-  const parts = [
-    fact.id,
-    fact.kind,
-    memoryKindFromFact(fact),
-    fact.scope,
-    fact.content,
-    fact.sourceProvider,
-  ]
-  for (const citation of fact.citations) {
-    parts.push(citation.id, citation.type, citation.ref, citation.hash ?? '')
-    parts.push(...(lookup.get(citation.id.toLowerCase()) ?? []))
-    parts.push(...(lookup.get(citation.ref.toLowerCase()) ?? []))
-    if (citation.hash) parts.push(...(lookup.get(citation.hash.toLowerCase()) ?? []))
-  }
-  return parts.join(' ')
-}
-
-function normalizeSearchText(text: string): string {
-  return text
-    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function searchTokens(text: string): string[] {
-  return normalizeSearchText(text)
-    .split(' ')
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 2)
 }
 
 function memoryKindFromFact(fact: ContextFact): MemoryRecordKind {
