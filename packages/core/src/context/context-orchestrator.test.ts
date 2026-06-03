@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { mainSessionProfile } from './actor-profile.js'
 import { buildContextBundle } from './orchestrator.js'
 import type { ContextStoreResult } from './store.js'
 import type { ContextFact, ContextRequest, ContextSection, RawEvidence } from './types.js'
@@ -57,6 +58,29 @@ describe('JDC Context orchestrator', () => {
     expect(result.renderedPrompt).not.toContain(request.userMessage)
     expect(store.saveRawEvidence).toHaveBeenCalledWith(evidence)
     expect(store.saveBundleSnapshot).toHaveBeenCalledWith(result.bundle)
+  })
+
+  it('preserves actor profile metadata in the bundle and rendered prompt', async () => {
+    const actorProfile = mainSessionProfile(request, 'Fix runtime cancellation bug')
+    const store = makeStore({ facts: [fact({ id: 'memory_fact', kind: 'project_convention', content: 'Use JDC Context Engine naming.' })] })
+
+    const result = await buildContextBundle(request, {
+      injectionEnabled: true,
+      store,
+      providers: [],
+      actorProfile,
+      now: () => 1_000,
+      id: () => 'bundle_actor_main',
+    })
+
+    expect(result.bundle.actorProfile).toEqual({
+      actor: 'main_session',
+      sessionId: 'session_1',
+      objective: 'Fix runtime cancellation bug',
+    })
+    expect(result.renderedPrompt).toContain('<jdc-context-engine bundle="bundle_actor_main">')
+    expect(result.renderedPrompt).toContain('<actor>main_session</actor>')
+    expect(result.renderedPrompt).toContain('<objective>Fix runtime cancellation bug</objective>')
   })
 
   it('does not drop large relevant sections when no explicit token caps are configured', async () => {
