@@ -1,38 +1,27 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { parseMemories, saveMemories } from '../src/memory-extractor.js'
-import { mkdirSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs'
+import { mkdirSync, rmSync, existsSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 
 describe('parseMemories', () => {
-  it('should parse memories from model output', () => {
+  it('ignores legacy memory extraction tags after file-based memory retirement', () => {
     const output = `Here is the summary...
 <memories>[{"name":"no-native-dialogs","type":"feedback","description":"Never use native dialogs","content":"Always use Radix UI components instead of native confirm/alert."}]</memories>`
 
-    const memories = parseMemories(output)
-    expect(memories).toHaveLength(1)
-    expect(memories[0].name).toBe('no-native-dialogs')
-    expect(memories[0].type).toBe('feedback')
-    expect(memories[0].content).toContain('Radix UI')
+    expect(parseMemories(output)).toEqual([])
   })
 
-  it('should return empty array when no memories tag', () => {
+  it('returns empty array when no memories tag', () => {
     expect(parseMemories('just a summary')).toEqual([])
   })
 
-  it('should return empty array for empty memories', () => {
+  it('returns empty array for empty memories', () => {
     expect(parseMemories('<memories>[]</memories>')).toEqual([])
   })
 
-  it('should handle malformed JSON gracefully', () => {
+  it('handles malformed legacy JSON as retired no-op', () => {
     expect(parseMemories('<memories>not json</memories>')).toEqual([])
-  })
-
-  it('should filter out incomplete memory objects', () => {
-    const output = '<memories>[{"name":"valid","type":"feedback","description":"desc","content":"ok"},{"name":"missing-content","type":"feedback"}]</memories>'
-    const memories = parseMemories(output)
-    expect(memories).toHaveLength(1)
-    expect(memories[0].name).toBe('valid')
   })
 })
 
@@ -42,68 +31,19 @@ describe('saveMemories', () => {
   beforeEach(() => mkdirSync(tmpDir, { recursive: true }))
   afterEach(() => rmSync(tmpDir, { recursive: true, force: true }))
 
-  it('should write memory files and update index', async () => {
+  it('does not write legacy memory files or MEMORY.md indexes', async () => {
     const memories = [
       { name: 'test-pref', type: 'feedback', description: 'Test preference', content: 'Always use TypeScript' },
     ]
 
     const count = await saveMemories(memories, tmpDir, 'session-123')
-    expect(count).toBe(1)
 
-    const filePath = path.join(tmpDir, 'test-pref.md')
-    expect(existsSync(filePath)).toBe(true)
-    const content = readFileSync(filePath, 'utf-8')
-    expect(content).toContain('name: test-pref')
-    expect(content).toContain('type: feedback')
-    expect(content).toContain('Always use TypeScript')
-
-    const index = readFileSync(path.join(tmpDir, 'MEMORY.md'), 'utf-8')
-    expect(index).toContain('test-pref')
-  })
-
-  it('skips rewriting when existing content has no substantive change', async () => {
-    // saveMemories now updates an existing file only when the body meaningfully
-    // changed (shouldOverwrite). Identical content must be left untouched.
-    const memories = [
-      { name: 'existing', type: 'feedback', description: 'Exists', content: 'same content' },
-    ]
-    const existing = path.join(tmpDir, 'existing.md')
-    writeFileSync(existing, `---
-name: existing
-description: Exists
-metadata:
-  type: feedback
----
-
-same content
-`)
-
-    const count = await saveMemories(memories, tmpDir, 'session-123')
     expect(count).toBe(0)
+    expect(existsSync(path.join(tmpDir, 'test-pref.md'))).toBe(false)
+    expect(existsSync(path.join(tmpDir, 'MEMORY.md'))).toBe(false)
   })
 
-  it('updates an existing memory file when the body changed', async () => {
-    const existing = path.join(tmpDir, 'existing.md')
-    writeFileSync(existing, `---
-name: existing
-description: Exists
-metadata:
-  type: feedback
----
-
-old content
-`)
-
-    const memories = [
-      { name: 'existing', type: 'feedback', description: 'Exists', content: 'substantially different new content' },
-    ]
-
-    const count = await saveMemories(memories, tmpDir, 'session-123')
-    expect(count).toBe(1)
-    expect(readFileSync(existing, 'utf-8')).toContain('substantially different new content')
-  })
-
-  it('should return 0 for empty memories array', async () => {
+  it('returns 0 for empty memories array', async () => {
     const count = await saveMemories([], tmpDir, 'session-123')
     expect(count).toBe(0)
   })

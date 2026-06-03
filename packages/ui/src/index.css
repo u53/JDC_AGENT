@@ -218,6 +218,25 @@ body {
   background: var(--muted);
 }
 
+.context-panel-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted) 38%, transparent) transparent;
+}
+.context-panel-scroll::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.context-panel-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.context-panel-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted) 36%, transparent);
+  border-radius: 999px;
+}
+.context-panel-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--muted) 58%, transparent);
+}
+
 .hljs { background: var(--surface-2) !important; color: var(--text) !important; }
 .hljs-keyword,
 .hljs-selector-tag,
@@ -654,19 +673,14 @@ body {
 
 /* ---- JDC Context Engine branded tool card ---- */
 .jdc-engine-card {
-  border-radius: 12px;
-  border-color: color-mix(in srgb, var(--event-color) 16%, var(--border));
+  border-radius: 10px;
+  border-color: color-mix(in srgb, var(--text) 12%, var(--border));
   background:
-    radial-gradient(circle at 78% 18%, color-mix(in srgb, var(--event-color) 4.5%, transparent), transparent 30%),
-    radial-gradient(circle at 22% 86%, color-mix(in srgb, var(--jdc-engine-secondary) 3.5%, transparent), transparent 36%),
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--surface-2) 91%, var(--text) 9%),
-      color-mix(in srgb, var(--surface-2) 97%, var(--event-color) 3%)
-    );
+    linear-gradient(90deg, color-mix(in srgb, var(--event-color) 5%, transparent), transparent 34%),
+    color-mix(in srgb, var(--surface-2) 96%, var(--text) 4%);
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--surface) 52%, transparent),
-    0 24px 54px -40px color-mix(in srgb, var(--event-color) 32%, transparent);
+    inset 0 1px 0 color-mix(in srgb, var(--surface) 35%, transparent),
+    0 2px 8px color-mix(in srgb, var(--text) 4%, transparent);
 }
 
 .jdc-engine-card::before {
@@ -674,131 +688,182 @@ body {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background:
+  background-image:
     linear-gradient(color-mix(in srgb, var(--text) 5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--text) 5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--event-color) 5%, transparent), transparent 45%);
-  background-size: 22px 22px, 22px 22px, auto;
-  opacity: 0.38;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), transparent 92%);
+    linear-gradient(90deg, color-mix(in srgb, var(--text) 5%, transparent) 1px, transparent 1px);
+  background-size: 22px 22px;
+  opacity: 0.32;
+  mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.9), transparent 92%);
 }
 
-.jdc-engine-card .jdc-event-card-header {
-  min-height: 48px;
-  border-bottom: 1px solid color-mix(in srgb, var(--event-color) 9%, transparent);
-  background: color-mix(in srgb, var(--surface) 6%, transparent);
-}
-
-.jdc-engine-card .jdc-event-card-header::after {
+.jdc-engine-card::after {
   content: "";
   position: absolute;
-  right: 46px;
-  top: 9px;
-  width: 30px;
-  height: 30px;
-  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
-  border-radius: 999px;
-  opacity: 0.5;
+  inset: 1px;
   pointer-events: none;
-  z-index: 0;
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--surface) 18%, transparent);
 }
 
-.jdc-engine-card .jdc-event-card-header::before {
-  content: "";
-  position: absolute;
-  right: 59px;
-  top: 7px;
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--jdc-engine-secondary) 60%, var(--muted) 40%);
-  box-shadow:
-    13px 24px 0 color-mix(in srgb, var(--event-color) 62%, var(--muted) 38%),
-    -15px 18px 0 color-mix(in srgb, var(--bad) 42%, var(--muted) 58%);
-  opacity: 0.62;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.jdc-engine-card .jdc-event-card-header > * {
+.jdc-engine-shell {
   position: relative;
   z-index: 1;
-}
-
-.jdc-engine-card .jdc-event-label {
-  border-color: color-mix(in srgb, var(--event-color) 13%, transparent);
-  background: color-mix(in srgb, var(--surface) 12%, transparent);
-  color: color-mix(in srgb, var(--text) 84%, var(--event-color) 16%);
-}
-
-.jdc-engine-card .jdc-event-detail {
-  color: color-mix(in srgb, var(--text) 56%, var(--muted) 44%);
-}
-
-.jdc-engine-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 7px;
-  margin-bottom: 7px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid color-mix(in srgb, var(--event-color) 14%, transparent);
+  gap: 11px;
+  min-height: 58px;
+  padding: 10px 14px;
 }
 
-.jdc-engine-glyph {
+.jdc-engine-robot {
+  position: relative;
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--event-color) 18%, var(--border));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface) 42%, var(--surface-3) 58%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--surface) 58%, transparent);
+}
+
+.jdc-engine-robot-antenna {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  width: 10px;
+  height: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--event-color) 54%, var(--muted));
+  border-left: 1px solid color-mix(in srgb, var(--event-color) 42%, var(--muted));
+  border-radius: 999px 999px 0 0;
+  transform: translateX(-50%);
+}
+
+.jdc-engine-robot-face {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  flex: 0 0 auto;
-  border-radius: 6px;
-  color: var(--event-color);
-  border: 1px solid color-mix(in srgb, var(--event-color) 30%, transparent);
-  background:
-    radial-gradient(120% 120% at 30% 20%, color-mix(in srgb, var(--event-color) 22%, transparent), transparent 70%),
-    color-mix(in srgb, var(--event-color) 8%, transparent);
+  width: 24px;
+  height: 16px;
+  border: 1px solid color-mix(in srgb, var(--text) 13%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--surface-3) 70%, var(--text) 8%);
 }
 
-.jdc-engine-op {
-  font-size: 11.5px;
-  font-weight: 650;
-  color: var(--text);
-  letter-spacing: 0;
+.jdc-engine-robot-eyes {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transform: translate(var(--jdc-robot-eye-x, 0), var(--jdc-robot-eye-y, 0));
+  transition: transform 900ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
 }
 
-.jdc-engine-count {
-  margin-left: auto;
-  flex: 0 0 auto;
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 600;
-  color: var(--event-color);
-  padding: 2px 7px;
+.jdc-engine-robot-eye {
+  width: 5px;
+  height: 5px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--event-color) 22%, transparent);
-  background: color-mix(in srgb, var(--event-color) 9%, transparent);
+  background: color-mix(in srgb, #fbf3db 80%, var(--event-color) 20%);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--event-color) 10%, transparent);
 }
 
-.jdc-engine-result {
-  margin: 0;
-  max-height: 240px;
-  overflow: auto;
+.jdc-engine-robot-base {
+  position: absolute;
+  right: 7px;
+  bottom: 5px;
+  left: 7px;
+  height: 1px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--event-color) 45%, transparent);
+}
+
+.jdc-engine-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.jdc-engine-title {
+  color: color-mix(in srgb, var(--text) 92%, var(--event-color) 8%);
   font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--text);
-  white-space: pre-wrap;
-  word-break: break-word;
-  border: 1px solid color-mix(in srgb, var(--event-color) 12%, var(--border));
-  border-radius: 6px;
-  padding: 7px 9px;
-  background: color-mix(in srgb, var(--surface) 42%, var(--surface-3) 58%);
+  font-size: 12px;
+  font-weight: 820;
+  letter-spacing: 0;
+  line-height: 1.1;
 }
 
-.jdc-engine-empty {
-  font-size: 11px;
-  color: var(--muted);
-  font-style: italic;
+.jdc-engine-subtitle {
+  min-width: 0;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--muted) 82%, var(--text) 18%);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jdc-engine-signal {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--event-color) 14%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 22%, transparent);
+}
+
+.jdc-engine-signal span {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--event-color) 62%, var(--muted) 38%);
+  opacity: 0.62;
+}
+
+.jdc-engine-signal.is-live span {
+  animation: jdc-engine-signal-pulse 1.8s ease-in-out infinite;
+}
+
+.jdc-engine-signal.is-live span:nth-child(2) {
+  animation-delay: 180ms;
+}
+
+.jdc-engine-signal.is-live span:nth-child(3) {
+  animation-delay: 360ms;
+}
+
+.jdc-engine-robot.is-live {
+  animation: jdc-engine-robot-thinking 3.8s ease-in-out infinite;
+}
+
+.jdc-engine-robot.is-live .jdc-engine-robot-antenna {
+  animation: jdc-engine-antenna-wiggle 4.6s ease-in-out infinite;
+  transform-origin: 50% 100%;
+}
+
+.jdc-engine-robot.is-live .jdc-engine-robot-eye {
+  animation: jdc-engine-robot-blink 5.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  transform-origin: 50% 50%;
+}
+
+.jdc-engine-card-premium[data-status="done"] .jdc-engine-robot-eye {
+  opacity: 0.86;
+}
+
+.jdc-engine-card-premium[data-status="error"] .jdc-engine-robot-eye,
+.jdc-engine-card-premium[data-status="error"] .jdc-engine-signal span {
+  background: color-mix(in srgb, var(--bad) 68%, var(--muted) 32%);
+}
+
+.jdc-engine-card-blackbox .jdc-event-chip {
+  min-width: 38px;
+  border-color: color-mix(in srgb, var(--event-color) 20%, var(--border));
+  background: color-mix(in srgb, var(--event-color) 8%, transparent);
+  text-align: center;
 }
 
 .tool-kv-grid {
@@ -1588,11 +1653,53 @@ body {
   }
 }
 
+@keyframes jdc-engine-robot-thinking {
+  0%, 100% { transform: translateY(0); }
+  42% { transform: translateY(-1px); }
+  70% { transform: translateY(0); }
+}
+
+@keyframes jdc-engine-robot-blink {
+  0%, 86%, 100% {
+    opacity: 0.78;
+    transform: scaleY(1);
+  }
+  92% {
+    opacity: 0.72;
+    transform: scaleY(0.18);
+  }
+  96% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes jdc-engine-antenna-wiggle {
+  0%, 100% { transform: translateX(-50%) rotate(0deg); }
+  36% { transform: translateX(-50%) rotate(-5deg); }
+  66% { transform: translateX(-50%) rotate(4deg); }
+}
+
+@keyframes jdc-engine-signal-pulse {
+  0%, 100% {
+    opacity: 0.36;
+    transform: translateY(0);
+  }
+  45% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .jdc-event-card,
   .jdc-event-card::after,
   .jdc-event-dot,
+  .jdc-event-status,
   .jdc-event-bars span,
+  .jdc-engine-robot,
+  .jdc-engine-robot-eye,
+  .jdc-engine-signal span,
   .jdc-agent-timeline-dot,
   .ask-user-mark.is-live,
   .agent-detail-live,

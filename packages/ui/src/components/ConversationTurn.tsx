@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { memo, useState, useEffect, useRef } from 'react'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { ToolCardRouter } from './tool-cards/ToolCardRouter'
 import type { ContentBlock, Message, ToolResultContent, ToolExecutionEvent } from '@jdcagnet/core'
@@ -52,7 +52,7 @@ function findToolResult(
   return { content: block.content, is_error: block.is_error }
 }
 
-export function ConversationTurn({
+function ConversationTurnView({
   userContent,
   assistantMessages,
   isActive,
@@ -187,3 +187,5 @@ export function ConversationTurn({
     </div>
   )
 }
+
+export const ConversationTurn = memo(ConversationTurnView)

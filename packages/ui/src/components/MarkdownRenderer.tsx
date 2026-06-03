@@ -1,4 +1,4 @@
-import { isValidElement, useState, type ComponentPropsWithoutRef, type KeyboardEvent, type ReactNode } from 'react'
+import { isValidElement, memo, useState, type ComponentPropsWithoutRef, type KeyboardEvent, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
@@ -109,7 +109,7 @@ function CodeBlock({
   )
 }
 
-export function MarkdownRenderer({ content, defaultCodeExpanded = false }: Props) {
+function MarkdownRendererView({ content, defaultCodeExpanded = false }: Props) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -231,3 +231,5 @@ export function MarkdownRenderer({ content, defaultCodeExpanded = false }: Props
     </ReactMarkdown>
   )
 }
+
+export const MarkdownRenderer = memo(MarkdownRendererView)

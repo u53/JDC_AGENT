@@ -85,6 +85,17 @@ export const IPC_CHANNELS = {
   TEAM_SEND: 'team:send',
   TEAM_STATE_CHANGED: 'team:state-changed',
 
+  // JDC Context Engine
+  CONTEXT_INSPECT: 'context:inspect',
+  CONTEXT_REFRESH: 'context:refresh',
+  CONTEXT_HARVEST_LIST: 'context:harvest:list',
+  CONTEXT_MEMORY_LIST: 'context:memory:list',
+  CONTEXT_MEMORY_ACCEPT: 'context:memory:accept',
+  CONTEXT_MEMORY_REJECT: 'context:memory:reject',
+  CONTEXT_PROVIDERS_HEALTH: 'context:providers:health',
+  CONTEXT_CONFIG_GET: 'context:config:get',
+  CONTEXT_CONFIG_UPDATE: 'context:config:update',
+
   // Model
   MODEL_TEST: 'model:test',
 } as const

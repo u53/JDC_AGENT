@@ -197,6 +197,36 @@ describe('ParallelExecutor', () => {
     expect(results[1]).toEqual({ tool_use_id: 'node', content: 'symbol detail', is_error: false })
   })
 
+  it('does not let a JDC read-tool error cancel unrelated write siblings', async () => {
+    const registry = new ToolRegistry()
+    const executed: string[] = []
+
+    registry.register({
+      definition: { name: 'JdcContext', description: 'JDC context', inputSchema: { type: 'object', properties: {} } },
+      execute: async () => ({ content: 'JDC ENGINE\nERROR\nsymbol lookup failed', isError: true }),
+    })
+    registry.register({
+      definition: { name: 'Write', description: 'Write', inputSchema: { type: 'object', properties: {} } },
+      execute: async (input) => {
+        executed.push(`write-${input.id}`)
+        return { content: `wrote-${input.id}` }
+      },
+    })
+
+    const executor = new ParallelExecutor(createRunner(registry))
+    const results = await executor.executeBatch(
+      [
+        { type: 'tool_use', id: 'jdc', name: 'JdcContext', input: { task: 'runLoop' } },
+        { type: 'tool_use', id: 'write', name: 'Write', input: { id: 'X' } },
+      ],
+      () => {}
+    )
+
+    expect(results[0]).toEqual({ tool_use_id: 'jdc', content: 'JDC ENGINE\nERROR\nsymbol lookup failed', is_error: true })
+    expect(results[1]).toEqual({ tool_use_id: 'write', content: 'wrote-X', is_error: false })
+    expect(executed).toEqual(['write-X'])
+  })
+
   it('should treat unknown tools as write (serial)', async () => {
     const registry = new ToolRegistry()
     const order: string[] = []

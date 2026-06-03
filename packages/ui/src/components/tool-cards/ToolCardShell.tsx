@@ -10,6 +10,7 @@ interface Props {
   className?: string
   variant?: string
   rail?: boolean
+  statusLabel?: string
   children?: ReactNode
   actions?: ReactNode
 }
@@ -29,6 +30,7 @@ export function ToolCardShell({
   className,
   variant = 'generic',
   rail = false,
+  statusLabel,
   children,
   actions,
 }: Props) {
@@ -97,7 +99,7 @@ export function ToolCardShell({
           <span className="jdc-event-label">{label}</span>
           <span className="jdc-event-detail" title={detail}>{detail}</span>
         </span>
-        <span className="jdc-event-chip">{cfg.label}</span>
+        <span className="jdc-event-chip">{statusLabel || cfg.label}</span>
         {actions && <div className="jdc-event-actions">{actions}</div>}
       </div>
       {showContent && (

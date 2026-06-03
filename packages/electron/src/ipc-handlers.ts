@@ -1,7 +1,7 @@
 import { ipcMain, dialog } from 'electron'
 import { IPC_CHANNELS } from './ipc-channels.js'
 import type { SessionManager } from './session-manager.js'
-import { loadAppConfig, saveAppConfig, AnthropicProvider, OpenAIChatProvider, OpenAIResponsesProvider } from '@jdcagnet/core'
+import { loadAppConfig, saveAppConfig, AnthropicProvider, OpenAIChatProvider, OpenAIResponsesProvider, inspectContext, refreshContextProviders, getContextProviderHealth, createDefaultRefreshProviders, searchMemoryRecords, writeMemoryRecord, ContextInspectPayloadSchema, ContextRefreshPayloadSchema, MemorySearchPayloadSchema, MemoryWritePayloadSchema, openContextStore } from '@jdcagnet/core'
 import { GitService } from './git-service.js'
 import { AppLauncher } from './app-launcher.js'
 import { TerminalService } from './terminal-service.js'
@@ -10,6 +10,28 @@ interface DevToolServices {
   gitService: GitService
   appLauncher: AppLauncher
   terminalService: TerminalService
+}
+
+function contextPayload(payload: unknown): Record<string, unknown> {
+  return payload && typeof payload === 'object' ? payload as Record<string, unknown> : {}
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined
+}
+
+function resolveContextIpcCwd(sessionManager: SessionManager, payload: unknown): string {
+  const input = contextPayload(payload)
+  const sessionId = nonEmptyString(input.sessionId)
+  if (sessionId) {
+    const cwd = sessionManager.getSessionCwd(sessionId)
+    if (!cwd) throw new Error(`Unable to resolve project cwd for session ${sessionId}`)
+    return cwd
+  }
+
+  const cwd = nonEmptyString(input.cwd)
+  if (!cwd) throw new Error('A sessionId or cwd is required for JDC Context Engine IPC')
+  return cwd
 }
 
 export function registerIpcHandlers(sessionManager: SessionManager, services: DevToolServices): void {
@@ -284,6 +306,94 @@ export function registerIpcHandlers(sessionManager: SessionManager, services: De
     } catch (err: any) {
       return { files: [] }
     }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CONTEXT_INSPECT, async (_event, payload = {}) => {
+    const input = contextPayload(payload)
+    const cwd = resolveContextIpcCwd(sessionManager, input)
+    const store = await openContextStore({ cwd })
+    const result = await inspectContext(input, { store, cwd })
+    return ContextInspectPayloadSchema.parse(result)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CONTEXT_REFRESH, async (_event, payload: any = {}) => {
+    const config = loadAppConfig().contextEngine
+    const input = contextPayload(payload)
+    const cwd = resolveContextIpcCwd(sessionManager, input)
+    const store = await openContextStore({ cwd })
+    const result = await refreshContextProviders({ ...input, cwd }, {
+      store,
+      providers: createDefaultRefreshProviders(config),
+      config,
+      cwd,
+    })
+    return ContextRefreshPayloadSchema.parse(result)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CONTEXT_HARVEST_LIST, async (_event, payload = {}) => {
+    const input = contextPayload(payload)
+    const cwd = resolveContextIpcCwd(sessionManager, input)
+    const store = await openContextStore({ cwd })
+    const result = await inspectContext(input, { store, cwd })
+    return ContextInspectPayloadSchema.parse(result).harvestQueue
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CONTEXT_MEMORY_LIST, async (_event, payload = {}) => {
+    const input = contextPayload(payload)
+    const cwd = resolveContextIpcCwd(sessionManager, input)
+    const store = await openContextStore({ cwd })
+    const result = await searchMemoryRecords(input, { store, cwd })
+    return MemorySearchPayloadSchema.parse(result)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CONTEXT_MEMORY_ACCEPT, async (_event, payload = {}) => {
+    const input = contextPayload(payload)
+    const cwd = resolveContextIpcCwd(sessionManager, input)
+    const candidateId = input.candidateId
+    if (!candidateId) {
+      throw new Error('candidateId is required for memory accept')
+    }
+    const store = await openContextStore({ cwd })
+    const result = await store.approvePendingCandidate(String(candidateId))
+    if (!result.ok) {
+      throw new Error(result.diagnostics[0]?.message || 'Failed to approve pending candidate')
+    }
+    const inspectResult = await inspectContext(input, { store, cwd })
+    return ContextInspectPayloadSchema.parse(inspectResult).memoryReview
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CONTEXT_MEMORY_REJECT, async (_event, payload = {}) => {
+    const input = contextPayload(payload)
+    const cwd = resolveContextIpcCwd(sessionManager, input)
+    const candidateId = input.candidateId
+    if (!candidateId) {
+      throw new Error('candidateId is required for memory reject')
+    }
+    const store = await openContextStore({ cwd })
+    await store.rejectPendingCandidate(String(candidateId))
+    const result = await inspectContext(input, { store, cwd })
+    return ContextInspectPayloadSchema.parse(result).memoryReview
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CONTEXT_PROVIDERS_HEALTH, async (_event, payload = {}) => {
+    const config = loadAppConfig().contextEngine
+    const input = contextPayload(payload)
+    const cwd = resolveContextIpcCwd(sessionManager, input)
+    return getContextProviderHealth({ ...input, cwd }, {
+      providers: createDefaultRefreshProviders(config),
+      config,
+      cwd,
+    })
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CONTEXT_CONFIG_GET, async () => {
+    return loadAppConfig().contextEngine ?? null
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CONTEXT_CONFIG_UPDATE, async (_event, payload = {}) => {
+    const existing = loadAppConfig()
+    saveAppConfig({ contextEngine: { ...(existing.contextEngine ?? {}), ...(payload as Record<string, unknown>) } })
+    return { success: true }
   })
 
   ipcMain.handle(IPC_CHANNELS.MODEL_TEST, async (_event, { protocol, baseUrl, apiKey, modelId }) => {

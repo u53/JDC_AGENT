@@ -19,13 +19,41 @@ declare global {
       mcpToggle: (serverName: string, enabled: boolean) => Promise<void>
       mcpSaveConfig: (servers: any, scope: string, cwd?: string) => Promise<void>
       onMcpStateChanged: (callback: (states: McpServerState[]) => void) => void
-      agentAbort?: (sessionId: string, agentToolUseId: string) => Promise<void>
+      listSkills: (sessionId: string) => Promise<{ name: string; description: string }[]>
+      setPermissionMode: (sessionId: string, mode: string) => Promise<void>
+      compactSession: (sessionId: string) => Promise<unknown>
+      clearSession: (sessionId: string) => Promise<unknown>
+      setEffort: (sessionId: string, effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max') => Promise<void>
+      agentAbort: (sessionId: string, agentToolUseId: string) => Promise<void>
+      agentBackground: (sessionId: string, agentToolUseId: string) => Promise<void>
+      planRespond: (id: string, approved: boolean, feedback?: string) => void
+      setPlanMode: (sessionId: string, mode: string) => Promise<unknown>
+      getPlanMode: (sessionId: string) => Promise<unknown>
+      writeClipboard: (text: string) => void
       // Git
       gitBranchList: (cwd: string) => Promise<{ branches: string[]; current: string }>
       gitBranchSwitch: (cwd: string, branch: string) => Promise<{ success: boolean; error?: string }>
       gitBranchCreate: (cwd: string, branch: string, from?: string) => Promise<{ success: boolean; error?: string }>
       gitBranchDelete: (cwd: string, branch: string) => Promise<{ success: boolean; error?: string }>
       gitStatus: (cwd: string) => Promise<{ dirty: boolean; changes: number }>
+      gitStash: (cwd: string) => Promise<{ success: boolean; error?: string }>
+      gitStashPop: (cwd: string) => Promise<{ success: boolean; error?: string }>
+      gitHasStash: (cwd: string) => Promise<boolean>
+      gitWatchStart: (cwd: string) => Promise<void>
+      gitWatchStop: (cwd: string) => Promise<void>
+      onGitBranchChanged: (callback: (payload: { cwd: string; branches: string[]; current: string }) => void) => () => void
+      // Apps
+      appsDetect: () => Promise<{ apps: { id: string; name: string; shortName: string; available: boolean }[] }>
+      appsOpen: (appId: string, cwd: string) => Promise<unknown>
+      // IDE Integration
+      ideGetState: () => Promise<unknown>
+      ideOpenFile: (filePath: string, line?: number, column?: number) => Promise<unknown>
+      ideOpenDiff: (params: unknown) => Promise<unknown>
+      ideCloseDiffTabs: () => Promise<unknown>
+      ideGetDiagnostics: (filePaths: string[]) => Promise<unknown>
+      onIdeStateChanged: (callback: (connections: unknown[]) => void) => () => void
+      onIdeSelectionChanged: (callback: (data: unknown) => void) => () => void
+      onIdeAtMentioned: (callback: (data: unknown) => void) => () => void
       // Terminal
       terminalCreate: (cwd: string) => Promise<{ id: string }>
       terminalWrite: (id: string, data: string) => void
@@ -33,6 +61,29 @@ declare global {
       terminalDestroy: (id: string) => Promise<{ success: boolean }>
       onTerminalData: (callback: (payload: { id: string; data: string }) => void) => () => void
       onTerminalExit: (callback: (payload: { id: string; code: number }) => void) => () => void
+      // Background Tasks
+      backgroundList: (sessionId: string) => Promise<unknown[]>
+      backgroundStop: (sessionId: string, taskId: string) => Promise<unknown>
+      backgroundOutput: (sessionId: string, taskId: string, tail?: number) => Promise<unknown>
+      onBackgroundStateChanged: (callback: (data: { sessionId: string }) => void) => () => void
+      onBackgroundNotification: (callback: (data: { sessionId: string }) => void) => () => void
+      // Team Mode
+      teamGetStatus: (sessionId: string, taskId: string) => Promise<unknown>
+      teamGetEvents: (sessionId: string, taskId: string, tail?: number) => Promise<unknown>
+      teamSend: (sessionId: string, taskId: string, payload: { message: string; target?: string; intent?: string; priority?: string }) => Promise<unknown>
+      onTeamStateChanged: (callback: (data: { sessionId: string; taskId: string }) => void) => () => void
+      // Updater
+      updaterCheck: () => Promise<{ error?: string }>
+      updaterDownload: () => Promise<unknown>
+      updaterInstall: () => Promise<unknown>
+      onUpdaterAvailable: (callback: (data: { version: string }) => void) => () => void
+      onUpdaterProgress: (callback: (data: { percent: number }) => void) => () => void
+      onUpdaterDownloaded: (callback: () => void) => () => void
+      onUpdaterNotAvailable: (callback: () => void) => () => void
+      onUpdaterError: (callback: (data: { message: string }) => void) => () => void
+      getVersion: () => Promise<string>
+      // Model
+      modelTest: (params: { protocol: string; baseUrl: string; apiKey: string; modelId: string }) => Promise<{ success: boolean; reply?: string; error?: string }>
     }
   }
 }

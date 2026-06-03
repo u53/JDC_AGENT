@@ -32,11 +32,10 @@ export function useSession() {
         // assistant streamingText area. The terminal compact_complete event
         // is sufficient for the user to see compression occurred.
       } else if (chunk.type === 'compact_complete' && chunk.compactInfo) {
-        const { originalCount, summarizedCount, keptCount, memoriesExtracted } = chunk.compactInfo
+        const { originalCount, summarizedCount, keptCount } = chunk.compactInfo
         store.setCompactState(sessionId, { active: false })
-        const memText = memoriesExtracted > 0 ? ` ${memoriesExtracted} memories saved.` : ''
         const recentKept = Math.max(0, keptCount - 1)
-        const compactText = `[Context compressed: ${summarizedCount} of ${originalCount} messages summarized, ${recentKept} recent kept.${memText}]`
+        const compactText = `[Context compressed: ${summarizedCount} of ${originalCount} messages summarized, ${recentKept} recent kept.]`
         const compactMessage = {
           id: crypto.randomUUID(),
           role: 'assistant' as const,
@@ -97,6 +96,7 @@ export function useSession() {
     })
 
     const unsubComplete = ipc.query.onComplete(({ sessionId, message }) => {
+      store.flushSessionStreamBuffers(sessionId)
       const current = useSessionStore.getState()
       if (sessionId === current.activeSessionId) {
         useSessionStore.setState((s) => ({ messages: [...s.messages, message] }))

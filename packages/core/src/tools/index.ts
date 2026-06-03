@@ -13,6 +13,8 @@ import { webFetchTool } from './web-fetch.js'
 import { webSearchTool } from './web-search.js'
 import { lspTool } from './lsp.js'
 import { createContextEngineTools } from './context-engine-tools.js'
+import { createMemorySearchTool } from './memory-search.js'
+import { createMemoryWriteTool } from './memory-write.js'
 import { createPowerShellTool } from './powershell.js'
 import { findGitBash, findPowerShell } from '../utils/shell-detection.js'
 import { isWindows } from '../utils/platform.js'
@@ -51,7 +53,13 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
   for (const tool of createContextEngineTools()) {
     registry.register(tool)
   }
+  registry.register(createMemorySearchTool())
+  registry.register(createMemoryWriteTool())
 }
 
 export { bashTool, fileReadTool, fileWriteTool, fileEditTool, multiEditTool, globTool, grepTool, lsTool, treeTool, notebookEditTool, webFetchTool, webSearchTool, lspTool }
 export { createContextEngineTools } from './context-engine-tools.js'
+export { createContextInspectTool } from './context-inspect.js'
+export { createContextRefreshTool } from './context-refresh.js'
+export { createMemorySearchTool } from './memory-search.js'
+export { createMemoryWriteTool } from './memory-write.js'

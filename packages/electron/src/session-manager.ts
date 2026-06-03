@@ -6,7 +6,7 @@ import {
   type PermissionCallback, createAskUserTool, type AskUserCallback, createNotifyTool, type NotifyCallback,
   McpManager, loadMcpConfig, saveMcpConfig, type McpServerConfig, type McpServerState,
   IdeManager, type IdeConnection, type OpenDiffParams, type OpenDiffResult, type DiagnosticFile,
-  compressImageForAPI, getContextEngine,
+  compressImageForAPI, getContextEngine, ensureCodeIndexJob,
 } from '@jdcagnet/core'
 import type { ToolExecutionEvent } from '@jdcagnet/core'
 import { Notification, type BrowserWindow } from 'electron'
@@ -67,6 +67,8 @@ export class SessionManager {
 
   private lastIdeSelection: any = null
   private activeSessionId: string | null = null
+  private contextWarmTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly contextWarmDelayMs = 1_500
 
   async ensureReady(): Promise<void> {
     await this.readyPromise
@@ -85,8 +87,8 @@ export class SessionManager {
     try {
       const engine = getContextEngine(cwd)
       if (!engine.isIndexed()) {
-        engine
-          .index()
+        const job = ensureCodeIndexJob(cwd, engine, Date.now())
+        job.promise
           .then(() => {
             // Begin live incremental updates once the initial index is built.
             engine.startWatching()
@@ -100,6 +102,16 @@ export class SessionManager {
     } catch (err) {
       console.error('[context-engine] warm failed:', err)
     }
+  }
+
+  private scheduleProjectBackgroundWarm(cwd: string): void {
+    if (this.contextWarmTimers.has(cwd)) return
+    const timer = setTimeout(() => {
+      this.contextWarmTimers.delete(cwd)
+      this.ideManager.startDiscovery(cwd)
+      this.warmContextEngine(cwd)
+    }, this.contextWarmDelayMs)
+    this.contextWarmTimers.set(cwd, timer)
   }
 
   getIdeConnections(): IdeConnection[] {
@@ -126,6 +138,12 @@ export class SessionManager {
     const sessionId = uuid()
     this.history.createSession(sessionId, projectName, cwd)
     return sessionId
+  }
+
+  getSessionCwd(sessionId: string): string | undefined {
+    const session = this.sessions.get(sessionId)
+    if (session?.config?.cwd) return session.config.cwd
+    return this.history.listSessions().find((item) => item.id === sessionId)?.cwd
   }
 
   listAllProjects() {
@@ -222,8 +240,7 @@ export class SessionManager {
     const meta = this.history.listSessions().find(s => s.id === sessionId)
     if (!meta) throw new Error(`Session ${sessionId} not found`)
     this.activeSessionId = sessionId
-    this.ideManager.startDiscovery(meta.cwd)
-    this.warmContextEngine(meta.cwd)
+    this.scheduleProjectBackgroundWarm(meta.cwd)
     if (this.sessions.has(sessionId)) return
 
     const sessionModelId = this.history.getSessionModel(sessionId)

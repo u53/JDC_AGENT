@@ -712,7 +712,7 @@ function ToolsTab() {
   const handleSave = async () => {
     await ipc.config.set({
       webSearch: { provider, ...keys, proxy: proxy || undefined },
-    })
+    } as any)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }

@@ -9,15 +9,17 @@ import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 import { EngineQuery, type SymbolLocation } from '../context-engine/query.js'
 import type { ContextEngine } from '../context-engine/engine.js'
 import { getContextEngine } from '../context-engine/index.js'
+import { ensureCodeIndexJob } from '../context/providers/code-provider.js'
 
 // Cache one EngineQuery per engine instance (keyed by cwd via the engine).
 const queryCache = new WeakMap<ContextEngine, EngineQuery>()
 
-async function getQuery(context: ToolContext): Promise<EngineQuery | null> {
+async function getQuery(context: ToolContext): Promise<EngineQuery | 'not_ready' | null> {
   const engine = resolveEngine(context)
   if (!engine) return null
   if (!engine.isIndexed()) {
-    await engine.index()
+    ensureCodeIndexJob(context.cwd, engine, Date.now())
+    return 'not_ready'
   }
   let q = queryCache.get(engine)
   if (!q) {
@@ -58,6 +60,14 @@ function noEngine(): ToolResult {
   return { content: 'Context engine is not available in this session.', isError: true }
 }
 
+function notReady(): ToolResult {
+  return { content: 'Code index is building in the background. This tool will be available once indexing completes — try again shortly.', isError: false }
+}
+
+function ensureQuery(q: EngineQuery | 'not_ready' | null): EngineQuery | null {
+  return q === 'not_ready' ? null : q
+}
+
 const jdcSearch: ToolHandler = {
   definition: {
     name: 'JdcSearch',
@@ -74,6 +84,7 @@ const jdcSearch: ToolHandler = {
   },
   async execute(input, context): Promise<ToolResult> {
     const q = await getQuery(context)
+    if (q === 'not_ready') return notReady()
     if (!q) return noEngine()
     const results = q.search(String(input.query), Number(input.limit) || 10)
     if (results.length === 0) return withStatus(context, `No symbols matching "${input.query}".`)
@@ -98,6 +109,7 @@ const jdcContext: ToolHandler = {
   },
   async execute(input, context): Promise<ToolResult> {
     const q = await getQuery(context)
+    if (q === 'not_ready') return notReady()
     if (!q) return noEngine()
     const res = await q.context(
       String(input.task),
@@ -147,6 +159,7 @@ const jdcNode: ToolHandler = {
   },
   async execute(input, context): Promise<ToolResult> {
     const q = await getQuery(context)
+    if (q === 'not_ready') return notReady()
     if (!q) return noEngine()
     const detail = await q.node(String(input.symbol), input.includeCode === true)
     if (!detail) return { content: `Symbol "${input.symbol}" not found.` }
@@ -173,6 +186,7 @@ const jdcCallers: ToolHandler = {
   },
   async execute(input, context): Promise<ToolResult> {
     const q = await getQuery(context)
+    if (q === 'not_ready') return notReady()
     if (!q) return noEngine()
     const callers = q.callers(String(input.symbol))
     if (callers.length === 0) return { content: `No callers found for "${input.symbol}".` }
@@ -192,6 +206,7 @@ const jdcCallees: ToolHandler = {
   },
   async execute(input, context): Promise<ToolResult> {
     const q = await getQuery(context)
+    if (q === 'not_ready') return notReady()
     if (!q) return noEngine()
     const callees = q.callees(String(input.symbol))
     if (callees.length === 0) return { content: `No callees found for "${input.symbol}".` }
@@ -214,6 +229,7 @@ const jdcImpact: ToolHandler = {
   },
   async execute(input, context): Promise<ToolResult> {
     const q = await getQuery(context)
+    if (q === 'not_ready') return notReady()
     if (!q) return noEngine()
     const impacted = q.impact(String(input.symbol), Number(input.depth) || 2)
     if (impacted.length === 0) return { content: `No code appears to be impacted by changing "${input.symbol}".` }
@@ -236,6 +252,7 @@ const jdcTrace: ToolHandler = {
   },
   async execute(input, context): Promise<ToolResult> {
     const q = await getQuery(context)
+    if (q === 'not_ready') return notReady()
     if (!q) return noEngine()
     const path = q.trace(String(input.from), String(input.to))
     if (!path) return { content: `No static call path found from "${input.from}" to "${input.to}". The chain may break at dynamic dispatch (callbacks/interfaces).` }
@@ -257,6 +274,7 @@ const jdcExplore: ToolHandler = {
   },
   async execute(input, context): Promise<ToolResult> {
     const q = await getQuery(context)
+    if (q === 'not_ready') return notReady()
     if (!q) return noEngine()
     const names = Array.isArray(input.symbols) ? (input.symbols as unknown[]).map(String) : []
     const results = await q.explore(names)
@@ -278,6 +296,7 @@ const jdcFiles: ToolHandler = {
   },
   async execute(input, context): Promise<ToolResult> {
     const q = await getQuery(context)
+    if (q === 'not_ready') return notReady()
     if (!q) return noEngine()
     const engine = resolveEngine(context)!
     const filter = input.path ? String(input.path) : ''

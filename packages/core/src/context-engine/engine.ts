@@ -11,6 +11,16 @@ import { languageForPath } from './parser/languages.js'
 import { ProjectWatcher } from './indexer/watcher.js'
 import { loadSnapshot, saveSnapshot } from './indexer/snapshot.js'
 import type { SymbolNode, EngineStats } from './types.js'
+import { createContextScheduler, type ContextScheduler } from '../context/scheduler.js'
+
+const DEFAULT_INDEX_CONCURRENCY = 3
+const WATCHER_RETRY_INITIAL_DELAY_MS = 1_000
+const WATCHER_RETRY_MAX_DELAY_MS = 30_000
+
+function indexConcurrency(): number {
+  const configured = Number(process.env.JDC_CONTEXT_INDEX_CONCURRENCY)
+  return Number.isInteger(configured) && configured > 0 ? Math.min(configured, 8) : DEFAULT_INDEX_CONCURRENCY
+}
 
 export interface IndexProgress {
   scanned: number
@@ -28,9 +38,16 @@ export class ContextEngine {
   private loadedFromSnapshot = false
   private saveTimer: ReturnType<typeof setTimeout> | null = null
   private dirty = false
+  private scheduler: ContextScheduler
+  private watcherDrainScheduled = false
+  private watcherRetryTimer: ReturnType<typeof setTimeout> | null = null
+  private watcherRetryDelayMs = WATCHER_RETRY_INITIAL_DELAY_MS
+  private pendingReindexPaths = new Set<string>()
+  private pendingRemovePaths = new Set<string>()
 
-  constructor(cwd: string) {
+  constructor(cwd: string, options: { scheduler?: ContextScheduler } = {}) {
     this.cwd = cwd
+    this.scheduler = options.scheduler ?? createContextScheduler()
   }
 
   isIndexed(): boolean {
@@ -73,7 +90,7 @@ export class ContextEngine {
   private async fullScan(onProgress?: (p: IndexProgress) => void): Promise<void> {
     const files = await scanProject(this.cwd)
     let scanned = 0
-    const CONCURRENCY = 8
+    const CONCURRENCY = indexConcurrency()
     let cursor = 0
     const worker = async (): Promise<void> => {
       while (cursor < files.length) {
@@ -100,7 +117,7 @@ export class ContextEngine {
     const known = this.store.fileHashes()
     const seen = new Set<string>()
     let scanned = 0
-    const CONCURRENCY = 8
+    const CONCURRENCY = indexConcurrency()
     let cursor = 0
     const worker = async (): Promise<void> => {
       while (cursor < files.length) {
@@ -137,10 +154,10 @@ export class ContextEngine {
     this.watcher = new ProjectWatcher(this.cwd, {
       debounceMs: 300,
       onChange: (paths) => {
-        void this.handleChanges(paths)
+        this.queueWatcherChanges(paths, [])
       },
       onRemove: (paths) => {
-        for (const p of paths) this.removeFile(p)
+        this.queueWatcherChanges([], paths)
       },
     })
     this.watcher.start()
@@ -154,11 +171,70 @@ export class ContextEngine {
       clearTimeout(this.saveTimer)
       this.saveTimer = null
     }
+    if (this.watcherRetryTimer) {
+      clearTimeout(this.watcherRetryTimer)
+      this.watcherRetryTimer = null
+    }
     void this.flushSave()
   }
 
-  private async handleChanges(absPaths: string[]): Promise<void> {
+  private queueWatcherChanges(reindexPaths: string[], removePaths: string[]): void {
+    for (const p of reindexPaths) this.pendingReindexPaths.add(p)
+    for (const p of removePaths) this.pendingRemovePaths.add(p)
+    if (!this.hasPendingWatcherChanges()) return
+    if (this.watcherDrainScheduled) return
+
+    this.watcherDrainScheduled = true
+    const scheduled = this.scheduler.enqueueBackground(this.cwd, 'watcher_reindex', async (signal) => {
+      try {
+        while (this.hasPendingWatcherChanges() && !signal.aborted) {
+          const removals = [...this.pendingRemovePaths]
+          const reindexes = [...this.pendingReindexPaths]
+          this.pendingRemovePaths.clear()
+          this.pendingReindexPaths.clear()
+          for (const p of removals) this.removeFile(p)
+          await this.handleChanges(reindexes, signal)
+        }
+        if (signal.aborted) throw new Error('context watcher reindex cancelled')
+      } finally {
+        this.watcherDrainScheduled = false
+        if (this.hasPendingWatcherChanges()) this.queueWatcherChanges([], [])
+      }
+    })
+
+    if (!scheduled.accepted) {
+      this.watcherDrainScheduled = false
+      this.scheduleWatcherRetry()
+      return
+    }
+    this.clearWatcherRetry()
+    void scheduled.promise
+  }
+
+  private scheduleWatcherRetry(): void {
+    if (this.watcherRetryTimer) return
+    const retryDelayMs = this.watcherRetryDelayMs
+    this.watcherRetryDelayMs = Math.min(this.watcherRetryDelayMs * 2, WATCHER_RETRY_MAX_DELAY_MS)
+    this.watcherRetryTimer = setTimeout(() => {
+      this.watcherRetryTimer = null
+      this.queueWatcherChanges([], [])
+    }, retryDelayMs)
+  }
+
+  private clearWatcherRetry(): void {
+    this.watcherRetryDelayMs = WATCHER_RETRY_INITIAL_DELAY_MS
+    if (!this.watcherRetryTimer) return
+    clearTimeout(this.watcherRetryTimer)
+    this.watcherRetryTimer = null
+  }
+
+  private hasPendingWatcherChanges(): boolean {
+    return this.pendingRemovePaths.size > 0 || this.pendingReindexPaths.size > 0
+  }
+
+  private async handleChanges(absPaths: string[], signal?: AbortSignal): Promise<void> {
     for (const abs of absPaths) {
+      if (signal?.aborted) throw new Error('context watcher reindex cancelled')
       try {
         await this.reindexFile(abs)
       } catch (err) {

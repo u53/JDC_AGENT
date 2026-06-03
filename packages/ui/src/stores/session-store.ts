@@ -84,6 +84,7 @@ interface SessionState {
   updateSessionState: (sessionId: string, update: Partial<SessionStreamState>) => void
   appendStreamText: (sessionId: string, text: string) => void
   appendThinkingText: (sessionId: string, text: string) => void
+  flushSessionStreamBuffers: (sessionId: string) => void
   setCompactState: (sessionId: string, state: { active: boolean }) => void
   addToolEvent: (sessionId: string, event: ToolExecutionEvent) => void
   markStreaming: (sessionId: string, streaming: boolean) => void
@@ -101,6 +102,69 @@ export interface ComposerDraft {
 }
 
 const EMPTY_DRAFT: ComposerDraft = { text: '', images: [] }
+const STREAM_FLUSH_MS = 32
+type SessionStoreSet = (
+  partial: Partial<SessionState> | ((state: SessionState) => Partial<SessionState>),
+  replace?: false,
+) => void
+
+interface PendingStreamBuffer {
+  streamingText: string
+  thinkingText: string
+  lastKind?: 'stream' | 'thinking'
+  timer?: ReturnType<typeof setTimeout>
+}
+
+const pendingStreamBuffers = new Map<string, PendingStreamBuffer>()
+
+function clearPendingStreamBuffer(sessionId: string) {
+  const pending = pendingStreamBuffers.get(sessionId)
+  if (pending?.timer) clearTimeout(pending.timer)
+  pendingStreamBuffers.delete(sessionId)
+}
+
+function flushPendingStreamBuffer(
+  sessionId: string,
+  set: SessionStoreSet,
+) {
+  const pending = pendingStreamBuffers.get(sessionId)
+  if (!pending || (!pending.streamingText && !pending.thinkingText)) return
+  if (pending.timer) clearTimeout(pending.timer)
+  pendingStreamBuffers.delete(sessionId)
+
+  set((s) => {
+    const current = s.sessionStates[sessionId] || EMPTY_STREAM_STATE
+    const lastKind = pending.lastKind
+    return {
+      sessionStates: {
+        ...s.sessionStates,
+        [sessionId]: {
+          ...current,
+          streamingText: current.streamingText + pending.streamingText,
+          thinkingText: current.thinkingText + pending.thinkingText,
+          isThinking: lastKind === 'thinking' ? true : lastKind === 'stream' ? false : current.isThinking,
+        },
+      },
+    }
+  })
+}
+
+function queuePendingStreamText(
+  sessionId: string,
+  text: string,
+  kind: 'stream' | 'thinking',
+  set: SessionStoreSet,
+) {
+  if (!text) return
+  const pending = pendingStreamBuffers.get(sessionId) || { streamingText: '', thinkingText: '' }
+  if (kind === 'stream') pending.streamingText += text
+  else pending.thinkingText += text
+  pending.lastKind = kind
+  if (!pending.timer) {
+    pending.timer = setTimeout(() => flushPendingStreamBuffer(sessionId, set), STREAM_FLUSH_MS)
+  }
+  pendingStreamBuffers.set(sessionId, pending)
+}
 
 export const useSessionStore = create<SessionState>((set, get) => ({
   projects: [],
@@ -246,27 +310,15 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   appendStreamText: (sessionId: string, text: string) => {
-    set((s) => {
-      const current = s.sessionStates[sessionId] || EMPTY_STREAM_STATE
-      return {
-        sessionStates: {
-          ...s.sessionStates,
-          [sessionId]: { ...current, streamingText: current.streamingText + text, isThinking: false },
-        },
-      }
-    })
+    queuePendingStreamText(sessionId, text, 'stream', set)
   },
 
   appendThinkingText: (sessionId: string, text: string) => {
-    set((s) => {
-      const current = s.sessionStates[sessionId] || EMPTY_STREAM_STATE
-      return {
-        sessionStates: {
-          ...s.sessionStates,
-          [sessionId]: { ...current, thinkingText: current.thinkingText + text, isThinking: true },
-        },
-      }
-    })
+    queuePendingStreamText(sessionId, text, 'thinking', set)
+  },
+
+  flushSessionStreamBuffers: (sessionId: string) => {
+    flushPendingStreamBuffer(sessionId, set)
   },
 
   setCompactState: (sessionId: string, state: { active: boolean }) => {
@@ -329,6 +381,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   }),
 
   clearSessionStreamState: (sessionId: string) => {
+    clearPendingStreamBuffer(sessionId)
     set((s) => {
       const current = s.sessionStates[sessionId]
       return {
@@ -341,6 +394,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   finishSession: (sessionId: string) => {
+    clearPendingStreamBuffer(sessionId)
     set((s) => {
       const current = s.sessionStates[sessionId] || EMPTY_STREAM_STATE
       return {

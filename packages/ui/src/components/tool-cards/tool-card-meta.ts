@@ -44,6 +44,10 @@ const JDC_TOOLS = new Set([
   'JdcTrace',
   'JdcExplore',
   'JdcFiles',
+  'JdcMemorySearch',
+  'JdcMemoryWrite',
+  'JdcContextInspect',
+  'JdcContextRefresh',
 ])
 
 const COMMAND_TOOLS = new Set(['Bash', 'Powershell', 'Monitor'])
@@ -58,7 +62,6 @@ const TASK_TOOLS = new Set([
   'EnterPlanMode',
   'ExitPlanMode',
   'Notify',
-  'SaveMemory',
   'TaskCreate',
   'TaskGet',
   'TaskList',
@@ -135,7 +138,7 @@ export function getToolCardKind(toolName: string): ToolCardKind {
 export function shouldShowToolRail(toolName: string, status: ToolStatus): boolean {
   if (status === 'running' || status === 'error') return true
   const family = getToolFamily(toolName)
-  return family === 'jdc' || family === 'mutation'
+  return family === 'mutation'
 }
 
 export function getToolVariant(toolName: string): string {
@@ -146,6 +149,7 @@ export function getToolVariant(toolName: string): string {
 
 export function formatToolLabel(toolName: string): string {
   if (!toolName) return 'TOOL'
+  if (toolName === 'SaveMemory') return '旧记忆工具（已退役）'
   if (toolName === 'Powershell') return 'POWERSHELL'
   if (toolName.startsWith('team_')) return toolName.replace(/^team_/, 'TEAM ').replace(/_/g, ' ').toUpperCase()
   return toolName.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').toUpperCase()

@@ -1,4 +1,5 @@
 import { v4 as uuid } from 'uuid'
+import { createHash } from 'node:crypto'
 import type { Message, StreamChunk, ModelConfig, ContentBlock, ToolDefinition } from './types.js'
 import type { ModelProvider } from './model-provider.js'
 import type { ToolRegistry } from './tool-registry.js'
@@ -6,6 +7,17 @@ import { ToolRunner } from './tool-runner.js'
 import { PermissionChecker } from './permissions.js'
 import type { ToolExecutionEvent, PermissionCallback } from './tool-runner.js'
 import { getAgentType, filterToolsForAgent, isWriteAllowedForPlanAgent, isBashAllowedForAuditor } from './agent-types.js'
+import { buildContextBundle, type ContextProvider } from './context/orchestrator.js'
+import { DEFAULT_CONTEXT_ENGINE_CONFIG, resolveContextEngineConfig, type ContextEngineConfigInput } from './context/config.js'
+import type { ContextStore } from './context/store.js'
+import { enqueueHarvest, runHarvestJob } from './context/harvest.js'
+import { classifyHarvestCandidate } from './context/safety.js'
+import { captureHarvestModelBinding } from './context/model-binding.js'
+import { createProviderDistillerModelClient } from './context/distillers/index.js'
+import { createContextScheduler, type ContextScheduler } from './context/scheduler.js'
+import type { ContextEngineConfig, ContextRequest, HarvestCandidate, HarvestModelBinding, ProviderProtocol } from './context/types.js'
+
+const subSessionHarvestCounts = new Map<string, { total: number; pending: number }>()
 
 const SUB_AGENT_SYSTEM = `You are a sub-agent executing a specific task. Focus on completing the task efficiently.
 You have access to the same tools as the main session.
@@ -41,6 +53,17 @@ export interface SubSessionOptions {
   onStreamHeartbeat?: () => void
   mailbox?: { drain(): Array<{ id: string; from: string; content: string; intent?: string; priority: string; createdAt: number }> }
   extraTools?: Array<{ definition: ToolDefinition; execute: (input: Record<string, unknown>, ctx: any) => Promise<{ content: string; isError?: boolean }> }>
+  contextEngine?: {
+    sessionId?: string
+    config?: ContextEngineConfigInput
+    store: ContextStore
+    providers?: ContextProvider[]
+    scheduler?: ContextScheduler
+    id?: () => string
+    protocol?: ProviderProtocol | 'openai'
+    modelGroupId?: string
+    baseUrl?: string
+  }
 }
 
 export interface SubSessionResult {
@@ -98,6 +121,13 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
   const messages: Message[] = [
     { id: uuid(), role: 'user', content: [{ type: 'text', text: prompt }], timestamp: Date.now() },
   ]
+  const contextConfig: ContextEngineConfig = opts.contextEngine ? resolveContextEngineConfig(opts.contextEngine.config) : DEFAULT_CONTEXT_ENGINE_CONFIG
+  const contextScheduler = opts.contextEngine?.scheduler ?? createContextScheduler({ maxBackgroundPerProject: contextPerformanceConfig(contextConfig).maxBackgroundJobsPerProject })
+  const contextSessionId = opts.contextEngine?.sessionId ?? `sub_${uuid()}`
+  const harvestAssistantMessages: Message[] = []
+  const harvestToolEvents: ToolExecutionEvent[] = []
+  const runLoopStartedAt = Date.now()
+  const runLoopId = `run_${createHash('sha1').update(`${contextSessionId}:${runLoopStartedAt}:${Math.random()}`).digest('hex').slice(0, 16)}`
   const toolsUsed: string[] = []
   let totalToolCount = 0
   let turns = 0
@@ -166,6 +196,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
     } else {
       composedSystem = [overlaySegment]
     }
+    composedSystem = await buildSubSessionContextPrompt(opts, contextConfig, contextScheduler, contextSessionId, messages, prompt, composedSystem)
     // Stable cache key per agentType so the same role across workers shares
     // a cache shard (OpenAI). Anthropic ignores it (uses cache_control).
     const cacheKey = modelConfig.cacheKey
@@ -211,11 +242,14 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
       contentBlocks.push({ type: 'tool_use', id: tu.id, name: tu.name, input: parsedInput })
     }
     if (contentBlocks.length > 0) {
-      messages.push({ id: uuid(), role: 'assistant', content: contentBlocks, timestamp: Date.now() })
+      const assistantMessage = { id: uuid(), role: 'assistant', content: contentBlocks, timestamp: Date.now() } as Message
+      messages.push(assistantMessage)
+      harvestAssistantMessages.push(stripThinkingForHarvest(assistantMessage))
     }
 
     // If no tool uses, we're done
     if (toolUses.length === 0) {
+      enqueueSubSessionHarvest(opts, contextConfig, contextScheduler, contextSessionId, runLoopId, prompt, harvestAssistantMessages, harvestToolEvents, runLoopStartedAt, modelConfig)
       return { content: textContent, turns, toolsUsed: [...new Set(toolsUsed)] }
     }
 
@@ -263,6 +297,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
           toolCount: totalToolCount,
         })
         toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: result.content, is_error: result.isError })
+        harvestToolEvents.push({ type: result.isError ? 'error' : 'complete', toolName: tu.name, toolUseId: tu.id, input: parsedInput, result })
         continue
       }
 
@@ -287,7 +322,10 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
         }
       }
 
-      const noopEvent = (event: ToolExecutionEvent) => { onToolEvent?.(event) }
+      const noopEvent = (event: ToolExecutionEvent) => {
+        harvestToolEvents.push(event)
+        onToolEvent?.(event)
+      }
       const result = await toolRunner.execute(tu.name, tu.id, parsedInput, noopEvent, signal)
 
       onAgentProgress?.({
@@ -306,9 +344,224 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
   // Max turns reached — return last assistant text
   const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant')
   const lastText = lastAssistant?.content.find(b => b.type === 'text') as { text: string } | undefined
+  enqueueSubSessionHarvest(opts, contextConfig, contextScheduler, contextSessionId, runLoopId, prompt, harvestAssistantMessages, harvestToolEvents, runLoopStartedAt, modelConfig)
   return {
     content: lastText?.text || '[Sub-agent reached max turns without final response]',
     turns,
     toolsUsed: [...new Set(toolsUsed)],
+  }
+}
+
+async function buildSubSessionContextPrompt(
+  opts: SubSessionOptions,
+  contextConfig: ContextEngineConfig,
+  contextScheduler: ContextScheduler,
+  contextSessionId: string,
+  messages: Message[],
+  prompt: string,
+  systemPrompt: ModelConfig['systemPrompt'],
+): Promise<ModelConfig['systemPrompt']> {
+  if (!opts.contextEngine || !contextConfig.enabled) return systemPrompt
+  const performance = contextPerformanceConfig(contextConfig)
+  try {
+    return await contextScheduler.runForeground(
+      'context:sub-session-inject',
+      performance.degradedProviderTimeoutMs,
+      async (signal) => {
+        const result = await buildContextBundle({
+          sessionId: contextSessionId,
+          cwd: opts.cwd,
+          userMessage: prompt,
+          recentMessages: messages.slice(-8),
+          mode: 'chat',
+          model: opts.modelConfig.model,
+          tokenBudget: contextConfig.tokenBudget.maxBundleTokens,
+          runtime: {},
+          signal,
+          createdAt: Date.now(),
+        }, {
+          injectionEnabled: contextConfig.injectionEnabled,
+          store: opts.contextEngine!.store,
+          providers: opts.contextEngine!.providers ?? [],
+          maxSectionTokens: contextConfig.tokenBudget.maxSectionTokens,
+          maxCodeTokens: contextConfig.tokenBudget.maxCodeTokens,
+          providerTimeoutMs: performance.providerTimeoutMs,
+          scheduler: contextScheduler,
+          id: opts.contextEngine!.id,
+        })
+        if (!result.renderedPrompt) return systemPrompt
+        return appendContextPromptSegment(systemPrompt, result.renderedPrompt)
+      },
+      systemPrompt,
+    )
+  } catch (error) {
+    void opts.contextEngine.store.saveDiagnostic(makeSubSessionContextDiagnostic('Sub-session context injection failed without blocking foreground chat', error)).catch(() => undefined)
+    return systemPrompt
+  }
+}
+
+function enqueueSubSessionHarvest(
+  opts: SubSessionOptions,
+  contextConfig: ContextEngineConfig,
+  contextScheduler: ContextScheduler,
+  contextSessionId: string,
+  runLoopId: string,
+  prompt: string,
+  assistantMessages: Message[],
+  toolEvents: ToolExecutionEvent[],
+  createdAt: number,
+  modelConfig: ModelConfig,
+): void {
+  if (!opts.contextEngine || !contextConfig.enabled || !contextConfig.harvestEnabled || assistantMessages.length === 0) return
+
+  let binding: HarvestModelBinding
+  try {
+    const providerProtocol = normalizeProviderProtocol(opts.contextEngine.protocol ?? opts.provider.name)
+    if (!providerProtocol) throw new Error('providerProtocol is required to capture harvest model binding')
+    binding = captureHarvestModelBinding({
+      sessionId: contextSessionId,
+      providerProtocol,
+      modelId: modelConfig.model,
+      modelConfig: sanitizeModelConfigForHarvest(modelConfig),
+      modelGroupId: opts.contextEngine.modelGroupId ?? providerMetadata(opts.provider).modelGroupId,
+      baseUrl: opts.contextEngine.baseUrl ?? providerMetadata(opts.provider).baseUrl,
+    })
+  } catch (error) {
+    void opts.contextEngine.store.saveDiagnostic(makeSubSessionContextDiagnostic('Sub-session harvest model binding capture failed; harvest skipped', error)).catch(() => undefined)
+    return
+  }
+
+  const candidate: HarvestCandidate = {
+    sessionId: contextSessionId,
+    runLoopId,
+    userMessage: prompt,
+    assistantMessages,
+    toolEvents: toolEvents.map(event => ({ id: event.toolUseId, name: event.toolName, status: event.type, ...event })),
+    changedFiles: [],
+    createdAt,
+  }
+
+  if (classifyHarvestCandidate(candidate).action === 'skip') return
+
+  const minIntervalMs = harvestMinIntervalMs(contextConfig)
+  const scheduled = contextScheduler.enqueueBackground(opts.cwd, 'harvest', async (signal) => {
+    try {
+      const maxJobs = contextConfig.harvest.maxJobsPerSession
+      const counts = subSessionHarvestCounts.get(contextSessionId) ?? { total: 0, pending: 0 }
+      if (counts.total >= maxJobs) {
+        await opts.contextEngine!.store.saveDiagnostic(makeSubSessionContextInfoDiagnostic(`Sub-session harvest skipped: max ${maxJobs} jobs reached for session`)).catch(() => undefined)
+        return
+      }
+      subSessionHarvestCounts.set(contextSessionId, { total: counts.total + 1, pending: counts.pending + 1 })
+
+      const enqueued = await enqueueHarvest(candidate, binding, { enabled: contextConfig.harvestEnabled, store: opts.contextEngine!.store })
+      if (enqueued.job && enqueued.status === 'queued') {
+        await runHarvestJob(enqueued.job, {
+          store: opts.contextEngine!.store,
+          modelClient: createProviderDistillerModelClient(opts.provider, signal),
+          maxOutputTokens: contextConfig.harvest.maxOutputTokens,
+          minConfidence: contextConfig.memory.minConfidence,
+          trustMode: contextConfig.memory.trustMode,
+          timeoutMs: contextConfig.harvest.timeoutMs,
+          signal,
+        })
+      }
+    } catch (error) {
+      await opts.contextEngine!.store.saveDiagnostic(makeSubSessionContextDiagnostic('Sub-session harvest failed asynchronously without blocking foreground chat', error)).catch(() => undefined)
+      throw error
+    } finally {
+      const counts = subSessionHarvestCounts.get(contextSessionId)
+      if (counts) {
+        subSessionHarvestCounts.set(contextSessionId, { ...counts, pending: Math.max(0, counts.pending - 1) })
+      }
+    }
+  }, { minIntervalMs })
+  if (!scheduled.accepted) {
+    const message = scheduled.reason === 'project_concurrency_limit'
+      ? 'Sub-session harvest skipped: another harvest job is already running for this session'
+      : `Sub-session harvest skipped: minimum interval ${minIntervalMs}ms has not elapsed`
+    void opts.contextEngine.store.saveDiagnostic(makeSubSessionContextInfoDiagnostic(message)).catch(() => undefined)
+    return
+  }
+
+  void scheduled.promise
+}
+
+function normalizeProviderProtocol(protocol?: ProviderProtocol | 'openai' | string): ProviderProtocol | undefined {
+  if (protocol === 'openai') return 'openai-chat'
+  if (protocol === 'anthropic' || protocol === 'openai-chat' || protocol === 'openai-responses') return protocol
+  return undefined
+}
+
+function sanitizeModelConfigForHarvest(modelConfig: ModelConfig): ModelConfig {
+  const sanitized: ModelConfig = {
+    model: modelConfig.model,
+    maxTokens: modelConfig.maxTokens,
+  }
+  if (modelConfig.temperature !== undefined) sanitized.temperature = modelConfig.temperature
+  const systemPrompt = removeContextPromptSegments(modelConfig.systemPrompt)
+  if (systemPrompt !== undefined) sanitized.systemPrompt = systemPrompt
+  if (modelConfig.effort !== undefined) sanitized.effort = modelConfig.effort
+  if (modelConfig.contextWindow !== undefined) sanitized.contextWindow = modelConfig.contextWindow
+  if (modelConfig.compressAt !== undefined) sanitized.compressAt = modelConfig.compressAt
+  if (modelConfig.cacheKey !== undefined) sanitized.cacheKey = modelConfig.cacheKey
+  if (modelConfig.cacheUser !== undefined) sanitized.cacheUser = modelConfig.cacheUser
+  return sanitized
+}
+
+function providerMetadata(provider: ModelProvider): { modelGroupId?: string; baseUrl?: string } {
+  const candidate = provider as unknown as Record<string, unknown>
+  return {
+    modelGroupId: nonEmptyString(candidate.modelGroupId ?? candidate.groupId),
+    baseUrl: nonEmptyString(candidate.baseUrl ?? candidate.baseURL),
+  }
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+function contextPerformanceConfig(contextConfig: ContextEngineConfig): NonNullable<ContextEngineConfig['performance']> {
+  return contextConfig.performance ?? DEFAULT_CONTEXT_ENGINE_CONFIG.performance!
+}
+
+function harvestMinIntervalMs(contextConfig: ContextEngineConfig): number {
+  return contextConfig.harvest.minIntervalMs ?? contextPerformanceConfig(contextConfig).harvestMinIntervalMs
+}
+
+function appendContextPromptSegment(systemPrompt: ModelConfig['systemPrompt'], renderedPrompt: string): ModelConfig['systemPrompt'] {
+  const segment = { content: renderedPrompt, cacheable: false, jdcContextEngine: true }
+  if (Array.isArray(systemPrompt)) return [...removeContextPromptSegments(systemPrompt) as NonNullable<ModelConfig['systemPrompt']> & Array<{ content: string; cacheable: boolean }>, segment]
+  if (typeof systemPrompt === 'string' && systemPrompt.length > 0) return [{ content: systemPrompt, cacheable: true }, segment]
+  return [segment]
+}
+
+function removeContextPromptSegments(systemPrompt: ModelConfig['systemPrompt']): ModelConfig['systemPrompt'] {
+  if (!Array.isArray(systemPrompt)) return systemPrompt
+  return systemPrompt.filter(segment => !(segment as { jdcContextEngine?: boolean }).jdcContextEngine)
+}
+
+function stripThinkingForHarvest(message: Message): Message {
+  return { ...message, content: message.content.filter(block => block.type !== 'thinking') }
+}
+
+function makeSubSessionContextDiagnostic(message: string, error: unknown) {
+  const suffix = error instanceof Error ? `: ${error.message}` : `: ${String(error)}`
+  return {
+    id: `diagnostic_sub_session_context_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    level: 'error' as const,
+    source: 'SubSessionContextRuntime',
+    message: `${message}${suffix}`,
+    createdAt: Date.now(),
+  }
+}
+
+function makeSubSessionContextInfoDiagnostic(message: string) {
+  return {
+    id: `diagnostic_sub_session_context_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    level: 'info' as const,
+    source: 'SubSessionContextRuntime',
+    message,
+    createdAt: Date.now(),
   }
 }

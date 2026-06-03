@@ -3,8 +3,11 @@ import { useSessionStore } from '../stores/session-store'
 import { useBackgroundTaskStore, type BackgroundTaskItem } from '../stores/background-task-store'
 import { useTeamStore } from '../stores/team-store'
 import { ipc } from '../lib/ipc-client'
-import { IconTasks, IconQueue, IconUsage, IconFiles, IconSession, IconX, IconTeam } from './icons'
+import { IconTasks, IconQueue, IconUsage, IconFiles, IconSession, IconX, IconTeam, IconJdcGraph } from './icons'
 import { TeamDetailPanel } from './TeamDetailPanel'
+import { ContextPanel } from './context/ContextPanel'
+import { useContextStore } from '../stores/context-store'
+import { shouldShowContextInspector } from '../lib/context-inspector-visibility'
 
 interface FileChange {
   filePath: string
@@ -12,7 +15,7 @@ interface FileChange {
   snapshotCount: number
 }
 
-type SectionId = 'session' | 'usage' | 'tasks' | 'queue' | 'files' | 'team'
+type SectionId = 'session' | 'usage' | 'tasks' | 'team' | 'context' | 'queue' | 'files'
 
 interface RailItem {
   id: SectionId
@@ -67,6 +70,10 @@ export function Inspector() {
   const teams = useTeamStore((s) => s.teams)
   const activeTeamId = useTeamStore((s) => s.activeTeamId)
   const setActiveTeam = useTeamStore((s) => s.setActiveTeam)
+  const contextInspect = useContextStore((s) => s.inspect.data)
+  const contextInspectLoading = useContextStore((s) => s.inspect.loading)
+  const contextInspectError = useContextStore((s) => s.inspect.error)
+  const showContextInspector = shouldShowContextInspector()
 
   const currentState = activeSessionId ? sessionStates[activeSessionId] : undefined
   const usage = currentState?.usage
@@ -76,7 +83,7 @@ export function Inspector() {
     if (!activeSessionId) return
     try {
       const changes = await window.electronAPI?.invoke('file:get-changes', { sessionId: activeSessionId })
-      if (changes) setFileChanges(changes)
+      if (Array.isArray(changes)) setFileChanges(changes as FileChange[])
     } catch {
       setFileChanges([])
     }
@@ -167,6 +174,7 @@ export function Inspector() {
   if (windowWidth < 700) return null
 
   const toggleSection = (section: SectionId) => {
+    if (section === 'context' && !showContextInspector) return
     if (!expanded) {
       // Disable expand on narrow windows
       if (windowWidth < 900) return
@@ -191,12 +199,15 @@ export function Inspector() {
   const taskBadgeColor = tasks.length > 0 && pendingCount === 0 && bgRunning === 0 ? 'var(--good)' : undefined
   const teamBadge = bgTeams.length > 0 ? bgTeams.length : null
   const teamBadgeColor = teamRunning > 0 ? 'var(--accent)' : 'var(--good)'
+  const contextBadge = contextInspect?.bundle?.sections.length ?? null
+  const contextBadgeColor = contextInspectError ? 'var(--bad)' : contextInspectLoading ? 'var(--warn)' : contextInspect?.status === 'available' ? 'var(--jdc-engine-accent)' : undefined
 
   const railItems: RailItem[] = [
     { id: 'session', Icon: IconSession, badge: null },
     { id: 'usage', Icon: IconUsage, badge: null },
     { id: 'tasks', Icon: IconTasks, badge: taskBadge, badgeColor: taskBadgeColor },
     { id: 'team', Icon: IconTeam, badge: teamBadge, badgeColor: teamBadgeColor },
+    ...(showContextInspector ? [{ id: 'context' as const, Icon: IconJdcGraph, badge: contextBadge, badgeColor: contextBadgeColor }] : []),
     { id: 'queue', Icon: IconQueue, badge: messageQueue.length || null },
     { id: 'files', Icon: IconFiles, badge: fileChanges.length || null },
   ]
@@ -285,7 +296,7 @@ export function Inspector() {
         ))}
       </div>
 
-      {/* Section content — Team section uses full panel without inner padding */}
+      {/* Section content — Team/Context sections use full panel without inner padding */}
       {activeSection === 'team' ? (
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           {effectiveTeamId && activeSessionId ? (
@@ -299,6 +310,10 @@ export function Inspector() {
               <p className="text-[12px] text-[var(--muted)]">No active team. Create one with the Team tool.</p>
             </div>
           )}
+        </div>
+      ) : activeSection === 'context' && showContextInspector ? (
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+          <ContextPanel sessionId={activeSessionId} />
         </div>
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto p-3">

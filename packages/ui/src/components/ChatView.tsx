@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useSession } from '../hooks/useSession'
 import { ipc } from '../lib/ipc-client'
 import { SessionHeader } from './SessionHeader'
@@ -306,7 +306,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
               const msg = `git add ${paths.join(' ')}`
               void copyToClipboard(msg)
                 .then(() => showToast(`${files.length} files copied to clipboard`))
-                .catch(() => showToast('Copy failed', 'error'))
+                .catch(() => showToast('Copy failed'))
             }
           })
         }
@@ -343,7 +343,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     }
   }
 
-  const turns = groupIntoTurns(messages)
+  const turns = useMemo(() => groupIntoTurns(messages), [messages])
   const lastTurn = turns[turns.length - 1]
   const isLastTurnActive = isStreaming && lastTurn && lastTurn.assistantMessages.length === 0
   // Team panel now lives in Inspector, not here. Only AgentDetailPanel uses the right panel slot.

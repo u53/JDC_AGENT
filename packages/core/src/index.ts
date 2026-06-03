@@ -12,13 +12,12 @@ export { createNotifyTool, type NotifyCallback } from './tools/notify.js'
 export { TaskStore, type Task } from './task-store.js'
 export { ConversationHistory } from './history.js'
 export { loadAppConfig, saveAppConfig, getConfigDir } from './config.js'
-export { assembleSystemPrompt, joinSegments, loadProjectMd, loadGlobalMd, getMemoryDir, loadMemoryIndex } from './context.js'
+export { assembleSystemPrompt, joinSegments, loadProjectMd, loadGlobalMd } from './context.js'
 export { PermissionChecker, DEFAULT_RULES, type PermissionRule, type PermissionMode, type DangerLevel } from './permissions.js'
 export { loadPermissionRules } from './permission-rules.js'
 export type { PermissionCallback } from './tool-runner.js'
 export { estimateTokens } from './token-estimation.js'
 export { compactMessages, type CompactResult } from './compact.js'
-export { parseMemories, saveMemories, type ExtractedMemory } from './memory-extractor.js'
 export { McpManager, loadMcpConfig, saveMcpConfig, createMcpToolHandler } from './mcp/index.js'
 export type { McpServerConfig, McpServerState, McpToolInfo, McpConnectionStatus, McpConfigFile } from './mcp/index.js'
 export { createListMcpResourcesTool } from './tools/list-mcp-resources.js'
@@ -39,5 +38,39 @@ export { createExitPlanModeTool, type PlanReviewCallback } from './tools/exit-pl
 export { IdeManager } from './ide/index.js'
 export type { IdeConnection, IdeConnectionStatus, SelectionData, AtMentionData, OpenDiffParams, OpenDiffResult, DiagnosticFile, IdeCallbacks } from './ide/index.js'
 export { ContextEngine, getContextEngine, disposeContextEngine, getContextEnginePromptSegment } from './context-engine/index.js'
+export { openContextStore } from './context/store.js'
+export { ensureCodeIndexJob } from './context/providers/code-provider.js'
 export type { SymbolNode, EngineStats, SymbolLocation, NodeDetail, ContextResult } from './context-engine/index.js'
+export {
+  ContextInspectPayloadSchema,
+  InspectableContextBundleSchema,
+  InspectableContextSectionSchema,
+  inspectContext,
+  inspectableBundle,
+  createContextInspectTool,
+  type ContextInspectPayload,
+} from './tools/context-inspect.js'
+export {
+  ContextRefreshPayloadSchema,
+  createContextRefreshTool,
+  createDefaultRefreshProviders,
+  getContextProviderHealth,
+  refreshContextProviders,
+  type ContextRefreshInput,
+  type ContextRefreshPayload,
+} from './tools/context-refresh.js'
+export {
+  MemorySearchPayloadSchema,
+  createMemorySearchTool,
+  searchMemoryRecords,
+  type MemorySearchInput,
+  type MemorySearchPayload,
+} from './tools/memory-search.js'
+export {
+  MemoryWritePayloadSchema,
+  createMemoryWriteTool,
+  writeMemoryRecord,
+  type MemoryWriteInput,
+  type MemoryWritePayload,
+} from './tools/memory-write.js'
 export { compressImageForAPI, type CompressedImage } from './utils/image-resizer.js'

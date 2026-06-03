@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
 import { v4 as uuid } from 'uuid'
 import path from 'node:path'
 import type { Message, ModelConfig, SessionConfig, StreamChunk } from './types.js'
@@ -6,21 +8,19 @@ import { ToolRegistry } from './tool-registry.js'
 import { ToolRunner, type ToolExecutionEvent, type PermissionCallback } from './tool-runner.js'
 import { registerBuiltinTools } from './tools/index.js'
 import { ConversationHistory } from './history.js'
-import { assembleSystemPrompt, getMemoryDir } from './context.js'
+import { assembleSystemPrompt } from './context.js'
 import { getContextEnginePromptSegment } from './context-engine/index.js'
 import { loadAppConfig, getConfigDir } from './config.js'
 import { PermissionChecker } from './permissions.js'
 import { TaskStore } from './task-store.js'
 import { estimateTokens } from './token-estimation.js'
 import { compactMessages, MIN_COMPACT_LENGTH } from './compact.js'
-import { parseMemories, saveMemories } from './memory-extractor.js'
 import { createTaskCreateTool } from './tools/task-create.js'
 import { createTaskGetTool } from './tools/task-get.js'
 import { createTaskListTool } from './tools/task-list.js'
 import { createTaskUpdateTool } from './tools/task-update.js'
 import { createTaskStopTool } from './tools/task-stop.js'
 import { createTodoWriteTool } from './tools/todo-write.js'
-import { saveMemoryTool } from './tools/save-memory.js'
 import { McpManager } from './mcp/manager.js'
 import { createMcpToolHandler } from './mcp/mcp-tool-handler.js'
 import { createListMcpResourcesTool } from './tools/list-mcp-resources.js'
@@ -46,6 +46,25 @@ import { createBackgroundStatusTool } from './tools/background-status.js'
 import { createBackgroundEventsTool } from './tools/background-events.js'
 import { createTeamListTool } from './tools/team-list.js'
 import { createTeamAddTaskTool } from './tools/team-add-task.js'
+import { buildContextBundle, type ContextProvider } from './context/orchestrator.js'
+import { DEFAULT_CONTEXT_ENGINE_CONFIG, resolveContextEngineConfig, type ContextEngineConfigInput } from './context/config.js'
+import { openContextStore, type ContextStore } from './context/store.js'
+import { enqueueHarvest, runHarvestJob } from './context/harvest.js'
+import { classifyHarvestCandidate } from './context/safety.js'
+import { captureHarvestModelBinding } from './context/model-binding.js'
+import { createProviderDistillerModelClient } from './context/distillers/index.js'
+import { hashContent } from './context/providers/shared.js'
+import { createContextScheduler, type ContextScheduler } from './context/scheduler.js'
+import type { ContextEngineConfig, ContextRequest, HarvestCandidate, HarvestModelBinding, ProviderProtocol } from './context/types.js'
+import {
+  collectCodeContext,
+  collectConversationContext,
+  collectGitContext,
+  collectIdeContext,
+  collectMemoryContext,
+  collectProjectContext,
+  collectRuntimeContext,
+} from './context/providers/index.js'
 
 export interface SessionEvents {
   onStreamChunk: (chunk: StreamChunk) => void
@@ -93,7 +112,20 @@ export class Session {
    * frame instead of getting an empty placeholder. Process-only — not persisted.
    */
   private teamFinalSnapshots = new Map<string, any>()
+  private contextConfig: ContextEngineConfig = DEFAULT_CONTEXT_ENGINE_CONFIG
+  private contextScheduler: ContextScheduler = createContextScheduler({ maxBackgroundPerProject: DEFAULT_CONTEXT_ENGINE_CONFIG.performance?.maxBackgroundJobsPerProject ?? 1 })
+  private contextStore?: ContextStore
+  private contextProviders?: ContextProvider[]
+  private contextId?: () => string
+  private contextProtocol?: ProviderProtocol
+  private contextModelGroupId?: string
+  private contextBaseUrl?: string
+  private recentToolEvents: ToolExecutionEvent[] = []
   private turnIndex = 0
+  private runLoopFileSnapshot: Set<string> = new Set()
+  private pendingHarvestCount = 0
+  private totalHarvestCount = 0
+  private lastHarvestStartedAt = 0
   private turnsSinceTaskTool = 0
   private planMode: 'normal' | 'planning' | 'awaiting_approval' = 'normal'
   private onPlanReview?: (planFile: string, content: string) => Promise<{ approved: boolean; feedback?: string }>
@@ -132,6 +164,8 @@ export class Session {
     this.taskStore = new TaskStore(history, config.id)
     this.backgroundTasks = new BackgroundTaskManager(path.join(getConfigDir(), 'tasks'))
     this.teamRegistry = new TeamRegistry()
+    this.contextConfig = resolveContextEngineConfig(loadAppConfig().contextEngine as ContextEngineConfigInput | undefined)
+    this.contextScheduler = this.createContextScheduler()
     this.backgroundTasks.setOnComplete((task) => {
       if (task.type === 'shell') {
         this.pendingNotifications.push({
@@ -164,7 +198,6 @@ export class Session {
     this.toolRegistry.register(createTaskUpdateTool(this.taskStore))
     this.toolRegistry.register(createTaskStopTool(this.taskStore))
     this.toolRegistry.register(createTodoWriteTool(this.taskStore))
-    this.toolRegistry.register(saveMemoryTool)
     this.toolRegistry.register(createTaskOutputTool(this.backgroundTasks))
     this.toolRegistry.register(monitorTool)
     // Team Mode tools
@@ -178,6 +211,19 @@ export class Session {
       modelConfig: this.config.modelConfig,
       cwd: this.config.cwd,
       onUsage: onSubAgentUsage,
+      ...(this.contextConfig.enabled && this.contextStore ? {
+        contextEngine: {
+          sessionId: this.id,
+          config: this.contextConfig,
+          store: this.contextStore,
+          providers: this.contextProviders,
+          scheduler: this.contextScheduler,
+          id: this.contextId,
+          protocol: this.contextProtocol,
+          modelGroupId: this.contextModelGroupId,
+          baseUrl: this.contextBaseUrl,
+        },
+      } : {}),
     })
     this.toolRegistry.register(createTeamTool({
       teamRegistry: this.teamRegistry,
@@ -311,6 +357,21 @@ export class Session {
         this.backgroundTriggers.set(toolUseId, resolve)
       },
       onUsage: onSubAgentUsage,
+      contextEngine: async () => {
+        if (!this.contextConfig.enabled) return undefined
+        const store = await this.getContextStore()
+        return {
+          sessionId: this.id,
+          config: this.contextConfig,
+          store,
+          providers: this.contextProviders,
+          scheduler: this.contextScheduler,
+          id: this.contextId,
+          protocol: this.contextProtocol,
+          modelGroupId: this.contextModelGroupId,
+          baseUrl: this.contextBaseUrl,
+        }
+      },
     }))
   }
 
@@ -394,6 +455,55 @@ export class Session {
       // (small→large) until the next API turn arrives.
       this.usageTracker.resetLastTurn(estimateTokens(this.messages))
     }
+  }
+
+  configureContextEngine(options: {
+    config?: ContextEngineConfigInput
+    store?: ContextStore
+    providers?: ContextProvider[]
+    scheduler?: ContextScheduler
+    id?: () => string
+    protocol?: ProviderProtocol | 'openai'
+    modelGroupId?: string
+    baseUrl?: string
+  }): void {
+    this.contextConfig = resolveContextEngineConfig(options.config)
+    this.contextScheduler = options.scheduler ?? this.createContextScheduler()
+    this.contextStore = options.store
+    this.contextProviders = options.providers
+    this.contextId = options.id
+    this.contextProtocol = normalizeProviderProtocol(options.protocol)
+    this.contextModelGroupId = options.modelGroupId
+    this.contextBaseUrl = options.baseUrl
+  }
+
+  setContextModelBindingMetadata(metadata: { protocol?: ProviderProtocol | 'openai'; modelGroupId?: string; baseUrl?: string }): void {
+    this.contextProtocol = normalizeProviderProtocol(metadata.protocol) ?? this.contextProtocol
+    this.contextModelGroupId = metadata.modelGroupId ?? this.contextModelGroupId
+    this.contextBaseUrl = metadata.baseUrl ?? this.contextBaseUrl
+  }
+
+  private getContextProviders(): ContextProvider[] {
+    if (this.contextProviders) return this.contextProviders
+    const toggles = this.contextConfig.providerToggles
+    return [
+      { id: 'conversation', collect: (request) => Promise.resolve(collectConversationContext(request, { enabled: toggles.conversation })) },
+      { id: 'runtime', collect: (request) => Promise.resolve(collectRuntimeContext(request, { enabled: toggles.runtime })) },
+      { id: 'ide', collect: (request) => Promise.resolve(collectIdeContext(request, { enabled: toggles.ide })) },
+      { id: 'memory', collect: (request) => collectMemoryContext(request, { enabled: toggles.memory }) },
+      { id: 'git', collect: (request) => collectGitContext(request, { enabled: toggles.git }) },
+      { id: 'project', collect: (request) => collectProjectContext(request, { enabled: toggles.project }) },
+      { id: 'code', collect: (request) => collectCodeContext(request, { enabled: toggles.code, scheduler: this.contextScheduler }) },
+    ]
+  }
+
+  private createContextScheduler(): ContextScheduler {
+    const performance = this.contextPerformanceConfig()
+    return createContextScheduler({ maxBackgroundPerProject: performance.maxBackgroundJobsPerProject })
+  }
+
+  private contextPerformanceConfig(): NonNullable<ContextEngineConfig['performance']> {
+    return this.contextConfig.performance ?? DEFAULT_CONTEXT_ENGINE_CONFIG.performance!
   }
 
   setEffort(effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'): void {
@@ -658,14 +768,7 @@ export class Session {
     this.messages = result.messages
     this.history.replaceMessages(this.id, this.messages)
 
-    let memoriesExtracted = 0
-    if (result.rawOutput) {
-      const memories = parseMemories(result.rawOutput)
-      if (memories.length > 0) {
-        const memDir = getMemoryDir(this.config.cwd)
-        memoriesExtracted = await saveMemories(memories, memDir, this.id)
-      }
-    }
+    const memoriesExtracted = 0
 
     // Bridge usage to a realistic estimate so the gauge does not flash to 0%.
     const estimated = estimateTokens(this.messages)
@@ -709,6 +812,13 @@ export class Session {
   private async runLoop(events: SessionEvents): Promise<void> {
     this.abortController = new AbortController()
     this.currentEvents = events
+    this.config.modelConfig.systemPrompt = removeContextPromptSegments(this.config.modelConfig.systemPrompt)
+
+    const runLoopStartedAt = Date.now()
+    const runLoopId = createRunLoopId(this.id, runLoopStartedAt)
+    const assistantMessagesForHarvest: Message[] = []
+    const toolEventsForHarvest: ToolExecutionEvent[] = []
+    this.runLoopFileSnapshot = new Set(this.fileTracker.getChangedFiles().map(c => c.filePath))
 
     const notificationMsg = this.drainNotifications()
     if (notificationMsg) {
@@ -720,6 +830,9 @@ export class Session {
     if (this.shouldCompact()) {
       await this.compact(events)
     }
+
+    const runLoopUserMessage = latestUserText(this.messages)
+    await this.injectContextForRunLoop(runLoopUserMessage)
 
     let justCompacted = false
     while (true) {
@@ -863,14 +976,20 @@ export class Session {
 
       this.messages.push(assistantMessage)
       this.history.addMessage(this.id, assistantMessage)
+      assistantMessagesForHarvest.push(stripThinkingForHarvest(assistantMessage))
       events.onMessageComplete(assistantMessage)
 
       if (!hasToolUse) break
 
       const toolUseBlocks = assistantContent.filter((b: any) => b.type === 'tool_use')
+      const recordToolEvent = (event: ToolExecutionEvent) => {
+        toolEventsForHarvest.push(event)
+        this.recentToolEvents = [...this.recentToolEvents, event].slice(-50)
+        events.onToolEvent(event)
+      }
       const batchResults = await this.parallelExecutor.executeBatch(
         toolUseBlocks,
-        events.onToolEvent,
+        recordToolEvent,
         this.abortController!.signal
       )
       if (this.abortController?.signal.aborted) break
@@ -923,8 +1042,227 @@ export class Session {
     }
     events.onUsage?.(finalSnapshot)
 
+    if (!this.abortController?.signal.aborted && assistantMessagesForHarvest.length > 0) {
+      this.enqueueHarvestAfterRunLoop({
+        runLoopId,
+        userMessage: runLoopUserMessage,
+        assistantMessages: assistantMessagesForHarvest,
+        toolEvents: toolEventsForHarvest,
+        createdAt: runLoopStartedAt,
+      })
+    }
+
+    void this.invalidateStaleFileFactsAfterRunLoop()
+
     this.abortController = null
     this.currentEvents = undefined
+  }
+
+  private async invalidateStaleFileFactsAfterRunLoop(): Promise<void> {
+    if (!this.contextConfig.enabled) return
+    const changedPaths = this.fileTracker.getChangedFiles()
+      .map(change => change.filePath)
+      .filter(p => !this.runLoopFileSnapshot.has(p))
+    if (changedPaths.length === 0) return
+
+    try {
+      const store = await this.getContextStore()
+      for (const filePath of [...new Set(changedPaths)]) {
+        try {
+          const absolute = path.isAbsolute(filePath) ? filePath : path.join(this.config.cwd, filePath)
+          const content = await readFile(absolute, 'utf-8')
+          await store.invalidateByFileHash(filePath, hashContent(content))
+        } catch {
+          // Missing/unreadable file (e.g. deleted) — skip; invalidation is best-effort.
+        }
+      }
+    } catch (error) {
+      try {
+        const store = await this.getContextStore()
+        await store.saveDiagnostic(makeRuntimeContextDiagnostic('File-hash invalidation failed without blocking foreground chat', error))
+      } catch {
+        // Context failures must not escape into foreground chat.
+      }
+    }
+  }
+
+  private async injectContextForRunLoop(userMessage: string): Promise<void> {
+    if (!this.contextConfig.enabled) return
+    const request = this.createContextRequest(userMessage)
+    const performance = this.contextPerformanceConfig()
+    let renderedPrompt = ''
+    try {
+      renderedPrompt = await this.contextScheduler.runForeground(
+        'context:inject',
+        performance.degradedProviderTimeoutMs,
+        async (signal) => {
+          const store = await this.getContextStore()
+          if (signal.aborted) throw new Error('context injection budget expired')
+          const result = await buildContextBundle({ ...request, signal }, {
+            injectionEnabled: this.contextConfig.injectionEnabled,
+            store,
+            providers: this.getContextProviders(),
+            maxSectionTokens: this.contextConfig.tokenBudget.maxSectionTokens,
+            maxCodeTokens: this.contextConfig.tokenBudget.maxCodeTokens,
+            providerTimeoutMs: performance.providerTimeoutMs,
+            scheduler: this.contextScheduler,
+            id: this.contextId,
+          })
+          return result.renderedPrompt
+        },
+        '',
+      )
+    } catch (error) {
+      void this.saveContextInjectionDiagnostic(error)
+    }
+    if (!renderedPrompt) return
+    this.config.modelConfig.systemPrompt = appendContextPromptSegment(this.config.modelConfig.systemPrompt, renderedPrompt)
+  }
+
+  private async saveContextInjectionDiagnostic(error: unknown): Promise<void> {
+    try {
+      const store = this.contextStore ?? await this.getContextStore()
+      await store.saveDiagnostic(makeRuntimeContextDiagnostic('Context runtime injection failed without blocking foreground chat', error))
+    } catch {
+      // Store open failures must not block the first token.
+    }
+  }
+
+  private createContextRequest(userMessage: string): ContextRequest {
+    const ide = this.ideContext ? {
+      activeFile: this.ideContext.filePath,
+      selection: this.ideContext.selection && this.ideContext.text ? {
+        text: this.ideContext.text,
+        startLine: this.ideContext.selection.start.line,
+        endLine: this.ideContext.selection.end.line,
+      } : undefined,
+    } : undefined
+
+    return {
+      sessionId: this.id,
+      cwd: this.config.cwd,
+      userMessage,
+      recentMessages: this.messages.slice(-8),
+      mode: contextModeFromPlanMode(this.planMode),
+      model: this.config.modelConfig.model,
+      tokenBudget: this.contextConfig.tokenBudget.maxBundleTokens,
+      runtime: { toolEvents: this.recentToolEvents.slice(-20), turnIndex: this.turnIndex },
+      ...(ide ? { ide } : {}),
+      createdAt: Date.now(),
+    }
+  }
+
+  private enqueueHarvestAfterRunLoop(input: { runLoopId: string; userMessage: string; assistantMessages: Message[]; toolEvents: ToolExecutionEvent[]; createdAt: number }): void {
+    if (!this.contextConfig.enabled || !this.contextConfig.harvestEnabled) return
+
+    const binding = this.captureRunLoopModelBinding()
+    if (!binding) return
+
+    const candidate: HarvestCandidate = {
+      sessionId: this.id,
+      runLoopId: input.runLoopId,
+      userMessage: input.userMessage,
+      assistantMessages: input.assistantMessages,
+      toolEvents: input.toolEvents.map(toHarvestToolEvent),
+      changedFiles: this.fileTracker.getChangedFiles().map(change => change.filePath).filter(p => !this.runLoopFileSnapshot.has(p)),
+      createdAt: input.createdAt,
+    }
+
+    const preflight = classifyHarvestCandidate(candidate)
+    if (preflight.action === 'skip') return
+
+    const harvestMinIntervalMs = this.harvestMinIntervalMs()
+    const scheduled = this.contextScheduler.enqueueBackground(
+      this.config.cwd,
+      'harvest',
+      (signal) => this.runHarvestInBackground(candidate, binding, signal),
+      { minIntervalMs: harvestMinIntervalMs },
+    )
+    if (!scheduled.accepted) {
+      const message = scheduled.reason === 'project_concurrency_limit'
+        ? 'Harvest skipped: another harvest job is already running for this session'
+        : `Harvest skipped: minimum interval ${harvestMinIntervalMs}ms has not elapsed`
+      void this.getContextStore().then(store => store.saveDiagnostic(makeRuntimeContextInfoDiagnostic(message))).catch(() => undefined)
+      return
+    }
+
+    void scheduled.promise
+  }
+
+  private captureRunLoopModelBinding(): HarvestModelBinding | null {
+    const metadata = this.resolveCurrentSessionModelMetadata()
+    const providerProtocol = this.resolveCurrentProviderProtocol(metadata.protocol)
+    if (!providerProtocol) return null
+    try {
+      return captureHarvestModelBinding({
+        sessionId: this.id,
+        providerProtocol,
+        modelId: this.config.modelConfig.model,
+        modelConfig: sanitizeModelConfigForHarvest(this.config.modelConfig),
+        modelGroupId: this.contextModelGroupId ?? metadata.modelGroupId,
+        baseUrl: this.contextBaseUrl ?? metadata.baseUrl,
+      })
+    } catch (error) {
+      void this.getContextStore().then(store => store.saveDiagnostic(makeRuntimeContextDiagnostic('Harvest model binding capture failed; harvest skipped', error))).catch(() => undefined)
+      return null
+    }
+  }
+
+  private resolveCurrentProviderProtocol(metadataProtocol?: ProviderProtocol | 'openai' | string): ProviderProtocol | null {
+    if (this.contextProtocol) return this.contextProtocol
+    return normalizeProviderProtocol((this as any)._protocol ?? metadataProtocol ?? this.provider.name) ?? null
+  }
+
+  private resolveCurrentSessionModelMetadata(): { protocol?: string; modelGroupId?: string; baseUrl?: string } {
+    return resolveConfiguredModelBindingMetadata(loadAppConfig(), this.history.getSessionModel(this.id), this.config.modelConfig.model)
+  }
+
+  private async runHarvestInBackground(candidate: HarvestCandidate, binding: HarvestModelBinding, signal?: AbortSignal): Promise<void> {
+    try {
+      if (signal?.aborted) throw new Error('context harvest cancelled before start')
+      const maxJobs = this.contextConfig.harvest.maxJobsPerSession
+      if (this.totalHarvestCount >= maxJobs) {
+        const store = await this.getContextStore()
+        await store.saveDiagnostic(makeRuntimeContextInfoDiagnostic(`Harvest skipped: max ${maxJobs} jobs per session reached`))
+        return
+      }
+      this.totalHarvestCount++
+      this.pendingHarvestCount++
+      this.lastHarvestStartedAt = Date.now()
+
+      const store = await this.getContextStore()
+      const enqueued = await enqueueHarvest(candidate, binding, { enabled: this.contextConfig.harvestEnabled, store })
+      if (enqueued.job && enqueued.status === 'queued') {
+        await runHarvestJob(enqueued.job, {
+          store,
+          modelClient: createProviderDistillerModelClient(this.provider, signal),
+          maxOutputTokens: this.contextConfig.harvest.maxOutputTokens,
+          minConfidence: this.contextConfig.memory.minConfidence,
+          trustMode: this.contextConfig.memory.trustMode,
+          timeoutMs: this.contextConfig.harvest.timeoutMs,
+          signal,
+        })
+      }
+    } catch (error) {
+      try {
+        const store = await this.getContextStore()
+        await store.saveDiagnostic(makeRuntimeContextDiagnostic('Harvest failed asynchronously without blocking foreground chat', error))
+      } catch {
+        // Context failures must not escape into foreground chat.
+      }
+      throw error
+    } finally {
+      this.pendingHarvestCount = Math.max(0, this.pendingHarvestCount - 1)
+    }
+  }
+
+  private async getContextStore(): Promise<ContextStore> {
+    if (!this.contextStore) this.contextStore = await openContextStore({ cwd: this.config.cwd })
+    return this.contextStore
+  }
+
+  private harvestMinIntervalMs(): number {
+    return this.contextConfig.harvest.minIntervalMs ?? this.contextPerformanceConfig().harvestMinIntervalMs
   }
 
   private getSystemReminder(): string | null {
@@ -1103,6 +1441,124 @@ export class Session {
     this.backgroundTasks.sendMessage(taskId, msg)
     const team = this.teamRegistry.get(taskId)
     if (team) team.sendMessage(msg)
+  }
+}
+
+function normalizeProviderProtocol(protocol?: ProviderProtocol | 'openai' | string): ProviderProtocol | undefined {
+  if (protocol === 'openai') return 'openai-chat'
+  if (protocol === 'anthropic' || protocol === 'openai-chat' || protocol === 'openai-responses') return protocol
+  return undefined
+}
+
+function sanitizeModelConfigForHarvest(modelConfig: ModelConfig): ModelConfig {
+  const sanitized: ModelConfig = {
+    model: modelConfig.model,
+    maxTokens: modelConfig.maxTokens,
+  }
+  if (modelConfig.temperature !== undefined) sanitized.temperature = modelConfig.temperature
+  const systemPrompt = removeContextPromptSegments(modelConfig.systemPrompt)
+  if (systemPrompt !== undefined) sanitized.systemPrompt = systemPrompt
+  if (modelConfig.effort !== undefined) sanitized.effort = modelConfig.effort
+  if (modelConfig.contextWindow !== undefined) sanitized.contextWindow = modelConfig.contextWindow
+  if (modelConfig.compressAt !== undefined) sanitized.compressAt = modelConfig.compressAt
+  if (modelConfig.cacheKey !== undefined) sanitized.cacheKey = modelConfig.cacheKey
+  if (modelConfig.cacheUser !== undefined) sanitized.cacheUser = modelConfig.cacheUser
+  return sanitized
+}
+
+function resolveConfiguredModelBindingMetadata(appConfig: Record<string, any>, sessionModelId: string | null, currentModel: string): { protocol?: string; modelGroupId?: string; baseUrl?: string } {
+  const groups = appConfig.modelGroups?.groups
+  if (!Array.isArray(groups)) return {}
+
+  if (sessionModelId) {
+    const exact = findConfiguredModel(groups, (model) => model.id === sessionModelId || `${model.groupId}:${model.modelId}` === sessionModelId)
+    if (exact) return exact
+  }
+
+  const byModel = groups.flatMap((group: any) => {
+    const models = Array.isArray(group.models) ? group.models : []
+    return models
+      .filter((model: any) => model.modelId === currentModel)
+      .map(() => metadataFromModelGroup(group))
+  })
+  return byModel.length === 1 ? byModel[0] : {}
+}
+
+function findConfiguredModel(groups: any[], predicate: (model: any) => boolean): { protocol?: string; modelGroupId?: string; baseUrl?: string } | undefined {
+  for (const group of groups) {
+    const models = Array.isArray(group.models) ? group.models : []
+    for (const model of models) {
+      if (predicate({ ...model, groupId: group.id })) return metadataFromModelGroup(group)
+    }
+  }
+  return undefined
+}
+
+function metadataFromModelGroup(group: any): { protocol?: string; modelGroupId?: string; baseUrl?: string } {
+  return {
+    protocol: nonEmptyString(group.protocol),
+    modelGroupId: nonEmptyString(group.id),
+    baseUrl: nonEmptyString(group.baseUrl ?? group.baseURL),
+  }
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+function appendContextPromptSegment(systemPrompt: ModelConfig['systemPrompt'], renderedPrompt: string): ModelConfig['systemPrompt'] {
+  const segment = { content: renderedPrompt, cacheable: false, jdcContextEngine: true }
+  if (Array.isArray(systemPrompt)) return [...removeContextPromptSegments(systemPrompt) as NonNullable<ModelConfig['systemPrompt']> & Array<{ content: string; cacheable: boolean }>, segment]
+  if (typeof systemPrompt === 'string' && systemPrompt.length > 0) return [{ content: systemPrompt, cacheable: true }, segment]
+  return [segment]
+}
+
+function removeContextPromptSegments(systemPrompt: ModelConfig['systemPrompt']): ModelConfig['systemPrompt'] {
+  if (!Array.isArray(systemPrompt)) return systemPrompt
+  return systemPrompt.filter(segment => !(segment as { jdcContextEngine?: boolean }).jdcContextEngine)
+}
+
+function latestUserText(messages: Message[]): string {
+  const message = [...messages].reverse().find(item => item.role === 'user')
+  if (!message) return ''
+  return message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+}
+
+function stripThinkingForHarvest(message: Message): Message {
+  return { ...message, content: message.content.filter(block => block.type !== 'thinking') }
+}
+
+function toHarvestToolEvent(event: ToolExecutionEvent): { id: string; name?: string; status?: string; [key: string]: unknown } {
+  return { id: event.toolUseId, name: event.toolName, status: event.type, ...event }
+}
+
+function createRunLoopId(sessionId: string, createdAt: number): string {
+  return `run_${createHash('sha1').update(`${sessionId}:${createdAt}:${Math.random()}`).digest('hex').slice(0, 16)}`
+}
+
+function contextModeFromPlanMode(planMode: Session['getPlanMode'] extends () => infer T ? T : string): ContextRequest['mode'] {
+  if (planMode === 'planning' || planMode === 'awaiting_approval') return 'plan'
+  return 'chat'
+}
+
+function makeRuntimeContextDiagnostic(message: string, error: unknown) {
+  const suffix = error instanceof Error ? `: ${error.message}` : `: ${String(error)}`
+  return {
+    id: `diagnostic_session_context_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    level: 'error' as const,
+    source: 'SessionContextRuntime',
+    message: `${message}${suffix}`,
+    createdAt: Date.now(),
+  }
+}
+
+function makeRuntimeContextInfoDiagnostic(message: string) {
+  return {
+    id: `diagnostic_session_context_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    level: 'info' as const,
+    source: 'SessionContextRuntime',
+    message,
+    createdAt: Date.now(),
   }
 }
 

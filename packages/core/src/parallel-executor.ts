@@ -40,6 +40,10 @@ function isReadTool(name: string): boolean {
   return READ_TOOLS.has(name) || JDC_READ_TOOLS.has(name) || name.startsWith('Jdc')
 }
 
+function isJdcReadTool(name: string): boolean {
+  return JDC_READ_TOOLS.has(name) || name.startsWith('Jdc')
+}
+
 class Semaphore {
   private queue: Array<() => void> = []
   private running = 0
@@ -143,7 +147,7 @@ export class ParallelExecutor {
             blocks[idx].name, blocks[idx].id, blocks[idx].input, onEvent, toolSignal
           )
           results[idx] = { tool_use_id: raced.tool_use_id, content: raced.content, is_error: raced.is_error }
-          if (raced.is_error && !raced.aborted) {
+          if (raced.is_error && !raced.aborted && !isJdcReadTool(blocks[idx].name)) {
             readHadError = true
           }
         } finally {

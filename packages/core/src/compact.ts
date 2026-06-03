@@ -79,17 +79,6 @@ What was being actively worked on at the moment of this summary. Include:
 
 ---
 
-Additionally, extract any persistent memories worth saving for future conversations.
-
-ONLY extract memories for things that are:
-- User feedback about working style or preferences (type: "feedback")
-- Project decisions, constraints, or context NOT derivable from code (type: "project")
-
-Do NOT extract:
-- Code patterns (read the code instead)
-- File paths or architecture (explore the project instead)
-- Temporary task state (that's what the summary is for)
-
 Output format:
 
 <analysis>
@@ -98,12 +87,7 @@ Output format:
 
 <summary>
 [Your structured summary with all 8 sections]
-</summary>
-
-<memories>
-[JSON array of memories to save, or empty array if none]
-[{"name": "kebab-case-slug", "type": "feedback|project", "description": "one-line summary for index", "content": "Full memory content. For feedback: include the rule, why, and when to apply it."}]
-</memories>`
+</summary>`
 
 export const KEEP_RECENT = 6
 export const MIN_COMPACT_LENGTH = KEEP_RECENT + 2
@@ -297,7 +281,5 @@ function formatCompactSummary(raw: string): string {
   }
   // No <summary> tag at all — fall back to stripping known wrapper tags so the
   // user still gets readable content.
-  let result = raw.replace(/<analysis>[\s\S]*?<\/analysis>/g, '')
-  result = result.replace(/<memories>[\s\S]*?<\/memories>/g, '').trim()
-  return result
+  return raw.replace(/<analysis>[\s\S]*?<\/analysis>/g, '').trim()
 }

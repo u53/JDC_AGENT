@@ -4,6 +4,11 @@ import type { ModelProvider } from '../model-provider.js'
 import type { ModelConfig } from '../types.js'
 import type { ToolExecutionEvent, PermissionCallback } from '../tool-runner.js'
 import { runSubSession } from '../sub-session.js'
+import type { SubSessionOptions } from '../sub-session.js'
+import { createContextScheduler } from '../context/scheduler.js'
+
+const AGENT_CONTEXT_ENGINE_TIMEOUT_MS = 200
+const agentContextEngineScheduler = createContextScheduler()
 
 export interface AgentToolDeps {
   provider: ModelProvider
@@ -22,6 +27,8 @@ export interface AgentToolDeps {
   registerBackgroundTrigger?: (toolUseId: string, resolve: () => void) => void
   /** Bubble sub-agent token usage up to the host session for aggregation. */
   onUsage?: (usage: { inputTokens: number; outputTokens: number; cacheCreationInputTokens?: number; cacheReadInputTokens?: number }) => void
+  /** Context Engine wiring for sub-agent sessions. Lazily resolved at dispatch time. */
+  contextEngine?: () => Promise<SubSessionOptions['contextEngine']>
 }
 
 export function createAgentTool(deps: AgentToolDeps): ToolHandler {
@@ -94,7 +101,8 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
       if (input.run_in_background && deps.backgroundTasks) {
         const task = deps.backgroundTasks.registerAgent(prompt, agentType)
 
-        deps.backgroundTasks.acquireAgentSlot().then(() => {
+        deps.backgroundTasks.acquireAgentSlot().then(async () => {
+          const contextEngine = await resolveContextEngineFailOpen(deps.contextEngine)
           return runSubSession({
             prompt,
             provider: effectiveProvider,
@@ -109,6 +117,7 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
             onAgentProgress: (event) => deps.onAgentProgress?.(toolUseId, event),
             onAgentText: (text) => deps.onAgentText?.(toolUseId, text),
             onUsage: (u) => deps.onUsage?.(u),
+            contextEngine,
           })
         }).then(result => {
           deps.onAgentComplete?.(toolUseId, result)
@@ -126,6 +135,7 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
       }
 
       try {
+        const contextEngine = await resolveContextEngineFailOpen(deps.contextEngine)
         let backgroundResolver: (() => void) | undefined
         const backgroundSignal = new Promise<void>(resolve => {
           backgroundResolver = resolve
@@ -148,6 +158,7 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
           onAgentProgress: (event) => deps.onAgentProgress?.(toolUseId, event),
           onAgentText: (text) => deps.onAgentText?.(toolUseId, text),
           onUsage: (u) => deps.onUsage?.(u),
+          contextEngine,
         })
 
         const raceResult = await Promise.race([
@@ -181,4 +192,15 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
       }
     },
   }
+}
+
+async function resolveContextEngineFailOpen(getter: AgentToolDeps['contextEngine']): Promise<SubSessionOptions['contextEngine'] | undefined> {
+  if (!getter) return undefined
+  const result = await agentContextEngineScheduler.runForeground<SubSessionOptions['contextEngine'] | null>(
+    'context:agent-context-engine',
+    AGENT_CONTEXT_ENGINE_TIMEOUT_MS,
+    async () => await getter() ?? null,
+    null,
+  ).catch(() => null)
+  return result ?? undefined
 }

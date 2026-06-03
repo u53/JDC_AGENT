@@ -22,7 +22,7 @@ export function AskUserDialog() {
   if (!request) return null
 
   const handleRespond = (_id: string, answer: string) => {
-    window.electronAPI.send('ask_user:response', { id: request.id, answer })
+    window.electronAPI?.send('ask_user:response', { id: request.id, answer })
     setRequest(null)
   }
 

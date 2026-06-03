@@ -14,14 +14,16 @@ const READ_ONLY_TOOLS = new Set([
   'TaskCreate', 'TaskGet', 'TaskList', 'TaskUpdate', 'TaskStop',
   'TodoWrite', 'LSP', 'WebSearch', 'AskUser',
   'ListMcpResources', 'ReadMcpResource', 'skill',
-  // JDC Context Engine — native, read-only code intelligence. Always allowed,
-  // mirroring how mcp__* code-nav tools were treated.
+  // JDC Context Engine — native, read-only code intelligence and project memory search.
+  // Only tools that do not persist durable context are allowed without prompting.
   'JdcContext', 'JdcSearch', 'JdcNode', 'JdcCallers', 'JdcCallees',
   'JdcImpact', 'JdcTrace', 'JdcExplore', 'JdcFiles',
+  'JdcMemorySearch',
 ])
 
 const WRITE_TOOLS = new Set([
   'Bash', 'Write', 'Edit', 'NotebookEdit', 'WebFetch', 'agent',
+  'JdcMemoryWrite',
 ])
 
 const CRITICAL_PATTERNS = [
