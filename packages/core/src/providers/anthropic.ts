@@ -72,7 +72,6 @@ function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): any {
 }
 
 function resolveStreamSystemPrompt(systemPrompt: string | PromptSegment[] | undefined, attribution: string): any[] {
-  const cliPrefix = `You are Claude Code, Anthropic's official CLI for Claude.`
   const result: any[] = []
 
   // Block 1: attribution header (no cache_control, stable across requests)
@@ -81,14 +80,15 @@ function resolveStreamSystemPrompt(systemPrompt: string | PromptSegment[] | unde
   }
 
   if (typeof systemPrompt === 'string') {
-    // Simple string: merge CLI prefix + content into one cached block
-    result.push({ type: 'text', text: [cliPrefix, systemPrompt].filter(Boolean).join('\n\n'), cache_control: { type: 'ephemeral' } })
+    // JDCAGNET owns the assistant identity. Keep Anthropic request shape as
+    // official text blocks, but never prepend a conflicting Claude Code persona.
+    result.push({ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } })
     return result
   }
 
   // Structured segments: separate cacheable (stable) from non-cacheable (dynamic)
   const segments = systemPrompt || []
-  const cacheableParts: string[] = [cliPrefix]
+  const cacheableParts: string[] = []
   const dynamicParts: string[] = []
 
   for (const seg of segments) {
@@ -111,6 +111,11 @@ function resolveStreamSystemPrompt(systemPrompt: string | PromptSegment[] | unde
   }
 
   return result
+}
+
+export const __anthropicPromptTest = {
+  resolveSystemPrompt,
+  resolveStreamSystemPrompt,
 }
 
 function effortToBudget(effort: ReasoningEffort, maxTokens: number): number {
