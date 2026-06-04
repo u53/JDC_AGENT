@@ -1,4 +1,4 @@
-import type { ActorContextProfile, ContextDiagnostic, ContextFact, ContextFactKind, ContextRequest } from './types.js'
+import type { ActorContextProfile, ContextDiagnostic, ContextFact, ContextFactKind, ContextFactStatus, ContextRequest } from './types.js'
 import type { ContextStore } from './store.js'
 import type { ContextPerformanceRecorder } from './performance.js'
 
@@ -37,6 +37,8 @@ export interface ContextRetrievalOptions {
   citationType?: string
   citationTextLookup?: Map<string, string[]>
   actorProfile?: ActorContextProfile
+  includeInactive?: boolean
+  status?: ContextFactStatus
   recorder?: ContextPerformanceRecorder
   projectKey?: string
   now?: () => number
@@ -57,6 +59,8 @@ export async function retrieveContextFacts(request: ContextRequest, options: Con
       includeStale: true,
       includeExpired: false,
       orderBy: 'updated_desc' as const,
+      ...(options.includeInactive === undefined ? {} : { includeInactive: options.includeInactive }),
+      ...(options.status === undefined ? {} : { status: options.status }),
       ...(options.citationRef === undefined ? {} : { citationRef: options.citationRef }),
       ...(options.citationType === undefined ? {} : { citationType: options.citationType }),
       ...(options.candidateLimit === undefined ? {} : { limit: options.candidateLimit }),
@@ -80,7 +84,7 @@ export async function retrieveContextFacts(request: ContextRequest, options: Con
     const scored = loaded.value
       .map((fact) => scoreFact(fact, query, now, options.citationTextLookup, options.actorProfile))
       .filter((item) => {
-        if (isInactiveLifecycleFact(item.fact)) {
+        if (!options.includeInactive && isInactiveLifecycleFact(item.fact)) {
           diagnostics.push(makeDiagnostic(`Suppressed inactive lifecycle fact ${item.fact.id}.`, now()))
           return false
         }
@@ -186,6 +190,9 @@ function searchableFactText(fact: ContextFact, citationTextLookup: Map<string, s
     fact.scope,
     fact.content,
     fact.sourceProvider,
+    fact.status ?? '',
+    fact.canonicalKey ?? '',
+    fact.lifecycleReason ?? '',
     fact.origin?.actor ?? '',
     fact.origin?.teamId ?? '',
     fact.origin?.memberId ?? '',
@@ -194,6 +201,8 @@ function searchableFactText(fact: ContextFact, citationTextLookup: Map<string, s
     ...(fact.relatedFiles ?? []),
     ...(fact.relatedSymbols ?? []),
     ...(fact.relatedTasks ?? []),
+    ...(fact.supersedes ?? []),
+    ...(fact.conflictsWith ?? []),
     ...fact.citations.flatMap((citation) => [citation.id, citation.type, citation.ref, citation.hash ?? '']),
   ]
   if (citationTextLookup) {
