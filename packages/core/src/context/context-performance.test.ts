@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildContextBundle } from './orchestrator.js'
 import { createContextPerformanceRecorder, recordContextOperation, summarizeContextPerformance } from './performance.js'
 import { createContextScheduler } from './scheduler.js'
-import type { ContextStore } from './store.js'
+import type { ContextStore, ContextStoreResult } from './store.js'
 import type { ContextBundle, ContextFact } from './types.js'
 
 describe('JDC Context Engine performance metrics', () => {
@@ -138,5 +138,6 @@ function makeStore(facts: ContextFact[]): ContextStore {
     approvePendingCandidate: async () => ({ ok: true, value: null, diagnostics: [] }),
     rejectPendingCandidate: async () => ({ ok: true, value: null, diagnostics: [] }),
     listDiagnostics: async () => ({ ok: true, value: [], diagnostics: [] }),
+    withWriteBatch: async <T>(_operation: string, fn: () => Promise<T> | T): Promise<ContextStoreResult<T>> => ({ ok: true, value: await fn(), diagnostics: [] }),
   }
 }

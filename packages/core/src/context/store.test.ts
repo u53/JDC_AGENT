@@ -292,6 +292,31 @@ describe('JDC Context Store persistence', () => {
     }
   })
 
+  it('batches mixed foreground context writes into one database export', async () => {
+    const dbPath = makeDbPath()
+    const store = await openContextStore({ dbPath, now: () => 1_000 })
+    const SQL = await initSqlJs()
+    const exportSpy = vi.spyOn(SQL.Database.prototype, 'export')
+
+    try {
+      const result = await store.withWriteBatch!('foregroundContextBundle', async () => {
+        await expectOk(store.saveRawEvidence(makeEvidence({ id: 'batch_evidence' })))
+        await expectOk(store.saveFact(makeFact({ id: 'batch_fact' })))
+        await expectOk(store.saveBundleSnapshot(makeBundle({ id: 'batch_bundle' })))
+        await expectOk(store.saveDiagnostic(makeDiagnostic({ id: 'batch_diagnostic' })))
+        return 'batched'
+      })
+
+      expect(result).toMatchObject({ ok: true, value: 'batched', diagnostics: [] })
+      expect(exportSpy).toHaveBeenCalledTimes(1)
+      expect((await store.queryFacts()).value.map((fact) => fact.id)).toEqual(['batch_fact'])
+      expect((await store.listBundleSnapshots()).value.map((bundle) => bundle.id)).toEqual(['batch_bundle'])
+      expect((await store.listDiagnostics()).value.map((diagnostic) => diagnostic.id)).toEqual(['batch_diagnostic'])
+    } finally {
+      exportSpy.mockRestore()
+    }
+  })
+
   it('persists and queries facts by scope, freshness, confidence, and citation', async () => {
     const dbPath = makeDbPath()
     const store = await openContextStore({ dbPath, now: () => 1_000 })

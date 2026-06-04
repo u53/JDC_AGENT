@@ -143,6 +143,7 @@ export interface ContextStore {
   approvePendingCandidate(id: string): Promise<ContextStoreResult<ContextFact | null>>
   rejectPendingCandidate(id: string): Promise<ContextStoreResult<RejectedCandidateRecord | null>>
   listDiagnostics(): Promise<ContextStoreResult<ContextDiagnostic[]>>
+  withWriteBatch?<T>(operation: string, fn: () => Promise<T> | T): Promise<ContextStoreResult<T>>
 }
 
 const DEFAULT_CONTEXT_STORE_QUOTAS: ContextStoreQuotas = {
@@ -467,6 +468,7 @@ function readSchemaVersion(db: Database): number | null {
 
 class SqlJsContextStore implements ContextStore {
   private dirty = false
+  private batchDepth = 0
 
   constructor(
     private readonly db: Database,
@@ -814,6 +816,19 @@ class SqlJsContextStore implements ContextStore {
     return this.read('listDiagnostics', [], () => this.selectRows('SELECT * FROM context_diagnostics WHERE project_key = ? ORDER BY created_at ASC', [this.projectKey]).map(parseDiagnosticRow))
   }
 
+  async withWriteBatch<T>(operation: string, fn: () => Promise<T> | T): Promise<ContextStoreResult<T>> {
+    this.batchDepth += 1
+    try {
+      const value = await fn()
+      this.batchDepth = Math.max(0, this.batchDepth - 1)
+      if (this.batchDepth === 0) this.flushIfDirty()
+      return success(value)
+    } catch (error) {
+      this.batchDepth = Math.max(0, this.batchDepth - 1)
+      return failure(undefined as T, createStoreDiagnostic(error, `Context store ${operation} batch failed`))
+    }
+  }
+
   persist(): void {
     writeFileSync(this.dbPath, Buffer.from(this.db.export()))
     this.dirty = false
@@ -839,7 +854,7 @@ class SqlJsContextStore implements ContextStore {
     try {
       const writtenValue = writeFn()
       this.markDirty()
-      if (options.flush) this.flushIfDirty()
+      if (options.flush && this.batchDepth === 0) this.flushIfDirty()
       return Promise.resolve(success((writtenValue ?? value) as T))
     } catch (error) {
       return Promise.resolve(failure(value, createStoreDiagnostic(error, `Context store ${operation} failed`)))
@@ -1046,6 +1061,7 @@ class UnavailableContextStore implements ContextStore {
   async approvePendingCandidate(): Promise<ContextStoreResult<ContextFact | null>> { return this.unavailable(null) }
   async rejectPendingCandidate(): Promise<ContextStoreResult<RejectedCandidateRecord | null>> { return this.unavailable(null) }
   async listDiagnostics(): Promise<ContextStoreResult<ContextDiagnostic[]>> { return this.unavailable([]) }
+  async withWriteBatch<T>(): Promise<ContextStoreResult<T>> { return this.unavailable(undefined as T) }
 
   private unavailable<T>(value: T): ContextStoreResult<T> {
     return failure(value, this.diagnostic)

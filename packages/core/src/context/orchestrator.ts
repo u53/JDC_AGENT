@@ -100,18 +100,24 @@ export async function buildContextBundle(request: ContextRequest, options: Build
       ...diagnosticsFromPlan(plan, rawSections, now()),
     ], budgeted.budget, options.actorProfile)
 
-    throwIfAborted(request.signal)
-    const persistenceDiagnostics = await persistProviderEvidence(options.store, providerResults.evidence, now, request.signal)
-    bundle.diagnostics.push(...persistenceDiagnostics)
+    const saveBundleSideEffects = async () => {
+      throwIfAborted(request.signal)
+      const persistenceDiagnostics = await persistProviderEvidence(options.store, providerResults.evidence, now, request.signal)
+      bundle.diagnostics.push(...persistenceDiagnostics)
 
-    throwIfAborted(request.signal)
-    const snapshotResult = await options.store.saveBundleSnapshot(bundle)
-    bundle.diagnostics.push(...diagnosticsFromStoreResult(snapshotResult, 'saveBundleSnapshot', now))
-    throwIfAborted(request.signal)
-    const quotaResult = await options.store.enforceQuotas()
-    bundle.diagnostics.push(...diagnosticsFromStoreResult(quotaResult, 'enforceQuotas', now))
-    throwIfAborted(request.signal)
-    await persistDiagnostics(options.store, bundle.diagnostics, request.signal)
+      throwIfAborted(request.signal)
+      const snapshotResult = await options.store.saveBundleSnapshot(bundle)
+      bundle.diagnostics.push(...diagnosticsFromStoreResult(snapshotResult, 'saveBundleSnapshot', now))
+      throwIfAborted(request.signal)
+      const quotaResult = await options.store.enforceQuotas()
+      bundle.diagnostics.push(...diagnosticsFromStoreResult(quotaResult, 'enforceQuotas', now))
+      throwIfAborted(request.signal)
+      await persistDiagnostics(options.store, bundle.diagnostics, request.signal)
+    }
+    const batchResult = options.store.withWriteBatch
+      ? await options.store.withWriteBatch('saveContextBundle', saveBundleSideEffects)
+      : await saveBundleSideEffects().then((): ContextStoreResult<void> => ({ ok: true, value: undefined, diagnostics: [] }))
+    bundle.diagnostics.push(...diagnosticsFromStoreResult(batchResult, 'saveContextBundle', now))
 
     const render = options.render ?? renderContextBundle
     return {
