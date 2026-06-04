@@ -59,7 +59,7 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
             description: 'The type of specialized agent to use (default: general)',
           },
           modelId: { type: 'string', description: 'Model ID to use for this sub-agent (from configured models). Defaults to current session model.' },
-          maxTurns: { type: 'number', description: 'Maximum conversation turns (default: 1000)' },
+          maxTurns: { type: 'number', description: 'Maximum conversation turns. Omit to use the selected agent type default; explicit values override the type default.' },
           run_in_background: {
             type: 'boolean',
             description: 'Run this agent in the background. Returns immediately with a task_id. You will receive a <task-notification> when it completes.',

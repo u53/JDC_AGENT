@@ -1,12 +1,32 @@
 # Team / Subagent Model Resolution, Compaction, and Handoff Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox syntax for tracking; completed steps are marked `- [x]`.
 
 **Goal:** Fix explicit model selection for Agent/Team/PM, add fail-open compaction to long sub-sessions, and make Team archive handoff structured enough that the main session never reads stale `.team/` paths.
 
 **Architecture:** Split the work into three dependent tracks inside one plan. Track A creates one pure model resolver and wires every Agent/Team caller through it; Track B adds sub-session context lifecycle management without adding JDC Context Engine token caps; Track C carries Team archive metadata as structured runtime data and updates the handoff contract.
 
 **Tech Stack:** TypeScript, Electron main process, `@jdcagnet/core`, Vitest, existing `compactMessages`, `UsageTracker`, `TeamRuntime`, `TeamWorkspace`.
+
+**Implementation Status:** Completed on `main`.
+
+**Completion Commits:**
+
+- `25638e7 feat(model): add configured model resolver`
+- `5589775 fix(model): use unified resolver for agents and teams`
+- `6aa85b3 fix(model): surface agent and team model fallback`
+- `d881d24 fix(model): complete runtime model overrides`
+- `12418af feat(team): compact sub-sessions and structure archive handoff`
+
+**Final Verification Run:**
+
+- `pnpm --filter @jdcagnet/core exec vitest run src/model-resolution.test.ts --no-file-parallelism`
+- `pnpm --filter @jdcagnet/core exec vitest run src/sub-session-max-turns.test.ts src/sub-session-compaction.test.ts src/team/__tests__/team-member.test.ts src/team/__tests__/team-runtime.test.ts src/team/__tests__/team-tools.test.ts --no-file-parallelism`
+- `pnpm --filter @jdcagnet/core exec vitest run src/session-context.test.ts --no-file-parallelism`
+- `pnpm --filter @jdcagnet/core build`
+- `pnpm --filter jdcagnet build`
+- `pnpm --filter @jdcagnet/ui build`
+- `git diff --check`
 
 ---
 
@@ -48,7 +68,7 @@
 - Create: `packages/core/src/model-resolution.test.ts`
 - Modify: `packages/core/src/index.ts`
 
-- [ ] **Step 1: Write failing resolver tests**
+- [x] **Step 1: Write failing resolver tests**
 
 Create `packages/core/src/model-resolution.test.ts`:
 
@@ -120,7 +140,7 @@ describe('resolveConfiguredModel', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run:
 
@@ -130,7 +150,7 @@ pnpm --filter @jdcagnet/core exec vitest run src/model-resolution.test.ts --no-f
 
 Expected: FAIL because `./model-resolution.js` does not exist.
 
-- [ ] **Step 3: Implement the resolver**
+- [x] **Step 3: Implement the resolver**
 
 Create `packages/core/src/model-resolution.ts`:
 
@@ -245,7 +265,7 @@ function ambiguous(requested: string, matches: ResolvedConfiguredModel[]): Confi
 }
 ```
 
-- [ ] **Step 4: Export the resolver**
+- [x] **Step 4: Export the resolver**
 
 Modify `packages/core/src/index.ts` and add:
 
@@ -259,7 +279,7 @@ export {
 } from './model-resolution.js'
 ```
 
-- [ ] **Step 5: Run resolver tests**
+- [x] **Step 5: Run resolver tests**
 
 Run:
 
@@ -269,7 +289,7 @@ pnpm --filter @jdcagnet/core exec vitest run src/model-resolution.test.ts --no-f
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/core/src/model-resolution.ts packages/core/src/model-resolution.test.ts packages/core/src/index.ts
@@ -284,7 +304,7 @@ git commit -m "feat(model): add configured model resolver"
 - Modify: `packages/electron/src/session-manager.ts:182-321`
 - Test: `packages/core/src/model-resolution.test.ts`
 
-- [ ] **Step 1: Replace private resolver logic with pure helper**
+- [x] **Step 1: Replace private resolver logic with pure helper**
 
 In `packages/electron/src/session-manager.ts`, import:
 
@@ -325,7 +345,7 @@ private resolveModelById(modelId: string): { provider: any; modelConfig: ModelCo
 }
 ```
 
-- [ ] **Step 2: Replace `session.resolveModel` duplicate implementation**
+- [x] **Step 2: Replace `session.resolveModel` duplicate implementation**
 
 Replace the callback at `packages/electron/src/session-manager.ts:303` with:
 
@@ -357,11 +377,11 @@ Apply this return type in:
 - `packages/core/src/team/team-runtime.ts`
 - `packages/core/src/team/team-member.ts`
 
-- [ ] **Step 3: Preserve not-specified inheritance**
+- [x] **Step 3: Preserve not-specified inheritance**
 
 Do not change any code path when `modelId` is absent. Agent, Team worker, and PM must keep inheriting the main session provider/modelConfig.
 
-- [ ] **Step 4: Verify build**
+- [x] **Step 4: Verify build**
 
 Run:
 
@@ -372,7 +392,7 @@ pnpm --filter jdcagnet build
 
 Expected: both PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/electron/src/session-manager.ts packages/core/src/session.ts
@@ -391,7 +411,7 @@ git commit -m "fix(model): use unified resolver for agents and teams"
 - Test: `packages/core/src/team/__tests__/team-member.test.ts`
 - Test: `packages/core/src/session-context.test.ts`
 
-- [ ] **Step 1: Add a Team event for model warnings**
+- [x] **Step 1: Add a Team event for model warnings**
 
 Modify `packages/core/src/team/team-types.ts` and add this union member:
 
@@ -399,7 +419,7 @@ Modify `packages/core/src/team/team-types.ts` and add this union member:
 | { type: 'model_resolution_warning'; memberId?: string; requestedModelId: string; message: string; timestamp: number }
 ```
 
-- [ ] **Step 2: Surface Agent model fallback in returned content**
+- [x] **Step 2: Surface Agent model fallback in returned content**
 
 In `packages/core/src/tools/agent.ts`, replace the resolution block with:
 
@@ -430,7 +450,7 @@ When returning background start content, include:
 modelWarning ? `Model warning: ${modelWarning}` : '',
 ```
 
-- [ ] **Step 3: Surface Team worker fallback as a structured event**
+- [x] **Step 3: Surface Team worker fallback as a structured event**
 
 In `packages/core/src/team/team-member.ts`, change the failure branch to emit:
 
@@ -451,7 +471,7 @@ this.opts.onEvent?.({
 })
 ```
 
-- [ ] **Step 4: Forward model warning events to the main session**
+- [x] **Step 4: Forward model warning events to the main session**
 
 In `packages/core/src/session.ts` inside `onTeamEvent`, add before the terminal event branches:
 
@@ -468,13 +488,13 @@ if (event.type === 'model_resolution_warning') {
 }
 ```
 
-- [ ] **Step 5: Add tests**
+- [x] **Step 5: Add tests**
 
 In `packages/core/src/team/__tests__/team-member.test.ts`, add a test that constructs a `TeamMember` with `modelId: 'missing'`, `resolveModel: () => null`, and asserts `onEvent` receives `model_resolution_warning`.
 
 In `packages/core/src/session-context.test.ts`, add a focused test through `processNotifications()` with a fake provider: trigger a `model_resolution_warning` Team event, process notifications, and assert the fake provider receives a `<task-notification>` containing `Model warning:`.
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 ```bash
 pnpm --filter @jdcagnet/core exec vitest run src/team/__tests__/team-member.test.ts src/session-context.test.ts --no-file-parallelism
@@ -482,7 +502,7 @@ pnpm --filter @jdcagnet/core exec vitest run src/team/__tests__/team-member.test
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/core/src/tools/agent.ts packages/core/src/team/team-member.ts packages/core/src/team/team-types.ts packages/core/src/session.ts packages/core/src/team/__tests__/team-member.test.ts packages/core/src/session-context.test.ts
@@ -499,7 +519,7 @@ git commit -m "fix(model): surface agent and team model fallback"
 - Modify: `packages/core/src/team/team-types.ts`
 - Test: `packages/core/src/team/__tests__/team-tools.test.ts`
 
-- [ ] **Step 1: Extend Team tool schema**
+- [x] **Step 1: Extend Team tool schema**
 
 In `packages/core/src/tools/team.ts`, add an optional root input field:
 
@@ -510,7 +530,7 @@ pmModelId: {
 },
 ```
 
-- [ ] **Step 2: Resolve PM model before constructing TeamRuntime**
+- [x] **Step 2: Resolve PM model before constructing TeamRuntime**
 
 Before `new TeamRuntime(...)`, add:
 
@@ -537,7 +557,7 @@ aiPM,
 
 Add `pmModelWarning` to returned content when present.
 
-- [ ] **Step 3: Store PM model id in runtime state**
+- [x] **Step 3: Store PM model id in runtime state**
 
 In `packages/core/src/team/team-runtime.ts`, set manager state model id when available:
 
@@ -555,7 +575,7 @@ this.manager = new TeamManagerAI({
 
 Extend `TeamManagerAIOptions` with `modelId?: string` and include it in `TeamManagerState.modelId` so the UI can show which model the PM used.
 
-- [ ] **Step 4: Add tests**
+- [x] **Step 4: Add tests**
 
 In `packages/core/src/team/__tests__/team-tools.test.ts`, add:
 
@@ -587,7 +607,7 @@ it('resolves explicit PM model without changing worker defaults', async () => {
 })
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 ```bash
 pnpm --filter @jdcagnet/core exec vitest run src/team/__tests__/team-tools.test.ts --no-file-parallelism
@@ -595,7 +615,7 @@ pnpm --filter @jdcagnet/core exec vitest run src/team/__tests__/team-tools.test.
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/core/src/tools/team.ts packages/core/src/team/team-runtime.ts packages/core/src/team/team-manager-ai.ts packages/core/src/team/team-types.ts packages/core/src/team/__tests__/team-tools.test.ts
@@ -611,7 +631,7 @@ git commit -m "feat(team): support explicit PM model override"
 - Modify: `packages/core/src/sub-session.ts:92-110`
 - Test: `packages/core/src/__tests__/agent-types.test.ts` or create `packages/core/src/sub-session-max-turns.test.ts`
 
-- [ ] **Step 1: Write failing maxTurns test**
+- [x] **Step 1: Write failing maxTurns test**
 
 Create `packages/core/src/sub-session-max-turns.test.ts`:
 
@@ -656,7 +676,7 @@ describe('runSubSession maxTurns', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify failure**
+- [x] **Step 2: Run test to verify failure**
 
 ```bash
 pnpm --filter @jdcagnet/core exec vitest run src/sub-session-max-turns.test.ts --no-file-parallelism
@@ -664,7 +684,7 @@ pnpm --filter @jdcagnet/core exec vitest run src/sub-session-max-turns.test.ts -
 
 Expected: FAIL. To keep the failure fast, make the fake provider throw `new Error('agentType maxTurns was not applied')` when `calls > 30`.
 
-- [ ] **Step 3: Implement maxTurns default fix**
+- [x] **Step 3: Implement maxTurns default fix**
 
 In `packages/core/src/tools/agent.ts`, change:
 
@@ -684,7 +704,7 @@ Then:
 const effectiveMaxTurns = maxTurns ?? agentDef?.maxTurns ?? 1000
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 pnpm --filter @jdcagnet/core exec vitest run src/sub-session-max-turns.test.ts src/team/__tests__/team-member.test.ts --no-file-parallelism
@@ -692,7 +712,7 @@ pnpm --filter @jdcagnet/core exec vitest run src/sub-session-max-turns.test.ts s
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/tools/agent.ts packages/core/src/sub-session.ts packages/core/src/sub-session-max-turns.test.ts
@@ -707,7 +727,7 @@ git commit -m "fix(agent): respect agent type max turn defaults"
 - Modify: `packages/core/src/sub-session.ts`
 - Create: `packages/core/src/sub-session-compaction.test.ts`
 
-- [ ] **Step 1: Write failing compaction continuation test**
+- [x] **Step 1: Write failing compaction continuation test**
 
 Create `packages/core/src/sub-session-compaction.test.ts`:
 
@@ -769,7 +789,7 @@ describe('sub-session compaction', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify failure**
+- [x] **Step 2: Run test to verify failure**
 
 ```bash
 pnpm --filter @jdcagnet/core exec vitest run src/sub-session-compaction.test.ts --no-file-parallelism
@@ -777,7 +797,7 @@ pnpm --filter @jdcagnet/core exec vitest run src/sub-session-compaction.test.ts 
 
 Expected: FAIL because no compaction occurs.
 
-- [ ] **Step 3: Implement UsageTracker and compaction**
+- [x] **Step 3: Implement UsageTracker and compaction**
 
 In `packages/core/src/sub-session.ts`, import:
 
@@ -839,15 +859,15 @@ function shouldCompactSubSession(messages: Message[], usageTracker: UsageTracker
 }
 ```
 
-- [ ] **Step 4: Ensure harvest accumulators are not touched**
+- [x] **Step 4: Ensure harvest accumulators are not touched**
 
 Do not mutate `harvestAssistantMessages` or `harvestToolEvents` during compaction. Only replace the local `messages` array used for provider context.
 
-- [ ] **Step 5: Add fail-open test**
+- [x] **Step 5: Add fail-open test**
 
 In `packages/core/src/sub-session-compaction.test.ts`, add a second test where the compact stream throws and the worker still returns final text. Assert `result.content` is the final response and no exception escapes.
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 ```bash
 pnpm --filter @jdcagnet/core exec vitest run src/sub-session-compaction.test.ts src/session-context.test.ts --no-file-parallelism
@@ -855,7 +875,7 @@ pnpm --filter @jdcagnet/core exec vitest run src/sub-session-compaction.test.ts 
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/core/src/sub-session.ts packages/core/src/sub-session-compaction.test.ts
@@ -874,7 +894,7 @@ git commit -m "feat(agent): compact long sub-session histories"
 - Test: `packages/core/src/team/__tests__/team-runtime.test.ts`
 - Test: `packages/core/src/team/__tests__/team-tools.test.ts`
 
-- [ ] **Step 1: Extend Team completed event**
+- [x] **Step 1: Extend Team completed event**
 
 In `packages/core/src/team/team-types.ts`, replace:
 
@@ -888,7 +908,7 @@ with:
 | { type: 'team_completed'; summary: string; archivePath?: string; archiveError?: string; timestamp: number }
 ```
 
-- [ ] **Step 2: Extend TeamRuntime onComplete signature**
+- [x] **Step 2: Extend TeamRuntime onComplete signature**
 
 In `packages/core/src/team/team-runtime.ts`, update `TeamRuntimeOptions`:
 
@@ -911,7 +931,7 @@ this.recordEvent({ type: 'team_completed', summary, archiveError, timestamp: Dat
 this.opts.onComplete?.(summary, { archiveError })
 ```
 
-- [ ] **Step 3: Store archive metadata in background completion**
+- [x] **Step 3: Store archive metadata in background completion**
 
 In `packages/core/src/tools/team.ts`, update:
 
@@ -924,7 +944,7 @@ onComplete: (summary, meta) => {
 
 Extend the `BackgroundTaskManager.completeTeam()` team result payload type to include optional `archivePath` and `archiveError`, then store both fields in the completed task result.
 
-- [ ] **Step 4: Update handoff contract text**
+- [x] **Step 4: Update handoff contract text**
 
 In `packages/core/src/tools/team.ts`, add to the returned `HANDOFF CONTRACT`:
 
@@ -932,7 +952,7 @@ In `packages/core/src/tools/team.ts`, add to the returned `HANDOFF CONTRACT`:
 `  • When the team completes, its live .team/ workspace is archived. Use the archive path from team_complete for artifacts/results/contracts; do NOT assume .team/ still exists.`,
 ```
 
-- [ ] **Step 5: Include archive metadata in main session notification**
+- [x] **Step 5: Include archive metadata in main session notification**
 
 In `packages/core/src/session.ts`, change the `team_completed` branch:
 
@@ -966,7 +986,7 @@ archivePath: meta.archivePath,
 archiveError: meta.archiveError,
 ```
 
-- [ ] **Step 6: Add archive tests**
+- [x] **Step 6: Add archive tests**
 
 In `packages/core/src/team/__tests__/team-runtime.test.ts`, add a test that completes a team and asserts a `team_completed` event has `archivePath`.
 
@@ -977,7 +997,7 @@ expect(result.content).toContain('Use the archive path from team_complete')
 expect(result.content).toContain('Do NOT assume .team/ still exists')
 ```
 
-- [ ] **Step 7: Run tests**
+- [x] **Step 7: Run tests**
 
 ```bash
 pnpm --filter @jdcagnet/core exec vitest run src/team/__tests__/team-runtime.test.ts src/team/__tests__/team-tools.test.ts src/session-context.test.ts --no-file-parallelism
@@ -985,7 +1005,7 @@ pnpm --filter @jdcagnet/core exec vitest run src/team/__tests__/team-runtime.tes
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/core/src/team/team-types.ts packages/core/src/team/team-runtime.ts packages/core/src/tools/team.ts packages/core/src/session.ts packages/core/src/background-tasks.ts packages/core/src/team/__tests__/team-runtime.test.ts packages/core/src/team/__tests__/team-tools.test.ts packages/core/src/session-context.test.ts
@@ -999,7 +1019,7 @@ git commit -m "fix(team): structure archive handoff metadata"
 **Files:**
 - No production files unless verification exposes a bug.
 
-- [ ] **Step 1: Run model resolver tests**
+- [x] **Step 1: Run model resolver tests**
 
 ```bash
 pnpm --filter @jdcagnet/core exec vitest run src/model-resolution.test.ts --no-file-parallelism
@@ -1007,7 +1027,7 @@ pnpm --filter @jdcagnet/core exec vitest run src/model-resolution.test.ts --no-f
 
 Expected: PASS.
 
-- [ ] **Step 2: Run Agent/Team focused tests**
+- [x] **Step 2: Run Agent/Team focused tests**
 
 ```bash
 pnpm --filter @jdcagnet/core exec vitest run src/sub-session-max-turns.test.ts src/sub-session-compaction.test.ts src/team/__tests__/team-member.test.ts src/team/__tests__/team-runtime.test.ts src/team/__tests__/team-tools.test.ts --no-file-parallelism
@@ -1015,7 +1035,7 @@ pnpm --filter @jdcagnet/core exec vitest run src/sub-session-max-turns.test.ts s
 
 Expected: PASS.
 
-- [ ] **Step 3: Run context integration tests**
+- [x] **Step 3: Run context integration tests**
 
 ```bash
 pnpm --filter @jdcagnet/core exec vitest run src/session-context.test.ts --no-file-parallelism
@@ -1023,7 +1043,7 @@ pnpm --filter @jdcagnet/core exec vitest run src/session-context.test.ts --no-fi
 
 Expected: PASS. Existing intentional stderr from fallback tests is acceptable only when Vitest exits 0.
 
-- [ ] **Step 4: Build core/electron/ui**
+- [x] **Step 4: Build core/electron/ui**
 
 ```bash
 pnpm --filter @jdcagnet/core build
@@ -1033,7 +1053,7 @@ pnpm --filter @jdcagnet/ui build
 
 Expected: all PASS.
 
-- [ ] **Step 5: Check formatting and git status**
+- [x] **Step 5: Check formatting and git status**
 
 ```bash
 git diff --check
@@ -1042,7 +1062,7 @@ git status --short
 
 Expected: `git diff --check` has no output. `git status --short` shows only intentional files before final commit.
 
-- [ ] **Step 6: Final commit**
+- [x] **Step 6: Final commit**
 
 ```bash
 git add -A
