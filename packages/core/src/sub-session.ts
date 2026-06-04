@@ -18,6 +18,9 @@ import { captureHarvestModelBinding } from './context/model-binding.js'
 import { createProviderDistillerModelClient } from './context/distillers/index.js'
 import { createContextScheduler, type ContextScheduler } from './context/scheduler.js'
 import type { ContextEngineConfig, ContextRequest, HarvestCandidate, HarvestModelBinding, ProviderProtocol } from './context/types.js'
+import { compactMessages, MIN_COMPACT_LENGTH } from './compact.js'
+import { estimateTokens } from './token-estimation.js'
+import { UsageTracker } from './usage-tracker.js'
 
 const subSessionHarvestCounts = new Map<string, { total: number; pending: number }>()
 
@@ -107,7 +110,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
   } = opts
 
   const agentDef = opts.agentType ? getAgentType(opts.agentType) : undefined
-  const effectiveMaxTurns = maxTurns || agentDef?.maxTurns || 1000
+  const effectiveMaxTurns = maxTurns ?? agentDef?.maxTurns ?? 1000
   const systemPrompt = agentDef?.systemPrompt || SUB_AGENT_SYSTEM
 
   const permChecker = new PermissionChecker(opts.permissionMode || 'relaxed')
@@ -140,9 +143,16 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
   const toolsUsed: string[] = []
   let totalToolCount = 0
   let turns = 0
+  const usageTracker = new UsageTracker(modelConfig.contextWindow || 200000)
+  let subSessionJustCompacted = false
 
   while (turns < effectiveMaxTurns) {
     if (signal?.aborted) break
+    if (!subSessionJustCompacted && await compactSubSessionIfNeeded(messages, provider, modelConfig, usageTracker, onStreamHeartbeat, signal)) {
+      subSessionJustCompacted = true
+    } else {
+      subSessionJustCompacted = false
+    }
     turns++
 
     const incoming = opts.mailbox?.drain() ?? []
@@ -232,6 +242,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
         toolUses.push(currentToolUse)
         currentToolUse = null
       } else if (chunk.type === 'message_end' && chunk.usage) {
+        usageTracker.addTurn(chunk.usage)
         onUsage?.(chunk.usage)
       }
     }
@@ -359,6 +370,44 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
     turns,
     toolsUsed: [...new Set(toolsUsed)],
   }
+}
+
+async function compactSubSessionIfNeeded(
+  messages: Message[],
+  provider: ModelProvider,
+  modelConfig: ModelConfig,
+  usageTracker: UsageTracker,
+  onStreamHeartbeat?: () => void,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  if (!shouldCompactSubSession(messages, usageTracker, modelConfig)) return false
+  try {
+    const compactResult = await compactMessages(
+      messages,
+      provider,
+      modelConfig,
+      (chunk) => {
+        if (chunk.type === 'compact_progress') onStreamHeartbeat?.()
+      },
+      signal,
+    )
+    if (compactResult.status === 'compacted') {
+      messages.splice(0, messages.length, ...compactResult.messages)
+      usageTracker.resetLastTurn(estimateTokens(messages))
+    }
+  } catch {
+    // Fail open: sub-agents should continue on the original message history
+    // when the summarizer stream fails, rather than aborting the delegated task.
+  }
+  return true
+}
+
+function shouldCompactSubSession(messages: Message[], usageTracker: UsageTracker, modelConfig: ModelConfig): boolean {
+  if (messages.length < MIN_COMPACT_LENGTH) return false
+  const compressAt = modelConfig.compressAt ?? 0.9
+  if (usageTracker.shouldCompact(compressAt)) return true
+  const contextWindow = modelConfig.contextWindow || 200000
+  return estimateTokens(messages) > contextWindow * compressAt
 }
 
 async function buildSubSessionContextPrompt(

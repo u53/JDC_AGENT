@@ -58,7 +58,7 @@ export interface TeamRuntimeOptions {
   /** Sink for PM's own LLM consumption — bubble up to host session usage. */
   onUsage?: (usage: { inputTokens: number; outputTokens: number; cacheCreationInputTokens?: number; cacheReadInputTokens?: number }) => void
   onEvent?: (event: TeamEvent) => void
-  onComplete?: (summary: string) => void
+  onComplete?: (summary: string, meta?: { archivePath?: string; archiveError?: string }) => void
   onFail?: (error: string) => void
 }
 
@@ -446,21 +446,17 @@ export class TeamRuntime {
         const completedTasks = this.manager.getTasks().filter(t => t.status === 'completed')
         if (completedTasks.length > 0) {
           const partialSummary = this.manager.synthesize()
-          this.recordEvent({
-            type: 'team_completed',
-            summary: `(partial — idle timeout after ${Math.floor(idleMs / 1000)}s) ${partialSummary}`,
-            timestamp: Date.now(),
-          })
+          const finalSummary = `(partial — idle timeout after ${Math.floor(idleMs / 1000)}s) ${partialSummary}`
           this.status = 'completed'
           this.manager.setStatus('completed')
           this.stop()
           this.workspace.archive().then(archivePath => {
-            const finalSummary = archivePath
-              ? `(partial) ${partialSummary}\n\nArchived to: ${archivePath}`
-              : `(partial) ${partialSummary}`
-            this.opts.onComplete?.(finalSummary)
-          }).catch(() => {
-            this.opts.onComplete?.(`(partial) ${partialSummary}`)
+            this.recordEvent({ type: 'team_completed', summary: finalSummary, archivePath, timestamp: Date.now() })
+            this.opts.onComplete?.(finalSummary, { archivePath })
+          }).catch((err) => {
+            const archiveError = err instanceof Error ? err.message : String(err)
+            this.recordEvent({ type: 'team_completed', summary: finalSummary, archiveError, timestamp: Date.now() })
+            this.opts.onComplete?.(finalSummary, { archiveError })
           })
         } else {
           this.recordEvent({ type: 'team_failed', error: `Team idle for ${Math.floor(idleMs / 1000)}s with no completed tasks`, timestamp: Date.now() })
@@ -1144,17 +1140,18 @@ export class TeamRuntime {
     // Archive workspace; don't block completion if archive fails
     this.workspace.archive()
       .then(archivePath => {
-        const finalSummary = archivePath ? `${summary}\n\nArchived to: ${archivePath}` : summary
-        this.recordEvent({ type: 'team_completed', summary: finalSummary, timestamp: Date.now() })
-        this.opts.onComplete?.(finalSummary)
+        this.recordEvent({ type: 'team_completed', summary, archivePath, timestamp: Date.now() })
+        this.opts.onComplete?.(summary, { archivePath })
       })
       .catch(err => {
+        const archiveError = err instanceof Error ? err.message : String(err)
         this.recordEvent({
           type: 'team_completed',
-          summary: `${summary}\n\n(archive failed: ${err instanceof Error ? err.message : String(err)})`,
+          summary,
+          archiveError,
           timestamp: Date.now(),
         })
-        this.opts.onComplete?.(summary)
+        this.opts.onComplete?.(summary, { archiveError })
       })
   }
 

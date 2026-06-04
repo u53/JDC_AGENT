@@ -124,7 +124,8 @@ describe('Session JDC Context Engine runtime integration', () => {
         yield { type: 'message_end', usage: { inputTokens: 8, outputTokens: 2 } }
       },
     }
-    const events = makeEvents()
+    const events = makeEvents() as ReturnType<typeof makeEvents> & { onMessagesReplaced: ReturnType<typeof vi.fn> }
+    events.onMessagesReplaced = vi.fn()
     const session = await makeSession({
       provider,
       contextConfig: { enabled: false } as any,
@@ -138,7 +139,45 @@ describe('Session JDC Context Engine runtime integration', () => {
     expect(textFromMessages(foregroundMessages)).toContain('Recovered project state after compact.')
     expect(textFromMessages(foregroundMessages)).toContain('trigger automatic compact and continue')
     expect(textFromMessages(foregroundMessages)).not.toContain('seed user 0')
+    expect(events.onMessagesReplaced).toHaveBeenCalled()
+    const replacedMessages = events.onMessagesReplaced.mock.calls.at(-1)?.[0] as Message[]
+    expect(textFromMessages(replacedMessages)).toContain('Recovered project state after compact.')
+    expect(textFromMessages(replacedMessages)).not.toContain('seed user 0')
     expect(session.getMessages().at(-1)?.content).toEqual([{ type: 'text', text: 'continued after compact' }])
+  })
+
+  it('uses the compacted message list for the next request after manual compact', async () => {
+    let foregroundMessages: Message[] = []
+    const provider: ModelProvider = {
+      name: 'manual-compact-provider',
+      chat: async () => ({ content: [], usage: { inputTokens: 0, outputTokens: 0 } }),
+      stream: async function* (messages: Message[], _tools: ToolDefinition[], config: ModelConfig) {
+        if (config.systemPrompt === undefined || typeof config.systemPrompt === 'string') {
+          yield { type: 'text_delta', text: '<summary>Manual compact retained project state.</summary>' }
+          yield { type: 'message_end', usage: { inputTokens: 10, outputTokens: 5 } }
+          return
+        }
+        foregroundMessages = messages
+        yield { type: 'text_delta', text: 'after manual compact' }
+        yield { type: 'message_end', usage: { inputTokens: 8, outputTokens: 2 } }
+      },
+    }
+    const session = await makeSession({
+      provider,
+      contextConfig: { enabled: false } as any,
+      modelConfig: { contextWindow: 200, compressAt: 0.1 },
+    })
+    seedMessagesForCompaction(session)
+
+    await session.compactNow(makeEvents())
+    expect(textFromMessages(session.getMessages())).toContain('Manual compact retained project state.')
+    expect(textFromMessages(session.getMessages())).not.toContain('seed user 0')
+
+    await session.sendMessage('continue after manual compact', makeEvents())
+
+    expect(textFromMessages(foregroundMessages)).toContain('Manual compact retained project state.')
+    expect(textFromMessages(foregroundMessages)).toContain('continue after manual compact')
+    expect(textFromMessages(foregroundMessages)).not.toContain('seed user 0')
   })
 
   it('injects a protocol-neutral context bundle before streaming and falls back when bundle generation fails', async () => {

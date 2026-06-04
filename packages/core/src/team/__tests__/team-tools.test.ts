@@ -130,6 +130,8 @@ describe('Team tools', () => {
 
     expect(result.isError).toBeFalsy()
     expect(result.content).toContain('Team ID:')
+    expect(result.content).toContain('Use the archive path from team_complete')
+    expect(result.content).toContain('Do NOT assume .team/ still exists')
     // After registration the team starts and may complete via mocked subagent.
     // Either it is still registered, or it completed and was removed — both are fine.
     // Just verify execution succeeded (above).

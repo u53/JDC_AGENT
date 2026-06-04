@@ -323,6 +323,9 @@ export class SessionManager {
         onMessageComplete: (message) => {
           this.window?.webContents.send('query:complete', { sessionId, message })
         },
+        onMessagesReplaced: (messages) => {
+          this.window?.webContents.send('session:messages-updated', { sessionId, messages })
+        },
         onError: (error) => {
           this.window?.webContents.send('query:error', { sessionId, error: error.message })
         },
@@ -396,6 +399,9 @@ export class SessionManager {
       },
       onMessageComplete: (message) => {
         this.window?.webContents.send('query:complete', { sessionId, message })
+      },
+      onMessagesReplaced: (messages) => {
+        this.window?.webContents.send('session:messages-updated', { sessionId, messages })
       },
       onError: (error) => {
         this.window?.webContents.send('query:error', { sessionId, error: error.message })
@@ -678,6 +684,9 @@ export class SessionManager {
       },
       onToolEvent: () => {},
       onMessageComplete: () => {},
+      onMessagesReplaced: (messages) => {
+        this.window?.webContents.send('session:messages-updated', { sessionId, messages })
+      },
       onError: (error) => {
         this.window?.webContents.send('query:error', { sessionId, error: error.message })
       },
@@ -687,8 +696,6 @@ export class SessionManager {
     }
     try {
       await session.compactNow(events)
-      const messages = session.getMessages()
-      this.window?.webContents.send('session:messages-updated', { sessionId, messages })
       for (const chunk of deferredChunks) {
         this.window?.webContents.send('query:stream', { sessionId, chunk })
       }

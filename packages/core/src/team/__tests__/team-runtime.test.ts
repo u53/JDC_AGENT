@@ -114,6 +114,33 @@ describe('TeamRuntime', () => {
     expect(team.getStatus()).toBe('completed')
   })
 
+  it('emits structured archive metadata when a team completes', async () => {
+    const onComplete = vi.fn()
+    const events: any[] = []
+    const team = new TeamRuntime({
+      objective: 'Test structured archive metadata for completed teams',
+      plan: {
+        members: [{ role: 'explorer', agentType: 'explore' }],
+        tasks: [{ title: 'A', description: 'do a' }],
+      },
+      subSessionDeps: mockDeps,
+      onEvent: (event) => events.push(event),
+      onComplete,
+    })
+
+    await team.start()
+    await delay(50)
+
+    const completed = events.find(event => event.type === 'team_completed')
+    expect(completed).toBeDefined()
+    expect(completed.archivePath).toContain('.team-archive')
+    expect(completed.summary).not.toContain('Archived to:')
+    expect(onComplete).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ archivePath: completed.archivePath }),
+    )
+  })
+
   it('handles wrap_up intervention', async () => {
     const onComplete = vi.fn()
     const team = new TeamRuntime({

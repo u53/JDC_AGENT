@@ -272,8 +272,8 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
           deps.backgroundTasks.emitEvent(bgTask.id, e)
           deps.onTeamEvent?.(bgTask.id, e)
         },
-        onComplete: (summary) => {
-          deps.backgroundTasks.completeTeam(bgTask.id, { summary })
+        onComplete: (summary, meta) => {
+          deps.backgroundTasks.completeTeam(bgTask.id, { summary, archivePath: meta?.archivePath, archiveError: meta?.archiveError })
           deps.teamRegistry.remove(bgTask.id)
         },
         onFail: (err) => {
@@ -305,6 +305,7 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
           `HANDOFF CONTRACT — IMPORTANT:`,
           `  • The objective now belongs to the team. Do NOT analyze, draft, or write outputs in parallel.`,
           `  • Wait for the team_complete notification, then base your follow-up work on the team's synthesized result.`,
+          `  • When the team completes, its live .team/ workspace is archived. Use the archive path from team_complete for artifacts/results/contracts; Do NOT assume .team/ still exists.`,
           `  • If the user pings you while the team is running, relay status / forward intents via background_send. Do not pre-empt the team.`,
           `  • You can still handle user requests that are clearly unrelated to the delegated objective.`,
           ``,

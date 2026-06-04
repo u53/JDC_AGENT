@@ -174,7 +174,7 @@ export type TeamEvent =
   | { type: 'intervention_received'; from: 'user' | 'main_session' | 'member'; intent: string; fromMemberId?: string; timestamp: number }
   | { type: 'team_synthesizing'; timestamp: number }
   | { type: 'model_resolution_warning'; memberId?: string; requestedModelId: string; message: string; timestamp: number }
-  | { type: 'team_completed'; summary: string; timestamp: number }
+  | { type: 'team_completed'; summary: string; archivePath?: string; archiveError?: string; timestamp: number }
   | { type: 'team_failed'; error: string; timestamp: number }
 
 export interface TeamConcurrencyPolicy {

@@ -76,6 +76,7 @@ export interface SessionEvents {
   onError: (error: Error) => void
   onRetrying?: (attempt: number, error: Error, delayMs: number, category: string) => void
   onUsage?: (snapshot: UsageSnapshot) => void
+  onMessagesReplaced?: (messages: Message[]) => void
   onAgentProgress?: (agentToolUseId: string, event: { toolName: string; toolStatus: 'start' | 'complete' | 'error'; toolInput?: Record<string, unknown>; toolResult?: { content: string; isError?: boolean }; toolCount: number }) => void
   onAgentText?: (agentToolUseId: string, text: string) => void
   onAgentComplete?: (agentToolUseId: string, result: { content: string; turns: number; toolsUsed: string[] }) => void
@@ -254,12 +255,19 @@ export class Session {
           return
         }
         if (event.type === 'team_completed') {
-          this.captureTeamFinalSnapshot(teamId)
+          const archivePath = (event as any).archivePath
+          const archiveError = (event as any).archiveError
+          const archiveLine = archivePath
+            ? `\n\nTeam workspace archived to: ${archivePath}\nUse this archive directory for task artifacts/results/contracts. Do NOT read .team/ for this completed team; it has been moved.`
+            : archiveError
+              ? `\n\nTeam workspace archive failed: ${archiveError}\nDo not assume .team/ or .team-archive/ contains complete artifacts.`
+              : ''
+          this.captureTeamFinalSnapshot(teamId, { archivePath, archiveError })
           this.pendingNotifications.push({
             type: 'team_complete',
             taskId: teamId,
             status: 'completed',
-            teamEvent: `Team finished. Final summary:\n${(event as any).summary ?? ''}\n\nDo NOT call background_status / background_events on this team again — it is done.`,
+            teamEvent: `Team finished. Final summary:\n${(event as any).summary ?? ''}${archiveLine}\n\nDo NOT call background_status / background_events on this team again — it is done.`,
           })
         } else if (event.type === 'team_failed') {
           this.captureTeamFinalSnapshot(teamId)
@@ -782,6 +790,7 @@ export class Session {
     // status === 'compacted' — actually replace messages
     this.messages = result.messages
     this.history.replaceMessages(this.id, this.messages)
+    events.onMessagesReplaced?.(this.getMessages())
 
     const memoriesExtracted = 0
 
@@ -1373,6 +1382,8 @@ export class Session {
         type: 'team',
         id: task.id,
         status: task.status,
+        archivePath: task.archivePath,
+        archiveError: task.archiveError,
         finished: true,
       }
     }
@@ -1410,7 +1421,7 @@ export class Session {
    * on team_completed / team_failed — at that point the runtime is still alive
    * and getMembers/getTasks/getManagerState are still resolvable.
    */
-  private captureTeamFinalSnapshot(taskId: string): void {
+  private captureTeamFinalSnapshot(taskId: string, meta: { archivePath?: string; archiveError?: string } = {}): void {
     const team = this.teamRegistry.get(taskId)
     if (!team) return
     const tasks = team.getTasks()
@@ -1419,6 +1430,8 @@ export class Session {
       id: team.id,
       objective: team.objective,
       status: team.getStatus(),
+      archivePath: meta.archivePath,
+      archiveError: meta.archiveError,
       manager: team.getManagerState(),
       members: team.getMembers(),
       tasks: tasks.map(t => ({
