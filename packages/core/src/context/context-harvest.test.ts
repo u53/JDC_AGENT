@@ -421,6 +421,46 @@ describe('harvest queue safety chain', () => {
     })
   })
 
+  it('accepts valid facts from a batch distiller output without rejecting the whole batch', async () => {
+    const store = makeStore()
+    const candidate: HarvestCandidate = {
+      ...baseCandidate,
+      userMessage: 'Capture the project overview and ignore invalid batch items.',
+      changedFiles: ['packages/core/src/context/harvest.ts'],
+      assistantMessages: [{ id: 'assistant_batch_summary', role: 'assistant', content: [{ type: 'text', text: 'Project overview: packages/core owns harvest and context storage.' }], timestamp: 2 }],
+    }
+    const invalidEnvelope: DistillerEnvelope = {
+      schemaVersion: 1,
+      distiller: 'UnknownDistiller',
+      confidence: 0.94,
+      citations: [{ id: 'assistant_batch_summary', type: 'message', ref: 'assistant_batch_summary' }],
+      payload: { content: 'This invalid batch item must not block valid facts.' },
+    }
+    const enqueued = await enqueueHarvest(candidate, makeBinding('anthropic'), { store, now: () => 4_320, createId: () => 'job_batch_output' })
+
+    const completed = await runHarvestJob(enqueued.job!, {
+      store,
+      distillers: [{
+        name: 'ProjectProfileDistiller',
+        distill: async () => ({
+          schemaVersion: 1,
+          distiller: 'ProjectProfileDistiller',
+          facts: [
+            projectProfileEnvelope('Batch accepted project overview.', 'assistant_batch_summary'),
+            invalidEnvelope,
+          ],
+        }),
+      }],
+      now: () => 4_330,
+    })
+
+    expect(completed.status).toBe('accepted')
+    expect(store.facts.map((fact) => fact.content)).toEqual(['Batch accepted project overview.'])
+    expect(store.rejectedCandidates).toHaveLength(1)
+    expect(store.rejectedCandidates[0]?.reason).toContain('Batch distiller fact rejected')
+    expect(store.jobs.at(-1)).toMatchObject({ status: 'accepted' })
+  })
+
   it('uses the high-confidence default threshold when validating model output', async () => {
     const store = makeStore()
     const enqueued = await enqueueHarvest(baseCandidate, makeBinding('anthropic'), { store, now: () => 4_500, createId: () => 'job_default_min_confidence' })
