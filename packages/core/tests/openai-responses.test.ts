@@ -116,4 +116,115 @@ describe('OpenAIResponsesProvider', () => {
     })
     expect(formatted).toContainEqual({ role: 'user', content: 'follow up' })
   })
+
+  it('passes cache user as safety_identifier for Responses params', async () => {
+    const provider = new OpenAIResponsesProvider('test-key')
+    let capturedParams: any
+    ;(provider as any).client = {
+      responses: {
+        create: async (params: any) => {
+          capturedParams = params
+          return { output: [], usage: { input_tokens: 0, output_tokens: 0 } }
+        },
+      },
+    }
+
+    await provider.chat(
+      [{ id: '1', role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: 0 }],
+      [],
+      { model: 'gpt-5', maxTokens: 100, cacheUser: 'session-1', cacheKey: 'main:session-1' },
+    )
+
+    expect(capturedParams).toMatchObject({
+      prompt_cache_key: 'main:session-1',
+      safety_identifier: 'session-1',
+    })
+    expect(capturedParams).not.toHaveProperty('user')
+  })
+
+  it('streams function calls from completed Responses output items instead of partial added items', async () => {
+    const provider = new OpenAIResponsesProvider('test-key')
+    const events = [
+      {
+        type: 'response.output_item.added',
+        item: { type: 'function_call', id: 'fc_item_1', call_id: '', name: '', arguments: '' },
+        output_index: 0,
+      },
+      { type: 'response.function_call_arguments.delta', item_id: 'fc_item_1', output_index: 0, delta: '{"file":"' },
+      { type: 'response.function_call_arguments.delta', item_id: 'fc_item_1', output_index: 0, delta: 'a.ts"}' },
+      {
+        type: 'response.output_item.done',
+        item: { type: 'function_call', id: 'fc_item_1', call_id: 'call_1', name: 'Read', arguments: '{"file":"a.ts"}' },
+        output_index: 0,
+      },
+      { type: 'response.completed', response: { usage: { input_tokens: 10, output_tokens: 4 } } },
+    ]
+    ;(provider as any).client = {
+      responses: {
+        create: async () => asyncIterable(events),
+      },
+    }
+
+    const chunks = []
+    for await (const chunk of provider.stream(
+      [{ id: '1', role: 'user', content: [{ type: 'text', text: 'read file' }], timestamp: 0 }],
+      [{ name: 'Read', description: 'Read a file', inputSchema: { type: 'object' } }],
+      { model: 'gpt-5', maxTokens: 100 },
+    )) {
+      chunks.push(chunk)
+    }
+
+    expect(chunks).toEqual([
+      { type: 'tool_use_start', toolUse: { id: 'call_1', name: 'Read', input: '' } },
+      { type: 'tool_use_delta', toolUse: { id: '', name: '', input: '{"file":"a.ts"}' } },
+      { type: 'tool_use_end' },
+      { type: 'message_end', usage: { inputTokens: 10, outputTokens: 4, cacheReadInputTokens: 0 } },
+    ])
+  })
+
+  it('streams interleaved Responses function calls as complete sequential tool uses', async () => {
+    const provider = new OpenAIResponsesProvider('test-key')
+    const events = [
+      { type: 'response.output_item.added', item: { type: 'function_call', id: 'fc_1', call_id: '', name: '', arguments: '' }, output_index: 0 },
+      { type: 'response.output_item.added', item: { type: 'function_call', id: 'fc_2', call_id: '', name: '', arguments: '' }, output_index: 1 },
+      { type: 'response.function_call_arguments.delta', item_id: 'fc_1', output_index: 0, delta: '{"path":"' },
+      { type: 'response.function_call_arguments.delta', item_id: 'fc_2', output_index: 1, delta: '{"cmd":"' },
+      { type: 'response.function_call_arguments.delta', item_id: 'fc_1', output_index: 0, delta: 'a.ts"}' },
+      { type: 'response.function_call_arguments.delta', item_id: 'fc_2', output_index: 1, delta: 'pwd"}' },
+      { type: 'response.output_item.done', item: { type: 'function_call', id: 'fc_2', call_id: 'call_2', name: 'Bash', arguments: '{"cmd":"pwd"}' }, output_index: 1 },
+      { type: 'response.output_item.done', item: { type: 'function_call', id: 'fc_1', call_id: 'call_1', name: 'Read', arguments: '{"path":"a.ts"}' }, output_index: 0 },
+      { type: 'response.completed', response: { usage: { input_tokens: 20, output_tokens: 8 } } },
+    ]
+    ;(provider as any).client = {
+      responses: {
+        create: async () => asyncIterable(events),
+      },
+    }
+
+    const chunks = []
+    for await (const chunk of provider.stream(
+      [{ id: '1', role: 'user', content: [{ type: 'text', text: 'read and pwd' }], timestamp: 0 }],
+      [
+        { name: 'Read', description: 'Read a file', inputSchema: { type: 'object' } },
+        { name: 'Bash', description: 'Run shell', inputSchema: { type: 'object' } },
+      ],
+      { model: 'gpt-5', maxTokens: 100 },
+    )) {
+      chunks.push(chunk)
+    }
+
+    expect(chunks).toEqual([
+      { type: 'tool_use_start', toolUse: { id: 'call_2', name: 'Bash', input: '' } },
+      { type: 'tool_use_delta', toolUse: { id: '', name: '', input: '{"cmd":"pwd"}' } },
+      { type: 'tool_use_end' },
+      { type: 'tool_use_start', toolUse: { id: 'call_1', name: 'Read', input: '' } },
+      { type: 'tool_use_delta', toolUse: { id: '', name: '', input: '{"path":"a.ts"}' } },
+      { type: 'tool_use_end' },
+      { type: 'message_end', usage: { inputTokens: 20, outputTokens: 8, cacheReadInputTokens: 0 } },
+    ])
+  })
 })
+
+async function* asyncIterable<T>(items: T[]): AsyncIterable<T> {
+  for (const item of items) yield item
+}

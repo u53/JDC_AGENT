@@ -44,6 +44,14 @@ function isJdcReadTool(name: string): boolean {
   return JDC_READ_TOOLS.has(name) || name.startsWith('Jdc')
 }
 
+export function isEagerExecutableTool(name: string): boolean {
+  return isReadTool(name) && !LONG_RUNNING_TOOLS.has(name)
+}
+
+export function shouldCancelSiblingToolsOnReadError(name: string): boolean {
+  return isReadTool(name) && !isJdcReadTool(name)
+}
+
 class Semaphore {
   private queue: Array<() => void> = []
   private running = 0

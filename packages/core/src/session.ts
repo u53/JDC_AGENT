@@ -35,7 +35,12 @@ import { classifyError, getMaxRetries, getRetryDelay } from './retry.js'
 import { UsageTracker, type UsageSnapshot } from './usage-tracker.js'
 import { FileTracker } from './file-tracker.js'
 import { FileReadStateCache } from './file-read-state.js'
-import { ParallelExecutor } from './parallel-executor.js'
+import {
+  ParallelExecutor,
+  isEagerExecutableTool,
+  shouldCancelSiblingToolsOnReadError,
+  type ToolBatchResult,
+} from './parallel-executor.js'
 import { BackgroundTaskManager } from './background-tasks.js'
 import { createTaskOutputTool } from './tools/task-output.js'
 import { monitorTool } from './tools/monitor.js'
@@ -866,6 +871,29 @@ export class Session {
       this.toolRunner.turnIndex = this.turnIndex
       const assistantContent: any[] = []
       let hasToolUse = false
+      const eagerToolExecutions = new Map<string, Promise<ToolBatchResult>>()
+      const recordToolEvent = (event: ToolExecutionEvent) => {
+        toolEventsForHarvest.push(event)
+        this.recentToolEvents = [...this.recentToolEvents, event].slice(-50)
+        events.onToolEvent(event)
+      }
+      const startEagerToolExecution = (block: any) => {
+        if (!isEagerExecutableTool(block.name) || eagerToolExecutions.has(block.id)) return
+        const promise = this.parallelExecutor.executeBatch(
+          [{ type: 'tool_use', id: block.id, name: block.name, input: block.input }],
+          recordToolEvent,
+          this.abortController!.signal,
+        ).then((results) => results[0] ?? {
+          tool_use_id: block.id,
+          content: 'Tool finished without a result',
+          is_error: true,
+        }).catch((error) => ({
+          tool_use_id: block.id,
+          content: error instanceof Error ? error.message : String(error),
+          is_error: true,
+        }))
+        eagerToolExecutions.set(block.id, promise)
+      }
 
       let streamSuccess = false
       let retryCount = 0
@@ -922,6 +950,9 @@ export class Session {
                 try { last.input = JSON.parse(last._rawInput) } catch { last.input = {} }
                 delete last._rawInput
               }
+              if (last?.type === 'tool_use') {
+                startEagerToolExecution(last)
+              }
             } else if (chunk.type === 'message_end' && chunk.usage) {
               this.usageTracker.addTurn(chunk.usage)
               this.history.saveUsage(this.id, this.usageTracker.serialize())
@@ -945,6 +976,7 @@ export class Session {
             // Drop any partial chunks accumulated before the error so we don't
             // duplicate content into the final assistantMessage.
             assistantContent.length = 0
+            eagerToolExecutions.clear()
             hasToolUse = false
             retryCount = 0
             continue
@@ -956,6 +988,7 @@ export class Session {
               console.log('[RUNLOOP] Gateway error after retries, attempting compact')
               await this.compact(events)
               assistantContent.length = 0
+              eagerToolExecutions.clear()
               hasToolUse = false
               retryCount = 0
               compactedOnError = true
@@ -972,6 +1005,7 @@ export class Session {
           // Drop partial chunks before retrying — provider will replay from the
           // start of the assistant turn.
           assistantContent.length = 0
+          eagerToolExecutions.clear()
           hasToolUse = false
 
           await new Promise<void>((resolve, reject) => {
@@ -1012,16 +1046,33 @@ export class Session {
       if (!hasToolUse) break
 
       const toolUseBlocks = assistantContent.filter((b: any) => b.type === 'tool_use')
-      const recordToolEvent = (event: ToolExecutionEvent) => {
-        toolEventsForHarvest.push(event)
-        this.recentToolEvents = [...this.recentToolEvents, event].slice(-50)
-        events.onToolEvent(event)
+      const eagerResultsById = new Map<string, ToolBatchResult>()
+      for (const block of toolUseBlocks) {
+        const eager = eagerToolExecutions.get(block.id)
+        if (eager) eagerResultsById.set(block.id, await eager)
       }
-      const batchResults = await this.parallelExecutor.executeBatch(
-        toolUseBlocks,
-        recordToolEvent,
-        this.abortController!.signal
-      )
+      const eagerReadHadError = toolUseBlocks.some((block: any) => {
+        const result = eagerResultsById.get(block.id)
+        return result?.is_error && shouldCancelSiblingToolsOnReadError(block.name)
+      })
+      const deferredToolUseBlocks = toolUseBlocks.filter((block: any) => !eagerToolExecutions.has(block.id))
+      const deferredResults = eagerReadHadError
+        ? deferredToolUseBlocks.map((block: any) => ({
+            tool_use_id: block.id,
+            content: 'Cancelled: sibling tool failed',
+            is_error: true,
+          }))
+        : await this.parallelExecutor.executeBatch(
+            deferredToolUseBlocks,
+            recordToolEvent,
+            this.abortController!.signal
+          )
+      const deferredResultsById = new Map(deferredResults.map((result) => [result.tool_use_id, result]))
+      const batchResults = toolUseBlocks.map((block: any) => (
+        eagerResultsById.get(block.id) ??
+        deferredResultsById.get(block.id) ??
+        { tool_use_id: block.id, content: 'Tool finished without a result', is_error: true }
+      ))
       if (this.abortController?.signal.aborted) break
 
       const TASK_TOOL_NAMES = new Set(['TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TaskStop', 'TodoWrite'])

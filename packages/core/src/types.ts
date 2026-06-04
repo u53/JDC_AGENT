@@ -115,8 +115,9 @@ export interface ModelConfig {
    */
   cacheKey?: string
   /**
-   * End-user identifier for OpenAI's `user` field — improves cache routing
-   * and helps with abuse signals. Usually the session id.
+   * End-user identifier for OpenAI abuse/safety signals. Chat Completions pass
+   * this as `user`; Responses pass it as `safety_identifier`. Usually the
+   * session id.
    */
   cacheUser?: string
 }
