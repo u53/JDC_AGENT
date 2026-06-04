@@ -7,6 +7,7 @@ import { HarvestCandidateSchema, HarvestJobSchema, HarvestModelBindingSchema } f
 import { defaultHarvestDistillers, selectDistillerForDecision, validateDistillerOutput, type ContextDistiller, type DistillerContext, type DistillerModelClient } from './distillers/index.js'
 import { contextFactKindFromMemoryKind } from '../tools/memory-search.js'
 import type { ContextOperationStatus, ContextPerformanceRecorder } from './performance.js'
+import { classifyHarvestPlan, type HarvestClassifier } from './harvest-classifier.js'
 
 export type HarvestDistiller = ContextDistiller
 export type { DistillerContext }
@@ -46,6 +47,7 @@ export interface RunHarvestJobOptions extends AcceptanceOptions {
   recorder?: ContextPerformanceRecorder
   projectKey?: string
   ambientModelBindingForTest?: HarvestModelBinding
+  classifier?: HarvestClassifier
 }
 
 export interface HarvestRunResult {
@@ -122,7 +124,18 @@ export async function runHarvestJob(job: HarvestJob, options: RunHarvestJobOptio
     current = updateJob(canonicalJob, 'classified', now)
     await options.store?.updateHarvestJob?.(current)
 
-    const decision = prepared.decision ?? classifyHarvestCandidate(prepared.candidate)
+    const fallbackDecision = prepared.decision ?? classifyHarvestCandidate(prepared.candidate)
+    const planned = await classifyHarvestPlan(prepared.candidate, {
+      classifier: options.classifier,
+      fallbackDecision,
+      modelBinding: current.modelBinding,
+    })
+    if (planned.diagnostics.length) {
+      const classifierDiagnostics = planned.diagnostics.map((message) => makeHarvestDiagnostic(message, 'warning', now))
+      diagnostics.push(...classifierDiagnostics)
+      await persistDiagnostics(options.store, classifierDiagnostics)
+    }
+    const decision = planned.decision
     current = { ...current, decision, updatedAt: now() }
     if (decision.action === 'skip') {
       return finish(await skipJob(current, decision.reason, `Harvest skipped: ${decision.reason}`, options.store, now))

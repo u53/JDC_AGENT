@@ -21,10 +21,10 @@
 
 ## Phase 3: Turn Intelligence Classifier
 
-- [ ] Introduce a background classifier that emits a multi-action harvest plan.
-- [ ] Keep `harvest-router.ts` as a cheap gate and fallback dispatcher.
+- [x] Introduce a background classifier that emits a multi-action harvest plan.
+- [x] Keep `harvest-router.ts` as a cheap gate and fallback dispatcher.
 - [ ] Allow one turn to request multiple distillers when evidence contains project knowledge, workflow rules, runtime state, and team state together.
-- [ ] Persist classifier diagnostics without blocking foreground chat.
+- [x] Persist classifier diagnostics without blocking foreground chat.
 
 ## Phase 4: Multi-Fact Distillation
 

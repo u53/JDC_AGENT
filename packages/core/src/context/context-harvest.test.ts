@@ -322,6 +322,70 @@ describe('harvest queue safety chain', () => {
     ])
   })
 
+  it('uses a background harvest plan classifier instead of treating the router as the final decision layer', async () => {
+    const store = makeStore()
+    const candidate: HarvestCandidate = {
+      ...baseCandidate,
+      userMessage: 'Can you capture the durable project overview from this turn?',
+      assistantMessages: [
+        {
+          id: 'assistant_project_overview',
+          role: 'assistant',
+          timestamp: 2,
+          content: [{ type: 'text', text: 'Project overview: packages/core owns harvest, context storage, and runLoop orchestration.' }],
+        },
+      ],
+    }
+    const classifier = vi.fn(async () => ({
+      id: 'plan_project_overview',
+      runLoopId: candidate.runLoopId,
+      reason: 'classifier selected project profile distillation',
+      sourceMessageIds: ['assistant_project_overview'],
+      actions: [{ action: 'distill_project_update' as const, reason: 'project overview evidence', priority: 100 }],
+    }))
+    const distiller = {
+      name: 'ProjectProfileDistiller',
+      distill: vi.fn(async () => projectProfileEnvelope('Project overview captured by classifier.', 'assistant_project_overview')),
+    }
+    const enqueued = await enqueueHarvest(candidate, makeBinding('anthropic'), { store, now: () => 4_180, createId: () => 'job_classifier_plan' })
+
+    const completed = await runHarvestJob(enqueued.job!, {
+      store,
+      classifier,
+      distillers: [distiller],
+      now: () => 4_190,
+    })
+
+    expect(completed.status).toBe('accepted')
+    expect(classifier).toHaveBeenCalledWith(expect.objectContaining({ runLoopId: 'run_1' }), expect.objectContaining({ fallbackDecision: expect.any(Object) }))
+    expect(distiller.distill).toHaveBeenCalled()
+    expect(store.facts.at(-1)).toMatchObject({
+      kind: 'project_profile',
+      content: 'Project overview captured by classifier.',
+      sourceProvider: 'Harvest:ProjectProfileDistiller',
+    })
+  })
+
+  it('falls back to the router decision when the harvest plan classifier fails', async () => {
+    const store = makeStore()
+    const classifier = vi.fn(async () => {
+      throw new Error('classifier model unavailable')
+    })
+    const enqueued = await enqueueHarvest(baseCandidate, makeBinding('anthropic'), { store, now: () => 4_195, createId: () => 'job_classifier_fallback' })
+
+    const completed = await runHarvestJob(enqueued.job!, {
+      store,
+      classifier,
+      distillers: [{ name: 'MemoryCuratorDistiller', distill: async () => memoryEnvelope('Fallback router memory survived classifier failure.', 'cit_user_run_1') }],
+      now: () => 4_196,
+    })
+
+    expect(completed.status).toBe('accepted')
+    expect(classifier).toHaveBeenCalled()
+    expect(store.diagnostics.some((diagnostic) => diagnostic.message.includes('classifier failed'))).toBe(true)
+    expect(store.facts.at(-1)?.content).toBe('Fallback router memory survived classifier failure.')
+  })
+
   it('distills structured Team artifact candidates without a model call', async () => {
     const store = makeStore()
     const candidate: HarvestCandidate = {
@@ -593,6 +657,21 @@ function conversationEnvelope(currentGoal: string, citationId: string): Distille
       confirmedDecisions: [],
       rejectedDirections: [],
       openQuestions: [],
+    },
+  }
+}
+
+function projectProfileEnvelope(projectPurpose: string, citationId: string): DistillerEnvelope {
+  return {
+    schemaVersion: 1,
+    distiller: 'ProjectProfileDistiller',
+    confidence: 0.94,
+    citations: [{ id: citationId, type: 'message', ref: citationId }],
+    payload: {
+      projectPurpose,
+      packageBoundaries: [{ name: 'core', path: 'packages/core', responsibility: 'Context engine and runLoop orchestration.' }],
+      commands: [{ name: 'core build', command: 'pnpm --filter @jdcagnet/core build', purpose: 'Compile core package.' }],
+      architectureNotes: ['Harvest plans select distillation lanes before durable facts are saved.'],
     },
   }
 }

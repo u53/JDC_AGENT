@@ -193,6 +193,20 @@ export type HarvestDecision =
   | { action: 'distill_qa_issue'; reason: string }
   | { action: 'distill_workflow_rule'; reason: string }
 
+export interface HarvestPlanAction {
+  action: HarvestDecision['action']
+  reason: string
+  priority: number
+}
+
+export interface HarvestPlan {
+  id: string
+  runLoopId: string
+  actions: HarvestPlanAction[]
+  reason: string
+  sourceMessageIds: string[]
+}
+
 export interface HarvestModelBinding {
   sessionId: string
   providerProtocol: ProviderProtocol
