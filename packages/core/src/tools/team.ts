@@ -7,6 +7,7 @@ import { resolveExpertPrompt } from '../team/expert-prompts.js'
 import type { SubSessionOptions } from '../sub-session.js'
 import type { ModelProvider } from '../model-provider.js'
 import type { ModelConfig } from '../types.js'
+import type { RuntimeModelResolution } from '../model-resolution.js'
 import { routeSkills } from '../team/skill-router.js'
 import { renderSkill, type SkillLoader } from '../skills/index.js'
 
@@ -16,7 +17,7 @@ export interface TeamToolDeps {
   buildSubSessionDeps: () => Omit<SubSessionOptions, 'prompt' | 'agentType' | 'signal' | 'onAgentProgress' | 'onAgentText' | 'mailbox' | 'onToolEvent'>
   provider?: ModelProvider
   modelConfig?: ModelConfig
-  resolveModel?: (modelId: string) => { provider: ModelProvider; modelConfig: ModelConfig } | null
+  resolveModel?: (modelId: string) => RuntimeModelResolution
   /**
    * Lazy accessor for the skill loader. The team tool is registered before
    * the loader is ready, so the deps object holds a thunk that resolves the
@@ -128,6 +129,10 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
             type: 'number',
             description: 'Idle timeout in minutes — team is killed if NO member has activity for this long. Heartbeat-based, so active teams are never killed. Default: 60.',
           },
+          pmModelId: {
+            type: 'string',
+            description: 'Optional model id for the Team PM only. Use exactly a configured model id such as "groupId:modelId" when the user explicitly asks the PM to use a specific model. Omit to inherit the main session model.',
+          },
           archive_path: {
             type: 'string',
             description: 'Optional: where to put archived workspaces (default: <cwd>/.team-archive)',
@@ -210,6 +215,18 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
       }
 
       const bgTask = deps.backgroundTasks.registerTeam(objective, plan.members)
+      let aiPM = deps.provider && deps.modelConfig ? { provider: deps.provider, modelConfig: deps.modelConfig } : undefined
+      const pmModelId = input.pmModelId as string | undefined
+      let pmModelWarning: string | undefined
+      if (pmModelId) {
+        const resolved = deps.resolveModel?.(pmModelId)
+        if (resolved?.status === 'resolved') {
+          aiPM = { provider: resolved.provider, modelConfig: resolved.modelConfig }
+          pmModelWarning = resolved.warning
+        } else {
+          pmModelWarning = resolved?.warning ?? `Requested PM model "${pmModelId}" was not found; PM is using the main session model.`
+        }
+      }
 
       // Route skills (best-effort, fails open). Two slots, at most one skill each:
       //   - pmContent → injected into PM system prompt (dialogue/process methodology)
@@ -248,7 +265,7 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
         teamTimeoutMs: typeof timeoutMinutes === 'number' && timeoutMinutes > 0 ? timeoutMinutes * 60_000 : undefined,
         subSessionDeps: deps.buildSubSessionDeps(),
         resolveModel: deps.resolveModel,
-        aiPM: deps.provider && deps.modelConfig ? { provider: deps.provider, modelConfig: deps.modelConfig } : undefined,
+        aiPM,
         skillInjection: { pmContent: pmSkillContent, workerContent: workerSkillContent },
         onUsage: deps.onUsage,
         onEvent: (e) => {
@@ -282,6 +299,7 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
           `Objective: ${objective}`,
           members.length > 0 ? `Initial members:\n${memberLines}` : `The PM is now planning staffing and task breakdown autonomously.`,
           taskLines ? `Initial tasks (hints):\n${taskLines}` : '',
+          pmModelWarning ? `PM model warning: ${pmModelWarning}` : '',
           routerNote ? `\n${routerNote}` : '',
           ``,
           `HANDOFF CONTRACT — IMPORTANT:`,

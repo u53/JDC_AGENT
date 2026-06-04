@@ -24,6 +24,7 @@ import { recordTeamEventEvidence, recordTeamTaskResultEvidence, type TeamLedgerC
 import type { SubSessionOptions } from '../sub-session.js'
 import type { ModelProvider } from '../model-provider.js'
 import type { ModelConfig } from '../types.js'
+import type { RuntimeModelResolution } from '../model-resolution.js'
 
 export interface TeamRuntimePlan {
   members: TeamMemberSpec[]
@@ -47,7 +48,7 @@ export interface TeamRuntimeOptions {
   teamTimeoutMs?: number
   archivePath?: string
   aiPM?: { provider: ModelProvider; modelConfig: ModelConfig }
-  resolveModel?: (modelId: string) => { provider: ModelProvider; modelConfig: ModelConfig } | null
+  resolveModel?: (modelId: string) => RuntimeModelResolution
   // Skill content selected by SkillRouter at team start. Both fields are
   // OPTIONAL plain text. The PM content is appended to PM's system prompt
   // (dialogue methodology); the worker content is appended to each task
@@ -124,6 +125,7 @@ export class TeamRuntime {
         cwd: opts.subSessionDeps.cwd,
         teamId: this.id,
         objective: opts.objective,
+        modelId: opts.aiPM.modelConfig.model,
         onActionsReady: () => this.scheduleTick(),
         recentEvents: (n) => this.events.tail(n),
         workspace: () => this.workspace,

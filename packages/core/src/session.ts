@@ -57,6 +57,7 @@ import { createProviderDistillerModelClient } from './context/distillers/index.j
 import { hashContent } from './context/providers/shared.js'
 import { createContextScheduler, type ContextScheduler } from './context/scheduler.js'
 import type { ContextEngineConfig, ContextRequest, HarvestCandidate, HarvestModelBinding, ProviderProtocol } from './context/types.js'
+import type { RuntimeModelResolution } from './model-resolution.js'
 import {
   collectCodeContext,
   collectConversationContext,
@@ -131,7 +132,7 @@ export class Session {
   private turnsSinceTaskTool = 0
   private planMode: 'normal' | 'planning' | 'awaiting_approval' = 'normal'
   private onPlanReview?: (planFile: string, content: string) => Promise<{ approved: boolean; feedback?: string }>
-  resolveModel?: (modelId: string) => { provider: ModelProvider; modelConfig: ModelConfig } | null
+  resolveModel?: (modelId: string) => RuntimeModelResolution
   ideContext?: { filePath?: string; text?: string; selection?: { start: { line: number }; end: { line: number } } | null }
   private pendingNotifications: Array<{
     type: 'shell_complete' | 'agent_complete' | 'team_progress' | 'team_complete'
@@ -234,7 +235,7 @@ export class Session {
       buildSubSessionDeps: buildTeamSubSessionDeps as any,
       provider: this.provider,
       modelConfig: this.config.modelConfig,
-      resolveModel: (modelId: string) => this.resolveModel?.(modelId) ?? null,
+      resolveModel: (modelId: string) => this.resolveModel?.(modelId) ?? modelResolverUnavailable(modelId),
       getSkillLoader: () => this.skillLoader,
       onUsage: onSubAgentUsage,
       onTeamEvent: this._teamEventHandler = (teamId, event) => {
@@ -354,7 +355,7 @@ export class Session {
       onToolEvent: undefined,
       onPermissionRequest,
       isSubAgent: false,
-      resolveModel: (modelId: string) => this.resolveModel?.(modelId) ?? null,
+      resolveModel: (modelId: string) => this.resolveModel?.(modelId) ?? modelResolverUnavailable(modelId),
       backgroundTasks: this.backgroundTasks,
       onAgentProgress: (agentToolUseId, event) => {
         this.currentEvents?.onAgentProgress?.(agentToolUseId, event)
@@ -1554,6 +1555,13 @@ function toHarvestToolEvent(event: ToolExecutionEvent): { id: string; name?: str
 
 function createRunLoopId(sessionId: string, createdAt: number): string {
   return `run_${createHash('sha1').update(`${sessionId}:${createdAt}:${Math.random()}`).digest('hex').slice(0, 16)}`
+}
+
+function modelResolverUnavailable(modelId: string): RuntimeModelResolution {
+  return {
+    status: 'failed',
+    warning: `Requested model "${modelId}" could not be resolved because no runtime model resolver is configured; using the main session model.`,
+  }
 }
 
 function contextModeFromPlanMode(planMode: Session['getPlanMode'] extends () => infer T ? T : string): ContextRequest['mode'] {

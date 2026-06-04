@@ -6,10 +6,14 @@ import {
   type PermissionCallback, createAskUserTool, type AskUserCallback, createNotifyTool, type NotifyCallback,
   McpManager, loadMcpConfig, saveMcpConfig, type McpServerConfig, type McpServerState,
   IdeManager, type IdeConnection, type OpenDiffParams, type OpenDiffResult, type DiagnosticFile,
-  compressImageForAPI, getContextEngine, ensureCodeIndexJob, resolveConfiguredModel,
+  compressImageForAPI, getContextEngine, ensureCodeIndexJob, resolveConfiguredModel, type ConfiguredModelResolution,
 } from '@jdcagnet/core'
 import type { ToolExecutionEvent } from '@jdcagnet/core'
 import { Notification, type BrowserWindow } from 'electron'
+
+type RuntimeModelResolutionWithProtocol =
+  | { status: 'resolved'; provider: any; modelConfig: ModelConfig; protocol: string; warning?: string }
+  | { status: 'failed'; warning: string }
 
 function getActiveModelConfig() {
   const config = loadAppConfig()
@@ -182,12 +186,26 @@ export class SessionManager {
   private resolveModelById(modelId: string): { provider: any; modelConfig: ModelConfig; protocol: string } | null {
     const config = loadAppConfig()
     const resolution = resolveConfiguredModel(config.modelGroups?.groups, modelId)
-    if (resolution.status !== 'resolved') return null
+    const runtime = this.modelResolutionToRuntime(resolution)
+    if (runtime.status !== 'resolved') return null
+    return {
+      provider: runtime.provider,
+      modelConfig: runtime.modelConfig,
+      protocol: runtime.protocol,
+    }
+  }
+
+  private modelResolutionToRuntime(resolution: ConfiguredModelResolution): RuntimeModelResolutionWithProtocol {
+    if (resolution.status !== 'resolved') {
+      return { status: 'failed', warning: resolution.message }
+    }
     const m = resolution.model
     return {
+      status: 'resolved',
       provider: this.createProvider(m.group as any),
       modelConfig: { model: m.modelId, maxTokens: m.maxTokens, contextWindow: m.contextWindow, compressAt: m.compressAt },
       protocol: m.protocol || 'anthropic',
+      warning: resolution.message,
     }
   }
 
@@ -272,9 +290,9 @@ export class SessionManager {
     session.resolveModel = (modelId: string) => {
       const config = loadAppConfig()
       const resolution = resolveConfiguredModel(config.modelGroups?.groups, modelId)
-      if (resolution.status !== 'resolved') return null
-      const m = resolution.model
-      return { provider: this.createProvider(m.group as any), modelConfig: { model: m.modelId, maxTokens: m.maxTokens, contextWindow: m.contextWindow, compressAt: m.compressAt } }
+      const runtime = this.modelResolutionToRuntime(resolution)
+      if (runtime.status !== 'resolved') return runtime
+      return { status: 'resolved', provider: runtime.provider, modelConfig: runtime.modelConfig, warning: runtime.warning }
     }
     const onAskUser: AskUserCallback = async (question, options, multiSelect) => {
       return new Promise<string>((resolve) => {

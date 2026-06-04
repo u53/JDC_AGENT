@@ -80,4 +80,5 @@ export {
   type ConfiguredModelEntry,
   type ConfiguredModelResolution,
   type ResolvedConfiguredModel,
+  type RuntimeModelResolution,
 } from './model-resolution.js'

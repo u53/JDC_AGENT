@@ -4,8 +4,7 @@ import { Mailbox, type MailboxMessage } from './team-mailbox.js'
 import { createTeamReportTool } from '../tools/team-report.js'
 import { createTeamArtifactTool } from '../tools/team-artifact.js'
 import type { TeamWorkspace } from './team-workspace.js'
-import type { ModelProvider } from '../model-provider.js'
-import type { ModelConfig } from '../types.js'
+import type { RuntimeModelResolution } from '../model-resolution.js'
 import type {
   TeamMemberState,
   TeamMemberSpec,
@@ -37,7 +36,7 @@ export interface TeamMemberOptions {
   teamMailbox?: { push(msg: any): void }
   workspace?: TeamWorkspace
   subSessionDeps: Omit<SubSessionOptions, 'prompt' | 'agentType' | 'signal' | 'onAgentProgress' | 'onAgentText' | 'mailbox' | 'onToolEvent'>
-  resolveModel?: (modelId: string) => { provider: ModelProvider; modelConfig: ModelConfig } | null
+  resolveModel?: (modelId: string) => RuntimeModelResolution
   onEvent?: (event: TeamEvent) => void
   onComplete?: (memberId: string, result: TeamTaskResult) => void
   onFail?: (memberId: string, error: string) => void
@@ -211,16 +210,13 @@ export class TeamMember {
         })
       }
 
-      // Resolve modelId override: if the member spec specifies a modelId AND the runtime
-      // gave us a resolveModel callback, swap in that model's provider + config. Otherwise
-      // fall back to whatever the main session passed in subSessionDeps. A bad / unknown
-      // modelId is logged via member_progress and silently falls back — the worker still
-      // gets to run, just on the default model.
+      // Resolve modelId override. Fail open to the main-session model, but emit
+      // the resolver-provided warning so ambiguous/not-found model IDs are visible.
       let effectiveProvider = this.opts.subSessionDeps.provider
       let effectiveModelConfig = this.opts.subSessionDeps.modelConfig
-      if (this.modelId && this.opts.resolveModel) {
-        const resolved = this.opts.resolveModel(this.modelId)
-        if (resolved) {
+      if (this.modelId) {
+        const resolved = this.opts.resolveModel?.(this.modelId)
+        if (resolved?.status === 'resolved') {
           effectiveProvider = resolved.provider
           effectiveModelConfig = resolved.modelConfig
           this.opts.onEvent?.({
@@ -230,7 +226,7 @@ export class TeamMember {
             timestamp: Date.now(),
           })
         } else {
-          const message = `Requested model "${this.modelId}" not found — falling back to main session model`
+          const message = resolved?.warning ?? `Requested model "${this.modelId}" not found — falling back to main session model`
           this.opts.onEvent?.({
             type: 'model_resolution_warning',
             memberId: this.id,

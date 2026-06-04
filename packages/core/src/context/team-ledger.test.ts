@@ -129,6 +129,29 @@ describe('JDC Context Team ledger', () => {
     })
   })
 
+  it('records model resolution warning events as team log evidence', async () => {
+    const store = makeWritableStore()
+    const context = ledgerContext(store)
+
+    await recordTeamEventEvidence({
+      type: 'model_resolution_warning',
+      memberId: 'member_api',
+      requestedModelId: 'claude-opus-4-1',
+      message: 'Configured model "claude-opus-4-1" is ambiguous. Use one of: official:claude-opus-4-1, proxy:claude-opus-4-1.',
+      timestamp: 1_008,
+    }, context)
+
+    expect(store.saveDiagnostic).not.toHaveBeenCalled()
+    expect(store.saveRawEvidence).toHaveBeenCalledTimes(1)
+    expect(mockFirstArgs<RawEvidence>(store.saveRawEvidence)[0]).toMatchObject({
+      content: expect.stringContaining('ambiguous'),
+      metadata: expect.objectContaining({
+        eventType: 'model_resolution_warning',
+        memberId: 'member_api',
+      }),
+    })
+  })
+
   it('records artifact, issue, and task result facts with deterministic ids', async () => {
     const store = makeWritableStore()
     const context = ledgerContext(store)

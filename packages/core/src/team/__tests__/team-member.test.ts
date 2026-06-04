@@ -151,7 +151,7 @@ describe('TeamMember', () => {
       spec: { role: 'worker', modelId: 'missing-model' },
       taskPrompt: 'task',
       subSessionDeps: mockDeps,
-      resolveModel: () => null,
+      resolveModel: () => ({ status: 'failed', warning: 'Requested model "missing-model" not found — falling back to main session model' }),
       onEvent: (e) => events.push(e),
     })
     await member.start()
@@ -159,5 +159,28 @@ describe('TeamMember', () => {
     expect(warn).toBeDefined()
     expect(warn.requestedModelId).toBe('missing-model')
     expect(warn.message).toContain('not found')
+  })
+
+  it('emits the resolver-provided warning when modelId resolution fails with details', async () => {
+    const events: any[] = []
+    const member = new TeamMember({
+      spec: { role: 'worker', modelId: 'claude-opus-4-1' },
+      taskPrompt: 'task',
+      subSessionDeps: mockDeps,
+      resolveModel: (() => ({
+        status: 'failed' as const,
+        warning: 'Configured model "claude-opus-4-1" is ambiguous. Use one of: official:claude-opus-4-1, proxy:claude-opus-4-1.',
+      })) as any,
+      onEvent: (e) => events.push(e),
+    })
+    await member.start()
+    const warn = events.find(e => e.type === 'model_resolution_warning')
+    expect(warn).toBeDefined()
+    expect(warn.message).toContain('ambiguous')
+    expect(warn.message).toContain('official:claude-opus-4-1')
+    expect(runSubSession).toHaveBeenLastCalledWith(expect.objectContaining({
+      provider: mockDeps.provider,
+      modelConfig: mockDeps.modelConfig,
+    }))
   })
 })

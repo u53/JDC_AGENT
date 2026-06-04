@@ -6,6 +6,7 @@ import type { ToolExecutionEvent, PermissionCallback } from '../tool-runner.js'
 import { runSubSession } from '../sub-session.js'
 import type { SubSessionOptions } from '../sub-session.js'
 import { createContextScheduler } from '../context/scheduler.js'
+import type { RuntimeModelResolution } from '../model-resolution.js'
 
 const AGENT_CONTEXT_ENGINE_TIMEOUT_MS = 200
 const agentContextEngineScheduler = createContextScheduler()
@@ -18,7 +19,7 @@ export interface AgentToolDeps {
   onToolEvent?: (event: ToolExecutionEvent) => void
   onPermissionRequest?: PermissionCallback
   isSubAgent?: boolean
-  resolveModel?: (modelId: string) => { provider: ModelProvider; modelConfig: ModelConfig } | null
+  resolveModel?: (modelId: string) => RuntimeModelResolution
   onAgentProgress?: (agentToolUseId: string, event: { toolName: string; toolStatus: 'start' | 'complete' | 'error'; toolInput?: Record<string, unknown>; toolResult?: { content: string; isError?: boolean }; toolCount: number }) => void
   onAgentText?: (agentToolUseId: string, text: string) => void
   onAgentComplete?: (agentToolUseId: string, result: { content: string; turns: number; toolsUsed: string[] }) => void
@@ -82,13 +83,14 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
       let effectiveModelConfig = deps.modelConfig
       let modelWarning: string | undefined
 
-      if (requestedModelId && deps.resolveModel) {
-        const resolved = deps.resolveModel(requestedModelId)
-        if (resolved) {
+      if (requestedModelId) {
+        const resolved = deps.resolveModel?.(requestedModelId)
+        if (resolved?.status === 'resolved') {
           effectiveProvider = resolved.provider
           effectiveModelConfig = resolved.modelConfig
+          modelWarning = resolved.warning
         } else {
-          modelWarning = `Requested model "${requestedModelId}" was not found; using the main session model.`
+          modelWarning = resolved?.warning ?? `Requested model "${requestedModelId}" was not found; using the main session model.`
         }
       }
 
@@ -133,7 +135,14 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
         })
 
         return {
-          content: `Background agent started.\nTask ID: ${task.id}\nType: ${agentType}\nPrompt: ${prompt}\nYou will receive a <task-notification> when it completes.`,
+          content: [
+            `Background agent started.`,
+            `Task ID: ${task.id}`,
+            `Type: ${agentType}`,
+            modelWarning ? `Model warning: ${modelWarning}` : '',
+            `Prompt: ${prompt}`,
+            `You will receive a <task-notification> when it completes.`,
+          ].filter(Boolean).join('\n'),
         }
       }
 
@@ -178,7 +187,12 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
             deps.backgroundTasks!.failAgent(task.id, err instanceof Error ? err.message : String(err))
           })
           return {
-            content: `Agent moved to background.\nTask ID: ${task.id}\nYou will receive a <task-notification> when it completes.`,
+            content: [
+              `Agent moved to background.`,
+              `Task ID: ${task.id}`,
+              modelWarning ? `Model warning: ${modelWarning}` : '',
+              `You will receive a <task-notification> when it completes.`,
+            ].filter(Boolean).join('\n'),
           }
         }
 

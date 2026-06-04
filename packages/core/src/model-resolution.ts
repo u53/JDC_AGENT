@@ -1,3 +1,6 @@
+import type { ModelProvider } from './model-provider.js'
+import type { ModelConfig } from './types.js'
+
 export interface ConfiguredModelGroup {
   id: string
   name?: string
@@ -35,6 +38,10 @@ export type ConfiguredModelResolution =
   | { status: 'resolved'; model: ResolvedConfiguredModel; message?: string }
   | { status: 'not_found'; message: string; matches: [] }
   | { status: 'ambiguous'; message: string; matches: ResolvedConfiguredModel[] }
+
+export type RuntimeModelResolution =
+  | { status: 'resolved'; provider: ModelProvider; modelConfig: ModelConfig; warning?: string }
+  | { status: 'failed'; warning: string }
 
 export function resolveConfiguredModel(groups: ConfiguredModelGroup[] | undefined, request: string): ConfiguredModelResolution {
   const requested = request.trim()

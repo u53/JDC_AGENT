@@ -28,6 +28,7 @@ export interface TeamManagerAIOptions extends TeamManagerOptions {
   cwd: string
   teamId: string
   objective: string
+  modelId?: string
   /**
    * Called when AI produces new actions ready to be consumed.
    * TeamRuntime should schedule a tick in response so pendingAIActions get executed.
@@ -866,6 +867,7 @@ export class TeamManagerAI extends TeamManager {
   private cwd: string
   private teamId: string
   private objective: string
+  private modelId?: string
   private recentEvents?: (n: number) => TeamEvent[]
   private workspace?: () => TeamWorkspace | undefined
   private skillContent?: string
@@ -905,10 +907,18 @@ export class TeamManagerAI extends TeamManager {
     this.cwd = opts.cwd
     this.teamId = opts.teamId
     this.objective = opts.objective
+    this.modelId = opts.modelId ?? opts.modelConfig.model
     this.recentEvents = opts.recentEvents
     this.workspace = opts.workspace
     this.skillContent = opts.skillContent
     this.contextEngine = opts.contextEngine
+  }
+
+  getState() {
+    return {
+      ...super.getState(),
+      modelId: this.modelId,
+    }
   }
 
   /**

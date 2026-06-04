@@ -135,6 +135,69 @@ describe('Team tools', () => {
     // Just verify execution succeeded (above).
   })
 
+  it('resolves explicit PM model without changing worker defaults', async () => {
+    const bg = new BackgroundTaskManager(path.join(os.tmpdir(), 'team-tools-pm-model-' + Date.now()))
+    const registry = new TeamRegistry()
+    const resolveModel = vi.fn((modelId: string) => modelId === 'proxy:deepseek-reasoner'
+      ? {
+          status: 'resolved' as const,
+          provider: pmProvider('pm-provider'),
+          modelConfig: { model: 'deepseek-reasoner', maxTokens: 32000, contextWindow: 128000 },
+        }
+      : { status: 'failed' as const, warning: `missing ${modelId}` })
+    const tool = createTeamTool({
+      teamRegistry: registry,
+      backgroundTasks: bg,
+      buildSubSessionDeps,
+      provider: pmProvider('main-provider'),
+      modelConfig: { model: 'main-model', maxTokens: 32000, contextWindow: 200000 },
+      resolveModel,
+    })
+
+    const result = await tool.execute({
+      objective: 'PM model override should use the explicitly configured model for coordination',
+      pmModelId: 'proxy:deepseek-reasoner',
+      members: [{ role: 'explorer', responsibility: 'Inspect project files', agentType: 'explore' }],
+      tasks: [{ title: 'A', description: 'a' }],
+    } as any, {} as any)
+
+    const teamId = bg.listAll()[0]?.id
+    const team = teamId ? registry.get(teamId) : undefined
+    expect(result.isError).toBeFalsy()
+    expect(resolveModel).toHaveBeenCalledWith('proxy:deepseek-reasoner')
+    expect(team?.getManagerState().modelId).toBe('deepseek-reasoner')
+    team?.stop()
+  })
+
+  it('surfaces PM model fallback warnings in the Team start result', async () => {
+    const bg = new BackgroundTaskManager(path.join(os.tmpdir(), 'team-tools-pm-model-warning-' + Date.now()))
+    const registry = new TeamRegistry()
+    const tool = createTeamTool({
+      teamRegistry: registry,
+      backgroundTasks: bg,
+      buildSubSessionDeps,
+      provider: pmProvider('main-provider'),
+      modelConfig: { model: 'main-model', maxTokens: 32000, contextWindow: 200000 },
+      resolveModel: () => ({
+        status: 'failed' as const,
+        warning: 'Configured PM model "missing-pm" was not found; PM is using the main session model.',
+      }),
+    })
+
+    const result = await tool.execute({
+      objective: 'PM model warning should be visible when the explicit override cannot resolve',
+      pmModelId: 'missing-pm',
+      members: [{ role: 'explorer', responsibility: 'Inspect project files', agentType: 'explore' }],
+      tasks: [{ title: 'A', description: 'a' }],
+    } as any, {} as any)
+
+    expect(result.isError).toBeFalsy()
+    expect(result.content).toContain('PM model warning:')
+    expect(result.content).toContain('missing-pm')
+    const teamId = bg.listAll()[0]?.id
+    registry.get(teamId)?.stop()
+  })
+
   it('Team tool caps members at 10 (uses maxWorkers)', async () => {
     const bg = new BackgroundTaskManager(path.join(os.tmpdir(), 'team-tools-2-' + Date.now()))
     const registry = new TeamRegistry()
@@ -225,4 +288,15 @@ describe('Team tools', () => {
 
 function mockFirstArgs<T>(mock: { mock: { calls: unknown[][] } }): T[] {
   return mock.mock.calls.map((call) => call[0] as T)
+}
+
+function pmProvider(name: string) {
+  return {
+    name,
+    chat: async () => ({ content: [], usage: { inputTokens: 0, outputTokens: 0 } }),
+    stream: async function* () {
+      yield { type: 'text_delta', text: '<scratch>no-op</scratch>\n{"actions":[]}' }
+      yield { type: 'message_end', usage: { inputTokens: 1, outputTokens: 1 } }
+    },
+  } as any
 }
