@@ -524,6 +524,41 @@ describe('Session JDC Context Engine runtime integration', () => {
     expect(store.savedHarvestJobs[0]?.candidate.assistantMessages[0]?.content).toEqual([{ type: 'text', text: 'manual scheduler complete' }])
   })
 
+  it('backfills previous assistant project summaries for confirmation harvest turns', async () => {
+    const store = makeContextStore()
+    const scheduler = makeManualScheduler()
+    const projectSummary = [
+      '# 项目整体架构',
+      'packages/core 负责 JDC Context Engine、Session runLoop、harvest、工具注册和上下文注入。',
+      'packages/electron 负责桌面主进程、IPC、窗口和系统服务。',
+      'packages/ui 负责 React 聊天界面、Inspector、Context Panel 和设置界面。',
+      '常用命令包括 pnpm --filter @jdcagnet/core test 和 pnpm --filter @jdcagnet/core build。',
+    ].join('\n')
+    const session = await makeSession({
+      provider: providerWithTurnTexts([projectSummary, '当然，已准备保存。']),
+      contextConfig: {
+        injectionEnabled: false,
+        harvestEnabled: true,
+        harvest: { minIntervalMs: 0 },
+        performance: { harvestMinIntervalMs: 0 },
+      },
+      contextStore: store,
+      scheduler,
+      providerProtocol: 'anthropic',
+    })
+
+    await session.sendMessage('帮我总结一下这个项目整体', makeEvents())
+    await session.sendMessage('当然，存一下', makeEvents())
+
+    expect(scheduler.backgroundJobs).toHaveLength(2)
+    await scheduler.backgroundJobs[1]!.task(new AbortController().signal)
+
+    expect(store.savedHarvestJobs).toHaveLength(1)
+    const candidateText = JSON.stringify(store.savedHarvestJobs[0]?.candidate.assistantMessages)
+    expect(candidateText).toContain('packages/core 负责 JDC Context Engine')
+    expect(candidateText).toContain('当然，已准备保存。')
+  })
+
   it('skips low-value turns before creating harvest jobs and avoids overlapping background harvest', async () => {
     const lowValueStore = makeContextStore()
     const lowValueSession = await makeSession({
@@ -826,6 +861,32 @@ function providerWithDistillerNoop(chunks: StreamChunk[]): ModelProvider {
       }],
       usage: { inputTokens: 1, outputTokens: 1 },
     }),
+  } as ModelProvider
+}
+
+function providerWithTurnTexts(texts: string[]): ModelProvider {
+  let streamCalls = 0
+  return {
+    name: 'turn-text-provider',
+    chat: async () => ({
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          schemaVersion: 1,
+          distiller: 'ProjectProfileDistiller',
+          action: 'skip',
+          reason: 'model_noop',
+          confidence: 0.94,
+        }),
+      }],
+      usage: { inputTokens: 1, outputTokens: 1 },
+    }),
+    stream: async function* () {
+      const text = texts[Math.min(streamCalls, texts.length - 1)] ?? ''
+      streamCalls++
+      yield { type: 'text_delta', text }
+      yield { type: 'message_end', usage: { inputTokens: 9, outputTokens: 3 } }
+    },
   } as ModelProvider
 }
 

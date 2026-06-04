@@ -147,7 +147,7 @@ export interface ContextStore {
 }
 
 const DEFAULT_CONTEXT_STORE_QUOTAS: ContextStoreQuotas = {
-  maxFacts: 1_000,
+  maxFacts: Number.POSITIVE_INFINITY,
   maxBundleSnapshots: 50,
   maxRejectedCandidates: 100,
   rawEvidenceTtlMs: 7 * 24 * 60 * 60 * 1000,
@@ -978,6 +978,7 @@ class SqlJsContextStore implements ContextStore {
   }
 
   private selectOverflowFactIds(): { table: string; ids: string[] } {
+    if (!Number.isFinite(this.quotas.maxFacts)) return { table: 'context_facts', ids: [] }
     const count = Number(this.selectRows('SELECT COUNT(*) AS count FROM context_facts WHERE project_key = ?', [this.projectKey])[0]?.count ?? 0)
     const overflow = count - this.quotas.maxFacts
     if (overflow <= 0) return { table: 'context_facts', ids: [] }
