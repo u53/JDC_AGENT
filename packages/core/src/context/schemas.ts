@@ -5,6 +5,7 @@ import type {
   ContextFact,
   ContextProviderId,
   DistillerEnvelope,
+  DistillerBatchOutput,
   DistillerOutput,
   DistillerSkipOutput,
   HarvestDecision,
@@ -281,7 +282,14 @@ export const DistillerSkipOutputSchema = z.object({
   diagnostic: z.string().optional(),
 }) satisfies z.ZodType<DistillerSkipOutput>
 
-export const DistillerOutputSchema = z.union([DistillerEnvelopeSchema, DistillerSkipOutputSchema]) satisfies z.ZodType<DistillerOutput>
+export const DistillerBatchOutputSchema = z.object({
+  schemaVersion: z.literal(1),
+  distiller: nonEmptyStringSchema,
+  facts: z.array(DistillerEnvelopeSchema).min(1),
+  skipped: z.array(z.object({ reason: SkipReasonSchema, diagnostic: z.string().optional() })).optional(),
+}) satisfies z.ZodType<DistillerBatchOutput>
+
+export const DistillerOutputSchema = z.union([DistillerEnvelopeSchema, DistillerSkipOutputSchema, DistillerBatchOutputSchema]) satisfies z.ZodType<DistillerOutput>
 
 export const RuntimeNarrativePayloadSchema = z.object({ summary: nonEmptyStringSchema, rootCause: z.string().optional(), affectedTools: z.array(z.string()), followUpRecommended: z.boolean() })
 export const ConversationStatePayloadSchema = z.object({ currentGoal: nonEmptyStringSchema, activeConstraints: z.array(z.string()), confirmedDecisions: z.array(z.string()), rejectedDirections: z.array(z.string()), openQuestions: z.array(z.string()) })

@@ -261,7 +261,14 @@ export interface DistillerSkipOutput {
   diagnostic?: string
 }
 
-export type DistillerOutput<T = unknown> = DistillerEnvelope<T> | DistillerSkipOutput
+export interface DistillerBatchOutput<T = unknown> {
+  schemaVersion: 1
+  distiller: string
+  facts: Array<DistillerEnvelope<T>>
+  skipped?: Array<{ reason: SkipReason; diagnostic?: string }>
+}
+
+export type DistillerOutput<T = unknown> = DistillerEnvelope<T> | DistillerSkipOutput | DistillerBatchOutput<T>
 
 export interface RuntimeNarrativePayload {
   summary: string

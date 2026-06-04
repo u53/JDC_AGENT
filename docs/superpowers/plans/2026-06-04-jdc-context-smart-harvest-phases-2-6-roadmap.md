@@ -28,10 +28,10 @@
 
 ## Phase 4: Multi-Fact Distillation
 
-- [ ] Allow distillers to return a batch of cited fact envelopes.
-- [ ] Validate and accept facts independently so one bad fact does not reject the whole batch.
-- [ ] Preserve evidence citations for each accepted fact.
-- [ ] Add model-output compatibility for existing single-envelope distillers.
+- [x] Allow distillers to return a batch of cited fact envelopes.
+- [x] Validate and accept facts independently so one bad fact does not reject the whole batch.
+- [x] Preserve evidence citations for each accepted fact.
+- [x] Add model-output compatibility for existing single-envelope distillers.
 
 ## Phase 5: Lifecycle-Aware Retrieval
 

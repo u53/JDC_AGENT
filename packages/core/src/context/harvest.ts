@@ -161,6 +161,9 @@ export async function runHarvestJob(job: HarvestJob, options: RunHarvestJobOptio
         visibleInPrimaryUi: false,
       }))
     }
+    if (isDistillerBatchOutput(output)) {
+      return finish(await acceptBatchOutput(current, output, prepared.candidate, options, now))
+    }
     const envelope = output
 
     current = updateJob(current, 'validating', now)
@@ -251,6 +254,83 @@ function harvestMetricStatus(result: HarvestRunResult): ContextOperationStatus {
 
 function isDistillerSkipOutput(output: DistillerOutput): output is Extract<DistillerOutput, { action: 'skip' }> {
   return Boolean(output && typeof output === 'object' && 'action' in output && output.action === 'skip')
+}
+
+function isDistillerBatchOutput(output: DistillerOutput): output is Extract<DistillerOutput, { facts: DistillerEnvelope[] }> {
+  return Boolean(output && typeof output === 'object' && 'facts' in output && Array.isArray((output as { facts?: unknown }).facts))
+}
+
+async function acceptBatchOutput(job: HarvestJob, batch: Extract<DistillerOutput, { facts: DistillerEnvelope[] }>, candidate: HarvestCandidate, options: RunHarvestJobOptions, now: () => number): Promise<HarvestRunResult> {
+  const diagnostics: ContextDiagnostic[] = []
+  const minConfidence = options.minConfidence ?? DEFAULT_CONTEXT_ENGINE_CONFIG.memory.minConfidence
+  const citationSources = options.citationSources ?? citationSourcesForCandidate(candidate)
+  const trustMode = options.trustMode ?? DEFAULT_CONTEXT_ENGINE_CONFIG.memory.trustMode
+  let acceptedCount = 0
+  let pendingCount = 0
+  let rejectedCount = 0
+
+  const evidenceDiagnostics = await persistCandidateEvidence(options.store, candidate, now)
+  diagnostics.push(...evidenceDiagnostics)
+
+  for (const skipped of batch.skipped ?? []) {
+    diagnostics.push(makeHarvestDiagnostic(skipped.diagnostic ?? `Batch distiller skipped fact: ${skipped.reason}`, 'info', now))
+  }
+
+  for (const envelope of batch.facts) {
+    const validation = validateDistillerOutput(envelope, { minConfidence, citationSources })
+    if (!validation.accepted) {
+      rejectedCount++
+      await options.store?.rejectCandidate?.(envelope, 'Batch distiller fact rejected by schema/citation/confidence/safety validation', {
+        sessionId: job.sessionId,
+        createdAt: now(),
+        validationErrors: validation.errors,
+      })
+      diagnostics.push(makeHarvestDiagnostic(`Batch distiller fact rejected: ${validation.errors.join('; ')}`, 'warning', now))
+      continue
+    }
+
+    const fact = factFromAcceptedEnvelope(envelope, job, now())
+    if (fact.confidence < minConfidence) {
+      rejectedCount++
+      const message = `confidence ${fact.confidence} is below minimum ${minConfidence}`
+      await options.store?.rejectCandidate?.(fact, 'Batch distiller fact rejected by derived fact confidence policy', {
+        sessionId: job.sessionId,
+        createdAt: now(),
+        validationErrors: [message],
+      })
+      diagnostics.push(makeHarvestDiagnostic(`Batch distiller fact rejected: ${message}`, 'warning', now))
+      continue
+    }
+
+    if (!shouldAutoAcceptFact(fact, trustMode)) {
+      pendingCount++
+      await options.store?.rejectCandidate?.(envelope, 'pending_review', { sessionId: job.sessionId, createdAt: now(), status: 'pending_review' })
+      diagnostics.push(makeHarvestDiagnostic(pendingReviewDiagnostic(envelope, fact, trustMode), 'info', now))
+      continue
+    }
+
+    const savedFact = await options.store?.saveFact?.(fact)
+    if (savedFact && !savedFact.ok) {
+      rejectedCount++
+      await options.store?.rejectCandidate?.(fact, 'Batch distiller accepted fact could not be persisted as durable context', {
+        sessionId: job.sessionId,
+        createdAt: now(),
+        validationErrors: savedFact.diagnostics.map((diagnostic) => diagnostic.message),
+      })
+      diagnostics.push(...savedFact.diagnostics)
+      continue
+    }
+
+    acceptedCount++
+  }
+
+  const finalStatus: HarvestStatus = acceptedCount > 0 ? 'accepted' : pendingCount > 0 ? 'pending_review' : rejectedCount > 0 ? 'rejected' : 'skipped'
+  const completed = updateJob(job, finalStatus, now)
+  await options.store?.updateHarvestJob?.(completed)
+  diagnostics.push(makeHarvestDiagnostic(`Harvest batch processed ${acceptedCount} accepted, ${pendingCount} pending, ${rejectedCount} rejected facts`, acceptedCount > 0 ? 'info' : 'warning', now))
+  await persistDiagnostics(options.store, diagnostics)
+  await enforceQuotas(options.store)
+  return { status: finalStatus, job: completed, diagnostics }
 }
 
 async function distillWithAbort(distiller: HarvestDistiller, candidate: HarvestCandidate, context: DistillerContext, options: { timeoutMs?: number; signal?: AbortSignal }): Promise<DistillerOutput> {
