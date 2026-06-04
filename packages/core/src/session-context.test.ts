@@ -488,6 +488,74 @@ describe('Session JDC Context Engine runtime integration', () => {
     expect(session.getMessages().at(-1)?.content).toEqual([{ type: 'text', text: 'fast foreground' }])
   })
 
+  it('still harvests completed assistant messages when the user stops immediately after a completed turn', async () => {
+    const store = makeContextStore()
+    const session = await makeSession({
+      provider: providerFromChunks([
+        { type: 'text_delta', text: 'Remember that stopped completed turns can still salvage context.' },
+        { type: 'message_end', usage: { inputTokens: 8, outputTokens: 4 } },
+      ]),
+      contextConfig: {
+        injectionEnabled: false,
+        harvestEnabled: true,
+        harvest: { minIntervalMs: 0 },
+        performance: { harvestMinIntervalMs: 0 },
+      },
+      contextStore: store,
+      providerProtocol: 'anthropic',
+    })
+    const events = makeEvents()
+    events.onMessageComplete = vi.fn((message: Message) => {
+      if (message.role === 'assistant') session.abort()
+    })
+
+    await session.sendMessage('Remember interrupted completed turn salvage.', events)
+
+    await waitFor(() => store.savedHarvestJobs.length >= 1)
+    expect(store.savedHarvestJobs).toHaveLength(1)
+    expect(store.savedHarvestJobs[0]?.candidate.assistantMessages[0]?.content).toEqual([
+      { type: 'text', text: 'Remember that stopped completed turns can still salvage context.' },
+    ])
+  })
+
+  it('still harvests streamed assistant text when the user stops before message_end', async () => {
+    const store = makeContextStore()
+    const provider: ModelProvider = {
+      name: 'abort-after-text-provider',
+      chat: async () => ({ content: [], usage: { inputTokens: 0, outputTokens: 0 } }),
+      stream: async function* (_messages: Message[], _tools: ToolDefinition[], _config: ModelConfig, signal?: AbortSignal) {
+        yield { type: 'text_delta', text: 'Remember that stop salvages already streamed text.' }
+        if (signal?.aborted) return
+        await new Promise<void>((resolve) => {
+          signal?.addEventListener('abort', () => resolve(), { once: true })
+        })
+      },
+    }
+    const session = await makeSession({
+      provider,
+      contextConfig: {
+        injectionEnabled: false,
+        harvestEnabled: true,
+        harvest: { minIntervalMs: 0 },
+        performance: { harvestMinIntervalMs: 0 },
+      },
+      contextStore: store,
+      providerProtocol: 'anthropic',
+    })
+    const events = makeEvents()
+    events.onStreamChunk = vi.fn((chunk: StreamChunk) => {
+      if (chunk.type === 'text_delta') session.abort()
+    })
+
+    await session.sendMessage('Remember interrupted stream salvage.', events)
+
+    await waitFor(() => store.savedHarvestJobs.length >= 1)
+    expect(store.savedHarvestJobs).toHaveLength(1)
+    expect(store.savedHarvestJobs[0]?.candidate.assistantMessages[0]?.content).toEqual([
+      { type: 'text', text: 'Remember that stop salvages already streamed text.' },
+    ])
+  })
+
   it('schedules completed runLoop harvest through the project scheduler interval before running harvest work', async () => {
     const store = makeContextStore()
     const scheduler = makeManualScheduler()

@@ -1123,7 +1123,9 @@ export class Session {
     }
     events.onUsage?.(finalSnapshot)
 
-    if (!this.abortController?.signal.aborted && assistantMessagesForHarvest.length > 0) {
+    // Stop should cancel unfinished streaming/tool work, but it should not throw
+    // away assistant text that already made it into a persisted message.
+    if (assistantMessagesForHarvest.length > 0) {
       this.enqueueHarvestAfterRunLoop({
         runLoopId,
         userMessage: runLoopUserMessage,
