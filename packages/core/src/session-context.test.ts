@@ -640,6 +640,27 @@ describe('Sub-session JDC Context Engine runtime integration', () => {
   })
 })
 
+describe('Session team model_resolution_warning notification', () => {
+  it('forwards model_resolution_warning team event to pending notifications', async () => {
+    const session = await makeSession({ contextConfig: { enabled: false } as any })
+    const sessionAny = session as any
+    sessionAny.pendingNotifications = []
+    sessionAny.onNotificationReady = vi.fn()
+
+    // Call the onTeamEvent handler directly (stored during construction for testability)
+    sessionAny._teamEventHandler?.('team_xyz', {
+      type: 'model_resolution_warning',
+      memberId: 'member_1',
+      requestedModelId: 'missing-model',
+      message: 'Requested model "missing-model" not found',
+      timestamp: Date.now(),
+    })
+
+    expect(sessionAny.pendingNotifications.some((n: any) => n.teamEvent?.includes('Model warning:'))).toBe(true)
+    expect(sessionAny.onNotificationReady).toHaveBeenCalled()
+  })
+})
+
 function providerFromChunks(chunks: StreamChunk[], inspectMessages?: (messages: Message[], config: ModelConfig) => void, providerName = 'test-provider', metadata: Record<string, unknown> = {}): ModelProvider {
   return {
     ...metadata,

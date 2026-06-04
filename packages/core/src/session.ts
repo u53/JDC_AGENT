@@ -147,6 +147,7 @@ export class Session {
     teamEvent?: string
   }> = []
   onNotificationReady?: () => void
+  /** @internal exposed for testing */ _teamEventHandler?: (teamId: string, event: any) => void
 
   constructor(
     config: SessionConfig,
@@ -236,11 +237,21 @@ export class Session {
       resolveModel: (modelId: string) => this.resolveModel?.(modelId) ?? null,
       getSkillLoader: () => this.skillLoader,
       onUsage: onSubAgentUsage,
-      onTeamEvent: (teamId, event) => {
+      onTeamEvent: this._teamEventHandler = (teamId, event) => {
         // Only notify the main session on terminal events (team_completed / team_failed)
         // and explicit PM replies. Intermediate events (task_completed, manager_decision,
         // etc.) fire before completeTeam() and would cause the main session to think
         // the team is done prematurely — suppress them.
+        if (event.type === 'model_resolution_warning') {
+          this.pendingNotifications.push({
+            type: 'team_progress',
+            taskId: teamId,
+            status: 'running',
+            teamEvent: `Model warning: ${(event as any).message}`,
+          })
+          this.onNotificationReady?.()
+          return
+        }
         if (event.type === 'team_completed') {
           this.captureTeamFinalSnapshot(teamId)
           this.pendingNotifications.push({

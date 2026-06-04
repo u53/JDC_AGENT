@@ -173,6 +173,7 @@ export type TeamEvent =
   | { type: 'message_sent'; from: string; to: string; intent: string; timestamp: number }
   | { type: 'intervention_received'; from: 'user' | 'main_session' | 'member'; intent: string; fromMemberId?: string; timestamp: number }
   | { type: 'team_synthesizing'; timestamp: number }
+  | { type: 'model_resolution_warning'; memberId?: string; requestedModelId: string; message: string; timestamp: number }
   | { type: 'team_completed'; summary: string; timestamp: number }
   | { type: 'team_failed'; error: string; timestamp: number }
 

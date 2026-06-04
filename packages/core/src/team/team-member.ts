@@ -230,10 +230,18 @@ export class TeamMember {
             timestamp: Date.now(),
           })
         } else {
+          const message = `Requested model "${this.modelId}" not found — falling back to main session model`
+          this.opts.onEvent?.({
+            type: 'model_resolution_warning',
+            memberId: this.id,
+            requestedModelId: this.modelId,
+            message,
+            timestamp: Date.now(),
+          })
           this.opts.onEvent?.({
             type: 'member_progress',
             memberId: this.id,
-            text: `[modelId resolve] requested "${this.modelId}" not found — falling back to main session model`,
+            text: `[modelId resolve] ${message}`,
             timestamp: Date.now(),
           })
         }

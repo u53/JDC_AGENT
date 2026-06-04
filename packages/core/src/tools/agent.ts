@@ -80,12 +80,15 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
 
       let effectiveProvider = deps.provider
       let effectiveModelConfig = deps.modelConfig
+      let modelWarning: string | undefined
 
       if (requestedModelId && deps.resolveModel) {
         const resolved = deps.resolveModel(requestedModelId)
         if (resolved) {
           effectiveProvider = resolved.provider
           effectiveModelConfig = resolved.modelConfig
+        } else {
+          modelWarning = `Requested model "${requestedModelId}" was not found; using the main session model.`
         }
       }
 
@@ -180,7 +183,10 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
         }
 
         deps.onAgentComplete?.(toolUseId, raceResult.result!)
-        return { content: raceResult.result!.content }
+        const resultContent = modelWarning
+          ? `Model warning: ${modelWarning}\n\n${raceResult.result!.content}`
+          : raceResult.result!.content
+        return { content: resultContent }
       } catch (error) {
         return {
           content: `Sub-agent error: ${error instanceof Error ? error.message : String(error)}`,

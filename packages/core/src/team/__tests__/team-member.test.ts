@@ -144,4 +144,20 @@ describe('TeamMember', () => {
     expect(member.getState().capabilities).toContain('write')
     expect(member.getState().capabilities).toContain('shell')
   })
+
+  it('emits model_resolution_warning when modelId cannot be resolved', async () => {
+    const events: any[] = []
+    const member = new TeamMember({
+      spec: { role: 'worker', modelId: 'missing-model' },
+      taskPrompt: 'task',
+      subSessionDeps: mockDeps,
+      resolveModel: () => null,
+      onEvent: (e) => events.push(e),
+    })
+    await member.start()
+    const warn = events.find(e => e.type === 'model_resolution_warning')
+    expect(warn).toBeDefined()
+    expect(warn.requestedModelId).toBe('missing-model')
+    expect(warn.message).toContain('not found')
+  })
 })
