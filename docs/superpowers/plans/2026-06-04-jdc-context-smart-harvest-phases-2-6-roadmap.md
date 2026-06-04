@@ -35,10 +35,10 @@
 
 ## Phase 5: Lifecycle-Aware Retrieval
 
-- [ ] Use lifecycle status, canonical identity, freshness, actor profile, citations, and task scope when selecting facts.
-- [ ] Keep accepted project memory unbounded at rest.
-- [ ] Retrieve only relevant facts for prompt injection.
-- [ ] Add explicit inspection paths for stale, superseded, conflicted, and archived facts.
+- [x] Use lifecycle status, canonical identity, freshness, actor profile, citations, and task scope when selecting facts.
+- [x] Keep accepted project memory unbounded at rest.
+- [x] Retrieve only relevant facts for prompt injection.
+- [x] Add explicit inspection paths for stale, superseded, conflicted, and archived facts.
 
 ## Phase 6: Maintenance And Self-Repair
 

@@ -78,6 +78,32 @@ describe('ContextRetriever', () => {
     }))
   })
 
+  it('supports explicit lifecycle inspection for inactive facts', async () => {
+    const store = makeStore([
+      fact({
+        id: 'release_flow_old',
+        content: 'Run the old release workflow.',
+        status: 'superseded',
+        canonicalKey: 'workflow:release-command',
+        supersedes: [],
+        lifecycleReason: 'superseded by release_flow_new',
+      } as any),
+      fact({ id: 'release_flow_active', content: 'Run the current release workflow.', status: 'active', canonicalKey: 'workflow:release-command' } as any),
+    ])
+
+    const result = await retrieveContextFacts(
+      { ...request, userMessage: 'workflow:release-command superseded' },
+      { store, includeInactive: true, status: 'superseded', now: () => 20_000 },
+    )
+
+    expect(result.facts.map((item) => item.fact.id)).toEqual(['release_flow_old'])
+    expect(result.facts[0]?.reasons).toContain('query_match')
+    expect(store.listAcceptedProjectFacts).toHaveBeenCalledWith(expect.objectContaining({
+      includeInactive: true,
+      status: 'superseded',
+    }))
+  })
+
   it('supports citation and path matching for workflow files', async () => {
     const store = makeStore([
       fact({
@@ -120,9 +146,9 @@ describe('ContextRetriever', () => {
 
 function makeStore(facts: ContextFact[]) {
   return {
-    listAcceptedProjectFacts: vi.fn(async (query: { limit?: number } = {}) => ({
+    listAcceptedProjectFacts: vi.fn(async (query: { limit?: number; status?: string } = {}) => ({
       ok: true,
-      value: query.limit === undefined ? facts : facts.slice(0, query.limit),
+      value: (query.limit === undefined ? facts : facts.slice(0, query.limit)).filter((item) => !query.status || item.status === query.status),
       diagnostics: [],
     })),
   } as any
