@@ -42,10 +42,10 @@
 
 ## Phase 6: Maintenance And Self-Repair
 
-- [ ] Repair stuck harvest jobs after interruption.
-- [ ] Re-run lifecycle checks for old facts when new evidence arrives.
-- [ ] Surface compact diagnostics for conflicts, repairs, and skipped maintenance.
-- [ ] Keep all maintenance in background lanes.
+- [x] Repair stuck harvest jobs after interruption.
+- [x] Re-run lifecycle checks for old facts when new evidence arrives.
+- [x] Surface compact diagnostics for conflicts, repairs, and skipped maintenance.
+- [x] Keep all maintenance in background lanes.
 
 ## Execution Policy
 

@@ -42,6 +42,7 @@ export interface ContextStoreQuotas {
   maxBundleSnapshots: number
   maxRejectedCandidates: number
   rawEvidenceTtlMs: number
+  staleHarvestJobTtlMs: number
 }
 
 export interface ContextStoreOpenOptions {
@@ -100,6 +101,7 @@ export interface QuotaEnforcementResult {
   deletedBundles: number
   deletedRawEvidence: number
   deletedRejectedCandidates: number
+  repairedHarvestJobs?: number
 }
 
 export interface ContextStoreSchemaInfo {
@@ -154,6 +156,7 @@ const DEFAULT_CONTEXT_STORE_QUOTAS: ContextStoreQuotas = {
   maxBundleSnapshots: 50,
   maxRejectedCandidates: 100,
   rawEvidenceTtlMs: 7 * 24 * 60 * 60 * 1000,
+  staleHarvestJobTtlMs: 24 * 60 * 60 * 1000,
 }
 
 interface SharedContextDatabase {
@@ -724,12 +727,15 @@ class SqlJsContextStore implements ContextStore {
       })
       const overflowRejected = this.deleteIds(this.selectOverflowIds('rejected_candidates', this.quotas.maxRejectedCandidates, 'created_at DESC', 'created_at ASC'))
       const deletedFacts = this.deleteIds(this.selectOverflowFactIds(), 'context_facts')
-      return {
+      const repairedHarvestJobs = this.repairStaleHarvestJobs()
+      const result: QuotaEnforcementResult = {
         deletedFacts,
         deletedBundles,
         deletedRawEvidence,
         deletedRejectedCandidates: expiredRejected + overflowRejected,
       }
+      if (repairedHarvestJobs > 0) result.repairedHarvestJobs = repairedHarvestJobs
+      return result
     })
   }
 
@@ -1169,6 +1175,58 @@ class SqlJsContextStore implements ContextStore {
         ]
       )
     })
+  }
+
+  private repairStaleHarvestJobs(): number {
+    if (this.quotas.staleHarvestJobTtlMs < 0) return 0
+    const cutoff = this.now() - this.quotas.staleHarvestJobTtlMs
+    const rows = this.selectRows(
+      `SELECT * FROM harvest_jobs
+       WHERE project_key = ?
+         AND status IN ('queued', 'classified', 'distilling', 'validating')
+         AND updated_at < ?
+       ORDER BY updated_at ASC`,
+      [this.projectKey, cutoff]
+    )
+    for (const row of rows) {
+      const job = parseHarvestJobRow(row)
+      const repaired = {
+        ...job,
+        status: 'skipped' as const,
+        decision: { action: 'skip' as const, reason: 'timeout' as const },
+        updatedAt: this.now(),
+        visibleInPrimaryUi: false,
+      }
+      this.db.run(
+        `UPDATE harvest_jobs
+         SET status = ?, decision_json = ?, updated_at = ?, visible_in_primary_ui = ?
+         WHERE project_key = ? AND job_id = ?`,
+        [repaired.status, JSON.stringify(repaired.decision), repaired.updatedAt, 0, this.projectKey, repaired.id]
+      )
+      this.writeDiagnosticRow({
+        ...makeDiagnostic(`Repaired stale harvest job ${job.id} from ${job.status} to skipped timeout`, 'warning'),
+        visibleInPrimaryUi: false,
+      })
+    }
+    return rows.length
+  }
+
+  private writeDiagnosticRow(diagnostic: ContextDiagnostic): void {
+    this.db.run(
+      `INSERT OR REPLACE INTO context_diagnostics(id, project_key, diagnostic_id, level, source, message, citation_json, created_at, visible_in_primary_ui)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        scopedId(this.projectKey, diagnostic.id),
+        this.projectKey,
+        diagnostic.id,
+        diagnostic.level,
+        diagnostic.source,
+        sanitizeStoreText(diagnostic.message),
+        diagnostic.citation ? JSON.stringify(diagnostic.citation) : null,
+        diagnostic.createdAt,
+        diagnostic.visibleInPrimaryUi === false ? 0 : 1,
+      ]
+    )
   }
 
   private citationSourcesFromStoredEvidence(): CitationValidationSources {

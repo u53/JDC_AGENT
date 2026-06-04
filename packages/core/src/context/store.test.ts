@@ -765,6 +765,39 @@ describe('JDC Context Store persistence', () => {
     expect((await store.listRejectedCandidates()).value.map((candidate) => candidate.id)).toEqual(['rejected_keep_1', 'rejected_keep_2'])
   })
 
+  it('repairs stale in-progress harvest jobs during quota enforcement', async () => {
+    const store = await openContextStore({
+      dbPath: makeDbPath(),
+      now: () => 90_000,
+      quotas: { staleHarvestJobTtlMs: 60_000 } as any,
+    })
+
+    await expectOk(store.saveHarvestJob(makeHarvestJob({
+      id: 'harvest_stuck',
+      status: 'distilling',
+      createdAt: 1_000,
+      updatedAt: 1_000,
+    })))
+    await expectOk(store.saveHarvestJob(makeHarvestJob({
+      id: 'harvest_recent',
+      status: 'distilling',
+      createdAt: 80_000,
+      updatedAt: 80_000,
+    })))
+
+    const repaired = await store.enforceQuotas()
+
+    expect(repaired.ok).toBe(true)
+    expect(repaired.value).toMatchObject({ repairedHarvestJobs: 1 })
+    const jobs = await store.listHarvestJobs('session_1')
+    expect(Object.fromEntries(jobs.value.map((job) => [job.id, job.status]))).toMatchObject({
+      harvest_stuck: 'skipped',
+      harvest_recent: 'distilling',
+    })
+    expect(jobs.value.find((job) => job.id === 'harvest_stuck')?.decision).toEqual({ action: 'skip', reason: 'timeout' })
+    expect((await store.listDiagnostics()).value.some((diagnostic) => diagnostic.message.includes('Repaired stale harvest job harvest_stuck'))).toBe(true)
+  })
+
   it('does not apply accepted project fact count deletion unless an explicit fact quota is configured', async () => {
     const store = await openContextStore({ dbPath: makeDbPath(), now: () => 10_000 })
     await saveFileEvidence(store)
