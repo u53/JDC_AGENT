@@ -17,6 +17,7 @@ const nonEmptyStringSchema = z.string().min(1)
 
 export const ContextModeSchema = z.enum(['chat', 'debug', 'code_edit', 'review', 'plan'])
 export const ContextFreshnessSchema = z.enum(['live', 'recent', 'cached', 'stale'])
+export const ContextFactStatusSchema = z.enum(['active', 'stale', 'superseded', 'conflicted', 'archived'])
 export const ContextScopeSchema = z.enum(['global', 'project', 'repo', 'session', 'turn'])
 export const MemoryScopeSchema = z.enum(['global', 'project', 'repo', 'session'])
 export const EvidenceKindSchema = z.enum(['file', 'git', 'tool_event', 'message', 'memory', 'ide', 'config', 'task', 'diagnostic'])
@@ -110,6 +111,12 @@ export const ContextFactSchema = z.object({
   relatedFiles: stringListSchema.optional(),
   relatedSymbols: stringListSchema.optional(),
   relatedTasks: stringListSchema.optional(),
+  status: ContextFactStatusSchema.optional(),
+  canonicalKey: nonEmptyStringSchema.optional(),
+  supersedes: stringListSchema.optional(),
+  conflictsWith: stringListSchema.optional(),
+  archivedAt: timestampSchema.optional(),
+  lifecycleReason: nonEmptyStringSchema.optional(),
 }) satisfies z.ZodType<ContextFact>
 
 export const ContextSectionSchema = z.object({

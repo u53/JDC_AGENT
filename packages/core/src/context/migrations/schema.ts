@@ -1,4 +1,4 @@
-export const CONTEXT_STORE_SCHEMA_VERSION = 1
+export const CONTEXT_STORE_SCHEMA_VERSION = 2
 export const CONTEXT_SCHEMA_VERSION_KEY = 'context_schema_version'
 
 export const CREATE_CONTEXT_STORE_TABLES = [
@@ -34,7 +34,13 @@ export const CREATE_CONTEXT_STORE_TABLES = [
     tags_json TEXT,
     related_files_json TEXT,
     related_symbols_json TEXT,
-    related_tasks_json TEXT
+    related_tasks_json TEXT,
+    status TEXT DEFAULT 'active',
+    canonical_key TEXT,
+    supersedes_json TEXT,
+    conflicts_with_json TEXT,
+    archived_at INTEGER,
+    lifecycle_reason TEXT
   )`,
   `CREATE TABLE IF NOT EXISTS context_bundles(
     id TEXT PRIMARY KEY,
@@ -91,6 +97,7 @@ export const CREATE_CONTEXT_STORE_INDEXES = [
   `CREATE INDEX IF NOT EXISTS idx_context_facts_scope ON context_facts(scope)`,
   `CREATE INDEX IF NOT EXISTS idx_context_facts_kind ON context_facts(kind)`,
   `CREATE INDEX IF NOT EXISTS idx_context_facts_updated ON context_facts(updated_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_context_facts_lifecycle ON context_facts(status, canonical_key)`,
   `CREATE INDEX IF NOT EXISTS idx_context_bundles_session ON context_bundles(session_id)`,
   `CREATE INDEX IF NOT EXISTS idx_harvest_jobs_session ON harvest_jobs(session_id)`,
   `CREATE INDEX IF NOT EXISTS idx_harvest_jobs_status ON harvest_jobs(status)`,
@@ -99,9 +106,21 @@ export const CREATE_CONTEXT_STORE_INDEXES = [
   `CREATE INDEX IF NOT EXISTS idx_rejected_candidates_expires ON rejected_candidates(expires_at)`,
 ]
 
+const MIGRATE_CONTEXT_STORE_V1_TO_V2 = [
+  `ALTER TABLE context_facts ADD COLUMN status TEXT DEFAULT 'active'`,
+  `ALTER TABLE context_facts ADD COLUMN canonical_key TEXT`,
+  `ALTER TABLE context_facts ADD COLUMN supersedes_json TEXT`,
+  `ALTER TABLE context_facts ADD COLUMN conflicts_with_json TEXT`,
+  `ALTER TABLE context_facts ADD COLUMN archived_at INTEGER`,
+  `ALTER TABLE context_facts ADD COLUMN lifecycle_reason TEXT`,
+  `UPDATE context_facts SET status = 'stale' WHERE freshness = 'stale' AND (status IS NULL OR status = '' OR status = 'active')`,
+  `CREATE INDEX IF NOT EXISTS idx_context_facts_lifecycle ON context_facts(status, canonical_key)`,
+]
+
 export function getContextStoreMigrationStatements(fromVersion: number, toVersion = CONTEXT_STORE_SCHEMA_VERSION): string[] | null {
   if (fromVersion === toVersion) return []
-  if (fromVersion === 0 && toVersion === 1) return [...CREATE_CONTEXT_STORE_TABLES, ...CREATE_CONTEXT_STORE_INDEXES, setSchemaVersionStatement(toVersion)]
+  if (fromVersion === 0 && toVersion === 2) return [...CREATE_CONTEXT_STORE_TABLES, ...CREATE_CONTEXT_STORE_INDEXES, setSchemaVersionStatement(toVersion)]
+  if (fromVersion === 1 && toVersion === 2) return [...MIGRATE_CONTEXT_STORE_V1_TO_V2, setSchemaVersionStatement(toVersion)]
   return null
 }
 

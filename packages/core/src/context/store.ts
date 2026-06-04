@@ -16,6 +16,7 @@ import type {
   ContextDiagnostic,
   ContextFact,
   ContextFactKind,
+  ContextFactStatus,
   ContextFreshness,
   ContextOrigin,
   ContextScope,
@@ -61,11 +62,13 @@ export interface ContextFactQuery {
   scope?: ContextScope
   kinds?: ContextFactKind[]
   freshness?: ContextFreshness
+  status?: ContextFactStatus
   minConfidence?: number
   citationRef?: string
   citationType?: string
   includeExpired?: boolean
   includeStale?: boolean
+  includeInactive?: boolean
   limit?: number
   orderBy?: 'updated_asc' | 'updated_desc' | 'created_asc' | 'created_desc' | 'confidence_desc'
 }
@@ -257,6 +260,7 @@ const PROJECT_SCOPED_TABLES = [
 const PROJECT_SCOPED_INDEXES = [
   `CREATE INDEX IF NOT EXISTS idx_raw_evidence_project_session ON raw_evidence(project_key, session_id)`,
   `CREATE INDEX IF NOT EXISTS idx_context_facts_project_scope ON context_facts(project_key, scope)`,
+  `CREATE INDEX IF NOT EXISTS idx_context_facts_project_lifecycle ON context_facts(project_key, status, canonical_key)`,
   `CREATE INDEX IF NOT EXISTS idx_context_bundles_project_session ON context_bundles(project_key, session_id)`,
   `CREATE INDEX IF NOT EXISTS idx_harvest_jobs_project_session ON harvest_jobs(project_key, session_id)`,
   `CREATE INDEX IF NOT EXISTS idx_memory_records_project_scope ON memory_records(project_key, scope)`,
@@ -335,6 +339,12 @@ function ensureProjectIsolationSchema(db: Database, projectKey: string, fallback
   ensureColumn(db, 'context_facts', 'related_files_json', 'TEXT')
   ensureColumn(db, 'context_facts', 'related_symbols_json', 'TEXT')
   ensureColumn(db, 'context_facts', 'related_tasks_json', 'TEXT')
+  ensureColumn(db, 'context_facts', 'status', "TEXT DEFAULT 'active'")
+  ensureColumn(db, 'context_facts', 'canonical_key', 'TEXT')
+  ensureColumn(db, 'context_facts', 'supersedes_json', 'TEXT')
+  ensureColumn(db, 'context_facts', 'conflicts_with_json', 'TEXT')
+  ensureColumn(db, 'context_facts', 'archived_at', 'INTEGER')
+  ensureColumn(db, 'context_facts', 'lifecycle_reason', 'TEXT')
   ensureColumn(db, 'context_bundles', 'bundle_id', 'TEXT')
   ensureColumn(db, 'harvest_jobs', 'job_id', 'TEXT')
   ensureColumn(db, 'memory_records', 'memory_id', 'TEXT')
@@ -345,6 +355,7 @@ function ensureProjectIsolationSchema(db: Database, projectKey: string, fallback
   ensureColumn(db, 'harvest_jobs', 'visible_in_primary_ui', 'INTEGER DEFAULT 1')
   backfillProjectIsolationRows(db, fallbackUnknownProjectRows ? projectKey : undefined)
   backfillFactProvenanceRows(db, projectKey)
+  backfillFactLifecycleRows(db)
   applyStatements(db, [...PROJECT_SCOPED_INDEXES])
 }
 
@@ -357,6 +368,22 @@ const LOGICAL_ID_BACKFILLS = [
   ['context_diagnostics', 'diagnostic_id'],
   ['rejected_candidates', 'candidate_id'],
 ] as const
+
+type LifecycleFact = ContextFact & {
+  status: ContextFactStatus
+  canonicalKey: string
+  supersedes: string[]
+  conflictsWith: string[]
+}
+
+interface StoredLifecycleFact {
+  scopedId: string
+  fact: ContextFact
+}
+
+type FactLifecycleResolution =
+  | { action: 'insert'; fact: LifecycleFact; superseded: ContextFact[] }
+  | { action: 'merge'; fact: LifecycleFact; targetScopedId: string; superseded: [] }
 
 function backfillProjectIsolationRows(db: Database, fallbackProjectKey?: string): void {
   const sessionProjectKeys = backfillRawEvidenceProjectKeys(db, fallbackProjectKey)
@@ -423,6 +450,11 @@ function backfillFactProvenanceRows(db: Database, fallbackProjectKey: string): v
     }
     db.run('UPDATE context_facts SET origin_json = ? WHERE id = ?', [JSON.stringify(origin), id])
   }
+}
+
+function backfillFactLifecycleRows(db: Database): void {
+  db.run("UPDATE context_facts SET status = 'active' WHERE status IS NULL OR status = ''")
+  db.run("UPDATE context_facts SET status = 'stale' WHERE freshness = 'stale' AND status = 'active'")
 }
 
 function selectDbRows(db: Database, sql: string, params: SqlValue[] = []): Array<Record<string, unknown>> {
@@ -521,36 +553,22 @@ class SqlJsContextStore implements ContextStore {
     }
 
     return this.write('saveFact', undefined, () => {
-      const origin = parsed.data.origin ?? defaultOriginForFact(parsed.data, this.projectKey)
-      const tags = parsed.data.tags ?? []
-      const relatedFiles = parsed.data.relatedFiles ?? []
-      const relatedSymbols = parsed.data.relatedSymbols ?? []
-      const relatedTasks = parsed.data.relatedTasks ?? []
-      this.db.run(
-        `INSERT OR REPLACE INTO context_facts(id, project_key, fact_id, kind, scope, content, citations_json, confidence, freshness, source_provider, session_id, created_at, updated_at, expires_at, origin_json, tags_json, related_files_json, related_symbols_json, related_tasks_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          scopedId(this.projectKey, parsed.data.id),
-          this.projectKey,
-          parsed.data.id,
-          parsed.data.kind,
-          parsed.data.scope,
-          parsed.data.content,
-          JSON.stringify(parsed.data.citations),
-          parsed.data.confidence,
-          parsed.data.freshness,
-          parsed.data.sourceProvider,
-          parsed.data.sessionId ?? null,
-          parsed.data.createdAt,
-          parsed.data.updatedAt,
-          parsed.data.expiresAt ?? null,
-          JSON.stringify(origin),
-          JSON.stringify(tags),
-          JSON.stringify(relatedFiles),
-          JSON.stringify(relatedSymbols),
-          JSON.stringify(relatedTasks),
-        ]
-      )
+      const resolution = this.resolveFactLifecycle(parsed.data)
+
+      if (resolution.action === 'merge') {
+        this.writeFactRow(resolution.fact, resolution.targetScopedId)
+        return
+      }
+
+      for (const superseded of resolution.superseded) {
+        this.db.run(
+          `UPDATE context_facts
+           SET status = ?, lifecycle_reason = ?, updated_at = ?
+           WHERE project_key = ? AND fact_id = ?`,
+          ['superseded', `superseded by ${resolution.fact.id}`, this.now(), this.projectKey, superseded.id]
+        )
+      }
+      this.writeFactRow(resolution.fact)
     })
   }
 
@@ -683,7 +701,14 @@ class SqlJsContextStore implements ContextStore {
         ),
       )
       for (const fact of invalidated) {
-        this.db.run('UPDATE context_facts SET freshness = ?, updated_at = ? WHERE project_key = ? AND fact_id = ?', ['stale', this.now(), this.projectKey, fact.id])
+        this.db.run(
+          `UPDATE context_facts
+           SET freshness = ?,
+             status = CASE WHEN status IN ('superseded', 'conflicted', 'archived') THEN status ELSE 'stale' END,
+             updated_at = ?
+           WHERE project_key = ? AND fact_id = ?`,
+          ['stale', this.now(), this.projectKey, fact.id]
+        )
       }
       return { invalidatedFacts: invalidated.length }
     })
@@ -906,6 +931,12 @@ class SqlJsContextStore implements ContextStore {
     } else if (!query.includeStale) {
       conditions.push("freshness != 'stale'")
     }
+    if (query.status) {
+      conditions.push('status = ?')
+      params.push(query.status)
+    } else if (!query.includeInactive) {
+      conditions.push("status NOT IN ('superseded', 'conflicted', 'archived')")
+    }
     if (query.minConfidence !== undefined) {
       conditions.push('confidence >= ?')
       params.push(query.minConfidence)
@@ -923,6 +954,123 @@ class SqlJsContextStore implements ContextStore {
     const rows = this.selectRows(`SELECT * FROM context_facts WHERE ${conditions.join(' AND ')} ORDER BY ${orderByFromQuery(query.orderBy) ?? orderBy}${limitClause}`, params)
     const facts = rows.map((row) => parseFactRow(row)).filter((fact) => matchesCitationQuery(fact, query))
     return limit !== undefined && deferLimitUntilAfterCitationFilter ? facts.slice(0, limit) : facts
+  }
+
+  private resolveFactLifecycle(fact: ContextFact): FactLifecycleResolution {
+    const incoming = this.withLifecycleDefaults(fact)
+    const explicitCanonicalKey = typeof fact.canonicalKey === 'string' && fact.canonicalKey.trim().length > 0
+    const candidates = explicitCanonicalKey ? this.selectLifecycleCandidates(incoming.canonicalKey) : []
+    const duplicate = candidates.find((candidate) => normalizeFactLifecycleContent(candidate.fact.content) === normalizeFactLifecycleContent(incoming.content))
+
+    if (duplicate) {
+      return {
+        action: 'merge',
+        targetScopedId: duplicate.scopedId,
+        superseded: [],
+        fact: this.mergeDuplicateFacts(duplicate.fact, incoming),
+      }
+    }
+
+    const superseded = explicitCanonicalKey && incoming.status === 'active'
+      ? candidates.map((candidate) => candidate.fact).filter((candidate) => factStatus(candidate) === 'active' || factStatus(candidate) === 'stale')
+      : []
+    const supersedes = mergeStringLists(incoming.supersedes, superseded.map((candidate) => candidate.id))
+    const lifecycleReason = superseded.length > 0 && !incoming.lifecycleReason
+      ? `supersedes ${superseded.map((candidate) => candidate.id).join(', ')}`
+      : incoming.lifecycleReason
+
+    return {
+      action: 'insert',
+      superseded,
+      fact: {
+        ...incoming,
+        supersedes,
+        ...(lifecycleReason ? { lifecycleReason } : {}),
+      },
+    }
+  }
+
+  private withLifecycleDefaults(fact: ContextFact): LifecycleFact {
+    const status = fact.status ?? (fact.freshness === 'stale' ? 'stale' : 'active')
+    return {
+      ...fact,
+      status,
+      canonicalKey: normalizeCanonicalKey(fact.canonicalKey) ?? canonicalKeyForFact(fact),
+      supersedes: fact.supersedes ?? [],
+      conflictsWith: fact.conflictsWith ?? [],
+    }
+  }
+
+  private selectLifecycleCandidates(canonicalKey: string): StoredLifecycleFact[] {
+    if (!canonicalKey) return []
+    return this.selectRows(
+      `SELECT * FROM context_facts
+       WHERE project_key = ?
+         AND canonical_key = ?
+         AND status NOT IN ('superseded', 'conflicted', 'archived')
+       ORDER BY updated_at DESC`,
+      [this.projectKey, canonicalKey]
+    ).map((row) => ({ scopedId: String(row.id), fact: parseFactRow(row) }))
+  }
+
+  private mergeDuplicateFacts(existing: ContextFact, incoming: LifecycleFact): LifecycleFact {
+    const existingLifecycle = this.withLifecycleDefaults(existing)
+    return {
+      ...existingLifecycle,
+      citations: mergeCitations(existingLifecycle.citations, incoming.citations),
+      confidence: Math.max(existingLifecycle.confidence, incoming.confidence),
+      freshness: freshestFreshness(existingLifecycle.freshness, incoming.freshness),
+      sourceProvider: mergeSourceProviders(existingLifecycle.sourceProvider, incoming.sourceProvider),
+      updatedAt: Math.max(existingLifecycle.updatedAt, incoming.updatedAt),
+      expiresAt: laterTimestamp(existingLifecycle.expiresAt, incoming.expiresAt),
+      tags: mergeOptionalStringLists(existingLifecycle.tags, incoming.tags),
+      relatedFiles: mergeOptionalStringLists(existingLifecycle.relatedFiles, incoming.relatedFiles),
+      relatedSymbols: mergeOptionalStringLists(existingLifecycle.relatedSymbols, incoming.relatedSymbols),
+      relatedTasks: mergeOptionalStringLists(existingLifecycle.relatedTasks, incoming.relatedTasks),
+      supersedes: mergeStringLists(existingLifecycle.supersedes, incoming.supersedes),
+      conflictsWith: mergeStringLists(existingLifecycle.conflictsWith, incoming.conflictsWith),
+      lifecycleReason: incoming.lifecycleReason ?? existingLifecycle.lifecycleReason,
+    }
+  }
+
+  private writeFactRow(fact: ContextFact, rowId = scopedId(this.projectKey, fact.id)): void {
+    const lifecycleFact = this.withLifecycleDefaults(fact)
+    const origin = lifecycleFact.origin ?? defaultOriginForFact(lifecycleFact, this.projectKey)
+    const tags = lifecycleFact.tags ?? []
+    const relatedFiles = lifecycleFact.relatedFiles ?? []
+    const relatedSymbols = lifecycleFact.relatedSymbols ?? []
+    const relatedTasks = lifecycleFact.relatedTasks ?? []
+    this.db.run(
+      `INSERT OR REPLACE INTO context_facts(id, project_key, fact_id, kind, scope, content, citations_json, confidence, freshness, source_provider, session_id, created_at, updated_at, expires_at, origin_json, tags_json, related_files_json, related_symbols_json, related_tasks_json, status, canonical_key, supersedes_json, conflicts_with_json, archived_at, lifecycle_reason)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        rowId,
+        this.projectKey,
+        lifecycleFact.id,
+        lifecycleFact.kind,
+        lifecycleFact.scope,
+        lifecycleFact.content,
+        JSON.stringify(lifecycleFact.citations),
+        lifecycleFact.confidence,
+        lifecycleFact.freshness,
+        lifecycleFact.sourceProvider,
+        lifecycleFact.sessionId ?? null,
+        lifecycleFact.createdAt,
+        lifecycleFact.updatedAt,
+        lifecycleFact.expiresAt ?? null,
+        JSON.stringify(origin),
+        JSON.stringify(tags),
+        JSON.stringify(relatedFiles),
+        JSON.stringify(relatedSymbols),
+        JSON.stringify(relatedTasks),
+        lifecycleFact.status,
+        lifecycleFact.canonicalKey,
+        JSON.stringify(lifecycleFact.supersedes),
+        JSON.stringify(lifecycleFact.conflictsWith),
+        lifecycleFact.archivedAt ?? null,
+        lifecycleFact.lifecycleReason ?? null,
+      ]
+    )
   }
 
   private selectRejectedCandidatesForDiagnostics(options: ListAdvancedDiagnosticsOptions): RejectedCandidateRecord[] {
@@ -1070,6 +1218,7 @@ class UnavailableContextStore implements ContextStore {
 }
 
 function parseFactRow(row: Record<string, unknown>): ContextFact {
+  const freshness = String(row.freshness) as ContextFreshness
   return ContextFactSchema.parse({
     id: row.fact_id ? String(row.fact_id) : String(row.id),
     kind: row.kind,
@@ -1077,7 +1226,7 @@ function parseFactRow(row: Record<string, unknown>): ContextFact {
     content: row.content,
     citations: JSON.parse(String(row.citations_json)),
     confidence: Number(row.confidence),
-    freshness: row.freshness,
+    freshness,
     sourceProvider: row.source_provider,
     sessionId: row.session_id ? String(row.session_id) : undefined,
     createdAt: Number(row.created_at),
@@ -1088,6 +1237,12 @@ function parseFactRow(row: Record<string, unknown>): ContextFact {
     relatedFiles: parseStringArrayColumn(row.related_files_json),
     relatedSymbols: parseStringArrayColumn(row.related_symbols_json),
     relatedTasks: parseStringArrayColumn(row.related_tasks_json),
+    status: parseFactStatusColumn(row.status, freshness),
+    canonicalKey: stringOrUndefined(row.canonical_key),
+    supersedes: parseStringArrayColumn(row.supersedes_json),
+    conflictsWith: parseStringArrayColumn(row.conflicts_with_json),
+    archivedAt: row.archived_at === null || row.archived_at === undefined ? undefined : Number(row.archived_at),
+    lifecycleReason: stringOrUndefined(row.lifecycle_reason),
   })
 }
 
@@ -1097,6 +1252,72 @@ function defaultOriginForFact(fact: ContextFact, projectKey: string): ContextOri
     actor: 'main_session',
     ...(fact.sessionId ? { sessionId: fact.sessionId } : {}),
   }
+}
+
+function parseFactStatusColumn(value: unknown, freshness: ContextFreshness): ContextFactStatus {
+  if (value === 'active' || value === 'stale' || value === 'superseded' || value === 'conflicted' || value === 'archived') return value
+  return freshness === 'stale' ? 'stale' : 'active'
+}
+
+function factStatus(fact: ContextFact): ContextFactStatus {
+  return fact.status ?? (fact.freshness === 'stale' ? 'stale' : 'active')
+}
+
+function normalizeCanonicalKey(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim().toLowerCase() : undefined
+}
+
+function canonicalKeyForFact(fact: ContextFact): string {
+  const refs = [
+    ...(fact.relatedFiles ?? []),
+    ...fact.citations.filter((citation) => citation.type === 'file').map((citation) => citation.ref),
+  ].map((ref) => ref.trim().toLowerCase()).filter(Boolean).sort()
+  const contentKey = hashStoreText(normalizeFactLifecycleContent(fact.content)).slice(0, 24)
+  return ['auto', fact.kind, fact.scope, refs.join(','), contentKey].filter(Boolean).join(':')
+}
+
+function normalizeFactLifecycleContent(content: string): string {
+  return content.toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+function mergeCitations(existing: ContextCitation[], incoming: ContextCitation[]): ContextCitation[] {
+  const seen = new Set<string>()
+  const result: ContextCitation[] = []
+  for (const citation of [...existing, ...incoming]) {
+    const key = JSON.stringify([citation.id, citation.type, citation.ref, citation.hash ?? '', citation.line ?? '', citation.range ?? ''])
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(citation)
+  }
+  return result
+}
+
+function mergeStringLists(...lists: Array<string[] | undefined>): string[] {
+  return [...new Set(lists.flatMap((list) => list ?? []).filter((value) => value.length > 0))]
+}
+
+function mergeOptionalStringLists(...lists: Array<string[] | undefined>): string[] | undefined {
+  const merged = mergeStringLists(...lists)
+  return merged.length ? merged : undefined
+}
+
+function freshestFreshness(a: ContextFreshness, b: ContextFreshness): ContextFreshness {
+  const rank: Record<ContextFreshness, number> = { stale: 0, cached: 1, recent: 2, live: 3 }
+  return rank[b] > rank[a] ? b : a
+}
+
+function mergeSourceProviders(a: string, b: string): string {
+  return a === b ? a : mergeStringLists([a], [b]).join(', ')
+}
+
+function laterTimestamp(a: number | undefined, b: number | undefined): number | undefined {
+  if (a === undefined) return b
+  if (b === undefined) return a
+  return Math.max(a, b)
+}
+
+function hashStoreText(text: string): string {
+  return createHash('sha256').update(text).digest('hex')
 }
 
 function parseJsonColumn<T>(value: unknown, fallback: T): T {

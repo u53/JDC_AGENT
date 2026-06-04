@@ -80,6 +80,10 @@ export async function retrieveContextFacts(request: ContextRequest, options: Con
     const scored = loaded.value
       .map((fact) => scoreFact(fact, query, now, options.citationTextLookup, options.actorProfile))
       .filter((item) => {
+        if (isInactiveLifecycleFact(item.fact)) {
+          diagnostics.push(makeDiagnostic(`Suppressed inactive lifecycle fact ${item.fact.id}.`, now()))
+          return false
+        }
         const actorSuppression = suppressForActor(item.fact, options.actorProfile)
         if (actorSuppression) {
           diagnostics.push(makeDiagnostic(actorSuppression, now()))
@@ -317,6 +321,10 @@ function matchesFileScope(fact: ContextFact, fileScope: string[] | undefined): b
 
 function isHighValueStaleFact(fact: ContextFact): boolean {
   return fact.kind === 'known_issue' || fact.kind === 'architecture_decision'
+}
+
+function isInactiveLifecycleFact(fact: ContextFact): boolean {
+  return fact.status === 'superseded' || fact.status === 'conflicted' || fact.status === 'archived'
 }
 
 function makeDiagnostic(message: string, createdAt: number): ContextDiagnostic {

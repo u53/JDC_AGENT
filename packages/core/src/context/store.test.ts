@@ -358,6 +358,95 @@ describe('JDC Context Store persistence', () => {
     expect((await store.queryFacts({ freshness: 'stale' })).value.map((fact) => fact.id)).toEqual(['fact_stale'])
   })
 
+  it('defaults lifecycle status and excludes inactive facts unless explicitly inspected', async () => {
+    const store = await openContextStore({ dbPath: makeDbPath(), now: () => 1_000 })
+    await saveFileEvidence(store)
+
+    await expectOk(store.saveFact(makeFact({ id: 'fact_active', content: 'Active lifecycle fact.', freshness: 'recent' })))
+    await expectOk(store.saveFact(makeFact({ id: 'fact_stale_status', content: 'Stale lifecycle fact.', freshness: 'stale' })))
+    await expectOk(store.saveFact(makeFact({ id: 'fact_superseded', content: 'Superseded lifecycle fact.', status: 'superseded', lifecycleReason: 'replaced by newer release flow' } as any)))
+    await expectOk(store.saveFact(makeFact({ id: 'fact_conflicted', content: 'Conflicted lifecycle fact.', status: 'conflicted', lifecycleReason: 'conflicting release flow evidence' } as any)))
+    await expectOk(store.saveFact(makeFact({ id: 'fact_archived', content: 'Archived lifecycle fact.', status: 'archived', archivedAt: 900, lifecycleReason: 'manual archive' } as any)))
+
+    expect((await store.queryFacts({ includeStale: true })).value.map((fact) => fact.id)).toEqual(['fact_active', 'fact_stale_status'])
+
+    const inactive = await store.queryFacts({ includeStale: true, includeInactive: true })
+    expect(Object.fromEntries(inactive.value.map((fact) => [fact.id, fact.status]))).toMatchObject({
+      fact_active: 'active',
+      fact_stale_status: 'stale',
+      fact_superseded: 'superseded',
+      fact_conflicted: 'conflicted',
+      fact_archived: 'archived',
+    })
+    expect(inactive.value.find((fact) => fact.id === 'fact_archived')?.archivedAt).toBe(900)
+
+    expect((await store.queryFacts({ status: 'superseded', includeInactive: true, includeStale: true })).value.map((fact) => fact.id)).toEqual(['fact_superseded'])
+  })
+
+  it('merges duplicate canonical facts while preserving citations and confidence', async () => {
+    const store = await openContextStore({ dbPath: makeDbPath(), now: () => 5_000 })
+    await saveFileEvidence(store)
+    await saveFileEvidence(store, { id: 'evidence_other', metadata: { file: 'src/other.ts' }, hash: 'hash_2' })
+
+    await expectOk(store.saveFact(makeFact({
+      id: 'release_rule_a',
+      canonicalKey: 'workflow:release-command',
+      content: 'Run pnpm --filter @jdcagnet/core build before release.',
+      confidence: 0.8,
+      citations: [{ ...citation, id: 'cit_release_a', hash: 'hash_1' }],
+      updatedAt: 10,
+    } as any)))
+    await expectOk(store.saveFact(makeFact({
+      id: 'release_rule_b',
+      canonicalKey: 'workflow:release-command',
+      content: 'Run pnpm --filter @jdcagnet/core build before release.',
+      confidence: 0.95,
+      citations: [{ id: 'cit_release_b', type: 'file', ref: 'src/other.ts', hash: 'hash_2' }],
+      updatedAt: 20,
+    } as any)))
+
+    const facts = await store.queryFacts({ includeInactive: true })
+    expect(facts.value.map((fact) => fact.id)).toEqual(['release_rule_a'])
+    expect(facts.value[0]).toMatchObject({
+      canonicalKey: 'workflow:release-command',
+      confidence: 0.95,
+      status: 'active',
+      updatedAt: 20,
+    })
+    expect(facts.value[0]?.citations.map((item) => item.id)).toEqual(['cit_release_a', 'cit_release_b'])
+  })
+
+  it('supersedes older active facts when a newer fact explicitly shares their canonical key', async () => {
+    const store = await openContextStore({ dbPath: makeDbPath(), now: () => 5_000 })
+    await saveFileEvidence(store)
+    await saveFileEvidence(store, { id: 'evidence_other', metadata: { file: 'src/other.ts' }, hash: 'hash_2' })
+
+    await expectOk(store.saveFact(makeFact({
+      id: 'release_rule_old',
+      canonicalKey: 'workflow:release-command',
+      content: 'Run pnpm build before release.',
+      citations: [{ ...citation, id: 'cit_release_old', hash: 'hash_1' }],
+      updatedAt: 10,
+    } as any)))
+    await expectOk(store.saveFact(makeFact({
+      id: 'release_rule_new',
+      canonicalKey: 'workflow:release-command',
+      content: 'Run pnpm --filter @jdcagnet/core build before release.',
+      citations: [{ id: 'cit_release_new', type: 'file', ref: 'src/other.ts', hash: 'hash_2' }],
+      updatedAt: 20,
+    } as any)))
+
+    expect((await store.queryFacts()).value.map((fact) => fact.id)).toEqual(['release_rule_new'])
+
+    const allFacts = await store.queryFacts({ includeInactive: true })
+    expect(Object.fromEntries(allFacts.value.map((fact) => [fact.id, fact.status]))).toMatchObject({
+      release_rule_old: 'superseded',
+      release_rule_new: 'active',
+    })
+    expect(allFacts.value.find((fact) => fact.id === 'release_rule_new')?.supersedes).toEqual(['release_rule_old'])
+    expect(allFacts.value.find((fact) => fact.id === 'release_rule_old')?.lifecycleReason).toContain('superseded')
+  })
+
   it('filters high-value fact kinds before applying newest-first limits', async () => {
     const store = await openContextStore({ dbPath: makeDbPath(), now: () => 1_000 })
     await saveFileEvidence(store)

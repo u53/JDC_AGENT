@@ -63,6 +63,21 @@ describe('ContextRetriever', () => {
     }))
   })
 
+  it('does not return inactive lifecycle facts by default', async () => {
+    const store = makeStore([
+      fact({ id: 'release_flow_old', content: 'Run the old release workflow.', status: 'superseded' } as any),
+      fact({ id: 'release_flow_conflict', content: 'Release workflow evidence conflicts.', status: 'conflicted' } as any),
+      fact({ id: 'release_flow_active', content: 'Run the current release workflow.', status: 'active' } as any),
+    ])
+
+    const result = await retrieveContextFacts({ ...request, userMessage: 'release workflow' }, { store, now: () => 20_000 })
+
+    expect(result.facts.map((item) => item.fact.id)).toEqual(['release_flow_active'])
+    expect(store.listAcceptedProjectFacts).toHaveBeenCalledWith(expect.not.objectContaining({
+      includeInactive: true,
+    }))
+  })
+
   it('supports citation and path matching for workflow files', async () => {
     const store = makeStore([
       fact({

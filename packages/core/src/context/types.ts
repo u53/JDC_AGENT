@@ -3,6 +3,7 @@ import type { Message, ModelConfig } from '../types.js'
 export type ContextMode = 'chat' | 'debug' | 'code_edit' | 'review' | 'plan'
 export type ContextPlanIntent = 'chat' | 'debug' | 'code_edit' | 'review' | 'plan' | 'memory_update'
 export type ContextFreshness = 'live' | 'recent' | 'cached' | 'stale'
+export type ContextFactStatus = 'active' | 'stale' | 'superseded' | 'conflicted' | 'archived'
 export type ContextScope = 'global' | 'project' | 'repo' | 'session' | 'turn'
 export type EvidenceKind = 'file' | 'git' | 'tool_event' | 'message' | 'memory' | 'ide' | 'config' | 'task' | 'diagnostic'
 export type ContextFactKind = 'project_profile' | 'architecture_decision' | 'module_boundary' | 'user_preference' | 'current_goal' | 'runtime_error_chain' | 'code_entrypoint' | 'known_issue' | 'project_convention' | 'workflow_rule' | 'team_decision' | 'task_result' | 'artifact_summary' | 'qa_issue'
@@ -113,6 +114,12 @@ export interface ContextFact {
   relatedFiles?: string[]
   relatedSymbols?: string[]
   relatedTasks?: string[]
+  status?: ContextFactStatus
+  canonicalKey?: string
+  supersedes?: string[]
+  conflictsWith?: string[]
+  archivedAt?: number
+  lifecycleReason?: string
 }
 
 export type ContextItem = ContextFact
