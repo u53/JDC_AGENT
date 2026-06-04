@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, useState, type KeyboardEvent, type ClipboardEvent, type DragEvent } from 'react'
+import { useRef, useCallback, useLayoutEffect, useState, type KeyboardEvent, type ClipboardEvent, type DragEvent } from 'react'
 import { ImagePreview } from './ImagePreview'
 import { SlashCommandMenu, type SlashCommand } from './SlashCommandMenu'
 import { BranchSwitcher } from './BranchSwitcher'
@@ -25,6 +25,15 @@ interface Props {
   onModelChange?: (modelId: string) => void
   onModelClick?: () => void
   skills?: { name: string; description: string }[]
+}
+
+export const COMPOSER_TEXTAREA_MAX_HEIGHT = 200
+
+export function resizeComposerTextarea(el: Pick<HTMLTextAreaElement, 'scrollHeight' | 'style'>) {
+  el.style.height = 'auto'
+  const height = Math.min(el.scrollHeight, COMPOSER_TEXTAREA_MAX_HEIGHT)
+  el.style.height = `${height}px`
+  el.style.overflowY = el.scrollHeight > COMPOSER_TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden'
 }
 
 export function Composer({
@@ -86,6 +95,11 @@ export function Composer({
   const resetDraft = useCallback(() => {
     if (activeSessionId) clearDraft(activeSessionId)
   }, [activeSessionId, clearDraft])
+
+  const resizeTextarea = useCallback(() => {
+    const el = textareaRef.current
+    if (el) resizeComposerTextarea(el)
+  }, [])
 
   const activeProject = projects.find((p) => p.sessions.some((s) => s.id === activeSessionId))
   const cwd = activeProject?.cwd || ''
@@ -213,31 +227,18 @@ export function Composer({
           onSend(text.trim(), images.length > 0 ? images : undefined)
         }
         resetDraft()
-        if (textareaRef.current) textareaRef.current.style.height = 'auto'
       }
     }
   }
 
   const handleInput = () => {
-    const el = textareaRef.current
-    if (el) {
-      el.style.height = 'auto'
-      const maxH = 200
-      if (el.scrollHeight > maxH) {
-        el.style.height = `${maxH}px`
-        el.style.overflowY = 'auto'
-      } else {
-        el.style.height = `${el.scrollHeight}px`
-        el.style.overflowY = 'hidden'
-      }
-    }
+    resizeTextarea()
   }
 
-  // Resize textarea whenever the active session (and thus the draft) changes,
-  // so switching back to a session with a long draft restores the right height.
-  useEffect(() => {
-    handleInput()
-  }, [activeSessionId])
+  // Keep the DOM height in sync after draft updates, including send/reset.
+  useLayoutEffect(() => {
+    resizeTextarea()
+  }, [activeSessionId, text, resizeTextarea])
 
   const handleClearQueue = () => {
     const len = messageQueue.length
