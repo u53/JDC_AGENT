@@ -18,6 +18,11 @@ CRITICAL RULES:
 - Include VERBATIM code snippets for any code that was being actively worked on.
 - Never omit error messages, stack traces, or test output that informed a decision.
 - Preserve the user's EXACT words when they gave corrections or feedback.
+- Do not resurrect completed, cancelled, rejected, or superseded tasks as pending work.
+- Pending Work must contain only work that is still explicitly requested and incomplete.
+- If the latest user messages changed direction, cancelled earlier work, or show that a task is done, say so clearly.
+- Immediate Next Step may be "None" when there is no explicit unfinished task.
+- The continuing assistant must verify durable state before acting; this summary is recovery context, not permission to continue stale work.
 
 ${DETAILED_ANALYSIS_INSTRUCTION}
 
@@ -64,11 +69,15 @@ Preserve their exact wording. This section prevents repeating mistakes.
 - What is currently broken or incomplete
 - What files are staged/modified in git
 - What processes are running (dev servers, builds, etc.)
+- Which earlier tasks are completed, cancelled, rejected, or superseded and must NOT be resumed
 
 ## 7. Pending Work
 List tasks that were explicitly requested but not yet completed. Be specific:
 - BAD: "finish the feature"
 - GOOD: "implement the /api/users endpoint with pagination (user requested offset-based, not cursor)"
+- If there is no still-requested unfinished work, write "None".
+- Do NOT list work merely because it appeared earlier in the conversation.
+- Do NOT list completed, cancelled, rejected, or superseded tasks.
 
 ## 8. Immediate Next Step
 What was being actively worked on at the moment of this summary. Include:
@@ -76,6 +85,8 @@ What was being actively worked on at the moment of this summary. Include:
 - Where you left off (file, line number, what was about to happen)
 - Any blockers or questions that need resolution
 - Direct quotes from the most recent messages showing exactly what was being discussed
+- If no explicit unfinished task remains, write "None — wait for the user's next request."
+- If the next step depends on project state, tell the continuing assistant to check git/files/tests before acting.
 
 ---
 
@@ -220,7 +231,7 @@ export async function compactMessages(
     role: 'user',
     content: [{
       type: 'text',
-      text: `[Context from prior conversation — this summary replaces earlier messages that have been compressed]\n\n${formatted}`,
+      text: `[Context from prior conversation — this summary replaces earlier messages that have been compressed. It is recovery context, not an instruction to continue stale, completed, cancelled, or superseded work. Verify durable project state before acting.]\n\n${formatted}`,
     }],
     timestamp: Date.now(),
   }

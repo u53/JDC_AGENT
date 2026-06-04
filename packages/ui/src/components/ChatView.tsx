@@ -5,6 +5,7 @@ import { SessionHeader } from './SessionHeader'
 import { ConversationTurn } from './ConversationTurn'
 import { Composer } from './Composer'
 import { ErrorCard } from './ErrorCard'
+import { CompactStatusCard } from './CompactStatusCard'
 import { PermissionDialog } from './PermissionDialog'
 import { PlanReviewDialog } from './PlanReviewDialog'
 import { HelpDialog } from './HelpDialog'
@@ -17,19 +18,8 @@ import { useAgentStore } from '../stores/agent-store'
 import { useTeamStore } from '../stores/team-store'
 import { useAgentEvents } from '../hooks/useAgentEvents'
 import { copyToClipboard } from '../lib/clipboard'
+import { PROJECT_INIT_PROMPT } from '../lib/init-prompt'
 import type { Message } from '@jdcagnet/core'
-
-const INIT_PROMPT = `Read the project structure in the current working directory and generate a JDCAGNET.md file in the project root. This file provides guidance to JDCAGNET when working with code in this repository.
-
-Analyze the project by reading key files (package.json, config files, source structure, etc.) and produce a markdown file that includes:
-
-1. **Project Overview** — What this project is, language/framework, key technologies
-2. **Build Commands** — How to install, build, test, lint, and run the project (in a code block)
-3. **Architecture** — Key modules/directories, how they relate, data flow
-4. **Key Patterns** — Important conventions, patterns, or constraints a developer should know
-5. **Development Notes** — Any gotchas, environment setup, or special considerations
-
-Keep it concise and practical. Write the file using the Write tool to the project root as JDCAGNET.md. If one already exists, read it first and update it with any new information.`
 
 interface Turn {
   userMessage: Message
@@ -86,8 +76,26 @@ interface ChatViewProps {
   onOpenMcp?: () => void
 }
 
+export function shouldShowProcessingIndicator({
+  isStreaming,
+  streamingText,
+  isThinking,
+  toolEventsLength,
+  isLastTurnActive,
+  compacting,
+}: {
+  isStreaming: boolean
+  streamingText: string
+  isThinking: boolean
+  toolEventsLength: number
+  isLastTurnActive?: boolean
+  compacting?: boolean
+}): boolean {
+  return isStreaming && !streamingText && !isThinking && toolEventsLength === 0 && !isLastTurnActive && !compacting
+}
+
 export function ChatView({ onOpenMcp }: ChatViewProps) {
-  const { messages, streamingText, thinkingText, isStreaming, aborting, isThinking, toolEvents, sendMessage, abort, error, retry, dismissError } = useSession()
+  const { messages, streamingText, thinkingText, isStreaming, aborting, compacting, isThinking, toolEvents, sendMessage, abort, error, retry, dismissError } = useSession()
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const getActiveModel = useModelStore((s) => s.getActiveModel)
   const groups = useModelStore((s) => s.groups)
@@ -199,7 +207,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     if (el && isNearBottomRef.current) {
       el.scrollTop = el.scrollHeight
     }
-  }, [messages, toolEvents, isThinking, isStreaming])
+  }, [messages, toolEvents, isThinking, isStreaming, compacting])
 
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current
@@ -256,11 +264,12 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
           }
           useSessionStore.setState((s) => ({ messages: [...s.messages, initMsg] }))
           useSessionStore.getState().markStreaming(activeSessionId, true)
-          ipc.query.send(activeSessionId, INIT_PROMPT)
+          ipc.query.send(activeSessionId, PROJECT_INIT_PROMPT)
         }
         break
       case '/compact':
         if (activeSessionId && api?.compactSession) {
+          useSessionStore.getState().setCompactState(activeSessionId, { active: true })
           useSessionStore.getState().markStreaming(activeSessionId, true)
           api.compactSession(activeSessionId)
         }
@@ -374,8 +383,17 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
               )
             })}
 
+            {compacting && <CompactStatusCard status="running" />}
+
             {/* Processing indicator when no content yet */}
-            {isStreaming && !streamingText && !isThinking && toolEvents.length === 0 && !isLastTurnActive && (
+            {shouldShowProcessingIndicator({
+              isStreaming,
+              streamingText,
+              isThinking,
+              toolEventsLength: toolEvents.length,
+              isLastTurnActive,
+              compacting,
+            }) && (
               <div className="aux-card mb-3" data-tone="accent">
                 <div className="aux-card-header">
                   <span className="aux-card-dot is-live" />

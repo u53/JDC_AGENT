@@ -1,6 +1,7 @@
 import { useEffect, useCallback } from 'react'
 import { useSessionStore, type SessionStreamState } from '../stores/session-store'
 import { ipc } from '../lib/ipc-client'
+import { createCompactNoticeMessage } from '../lib/compact-notice'
 
 const EMPTY_STATE: SessionStreamState = { isStreaming: false, streamingText: '', thinkingText: '', isThinking: false, toolEvents: [] }
 
@@ -35,13 +36,12 @@ export function useSession() {
         const { originalCount, summarizedCount, keptCount } = chunk.compactInfo
         store.setCompactState(sessionId, { active: false })
         const recentKept = Math.max(0, keptCount - 1)
-        const compactText = `[Context compressed: ${summarizedCount} of ${originalCount} messages summarized, ${recentKept} recent kept.]`
-        const compactMessage = {
-          id: crypto.randomUUID(),
-          role: 'assistant' as const,
-          content: [{ type: 'text' as const, text: compactText }],
-          timestamp: Date.now(),
-        }
+        const compactMessage = createCompactNoticeMessage({
+          status: 'complete',
+          originalCount,
+          summarizedCount,
+          keptRecent: recentKept,
+        })
         const current = useSessionStore.getState()
         if (sessionId === current.activeSessionId) {
           useSessionStore.setState((s) => ({ messages: [...s.messages, compactMessage] }))
@@ -50,37 +50,21 @@ export function useSession() {
         store.setCompactState(sessionId, { active: false })
         const current = useSessionStore.getState()
         if (sessionId !== current.activeSessionId) return
-        const reason = chunk.compactSkipped.reason
-        const text =
-          reason === 'too_short'
-            ? `[Compact skipped: conversation too short (${chunk.compactSkipped.messageCount} messages) — nothing to compress yet.]`
-            : reason === 'in_progress'
-            ? '[Compact skipped: another compaction is already in progress.]'
-            : '[Compact skipped: no active session.]'
-        const skipMsg = {
-          id: crypto.randomUUID(),
-          role: 'assistant' as const,
-          content: [{ type: 'text' as const, text }],
-          timestamp: Date.now(),
-        }
+        const skipMsg = createCompactNoticeMessage({
+          status: 'skipped',
+          reason: chunk.compactSkipped.reason,
+          messageCount: chunk.compactSkipped.messageCount,
+        })
         useSessionStore.setState((s) => ({ messages: [...s.messages, skipMsg] }))
       } else if (chunk.type === 'compact_failed' && chunk.compactFailed) {
         store.setCompactState(sessionId, { active: false })
         const current = useSessionStore.getState()
         if (sessionId !== current.activeSessionId) return
-        const r = chunk.compactFailed.reason
-        const baseText =
-          r === 'aborted'
-            ? '[Compact aborted before completion. No messages were modified.]'
-            : r === 'empty_response'
-            ? '[Compact failed: model returned no summary. No messages were modified.]'
-            : `[Compact failed: ${chunk.compactFailed.message || 'stream error'}. No messages were modified.]`
-        const failMsg = {
-          id: crypto.randomUUID(),
-          role: 'assistant' as const,
-          content: [{ type: 'text' as const, text: baseText }],
-          timestamp: Date.now(),
-        }
+        const failMsg = createCompactNoticeMessage({
+          status: 'failed',
+          reason: chunk.compactFailed.reason,
+          message: chunk.compactFailed.message,
+        })
         useSessionStore.setState((s) => ({ messages: [...s.messages, failMsg] }))
       }
     })
@@ -223,6 +207,7 @@ export function useSession() {
     thinkingText: currentState.thinkingText,
     isStreaming: currentState.isStreaming,
     aborting: currentState.aborting === true,
+    compacting: currentState.compacting === true,
     isThinking: currentState.isThinking,
     toolEvents: currentState.toolEvents,
     error: currentState.error,

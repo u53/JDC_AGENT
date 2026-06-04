@@ -1,6 +1,9 @@
 import { memo, useState, useEffect, useRef } from 'react'
 import { MarkdownRenderer } from './MarkdownRenderer'
+import { CompactStatusCard } from './CompactStatusCard'
+import { CompactSummary } from './CompactSummary'
 import { ToolCardRouter } from './tool-cards/ToolCardRouter'
+import { isCompactSummaryText, parseCompactNoticeText, stripCompactSummaryPreamble } from '../lib/compact-notice'
 import type { ContentBlock, Message, ToolResultContent, ToolExecutionEvent } from '@jdcagnet/core'
 
 function ThinkingBlock({ content, streaming }: { content: string; streaming?: boolean }) {
@@ -75,31 +78,37 @@ function ConversationTurnView({
     if (isActive) setExpanded(false)
   }, [isActive])
 
+  const compactSummaryBlock = userContent.length === 1 && userContent[0]?.type === 'text' && isCompactSummaryText(userContent[0].text)
+
   return (
     <div className="py-5 border-b border-[var(--border)]">
       {/* User input section */}
-      <div className="border-l-2 border-[var(--accent)] pl-4 mb-4">
-        {userContent.map((block, i) => {
-          if (block.type === 'text') {
-            return (
-              <div key={i} className="text-[14px] whitespace-pre-wrap text-[var(--text)]">
-                {block.text}
-              </div>
-            )
-          }
-          if (block.type === 'image') {
-            return (
-              <img
-                key={i}
-                src={`data:${block.source.media_type};base64,${block.source.data}`}
-                alt="User attachment"
-                className="rounded-[8px] max-w-full max-h-64 mt-2"
-              />
-            )
-          }
-          return null
-        })}
-      </div>
+      {compactSummaryBlock ? (
+        <CompactSummary content={stripCompactSummaryPreamble(userContent[0].text)} />
+      ) : (
+        <div className="border-l-2 border-[var(--accent)] pl-4 mb-4">
+          {userContent.map((block, i) => {
+            if (block.type === 'text') {
+              return (
+                <div key={i} className="text-[14px] whitespace-pre-wrap text-[var(--text)]">
+                  {block.text}
+                </div>
+              )
+            }
+            if (block.type === 'image') {
+              return (
+                <img
+                  key={i}
+                  src={`data:${block.source.media_type};base64,${block.source.data}`}
+                  alt="User attachment"
+                  className="rounded-[8px] max-w-full max-h-64 mt-2"
+                />
+              )
+            }
+            return null
+          })}
+        </div>
+      )}
 
       {/* Assistant section */}
       <div className="pl-4">
@@ -112,6 +121,10 @@ function ConversationTurnView({
           <div key={pair.message.id}>
             {pair.message.content.map((block, i) => {
               if (block.type === 'text' && !block.text.startsWith('__STATS__') && !block.text.startsWith('<ide-context>')) {
+                const compactNotice = parseCompactNoticeText(block.text)
+                if (compactNotice) {
+                  return <CompactStatusCard key={i} {...compactNotice} />
+                }
                 return (
                   <div key={i} className="text-[14px] mb-3">
                     <MarkdownRenderer content={block.text} />

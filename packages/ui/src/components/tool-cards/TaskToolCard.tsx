@@ -81,16 +81,11 @@ function renderStructuredInput(toolName: string, input: Record<string, unknown>)
         const text = typeof value === 'string' ? value : JSON.stringify(value)
         const isLong = text.length > 60
         return (
-          <div key={key} className="relative group">
+          <div key={key}>
             <span>{key}</span>
-            <strong className={isLong ? 'truncate block max-w-[300px]' : ''}>
+            <strong className={isLong ? 'truncate block max-w-[300px]' : ''} title={isLong ? text : undefined}>
               {text}
             </strong>
-            {isLong && (
-              <div className="absolute left-0 bottom-full mb-1 z-50 hidden group-hover:block max-w-[400px] p-2 text-[12px] text-[var(--text)] bg-[var(--surface-3)] border border-[var(--border)] rounded-[6px] shadow-lg whitespace-pre-wrap break-words">
-                {text}
-              </div>
-            )}
           </div>
         )
       })}

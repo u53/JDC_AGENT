@@ -106,6 +106,41 @@ describe('Session JDC Context Engine runtime integration', () => {
     expect(existsSync(path.join('/tmp/jdc-session-context-config', 'projects'))).toBe(false)
   })
 
+  it('continues runLoop with the compacted message list after automatic compaction', async () => {
+    let streamCalls = 0
+    let foregroundMessages: Message[] = []
+    const provider: ModelProvider = {
+      name: 'compact-continuation-provider',
+      chat: async () => ({ content: [], usage: { inputTokens: 0, outputTokens: 0 } }),
+      stream: async function* (messages: Message[], _tools: ToolDefinition[], config: ModelConfig) {
+        streamCalls++
+        if (config.systemPrompt === undefined || typeof config.systemPrompt === 'string') {
+          yield { type: 'text_delta', text: '<summary>Recovered project state after compact.</summary>' }
+          yield { type: 'message_end', usage: { inputTokens: 10, outputTokens: 5 } }
+          return
+        }
+        foregroundMessages = messages
+        yield { type: 'text_delta', text: 'continued after compact' }
+        yield { type: 'message_end', usage: { inputTokens: 8, outputTokens: 2 } }
+      },
+    }
+    const events = makeEvents()
+    const session = await makeSession({
+      provider,
+      contextConfig: { enabled: false } as any,
+      modelConfig: { contextWindow: 200, compressAt: 0.1 },
+    })
+    seedMessagesForCompaction(session)
+
+    await session.sendMessage('trigger automatic compact and continue', events)
+
+    expect(streamCalls).toBe(2)
+    expect(textFromMessages(foregroundMessages)).toContain('Recovered project state after compact.')
+    expect(textFromMessages(foregroundMessages)).toContain('trigger automatic compact and continue')
+    expect(textFromMessages(foregroundMessages)).not.toContain('seed user 0')
+    expect(session.getMessages().at(-1)?.content).toEqual([{ type: 'text', text: 'continued after compact' }])
+  })
+
   it('injects a protocol-neutral context bundle before streaming and falls back when bundle generation fails', async () => {
     const session = await makeSession({
       provider: providerFromChunks([

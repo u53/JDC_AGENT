@@ -1217,6 +1217,85 @@ body {
   color: var(--bad);
 }
 
+.jdc-compact-card,
+.jdc-compact-summary {
+  border-radius: 10px;
+}
+
+.jdc-compact-card-header {
+  min-height: 56px;
+}
+
+.jdc-compact-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 3px;
+}
+
+.jdc-compact-ring {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, var(--aux-color) 18%, var(--border));
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--aux-color) 22%, transparent) 0 2px, transparent 3px),
+    color-mix(in srgb, var(--surface) 45%, transparent);
+}
+
+.jdc-compact-ring span {
+  position: absolute;
+  inset: 5px;
+  border: 1px solid color-mix(in srgb, var(--aux-color) 28%, transparent);
+  border-radius: 999px;
+  animation: jdc-compact-orbit 2.8s ease-in-out infinite;
+}
+
+.jdc-compact-ring span:nth-child(2) {
+  inset: 8px;
+  animation-duration: 3.4s;
+  animation-direction: reverse;
+}
+
+.jdc-compact-ring span:nth-child(3) {
+  inset: 11px;
+  animation-duration: 4.1s;
+}
+
+.jdc-compact-card[data-status="complete"] .jdc-compact-ring span,
+.jdc-compact-card[data-status="skipped"] .jdc-compact-ring span,
+.jdc-compact-card[data-status="failed"] .jdc-compact-ring span {
+  animation-play-state: paused;
+}
+
+.jdc-compact-card-body {
+  display: grid;
+  gap: 8px;
+}
+
+.jdc-compact-card-body p {
+  margin: 0;
+}
+
+.jdc-compact-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.jdc-compact-metrics span {
+  border: 1px solid color-mix(in srgb, var(--aux-color) 12%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--aux-color) 4%, transparent);
+  color: color-mix(in srgb, var(--text) 72%, var(--aux-color) 28%);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1;
+  padding: 5px 7px;
+}
+
 .ask-user-card {
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--good) 12%, var(--border));
@@ -1691,6 +1770,21 @@ body {
   }
 }
 
+@keyframes jdc-compact-orbit {
+  0%, 100% {
+    opacity: 0.38;
+    transform: rotate(0deg) scale(0.94);
+  }
+  45% {
+    opacity: 0.86;
+    transform: rotate(135deg) scale(1.08);
+  }
+  72% {
+    opacity: 0.58;
+    transform: rotate(250deg) scale(0.98);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .jdc-event-card,
   .jdc-event-card::after,
@@ -1700,6 +1794,7 @@ body {
   .jdc-engine-robot,
   .jdc-engine-robot-eye,
   .jdc-engine-signal span,
+  .jdc-compact-ring span,
   .jdc-agent-timeline-dot,
   .ask-user-mark.is-live,
   .agent-detail-live,

@@ -48,6 +48,29 @@ describe('legacy file-based memory retirement', () => {
     expect(compactPrompt).not.toContain('JSON array of memories to save')
   })
 
+  it('instructs compaction not to resurrect completed, cancelled, or superseded work', async () => {
+    let compactPrompt = ''
+    const provider: ModelProvider = {
+      name: 'compact-stale-task-guard-provider',
+      chat: async () => ({ content: [], usage: { inputTokens: 0, outputTokens: 0 } }),
+      stream: async function* (_messages: Message[], _tools, config: ModelConfig): AsyncGenerator<StreamChunk> {
+        compactPrompt = typeof config.systemPrompt === 'string'
+          ? config.systemPrompt
+          : config.systemPrompt?.map((segment) => segment.content).join('\n') ?? ''
+        yield { type: 'text_delta', text: '<summary>No stale tasks.</summary>' }
+        yield { type: 'message_end', usage: { inputTokens: 10, outputTokens: 2 } }
+      },
+    }
+
+    const result = await compactMessages(makeMessages(), provider, { model: 'test-model', maxTokens: 1024 })
+
+    expect(result.status).toBe('compacted')
+    expect(compactPrompt).toContain('Do not resurrect completed, cancelled, rejected, or superseded tasks')
+    expect(compactPrompt).toContain('Pending Work must contain only work that is still explicitly requested and incomplete')
+    expect(compactPrompt).toContain('Immediate Next Step may be "None"')
+    expect(compactPrompt).toContain('The continuing assistant must verify durable state before acting')
+  })
+
   it('describes JDC project memory and forbids legacy SaveMemory in the context engine prompt', () => {
     const prompt = getContextEnginePromptSegment().segment
     expect(prompt).toContain('JdcMemoryWrite')
