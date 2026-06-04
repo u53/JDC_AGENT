@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { runHarvestJob } from './harvest.js'
 import { buildContextBundle } from './orchestrator.js'
 import { createContextPerformanceRecorder, recordContextOperation, summarizeContextPerformance } from './performance.js'
 import { createContextScheduler } from './scheduler.js'
 import type { ContextStore, ContextStoreResult } from './store.js'
-import type { ContextBundle, ContextFact } from './types.js'
+import type { ContextBundle, ContextFact, DistillerEnvelope, HarvestJob, HarvestModelBinding } from './types.js'
 
 describe('JDC Context Engine performance metrics', () => {
   it('summarizes operation counts, percentiles, and metadata without wall-clock assumptions', () => {
@@ -93,6 +94,81 @@ describe('JDC Context Engine performance metrics', () => {
     expect(packMetric?.metadata?.usedTokens).toBeGreaterThan(0)
     expect(packMetric?.metadata?.droppedTokens).toBe(0)
   })
+
+  it('captures retrieval, packing, and harvest budget metadata in one performance snapshot', async () => {
+    let clock = 10_000
+    const recorder = createContextPerformanceRecorder({ now: () => clock })
+    const scheduler = createContextScheduler({ recorder, now: () => clock })
+    const store = makeStore(Array.from({ length: 160 }, (_, index) => performanceFact(index)))
+
+    await buildContextBundle({
+      sessionId: 'session_perf_snapshot',
+      cwd: '/repo',
+      userMessage: 'performance budget project convention 159',
+      recentMessages: [],
+      mode: 'code_edit',
+      model: 'test-model',
+      runtime: {},
+      createdAt: clock,
+    }, {
+      injectionEnabled: true,
+      store,
+      providers: [],
+      scheduler,
+      now: () => {
+        clock += 7
+        return clock
+      },
+      id: () => 'bundle_perf_snapshot',
+    })
+
+    const harvest = await runHarvestJob(performanceHarvestJob(clock), {
+      store,
+      recorder,
+      projectKey: '/repo',
+      trustMode: 'auto_accept_high_confidence',
+      distillers: [{
+        name: 'MemoryCuratorDistiller',
+        distill: async () => performanceEnvelope('Run Phase 7 context performance evals before release.'),
+      }],
+      now: () => {
+        clock += 13
+        return clock
+      },
+    })
+
+    const operations = recorder.snapshot().operations
+    const retrieveMetric = operations.find((operation) => operation.name === 'context:retrieve-facts')
+    const packMetric = operations.find((operation) => operation.name === 'context:pack-assemble')
+    const harvestMetric = operations.find((operation) => operation.name === 'context:harvest')
+
+    expect(harvest.status).toBe('accepted')
+    expect(operations.map((operation) => operation.name)).toEqual(expect.arrayContaining([
+      'context:retrieve-facts',
+      'context:pack-assemble',
+      'context:harvest',
+    ]))
+    expect(retrieveMetric?.metadata).toMatchObject({
+      candidateCount: 160,
+      returnedCount: expect.any(Number),
+      queryPresent: true,
+    })
+    expect(packMetric?.metadata).toMatchObject({
+      usedTokens: expect.any(Number),
+      droppedTokens: 0,
+      droppedSectionCount: 0,
+    })
+    expect(harvestMetric).toMatchObject({
+      lane: 'background',
+      status: 'success',
+      projectKey: '/repo',
+      metadata: {
+        sessionId: 'session_perf_snapshot',
+        runLoopId: 'run_perf_snapshot',
+        finalStatus: 'accepted',
+      },
+    })
+  })
 })
 
 function performanceFact(index: number): ContextFact {
@@ -107,6 +183,58 @@ function performanceFact(index: number): ContextFact {
     sourceProvider: 'MemorySignalProvider',
     createdAt: 1_000 + index,
     updatedAt: 1_000 + index,
+  }
+}
+
+function performanceHarvestJob(createdAt: number): HarvestJob {
+  return {
+    id: 'job_perf_snapshot',
+    sessionId: 'session_perf_snapshot',
+    runLoopId: 'run_perf_snapshot',
+    status: 'queued',
+    candidate: {
+      sessionId: 'session_perf_snapshot',
+      runLoopId: 'run_perf_snapshot',
+      userMessage: 'Remember: run Phase 7 context performance evals before release.',
+      assistantMessages: [{ id: 'assistant_perf_snapshot', role: 'assistant', content: [{ type: 'text', text: 'Noted.' }], timestamp: createdAt + 1 }],
+      toolEvents: [],
+      changedFiles: [],
+      createdAt,
+      origin: {
+        projectKey: '/repo',
+        actor: 'main_session',
+        sessionId: 'session_perf_snapshot',
+        runLoopId: 'run_perf_snapshot',
+      },
+    },
+    modelBinding: performanceBinding(),
+    createdAt,
+    updatedAt: createdAt,
+  }
+}
+
+function performanceBinding(): HarvestModelBinding {
+  return {
+    sessionId: 'session_perf_snapshot',
+    providerProtocol: 'anthropic',
+    modelId: 'claude-test',
+    modelConfig: { model: 'claude-test', maxTokens: 1024 },
+    contextWindow: 128_000,
+  }
+}
+
+function performanceEnvelope(content: string): DistillerEnvelope {
+  return {
+    schemaVersion: 1,
+    distiller: 'MemoryCuratorDistiller',
+    confidence: 0.96,
+    citations: [{ id: 'cit_perf_snapshot', type: 'message', ref: 'run_perf_snapshot:user' }],
+    payload: {
+      kind: 'workflow_hint',
+      scope: 'project',
+      content,
+      confidence: 0.96,
+    },
   }
 }
 
