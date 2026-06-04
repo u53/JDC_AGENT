@@ -180,6 +180,104 @@ describe('Session JDC Context Engine runtime integration', () => {
     expect(textFromMessages(foregroundMessages)).not.toContain('seed user 0')
   })
 
+  it('continues prompt_too_long recovery with trimmed recent tool results', async () => {
+    const largeOutput = `start\n${'x'.repeat(12_000)}\nend`
+    let mainCalls = 0
+    let compactCalls = 0
+    let continuedMessages: Message[] = []
+    const provider: ModelProvider = {
+      name: 'prompt-too-long-recovery-provider',
+      chat: async () => ({ content: [], usage: { inputTokens: 0, outputTokens: 0 } }),
+      stream: async function* (messages: Message[], _tools: ToolDefinition[], config: ModelConfig) {
+        if (typeof config.systemPrompt === 'string') {
+          compactCalls++
+          yield { type: 'text_delta', text: '<summary>Recovered after prompt too long.</summary>' }
+          yield { type: 'message_end', usage: { inputTokens: 10, outputTokens: 5 } }
+          return
+        }
+
+        mainCalls++
+        if (mainCalls === 1) {
+          throw new Error('prompt is too long')
+        }
+
+        continuedMessages = messages
+        yield { type: 'text_delta', text: 'continued after prompt compact' }
+        yield { type: 'message_end', usage: { inputTokens: 8, outputTokens: 2 } }
+      },
+    }
+    const events = makeEvents()
+    const session = await makeSession({
+      provider,
+      contextConfig: { enabled: false } as any,
+      modelConfig: { contextWindow: 128_000, compressAt: 0.9 },
+    })
+    const seedMessages: Message[] = []
+    for (let index = 0; index < 12; index++) {
+      seedMessages.push(index % 2 === 0
+        ? { id: `seed_user_${index}`, role: 'user', content: [{ type: 'text', text: `seed user ${index}` }], timestamp: index }
+        : { id: `seed_assistant_${index}`, role: 'assistant', content: [{ type: 'text', text: `seed assistant ${index}` }], timestamp: index }
+      )
+    }
+    seedMessages.push(
+      { id: 'recent_tool_use', role: 'assistant', content: [{ type: 'tool_use', id: 't-large', name: 'bash', input: { cmd: 'big output' } }], timestamp: 20 },
+      { id: 'recent_tool_result', role: 'user', content: [{ type: 'tool_result', tool_use_id: 't-large', content: largeOutput, is_error: false }], timestamp: 21 },
+    )
+    ;(session as any).messages = seedMessages
+
+    await session.sendMessage('recover and keep going', events)
+
+    expect(mainCalls).toBe(2)
+    expect(compactCalls).toBe(1)
+    expect(events.onError).not.toHaveBeenCalled()
+    expect(textFromMessages(continuedMessages)).toContain('Recovered after prompt too long.')
+    expect(textFromMessages(continuedMessages)).toContain('recover and keep going')
+    expect(textFromMessages(continuedMessages)).toContain('Tool result truncated')
+    expect(textFromMessages(continuedMessages)).not.toContain('end')
+    expect(textFromMessages(session.getMessages())).toContain('continued after prompt compact')
+  })
+
+  it('stops prompt_too_long recovery when compaction fails', async () => {
+    let mainCalls = 0
+    let compactCalls = 0
+    const provider: ModelProvider = {
+      name: 'prompt-too-long-compact-fail-provider',
+      chat: async () => ({ content: [], usage: { inputTokens: 0, outputTokens: 0 } }),
+      stream: async function* (_messages: Message[], _tools: ToolDefinition[], config: ModelConfig) {
+        if (typeof config.systemPrompt === 'string') {
+          compactCalls++
+          yield { type: 'text_delta', text: '<summary>   </summary>' }
+          yield { type: 'message_end', usage: { inputTokens: 10, outputTokens: 1 } }
+          return
+        }
+
+        mainCalls++
+        if (mainCalls === 1) {
+          throw new Error('prompt is too long')
+        }
+
+        yield { type: 'text_delta', text: 'should not continue after failed compact' }
+        yield { type: 'message_end', usage: { inputTokens: 8, outputTokens: 2 } }
+      },
+    }
+    const events = makeEvents()
+    const session = await makeSession({
+      provider,
+      contextConfig: { enabled: false } as any,
+      modelConfig: { contextWindow: 128_000, compressAt: 0.9 },
+    })
+    seedMessagesForCompaction(session)
+
+    await session.sendMessage('recover from failed compact', events)
+
+    expect(mainCalls).toBe(1)
+    expect(compactCalls).toBe(1)
+    expect(events.onError).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'Prompt is too long and compaction could not reduce the session context.',
+    }))
+    expect(textFromMessages(session.getMessages())).not.toContain('should not continue after failed compact')
+  })
+
   it('injects a protocol-neutral context bundle before streaming and falls back when bundle generation fails', async () => {
     const session = await makeSession({
       provider: providerFromChunks([

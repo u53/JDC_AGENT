@@ -102,6 +102,7 @@ Output format:
 
 export const KEEP_RECENT = 6
 export const MIN_COMPACT_LENGTH = KEEP_RECENT + 2
+const MAX_KEPT_TOOL_RESULT_CHARS = 1200
 
 export type CompactStatus = 'compacted' | 'skipped' | 'failed'
 export type CompactSkipReason = 'too_short'
@@ -154,7 +155,7 @@ export async function compactMessages(
   }
 
   const toCompress = messages.slice(0, cutIndex)
-  const toKeep = messages.slice(cutIndex)
+  const toKeep = trimKeptToolResults(messages.slice(cutIndex))
 
   const compactConfig: ModelConfig = { ...config, systemPrompt: COMPACT_PROMPT, maxTokens: 16384 }
   const compactMsgs: Message[] = [
@@ -280,6 +281,27 @@ function sanitizeForSummaryPrompt(messages: Message[]): Message[] {
       return block
     })
     return { ...msg, content: newContent }
+  })
+}
+
+function trimKeptToolResults(messages: Message[]): Message[] {
+  return messages.map(msg => {
+    let changed = false
+    const newContent: ContentBlock[] = msg.content.map(block => {
+      if (block.type !== 'tool_result' || block.content.length <= MAX_KEPT_TOOL_RESULT_CHARS) {
+        return block
+      }
+
+      changed = true
+      const removed = block.content.length - MAX_KEPT_TOOL_RESULT_CHARS
+      const errMark = block.is_error ? ' error' : ''
+      return {
+        ...block,
+        content: `${block.content.slice(0, MAX_KEPT_TOOL_RESULT_CHARS)}\n[Tool result truncated during compaction${errMark} — original ${block.content.length} chars, ${removed} chars removed.]`,
+      }
+    })
+
+    return changed ? { ...msg, content: newContent } : msg
   })
 }
 

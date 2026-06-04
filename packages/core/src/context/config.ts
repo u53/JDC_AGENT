@@ -23,7 +23,6 @@ export const DEFAULT_CONTEXT_ENGINE_CONFIG: ContextEngineConfig = {
   },
   harvest: {
     maxJobsPerSession: 50,
-    maxOutputTokens: 1200,
     timeoutMs: 30_000,
     minIntervalMs: 15_000,
   },

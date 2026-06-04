@@ -537,27 +537,27 @@ export class Session {
     this.messages = []
   }
 
-  async compactNow(events: SessionEvents): Promise<void> {
+  async compactNow(events: SessionEvents): Promise<boolean> {
     if (this.messages.length < MIN_COMPACT_LENGTH) {
       events.onStreamChunk({
         type: 'compact_skipped',
         compactSkipped: { reason: 'too_short', messageCount: this.messages.length },
       })
-      return
+      return false
     }
     if (this.isCompacting) {
       events.onStreamChunk({
         type: 'compact_skipped',
         compactSkipped: { reason: 'in_progress', messageCount: this.messages.length },
       })
-      return
+      return false
     }
     const ownAbort = new AbortController()
     const previousAbort = this.abortController
     this.abortController = ownAbort
     this.isCompacting = true
     try {
-      await this.compact(events)
+      return await this.compact(events)
     } finally {
       this.isCompacting = false
       // Only restore previous controller if no new runLoop replaced it.
@@ -758,7 +758,7 @@ export class Session {
     }
   }
 
-  private async compact(events: SessionEvents): Promise<void> {
+  private async compact(events: SessionEvents): Promise<boolean> {
     events.onStreamChunk({ type: 'compact_start' })
     const result = await compactMessages(
       this.messages,
@@ -773,7 +773,7 @@ export class Session {
         type: 'compact_skipped',
         compactSkipped: { reason: 'too_short', messageCount: result.originalCount },
       })
-      return
+      return false
     }
 
     if (result.status === 'failed') {
@@ -784,7 +784,7 @@ export class Session {
           message: result.errorMessage,
         },
       })
-      return
+      return false
     }
 
     // status === 'compacted' — actually replace messages
@@ -808,6 +808,7 @@ export class Session {
         memoriesExtracted,
       },
     })
+    return true
   }
 
   private drainNotifications(): Message | null {
@@ -933,7 +934,11 @@ export class Session {
           const category = classifyError(streamErr)
 
           if (category === 'prompt_too_long') {
-            await this.compactNow(events)
+            const compacted = await this.compactNow(events)
+            if (!compacted) {
+              events.onError(new Error('Prompt is too long and compaction could not reduce the session context.'))
+              return
+            }
             if (this.abortController?.signal.aborted) break
             // Re-run this turn against the compacted message list.
             // Drop any partial chunks accumulated before the error so we don't
@@ -1264,7 +1269,6 @@ export class Session {
         await runHarvestJob(enqueued.job, {
           store,
           modelClient: createProviderDistillerModelClient(this.provider, signal),
-          maxOutputTokens: this.contextConfig.harvest.maxOutputTokens,
           minConfidence: this.contextConfig.memory.minConfidence,
           trustMode: this.contextConfig.memory.trustMode,
           timeoutMs: this.contextConfig.harvest.timeoutMs,

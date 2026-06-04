@@ -307,7 +307,7 @@ export interface ContextEngineConfig {
   }
   harvest: {
     maxJobsPerSession: number
-    maxOutputTokens: number
+    maxOutputTokens?: number
     timeoutMs: number
     minIntervalMs: number
   }

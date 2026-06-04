@@ -273,6 +273,29 @@ describe('harvest queue safety chain', () => {
     }
   })
 
+  it('does not inject a default harvest output token cap into model distillers', async () => {
+    const store = makeStore()
+    const seenMaxOutputTokens: Array<number | undefined> = []
+    const modelClient: DistillerModelClient = {
+      completeAnthropicMessages: async (request) => {
+        seenMaxOutputTokens.push(request.maxOutputTokens)
+        return JSON.stringify(memoryEnvelope('Keep the full durable project fact.', 'cit_user_run_1'))
+      },
+      completeOpenAIChatCompletions: async () => {
+        throw new Error('unexpected protocol')
+      },
+      completeOpenAIResponses: async () => {
+        throw new Error('unexpected protocol')
+      },
+    }
+    const enqueued = await enqueueHarvest(baseCandidate, makeBinding('anthropic'), { store, now: () => 4_120, createId: () => 'job_no_default_output_cap' })
+
+    const completed = await runHarvestJob(enqueued.job!, { store, modelClient, now: () => 4_130 })
+
+    expect(completed.status).toBe('accepted')
+    expect(seenMaxOutputTokens).toEqual([undefined])
+  })
+
   it('distills workflow file changes into durable project workflow rules without a model call', async () => {
     const store = makeStore()
     const candidate: HarvestCandidate = {

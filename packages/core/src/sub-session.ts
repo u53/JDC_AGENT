@@ -549,7 +549,6 @@ function enqueueSubSessionHarvest(
         await runHarvestJob(enqueued.job, {
           store: opts.contextEngine!.store,
           modelClient: createProviderDistillerModelClient(opts.provider, signal),
-          maxOutputTokens: contextConfig.harvest.maxOutputTokens,
           minConfidence: contextConfig.memory.minConfidence,
           trustMode: contextConfig.memory.trustMode,
           timeoutMs: contextConfig.harvest.timeoutMs,

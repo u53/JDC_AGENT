@@ -99,6 +99,31 @@ describe('compactMessages status', () => {
     expect(startsWithToolResult).toBe(false)
   })
 
+  it('trims large tool results that are kept as recent messages', async () => {
+    const largeOutput = `start\n${'x'.repeat(10_000)}\nend`
+    const msgs = Array.from({ length: MIN_COMPACT_LENGTH + 4 }, (_, i) =>
+      i % 2 === 0 ? userMsg(`u${i}`, `u${i}`) : assistantMsg(`a${i}`, `a${i}`)
+    )
+    msgs.splice(
+      msgs.length - 2,
+      0,
+      { id: 'recent_tool_use', role: 'assistant', content: [{ type: 'tool_use', id: 't-large', name: 'bash', input: { cmd: 'big output' } }], timestamp: 0 },
+      { id: 'recent_tool_result', role: 'user', content: [{ type: 'tool_result', tool_use_id: 't-large', content: largeOutput, is_error: false }], timestamp: 0 },
+    )
+
+    const result = await compactMessages(msgs, fakeProvider('summary content'), baseConfig)
+
+    expect(result.status).toBe('compacted')
+    const toolResult = result.messages
+      .flatMap(msg => msg.content)
+      .find(block => block.type === 'tool_result' && block.tool_use_id === 't-large')
+    expect(toolResult?.type).toBe('tool_result')
+    expect(toolResult?.content).toContain('Tool result truncated')
+    expect(toolResult?.content).toContain(`${largeOutput.length} chars`)
+    expect(toolResult?.content.length).toBeLessThan(2_000)
+    expect(toolResult?.content).not.toContain('end')
+  })
+
   it('does not invoke onChunk with text_delta during summary streaming', async () => {
     const msgs = Array.from({ length: MIN_COMPACT_LENGTH + 2 }, (_, i) =>
       i % 2 === 0 ? userMsg(`u${i}`, `u${i}`) : assistantMsg(`a${i}`, `a${i}`)

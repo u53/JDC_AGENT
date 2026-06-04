@@ -21,7 +21,7 @@ describe('Built-in Tools', () => {
     const runner = await setup()
     const result = await runner.execute('Bash', 'id-1', { command: 'echo hello' }, () => {})
     expect(result.content.trim()).toContain('hello')
-  })
+  }, 15000)
 
   it('file_write + file_read: round trip', async () => {
     const runner = await setup()

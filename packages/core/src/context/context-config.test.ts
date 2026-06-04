@@ -9,6 +9,10 @@ describe('Context Engine config defaults', () => {
     expect(DEFAULT_CONTEXT_ENGINE_CONFIG.tokenBudget.providerOverflowPolicy).toBe('degrade_and_retry')
   })
 
+  it('does not impose a harvest distiller output token cap in production defaults', () => {
+    expect(DEFAULT_CONTEXT_ENGINE_CONFIG.harvest.maxOutputTokens).toBeUndefined()
+  })
+
   it('parses legacy compatibility caps without making them production defaults', () => {
     const config = resolveContextEngineConfig({
       tokenBudget: {

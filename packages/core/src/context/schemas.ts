@@ -236,7 +236,7 @@ export const ContextConfigSchema = z.object({
   }),
   harvest: z.object({
     maxJobsPerSession: z.number().int().nonnegative(),
-    maxOutputTokens: z.number().int().positive(),
+    maxOutputTokens: z.number().int().positive().optional(),
     timeoutMs: z.number().int().positive(),
     minIntervalMs: z.number().int().nonnegative(),
   }),
