@@ -73,7 +73,7 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
       }
 
       const prompt = input.prompt as string
-      const maxTurns = (input.maxTurns as number) || 1000
+      const maxTurns = typeof input.maxTurns === 'number' ? input.maxTurns : undefined
       const agentType = (input.type as string) || 'general'
       const requestedModelId = input.modelId as string | undefined
       const toolUseId = context.toolUseId || 'unknown'

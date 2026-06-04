@@ -96,7 +96,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
     toolRegistry,
     modelConfig,
     cwd,
-    maxTurns = 1000,
+    maxTurns,
     signal,
     onToolEvent,
     onPermissionRequest,
