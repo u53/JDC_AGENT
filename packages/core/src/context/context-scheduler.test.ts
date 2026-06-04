@@ -94,6 +94,33 @@ describe('JDC Context Engine scheduler', () => {
     if (third.accepted) await third.promise
   })
 
+  it('records cancelled background jobs after project cancellation settles', async () => {
+    const recorder = createContextPerformanceRecorder({ now: () => Date.now() })
+    const scheduler = createContextScheduler({ recorder, now: () => Date.now(), maxBackgroundPerProject: 1 })
+
+    const job = scheduler.enqueueBackground('repo-a', 'warm-index', async (signal) => {
+      await new Promise<void>((_resolve, reject) => {
+        if (signal.aborted) {
+          reject(new Error('project warmup cancelled'))
+          return
+        }
+        signal.addEventListener('abort', () => reject(new Error('project warmup cancelled')), { once: true })
+      })
+    })
+
+    expect(job.accepted).toBe(true)
+    scheduler.cancelProject('repo-a')
+    if (job.accepted) await job.promise
+
+    expect(recorder.snapshot().operations.at(-1)).toMatchObject({
+      name: 'warm-index',
+      lane: 'background',
+      status: 'cancelled',
+      projectKey: 'repo-a',
+      diagnostic: 'project warmup cancelled',
+    })
+  })
+
   it('rate limits background jobs by project and job name', async () => {
     let clock = 1_000
     const recorder = createContextPerformanceRecorder({ now: () => clock })

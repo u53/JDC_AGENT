@@ -105,6 +105,7 @@ export class SessionManager {
   }
 
   private scheduleProjectBackgroundWarm(cwd: string): void {
+    this.cancelPendingContextWarmsExcept(cwd)
     if (this.contextWarmTimers.has(cwd)) return
     const timer = setTimeout(() => {
       this.contextWarmTimers.delete(cwd)
@@ -112,6 +113,14 @@ export class SessionManager {
       this.warmContextEngine(cwd)
     }, this.contextWarmDelayMs)
     this.contextWarmTimers.set(cwd, timer)
+  }
+
+  private cancelPendingContextWarmsExcept(activeCwd: string): void {
+    for (const [cwd, timer] of this.contextWarmTimers) {
+      if (cwd === activeCwd) continue
+      clearTimeout(timer)
+      this.contextWarmTimers.delete(cwd)
+    }
   }
 
   getIdeConnections(): IdeConnection[] {
