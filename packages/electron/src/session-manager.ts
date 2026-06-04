@@ -6,7 +6,7 @@ import {
   type PermissionCallback, createAskUserTool, type AskUserCallback, createNotifyTool, type NotifyCallback,
   McpManager, loadMcpConfig, saveMcpConfig, type McpServerConfig, type McpServerState,
   IdeManager, type IdeConnection, type OpenDiffParams, type OpenDiffResult, type DiagnosticFile,
-  compressImageForAPI, getContextEngine, ensureCodeIndexJob,
+  compressImageForAPI, getContextEngine, ensureCodeIndexJob, resolveConfiguredModel,
 } from '@jdcagnet/core'
 import type { ToolExecutionEvent } from '@jdcagnet/core'
 import { Notification, type BrowserWindow } from 'electron'
@@ -181,45 +181,14 @@ export class SessionManager {
 
   private resolveModelById(modelId: string): { provider: any; modelConfig: ModelConfig; protocol: string } | null {
     const config = loadAppConfig()
-    const data = config.modelGroups
-    if (!data?.groups) return null
-
-    // Composite key format: "groupId:modelId" (from AI via team/agent tools)
-    const colonIdx = modelId.indexOf(':')
-    if (colonIdx > 0) {
-      const groupId = modelId.slice(0, colonIdx)
-      const mId = modelId.slice(colonIdx + 1)
-      const group = data.groups.find((g: any) => g.id === groupId)
-      if (group) {
-        const model = group.models?.find((m: any) => m.modelId === mId)
-        if (model) {
-          const provider = this.createProvider(group)
-          const modelConfig: ModelConfig = {
-            model: model.modelId,
-            maxTokens: model.maxTokens || 32000,
-            contextWindow: model.contextWindow || 200000,
-            compressAt: model.compressAt || 0.9,
-          }
-          return { provider, modelConfig, protocol: group.protocol || 'anthropic' }
-        }
-      }
+    const resolution = resolveConfiguredModel(config.modelGroups?.groups, modelId)
+    if (resolution.status !== 'resolved') return null
+    const m = resolution.model
+    return {
+      provider: this.createProvider(m.group as any),
+      modelConfig: { model: m.modelId, maxTokens: m.maxTokens, contextWindow: m.contextWindow, compressAt: m.compressAt },
+      protocol: m.protocol || 'anthropic',
     }
-
-    // Fallback: UUID lookup (for activeModelId stored in session DB)
-    for (const group of data.groups) {
-      const model = group.models?.find((m: any) => m.id === modelId)
-      if (model) {
-        const provider = this.createProvider(group)
-        const modelConfig: ModelConfig = {
-          model: model.modelId,
-          maxTokens: model.maxTokens || 32000,
-          contextWindow: model.contextWindow || 200000,
-          compressAt: model.compressAt || 0.9,
-        }
-        return { provider, modelConfig, protocol: group.protocol || 'anthropic' }
-      }
-    }
-    return null
   }
 
   setSessionModel(sessionId: string, modelId: string): void {
@@ -302,22 +271,10 @@ export class SessionManager {
     const session = new Session(sessionConfig, provider, this.history, permissionCallback, this.mcpManager, onPlanReview)
     session.resolveModel = (modelId: string) => {
       const config = loadAppConfig()
-      const data = config.modelGroups
-      if (!data?.groups) return null
-      for (const group of data.groups) {
-        const model = group.models?.find((m: any) => m.id === modelId || m.modelId === modelId)
-        if (model) {
-          const resolvedProvider = this.createProvider(group)
-          const resolvedConfig = {
-            model: model.modelId,
-            maxTokens: model.maxTokens || 32000,
-            contextWindow: model.contextWindow || 200000,
-            compressAt: model.compressAt || 0.9,
-          }
-          return { provider: resolvedProvider, modelConfig: resolvedConfig }
-        }
-      }
-      return null
+      const resolution = resolveConfiguredModel(config.modelGroups?.groups, modelId)
+      if (resolution.status !== 'resolved') return null
+      const m = resolution.model
+      return { provider: this.createProvider(m.group as any), modelConfig: { model: m.modelId, maxTokens: m.maxTokens, contextWindow: m.contextWindow, compressAt: m.compressAt } }
     }
     const onAskUser: AskUserCallback = async (question, options, multiSelect) => {
       return new Promise<string>((resolve) => {
