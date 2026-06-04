@@ -52,6 +52,7 @@ import { DEFAULT_CONTEXT_ENGINE_CONFIG, resolveContextEngineConfig, type Context
 import { openContextStore, type ContextStore } from './context/store.js'
 import { enqueueHarvest, runHarvestJob } from './context/harvest.js'
 import { classifyHarvestCandidate } from './context/safety.js'
+import { assistantMessagesContainProjectSummary, isHarvestConfirmationSaveTurn } from './context/harvest-router.js'
 import { captureHarvestModelBinding } from './context/model-binding.js'
 import { createProviderDistillerModelClient } from './context/distillers/index.js'
 import { hashContent } from './context/providers/shared.js'
@@ -1184,12 +1185,13 @@ export class Session {
 
     const binding = this.captureRunLoopModelBinding()
     if (!binding) return
+    const assistantMessages = this.assistantMessagesForHarvestCandidate(input.userMessage, input.assistantMessages)
 
     const candidate: HarvestCandidate = {
       sessionId: this.id,
       runLoopId: input.runLoopId,
       userMessage: input.userMessage,
-      assistantMessages: input.assistantMessages,
+      assistantMessages,
       toolEvents: input.toolEvents.map(toHarvestToolEvent),
       changedFiles: this.fileTracker.getChangedFiles().map(change => change.filePath).filter(p => !this.runLoopFileSnapshot.has(p)),
       createdAt: input.createdAt,
@@ -1220,6 +1222,22 @@ export class Session {
     }
 
     void scheduled.promise
+  }
+
+  private assistantMessagesForHarvestCandidate(userMessage: string, currentAssistantMessages: Message[]): Message[] {
+    if (!isHarvestConfirmationSaveTurn(userMessage)) return currentAssistantMessages
+    if (assistantMessagesContainProjectSummary(currentAssistantMessages)) return currentAssistantMessages
+
+    const currentIds = new Set(currentAssistantMessages.map(message => message.id))
+    const backfill = [...this.messages]
+      .reverse()
+      .filter(message => message.role === 'assistant' && !currentIds.has(message.id))
+      .map(stripThinkingForHarvest)
+      .filter(message => assistantMessagesContainProjectSummary([message]))
+      .slice(0, 1)
+      .reverse()
+
+    return backfill.length > 0 ? [...backfill, ...currentAssistantMessages] : currentAssistantMessages
   }
 
   private captureRunLoopModelBinding(): HarvestModelBinding | null {

@@ -52,6 +52,54 @@ describe('routeHarvestCandidate', () => {
     })).action).toBe('distill_workflow_rule')
   })
 
+  it('routes assistant project summaries to project update distillation', () => {
+    const decision = routeHarvestCandidate(candidate({
+      userMessage: '帮我总结一下这个项目整体',
+      assistantMessages: [{
+        id: 'assistant_project_summary',
+        role: 'assistant',
+        timestamp: 2,
+        content: [{
+          type: 'text',
+          text: [
+            '# 项目整体架构',
+            'packages/core 负责 runLoop、JDC Context Engine、工具调度和上下文注入。',
+            'packages/electron 负责桌面主进程、IPC 和窗口管理。',
+            'packages/ui 负责 React UI、Inspector 和 Context Panel。',
+            '常用命令包括 pnpm --filter @jdcagnet/core test 和 pnpm --filter @jdcagnet/core build。',
+          ].join('\n'),
+        }],
+      }],
+    }))
+
+    expect(decision).toEqual({
+      action: 'distill_project_update',
+      reason: expect.stringContaining('assistant project summary'),
+    })
+  })
+
+  it('routes short confirmation turns when assistant evidence contains a project summary', () => {
+    const decision = routeHarvestCandidate(candidate({
+      userMessage: '当然，存一下',
+      assistantMessages: [{
+        id: 'assistant_previous_summary',
+        role: 'assistant',
+        timestamp: 2,
+        content: [{
+          type: 'text',
+          text: [
+            '项目整体架构：packages/core 管理 JDC Context Engine、Session runLoop、harvest 和 tool runner。',
+            'packages/electron 管理 IPC、窗口和桌面服务。',
+            'packages/ui 管理 React Inspector、Context Panel 和聊天界面。',
+          ].join('\n'),
+        }],
+      }],
+    }))
+
+    expect(decision.action).toBe('distill_project_update')
+    expect(decision.reason).toContain('confirmation')
+  })
+
   it('routes explicit project conventions and memory requests to memory candidate distillation', () => {
     expect(routeHarvestCandidate(candidate({ userMessage: 'Remember: this project always runs vitest with --no-file-parallelism.' })).action).toBe('distill_memory_candidate')
     expect(routeHarvestCandidate(candidate({ userMessage: 'Project convention: context facts must cite stored evidence.' })).action).toBe('distill_memory_candidate')

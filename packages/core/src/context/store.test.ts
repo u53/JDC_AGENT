@@ -676,6 +676,32 @@ describe('JDC Context Store persistence', () => {
     expect((await store.listRejectedCandidates()).value.map((candidate) => candidate.id)).toEqual(['rejected_keep_1', 'rejected_keep_2'])
   })
 
+  it('does not apply accepted project fact count deletion unless an explicit fact quota is configured', async () => {
+    const store = await openContextStore({ dbPath: makeDbPath(), now: () => 10_000 })
+    await saveFileEvidence(store)
+
+    const factCountAboveLegacyDefault = 1_001
+    await expectOk(store.withWriteBatch!('seed facts above legacy default quota', async () => {
+      for (let index = 0; index < factCountAboveLegacyDefault; index++) {
+        await expectOk(store.saveFact(makeFact({
+          id: `fact_${index}`,
+          content: `Durable project fact ${index} must not be removed by a hidden default count cap.`,
+          confidence: 0.91,
+          updatedAt: index + 1,
+        })))
+      }
+    }))
+
+    const quota = await store.enforceQuotas()
+
+    expect(quota.ok).toBe(true)
+    expect(quota.value.deletedFacts).toBe(0)
+    const facts = await store.queryFacts()
+    expect(facts.value).toHaveLength(factCountAboveLegacyDefault)
+    expect(facts.value.map((fact) => fact.id)).toContain('fact_0')
+    expect(facts.value.map((fact) => fact.id)).toContain('fact_1000')
+  })
+
   it('retains rejected candidates temporarily and removes them after their TTL expires', async () => {
     const store = await openContextStore({ dbPath: makeDbPath(), now: () => 1_000, quotas: { maxRejectedCandidates: 10 } })
 
