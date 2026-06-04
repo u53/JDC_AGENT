@@ -74,3 +74,10 @@ export {
   type MemoryWritePayload,
 } from './tools/memory-write.js'
 export { compressImageForAPI, type CompressedImage } from './utils/image-resizer.js'
+export {
+  resolveConfiguredModel,
+  type ConfiguredModelGroup,
+  type ConfiguredModelEntry,
+  type ConfiguredModelResolution,
+  type ResolvedConfiguredModel,
+} from './model-resolution.js'
