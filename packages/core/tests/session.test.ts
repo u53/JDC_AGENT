@@ -1,7 +1,32 @@
 import { describe, it, expect, afterAll } from 'vitest'
 import { ConversationHistory } from '../src/history.js'
+import { Session } from '../src/session.js'
+import type { ModelProvider } from '../src/model-provider.js'
+import type { SessionEvents, Message, StreamChunk } from '../src/index.js'
 import path from 'node:path'
 import os from 'node:os'
+
+function providerFromText(text: string): ModelProvider {
+  return {
+    name: 'retry-test-provider',
+    async chat() {
+      return { content: [{ type: 'text', text }], usage: { inputTokens: 1, outputTokens: 1 } }
+    },
+    async *stream(): AsyncIterable<StreamChunk> {
+      yield { type: 'text_delta', text }
+      yield { type: 'message_end', usage: { inputTokens: 1, outputTokens: 1 } }
+    },
+  }
+}
+
+function silentEvents(): SessionEvents {
+  return {
+    onStreamChunk: () => {},
+    onToolEvent: () => {},
+    onMessageComplete: () => {},
+    onError: () => {},
+  }
+}
 
 describe('ConversationHistory', () => {
   const dbPath = path.join(os.tmpdir(), `jdcagnet-test-${Date.now()}.db`)
@@ -46,5 +71,38 @@ describe('ConversationHistory', () => {
 
   afterAll(() => {
     history.close()
+  })
+})
+
+describe('Session retry', () => {
+  it('retries the current turn without appending a duplicate user message', async () => {
+    const dbPath = path.join(os.tmpdir(), `jdcagnet-retry-test-${Date.now()}.db`)
+    const retryHistory = new ConversationHistory(dbPath)
+    await retryHistory.ensureReady()
+    retryHistory.createSession('retry-session', 'RetryProject', '/tmp/retry')
+    const completed: Message[] = []
+    const events = {
+      ...silentEvents(),
+      onMessageComplete: (message: Message) => completed.push(message),
+    }
+    const session = new Session(
+      {
+        id: 'retry-session',
+        projectName: 'RetryProject',
+        cwd: '/tmp/retry',
+        modelConfig: { model: 'test-model', maxTokens: 1024 },
+      },
+      providerFromText('ok'),
+      retryHistory,
+    )
+
+    await session.sendMessage('hello', events)
+    await session.retryLastTurn(events)
+
+    const stored = retryHistory.getMessages('retry-session')
+    expect(stored.filter(message => message.role === 'user')).toHaveLength(1)
+    expect(stored.filter(message => message.role === 'assistant')).toHaveLength(2)
+    expect(completed).toHaveLength(2)
+    retryHistory.close()
   })
 })

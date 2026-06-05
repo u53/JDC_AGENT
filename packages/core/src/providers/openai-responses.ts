@@ -180,7 +180,12 @@ export class OpenAIResponsesProvider implements ModelProvider {
     // Retry only before the first chunk — the OpenAI SDK's maxRetries covers
     // the initial create() call but NOT a socket dropped mid-iteration of the
     // stream. withStreamRetry closes that gap for transient drops.
-    return withStreamRetry(() => this.streamOnce(messages, tools, config, signal), signal)
+    return withStreamRetry(
+      () => this.streamOnce(messages, tools, config, signal),
+      signal,
+      undefined,
+      config.onStreamRetry,
+    )
   }
 
   private async *streamOnce(

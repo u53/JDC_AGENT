@@ -129,9 +129,16 @@ describe('AnthropicProvider', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const provider = new AnthropicProvider('test-key')
-    const chunks = await collect(provider.stream(streamMessages, streamTools, streamConfig))
+    const retries: Array<{ attempt: number; maxRetries: number }> = []
+    const chunks = await collect(provider.stream(streamMessages, streamTools, {
+      ...streamConfig,
+      onStreamRetry: (attempt, _error, _delayMs, maxRetries) => {
+        retries.push({ attempt, maxRetries })
+      },
+    }))
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(retries).toEqual([{ attempt: 1, maxRetries: 10 }])
     expect(chunks.some(c => c.type === 'text_delta' && c.text === 'hi')).toBe(true)
   })
 

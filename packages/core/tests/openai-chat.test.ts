@@ -1,5 +1,16 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { OpenAIChatProvider } from '../src/providers/openai-chat.js'
+import type { StreamChunk } from '../src/types.js'
+
+async function collect(stream: AsyncIterable<StreamChunk>): Promise<StreamChunk[]> {
+  const chunks: StreamChunk[] = []
+  for await (const chunk of stream) chunks.push(chunk)
+  return chunks
+}
+
+async function* asyncIterable<T>(items: T[]): AsyncIterable<T> {
+  for (const item of items) yield item
+}
 
 describe('OpenAIChatProvider', () => {
   it('implements ModelProvider interface', () => {
@@ -57,5 +68,34 @@ describe('OpenAIChatProvider', () => {
     ])
     const assistant = formatted.find((m: any) => m.role === 'assistant')
     expect(assistant.tool_calls[0].function.arguments).toBe('{"command":"ls","flags":["-la"]}')
+  })
+
+  it('reports stream retries before the first chunk', async () => {
+    const provider = new OpenAIChatProvider('test-key')
+    const create = vi.fn()
+      .mockRejectedValueOnce(new TypeError('terminated'))
+      .mockResolvedValueOnce(asyncIterable([
+        { choices: [{ delta: { content: 'ok' } }] },
+      ]))
+    ;(provider as any).client = {
+      chat: { completions: { create } },
+    }
+    const retries: Array<{ attempt: number; maxRetries: number }> = []
+
+    const chunks = await collect(provider.stream(
+      [{ id: '1', role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: 0 }],
+      [],
+      {
+        model: 'gpt-5',
+        maxTokens: 100,
+        onStreamRetry: (attempt, _error, _delayMs, maxRetries) => {
+          retries.push({ attempt, maxRetries })
+        },
+      },
+    ))
+
+    expect(create).toHaveBeenCalledTimes(2)
+    expect(retries).toEqual([{ attempt: 1, maxRetries: 10 }])
+    expect(chunks.some(c => c.type === 'text_delta' && c.text === 'ok')).toBe(true)
   })
 })

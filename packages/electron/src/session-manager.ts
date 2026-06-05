@@ -329,8 +329,8 @@ export class SessionManager {
         onError: (error) => {
           this.window?.webContents.send('query:error', { sessionId, error: error.message })
         },
-        onRetrying: (attempt: number, error: Error, delayMs: number, category: string) => {
-          this.window?.webContents.send('query:retrying', { sessionId, attempt, error: error.message, delayMs, category })
+        onRetrying: (attempt: number, error: Error, delayMs: number, category: string, maxRetries: number) => {
+          this.window?.webContents.send('query:retrying', { sessionId, attempt, maxRetries, error: error.message, delayMs, category })
         },
         onAgentProgress: (agentToolUseId: string, event: any) => {
           this.window?.webContents.send('agent:progress', { sessionId, agentToolUseId, ...event })
@@ -406,10 +406,11 @@ export class SessionManager {
       onError: (error) => {
         this.window?.webContents.send('query:error', { sessionId, error: error.message })
       },
-      onRetrying: (attempt: number, error: Error, delayMs: number, category: string) => {
+      onRetrying: (attempt: number, error: Error, delayMs: number, category: string, maxRetries: number) => {
         this.window?.webContents.send('query:retrying', {
           sessionId,
           attempt,
+          maxRetries,
           error: error.message || String(error),
           delayMs,
           category,
@@ -472,6 +473,66 @@ export class SessionManager {
       this.window?.webContents.send('query:finished', { sessionId })
     } catch (err: any) {
       console.error('[SEND] Error:', err.message, err.stack)
+      this.window?.webContents.send('query:error', { sessionId, error: err.message })
+    }
+  }
+
+  async retrySession(sessionId: string): Promise<void> {
+    if (!this.sessions.has(sessionId)) {
+      await this.activateSession(sessionId)
+    }
+    const session = this.sessions.get(sessionId)!
+
+    const events: SessionEvents = {
+      onStreamChunk: (chunk: StreamChunk) => {
+        this.window?.webContents.send('query:stream', { sessionId, chunk })
+      },
+      onToolEvent: (event: ToolExecutionEvent) => {
+        this.window?.webContents.send('query:tool-event', { sessionId, event })
+        if (event.type === 'complete' && event.toolName === 'EnterPlanMode') {
+          this.window?.webContents.send('plan:mode-changed', { sessionId, mode: 'planning' })
+        } else if (event.type === 'complete' && event.toolName === 'ExitPlanMode') {
+          this.window?.webContents.send('plan:mode-changed', { sessionId, mode: 'normal' })
+        }
+      },
+      onMessageComplete: (message) => {
+        this.window?.webContents.send('query:complete', { sessionId, message })
+      },
+      onMessagesReplaced: (messages) => {
+        this.window?.webContents.send('session:messages-updated', { sessionId, messages })
+      },
+      onError: (error) => {
+        this.window?.webContents.send('query:error', { sessionId, error: error.message })
+      },
+      onRetrying: (attempt: number, error: Error, delayMs: number, category: string, maxRetries: number) => {
+        this.window?.webContents.send('query:retrying', {
+          sessionId,
+          attempt,
+          maxRetries,
+          error: error.message || String(error),
+          delayMs,
+          category,
+        })
+      },
+      onAgentProgress: (agentToolUseId: string, event: any) => {
+        this.window?.webContents.send('agent:progress', { sessionId, agentToolUseId, ...event })
+      },
+      onAgentText: (agentToolUseId: string, text: string) => {
+        this.window?.webContents.send('agent:text', { sessionId, agentToolUseId, text })
+      },
+      onAgentComplete: (agentToolUseId: string, result: any) => {
+        this.window?.webContents.send('agent:complete', { sessionId, agentToolUseId, ...result })
+      },
+      onUsage: (usage) => {
+        this.window?.webContents.send('query:usage', { sessionId, usage })
+      },
+    }
+
+    try {
+      await session.retryLastTurn(events)
+      this.window?.webContents.send('query:finished', { sessionId })
+    } catch (err: any) {
+      console.error('[RETRY] Error:', err.message, err.stack)
       this.window?.webContents.send('query:error', { sessionId, error: err.message })
     }
   }

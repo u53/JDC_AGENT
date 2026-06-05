@@ -88,6 +88,11 @@ export function registerIpcHandlers(sessionManager: SessionManager, services: De
     return { success: true }
   })
 
+  ipcMain.handle(IPC_CHANNELS.QUERY_RETRY, async (_event, { sessionId }) => {
+    sessionManager.retrySession(sessionId)
+    return { success: true }
+  })
+
   ipcMain.handle(IPC_CHANNELS.QUERY_ABORT, async (_event, { sessionId }) => {
     sessionManager.abortSession(sessionId)
     return { success: true }

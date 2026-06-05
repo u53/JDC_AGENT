@@ -57,4 +57,49 @@ describe('session stream store', () => {
     expect(streamed?.streamingText).toBe('answer')
     expect(streamed?.isThinking).toBe(false)
   })
+
+  it('stores automatic retry progress with the retry limit', () => {
+    const store = useSessionStore.getState()
+
+    store.setError('session_1', {
+      message: 'upstream overloaded',
+      category: 'overloaded',
+      retrying: true,
+      retryAttempt: 1,
+      retryIn: 5000,
+      retryMaxRetries: 10,
+    })
+
+    expect(useSessionStore.getState().sessionStates.session_1?.error).toMatchObject({
+      retrying: true,
+      retryAttempt: 1,
+      retryIn: 5000,
+      retryMaxRetries: 10,
+    })
+  })
+
+  it('clears retrying errors when the session finishes but keeps final errors', () => {
+    const store = useSessionStore.getState()
+
+    store.setError('session_1', {
+      message: 'temporary outage',
+      category: 'network',
+      retrying: true,
+      retryAttempt: 1,
+      retryMaxRetries: 10,
+    })
+    store.finishSession('session_1')
+    expect(useSessionStore.getState().sessionStates.session_1?.error).toBeUndefined()
+
+    store.setError('session_1', {
+      message: 'final outage',
+      category: 'network',
+      retrying: false,
+    })
+    store.finishSession('session_1')
+    expect(useSessionStore.getState().sessionStates.session_1?.error).toMatchObject({
+      message: 'final outage',
+      retrying: false,
+    })
+  })
 })

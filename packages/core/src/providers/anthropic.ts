@@ -233,7 +233,7 @@ export class AnthropicProvider implements ModelProvider {
 
     applyEffort(params, config)
 
-    yield* this.streamRaw(params, signal)
+    yield* this.streamRaw(params, signal, config.onStreamRetry)
   }
 
   private async *streamSDK(params: any, signal?: AbortSignal): AsyncIterable<StreamChunk> {
@@ -297,8 +297,17 @@ export class AnthropicProvider implements ModelProvider {
   // (Anthropic SSE has no replay), so retries only apply before the first
   // chunk — see withStreamRetry. Mid-flight failures surface to the caller
   // (the PM layer already counts consecutive failures and falls back).
-  private streamRaw(params: any, signal?: AbortSignal): AsyncIterable<StreamChunk> {
-    return withStreamRetry(() => this.streamRawOnce(params, signal), signal)
+  private streamRaw(
+    params: any,
+    signal?: AbortSignal,
+    onRetry?: ModelConfig['onStreamRetry'],
+  ): AsyncIterable<StreamChunk> {
+    return withStreamRetry(
+      () => this.streamRawOnce(params, signal),
+      signal,
+      undefined,
+      onRetry,
+    )
   }
 
   private async *streamRawOnce(params: any, signal?: AbortSignal): AsyncIterable<StreamChunk> {

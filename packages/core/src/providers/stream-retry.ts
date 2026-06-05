@@ -1,4 +1,16 @@
 import type { StreamChunk } from '../types.js'
+import { DEFAULT_RETRYABLE_MAX_RETRIES } from '../retry.js'
+
+export type StreamRetryCallback = (
+  attempt: number,
+  error: Error,
+  delayMs: number,
+  maxRetries: number,
+) => void
+
+function toError(err: unknown): Error {
+  return err instanceof Error ? err : new Error(String(err))
+}
 
 /**
  * Decide whether a streaming failure is a transient network/server hiccup that
@@ -52,7 +64,8 @@ export function isRetryableStreamError(err: unknown): boolean {
 export async function* withStreamRetry(
   makeStream: () => AsyncIterable<StreamChunk>,
   signal?: AbortSignal,
-  maxRetries = 2,
+  maxRetries = DEFAULT_RETRYABLE_MAX_RETRIES,
+  onRetry?: StreamRetryCallback,
 ): AsyncIterable<StreamChunk> {
   for (let attempt = 0; ; attempt++) {
     let yieldedAny = false
@@ -68,6 +81,7 @@ export async function* withStreamRetry(
       }
       // Exponential backoff with jitter: ~500ms, ~1000ms.
       const delay = 500 * 2 ** attempt + Math.floor(Math.random() * 250)
+      onRetry?.(attempt + 1, toError(err), delay, maxRetries)
       await new Promise<void>((resolve, reject) => {
         const t = setTimeout(resolve, delay)
         signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')) }, { once: true })

@@ -120,6 +120,17 @@ export interface ModelConfig {
    * session id.
    */
   cacheUser?: string
+  /**
+   * UI/host-facing progress for provider-level stream retries. Providers call
+   * this only when retrying is still protocol-safe: before any chunks have
+   * been yielded for the current stream attempt.
+   */
+  onStreamRetry?: (
+    attempt: number,
+    error: Error,
+    delayMs: number,
+    maxRetries: number,
+  ) => void
 }
 
 export interface SessionConfig {

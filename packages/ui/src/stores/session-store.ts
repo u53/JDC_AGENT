@@ -27,7 +27,7 @@ export interface SessionStreamState {
   isThinking: boolean
   toolEvents: ToolExecutionEvent[]
   compacting?: boolean
-  error?: { message: string; category: string; retrying: boolean; retryAttempt?: number; retryIn?: number }
+  error?: SessionErrorState
   finished?: boolean
   usage?: {
     inputTokens: number
@@ -48,6 +48,15 @@ export interface SessionStreamState {
     grandOutputTokens?: number
     grandTotalTokens?: number
   }
+}
+
+export interface SessionErrorState {
+  message: string
+  category: string
+  retrying: boolean
+  retryAttempt?: number
+  retryIn?: number
+  retryMaxRetries?: number
 }
 
 const EMPTY_STREAM_STATE: SessionStreamState = {
@@ -88,7 +97,7 @@ interface SessionState {
   setCompactState: (sessionId: string, state: { active: boolean }) => void
   addToolEvent: (sessionId: string, event: ToolExecutionEvent) => void
   markStreaming: (sessionId: string, streaming: boolean) => void
-  setError: (sessionId: string, error: { message: string; category: string; retrying: boolean; retryAttempt?: number; retryIn?: number } | null) => void
+  setError: (sessionId: string, error: SessionErrorState | null) => void
   clearSessionStreamState: (sessionId: string) => void
   finishSession: (sessionId: string) => void
   dismissFinished: (sessionId: string) => void
@@ -400,7 +409,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       return {
         sessionStates: {
           ...s.sessionStates,
-          [sessionId]: { ...EMPTY_STREAM_STATE, finished: true, usage: current.usage, error: current.error },
+          [sessionId]: {
+            ...EMPTY_STREAM_STATE,
+            finished: true,
+            usage: current.usage,
+            error: current.error?.retrying ? undefined : current.error,
+          },
         },
       }
     })

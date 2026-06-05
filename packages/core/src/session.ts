@@ -80,7 +80,13 @@ export interface SessionEvents {
   onToolEvent: (event: ToolExecutionEvent) => void
   onMessageComplete: (message: Message) => void
   onError: (error: Error) => void
-  onRetrying?: (attempt: number, error: Error, delayMs: number, category: string) => void
+  onRetrying?: (
+    attempt: number,
+    error: Error,
+    delayMs: number,
+    category: string,
+    maxRetries: number,
+  ) => void
   onUsage?: (snapshot: UsageSnapshot) => void
   onMessagesReplaced?: (messages: Message[]) => void
   onAgentProgress?: (agentToolUseId: string, event: { toolName: string; toolStatus: 'start' | 'complete' | 'error'; toolInput?: Record<string, unknown>; toolResult?: { content: string; isError?: boolean }; toolCount: number }) => void
@@ -700,6 +706,19 @@ export class Session {
     await this.runLoop(events)
   }
 
+  async retryLastTurn(events: SessionEvents): Promise<void> {
+    await this.ensureHooksReady()
+    await this.ensureSkillsReady()
+    this.syncMcpTools()
+
+    if (!this.messages.some(message => message.role === 'user')) {
+      events.onError(new Error('No user message is available to retry.'))
+      return
+    }
+
+    await this.runLoop(events)
+  }
+
   private shouldCompact(): boolean {
     const compressAt = this.config.modelConfig.compressAt || 0.9
     if (this.usageTracker.shouldCompact(compressAt)) return true
@@ -907,6 +926,15 @@ export class Session {
             ...this.config.modelConfig,
             cacheKey: this.config.modelConfig.cacheKey ?? `main:${this.id}`,
             cacheUser: this.config.modelConfig.cacheUser ?? this.id,
+            onStreamRetry: (attempt, error, delayMs, maxRetries) => {
+              events.onRetrying?.(
+                attempt,
+                error,
+                delayMs,
+                classifyError(error),
+                maxRetries,
+              )
+            },
           }
           const stream = this.provider.stream(
             this.messages,
@@ -1000,7 +1028,13 @@ export class Session {
           }
 
           const delay = getRetryDelay(retryCount, category, streamErr)
-          events.onRetrying?.(retryCount + 1, streamErr, delay, category)
+          events.onRetrying?.(
+            retryCount + 1,
+            streamErr,
+            delay,
+            category,
+            maxForCategory,
+          )
           retryCount++
           // Drop partial chunks before retrying — provider will replay from the
           // start of the assistant turn.

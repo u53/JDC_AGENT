@@ -6,6 +6,8 @@ export interface RetryOptions {
 
 export type ErrorCategory = 'rate_limit' | 'overloaded' | 'gateway' | 'network' | 'prompt_too_long' | 'non_retryable'
 
+export const DEFAULT_RETRYABLE_MAX_RETRIES = 10
+
 export function classifyError(error: any): ErrorCategory {
   const status = error?.status || error?.statusCode
   const message = error?.message || String(error)
@@ -22,10 +24,10 @@ export function classifyError(error: any): ErrorCategory {
 
 export function getMaxRetries(category: ErrorCategory): number {
   switch (category) {
-    case 'rate_limit': return 5
-    case 'overloaded': return 3
-    case 'gateway': return 3
-    case 'network': return 2
+    case 'rate_limit': return DEFAULT_RETRYABLE_MAX_RETRIES
+    case 'overloaded': return DEFAULT_RETRYABLE_MAX_RETRIES
+    case 'gateway': return DEFAULT_RETRYABLE_MAX_RETRIES
+    case 'network': return DEFAULT_RETRYABLE_MAX_RETRIES
     case 'prompt_too_long': return 0
     case 'non_retryable': return 0
   }

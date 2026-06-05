@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { OpenAIResponsesProvider } from '../src/providers/openai-responses.js'
 
 describe('OpenAIResponsesProvider', () => {
@@ -180,6 +180,39 @@ describe('OpenAIResponsesProvider', () => {
       { type: 'tool_use_end' },
       { type: 'message_end', usage: { inputTokens: 10, outputTokens: 4, cacheReadInputTokens: 0 } },
     ])
+  })
+
+  it('reports stream retries before the first chunk', async () => {
+    const provider = new OpenAIResponsesProvider('test-key')
+    const create = vi.fn()
+      .mockRejectedValueOnce(new TypeError('terminated'))
+      .mockResolvedValueOnce(asyncIterable([
+        { type: 'response.output_text.delta', delta: 'ok' },
+        { type: 'response.completed', response: { usage: { input_tokens: 1, output_tokens: 1 } } },
+      ]))
+    ;(provider as any).client = {
+      responses: { create },
+    }
+    const retries: Array<{ attempt: number; maxRetries: number }> = []
+
+    const chunks = []
+    for await (const chunk of provider.stream(
+      [{ id: '1', role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: 0 }],
+      [],
+      {
+        model: 'gpt-5',
+        maxTokens: 100,
+        onStreamRetry: (attempt, _error, _delayMs, maxRetries) => {
+          retries.push({ attempt, maxRetries })
+        },
+      },
+    )) {
+      chunks.push(chunk)
+    }
+
+    expect(create).toHaveBeenCalledTimes(2)
+    expect(retries).toEqual([{ attempt: 1, maxRetries: 10 }])
+    expect(chunks.some(c => c.type === 'text_delta' && c.text === 'ok')).toBe(true)
   })
 
   it('streams interleaved Responses function calls as complete sequential tool uses', async () => {

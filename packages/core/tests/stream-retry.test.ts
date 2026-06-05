@@ -41,6 +41,26 @@ describe('isRetryableStreamError', () => {
 })
 
 describe('withStreamRetry', () => {
+  it('reports retry progress before waiting for the next attempt', async () => {
+    let attempts = 0
+    const retries: Array<{ attempt: number; maxRetries: number }> = []
+    const out = await collect(withStreamRetry(
+      () => {
+        attempts++
+        if (attempts < 2) throw new TypeError('terminated')
+        return streamOf({ type: 'text_delta', text: 'ok' })
+      },
+      undefined,
+      2,
+      (attempt, _error, _delayMs, maxRetries) => {
+        retries.push({ attempt, maxRetries })
+      },
+    ))
+
+    expect(out).toEqual([{ type: 'text_delta', text: 'ok' }])
+    expect(retries).toEqual([{ attempt: 1, maxRetries: 2 }])
+  })
+
   it('retries when the failure happens before the first chunk', async () => {
     let attempts = 0
     const out = await collect(withStreamRetry(() => {

@@ -25,8 +25,11 @@ describe('classifyError', () => {
 })
 
 describe('getMaxRetries', () => {
-  it('returns 5 for rate_limit', () => {
-    expect(getMaxRetries('rate_limit')).toBe(5)
+  it('returns 10 for retryable protocol errors', () => {
+    expect(getMaxRetries('rate_limit')).toBe(10)
+    expect(getMaxRetries('overloaded')).toBe(10)
+    expect(getMaxRetries('gateway')).toBe(10)
+    expect(getMaxRetries('network')).toBe(10)
   })
   it('returns 0 for non_retryable', () => {
     expect(getMaxRetries('non_retryable')).toBe(0)

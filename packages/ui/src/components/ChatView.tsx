@@ -95,7 +95,7 @@ export function shouldShowProcessingIndicator({
 }
 
 export function ChatView({ onOpenMcp }: ChatViewProps) {
-  const { messages, streamingText, thinkingText, isStreaming, aborting, compacting, isThinking, toolEvents, sendMessage, abort, error, retry, dismissError } = useSession()
+  const { messages, streamingText, thinkingText, isStreaming, aborting, compacting, isThinking, toolEvents, sendMessage, abort, error, retry, cancelRetry, dismissError } = useSession()
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const getActiveModel = useModelStore((s) => s.getActiveModel)
   const groups = useModelStore((s) => s.groups)
@@ -409,8 +409,10 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
                 category={error.category}
                 retrying={error.retrying}
                 retryAttempt={error.retryAttempt}
+                retryMaxRetries={error.retryMaxRetries}
                 retryIn={error.retryIn}
                 onRetry={retry}
+                onCancel={cancelRetry}
                 onDismiss={dismissError}
               />
             )}
