@@ -89,7 +89,18 @@ export async function collectCodeContext(request: ContextRequest, options: CodeP
     }
 
     const sections = contentParts.length
-      ? [section([request.sessionId, SOURCE, request.userMessage], 'relevant_code', 'Relevant code', contentParts.join('\n\n'), citations, 90, 0.9, 'live', SOURCE)]
+      ? [section(
+        [request.sessionId, SOURCE, request.userMessage],
+        'relevant_code',
+        'Relevant code',
+        contentParts.join('\n\n'),
+        citations,
+        90,
+        0.9,
+        'live',
+        SOURCE,
+        { authority: 'code_evidence', topic: 'code', conflictPolicy: 'render' },
+      )]
       : []
 
     return {

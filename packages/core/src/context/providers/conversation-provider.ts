@@ -40,7 +40,18 @@ export function collectConversationContext(request: ContextRequest, options: Con
 
   return {
     evidence,
-    sections: transcript ? [section([request.sessionId, SOURCE, transcript], 'conversation_state', 'Conversation state', transcript, citations, 75, 0.88, 'live', SOURCE)] : [],
+    sections: transcript ? [section(
+      [request.sessionId, SOURCE, transcript],
+      'conversation_state',
+      'Conversation state',
+      transcript,
+      citations,
+      75,
+      0.88,
+      'live',
+      SOURCE,
+      { authority: 'derived_state', topic: 'conversation', conflictPolicy: 'suppress_if_carried' },
+    )] : [],
     diagnostics: [],
     health: providerHealth('conversation', 'enabled', capturedAt),
   }

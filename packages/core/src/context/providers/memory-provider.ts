@@ -70,6 +70,7 @@ export async function collectMemoryContext(request: ContextRequest, options: Mem
         Math.max(...facts.map((fact) => fact.confidence)),
         'cached',
         SOURCE,
+        { authority: 'durable_memory', topic: 'memory', conflictPolicy: 'render' },
       )],
       diagnostics: result.diagnostics,
       health: providerHealth('memory', 'cached', capturedAt),

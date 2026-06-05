@@ -62,7 +62,18 @@ export async function collectGitContext(request: ContextRequest, options: GitPro
 
     return {
       evidence: [evidence],
-      sections: [section([request.sessionId, SOURCE, content], 'git_state', 'Git state', content, [citation], 55, 0.84, 'live', SOURCE)],
+      sections: [section(
+        [request.sessionId, SOURCE, content],
+        'git_state',
+        'Git state',
+        content,
+        [citation],
+        55,
+        0.84,
+        'live',
+        SOURCE,
+        { authority: 'live_state', topic: 'git', conflictPolicy: 'suppress_if_carried' },
+      )],
       diagnostics: [],
       health: providerHealth('git', 'enabled', capturedAt),
     }

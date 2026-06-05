@@ -20,6 +20,10 @@ export interface ProjectProviderOptions {
   rateLimited?: boolean
 }
 
+function carriedInstructionRefs(request: ContextRequest): Set<string> {
+  return new Set(request.carriedContext?.projectInstructionRefs ?? [])
+}
+
 export async function collectProjectContext(request: ContextRequest, options: ProjectProviderOptions = {}) {
   if (options.enabled === false) {
     const { disabledProviderResult } = await import('./shared.js')
@@ -31,8 +35,10 @@ export async function collectProjectContext(request: ContextRequest, options: Pr
     const capturedAt = nowFromRequest(request)
     const evidence = []
     const summaries: string[] = []
+    const carriedRefs = carriedInstructionRefs(request)
 
     for (const fileName of PROJECT_FILES) {
+      if (carriedRefs.has(fileName)) continue
       const filePath = join(request.cwd, fileName)
       const content = await readProjectFile(filePath)
       if (content === null) continue
@@ -55,7 +61,18 @@ export async function collectProjectContext(request: ContextRequest, options: Pr
     const citations = evidence.map((item) => citationFor(item, String(item.metadata.file ?? item.id)))
     return {
       evidence,
-      sections: [section([request.sessionId, SOURCE, ...summaries], 'project_profile', 'Project profile', summaries.join('\n'), citations, 60, 0.86, 'recent', SOURCE)],
+      sections: [section(
+        [request.sessionId, SOURCE, ...summaries],
+        'project_profile',
+        'Project profile',
+        summaries.join('\n'),
+        citations,
+        60,
+        0.86,
+        'recent',
+        SOURCE,
+        { authority: 'live_state', topic: 'project_profile', conflictPolicy: 'render' },
+      )],
       diagnostics: [],
       health: providerHealth('project', 'enabled', capturedAt),
     }

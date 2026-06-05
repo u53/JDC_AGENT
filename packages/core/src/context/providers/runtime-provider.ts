@@ -33,7 +33,18 @@ export function collectRuntimeContext(request: ContextRequest, options: RuntimeP
 
   return {
     evidence,
-    sections: content ? [section([request.sessionId, SOURCE, content], 'runtime_state', 'Runtime state', content, citations, 80, 0.9, 'live', SOURCE)] : [],
+    sections: content ? [section(
+      [request.sessionId, SOURCE, content],
+      'runtime_state',
+      'Runtime state',
+      content,
+      citations,
+      80,
+      0.9,
+      'live',
+      SOURCE,
+      { authority: 'runtime_evidence', topic: 'runtime', conflictPolicy: 'render' },
+    )] : [],
     diagnostics: [],
     health: providerHealth('runtime', 'enabled', capturedAt),
   }

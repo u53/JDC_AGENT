@@ -37,7 +37,18 @@ export function collectIdeContext(request: ContextRequest, options: IdeProviderO
 
   return {
     evidence: [evidence],
-    sections: [section([request.sessionId, SOURCE, content], 'ide_state', 'IDE state', content, [citation], 85, 0.9, 'live', SOURCE)],
+    sections: [section(
+      [request.sessionId, SOURCE, content],
+      'ide_state',
+      'IDE state',
+      content,
+      [citation],
+      85,
+      0.9,
+      'live',
+      SOURCE,
+      { authority: 'live_state', topic: 'ide', conflictPolicy: 'render' },
+    )],
     diagnostics: [],
     health: providerHealth('ide', 'enabled', capturedAt),
   }

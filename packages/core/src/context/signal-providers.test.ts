@@ -175,6 +175,33 @@ describe('context signal providers', () => {
     expect(sectionCitations(project).every((citation) => citation.hash === undefined)).toBe(true)
   })
 
+  it('does not duplicate project instruction files already loaded into the system prompt', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'jdc-project-provider-dedupe-'))
+    writeFileSync(join(cwd, 'JDCAGNET.md'), 'Instruction: use project style.')
+    writeFileSync(join(cwd, 'AGENTS.md'), 'Agent instruction.')
+    writeFileSync(join(cwd, 'README.md'), 'Project overview.')
+    writeFileSync(join(cwd, 'package.json'), '{"scripts":{"test":"vitest"}}')
+
+    const result = await collectProjectContext(request(cwd, {
+      carriedContext: {
+        projectInstructionRefs: ['JDCAGNET.md', 'AGENTS.md'],
+        gitStatusInSystemPrompt: false,
+        taskRefs: [],
+      },
+    }))
+
+    const content = result.sections.map((section) => section.content).join('\n')
+    expect(content).not.toContain('Instruction: use project style.')
+    expect(content).not.toContain('Agent instruction.')
+    expect(content).toContain('Project overview.')
+    expect(content).toContain('package.json')
+    expect(result.sections[0]?.ownership).toMatchObject({
+      authority: 'live_state',
+      topic: 'project_profile',
+      conflictPolicy: 'render',
+    })
+  })
+
   it('includes direct branch, short status, and recent log signals while preserving hot files', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'jdc-git-direct-provider-'))
     mkdirSync(join(cwd, 'packages/core/src/context'), { recursive: true })
