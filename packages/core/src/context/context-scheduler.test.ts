@@ -32,21 +32,31 @@ describe('JDC Context Engine scheduler', () => {
     })
   })
 
-  it('limits project background jobs by key', async () => {
+  it('queues project background jobs by key instead of rejecting concurrency', async () => {
     const recorder = createContextPerformanceRecorder({ now: () => Date.now() })
     const scheduler = createContextScheduler({ recorder, now: () => Date.now(), maxBackgroundPerProject: 1 })
     const release = deferred<void>()
+    const order: string[] = []
     const first = scheduler.enqueueBackground('repo-a', 'harvest', async () => {
+      order.push('first:start')
       await release.promise
+      order.push('first:end')
     })
-    const second = scheduler.enqueueBackground('repo-a', 'harvest', async () => undefined)
+    const second = scheduler.enqueueBackground('repo-a', 'harvest', async () => {
+      order.push('second')
+    })
 
     expect(first.accepted).toBe(true)
-    expect(second.accepted).toBe(false)
-    expect(second.reason).toBe('project_concurrency_limit')
+    expect(second.accepted).toBe(true)
+    await Promise.resolve()
+    expect(order).toEqual(['first:start'])
 
     release.resolve()
     await first.promise
+    await second.promise
+
+    expect(order).toEqual(['first:start', 'first:end', 'second'])
+    expect(recorder.snapshot().operations.map(operation => operation.status)).toEqual(['success', 'success'])
   })
 
   it('records synchronous background task failures and releases the project slot', async () => {
@@ -71,27 +81,70 @@ describe('JDC Context Engine scheduler', () => {
     if (second.accepted) await second.promise
   })
 
-  it('keeps cancelled project jobs counted until their task settles', async () => {
+  it('queues follow-up jobs behind cancelled project jobs until their task settles', async () => {
     const recorder = createContextPerformanceRecorder({ now: () => Date.now() })
     const scheduler = createContextScheduler({ recorder, now: () => Date.now(), maxBackgroundPerProject: 1 })
     const release = deferred<void>()
+    const order: string[] = []
 
     const first = scheduler.enqueueBackground('repo-a', 'harvest', async () => {
+      order.push('first:start')
       await release.promise
     })
     expect(first.accepted).toBe(true)
 
     scheduler.cancelProject('repo-a')
-    const second = scheduler.enqueueBackground('repo-a', 'harvest', async () => undefined)
-    expect(second.accepted).toBe(false)
-    expect(second.reason).toBe('project_concurrency_limit')
+    const second = scheduler.enqueueBackground('repo-a', 'harvest', async () => {
+      order.push('second')
+    })
+    expect(second.accepted).toBe(true)
+    await Promise.resolve()
+    expect(order).toEqual(['first:start'])
 
     release.resolve()
     if (first.accepted) await first.promise
+    if (second.accepted) await second.promise
 
-    const third = scheduler.enqueueBackground('repo-a', 'harvest', async () => undefined)
+    expect(order).toEqual(['first:start', 'second'])
+
+    const third = scheduler.enqueueBackground('repo-a', 'harvest', async () => {
+      order.push('third')
+    })
     expect(third.accepted).toBe(true)
     if (third.accepted) await third.promise
+    expect(order).toEqual(['first:start', 'second', 'third'])
+  })
+
+  it('cancels queued project jobs before they start', async () => {
+    const recorder = createContextPerformanceRecorder({ now: () => Date.now() })
+    const scheduler = createContextScheduler({ recorder, now: () => Date.now(), maxBackgroundPerProject: 1 })
+    const release = deferred<void>()
+    const order: string[] = []
+
+    const first = scheduler.enqueueBackground('repo-a', 'harvest', async () => {
+      order.push('first:start')
+      await release.promise
+    })
+    const second = scheduler.enqueueBackground('repo-a', 'harvest', async () => {
+      order.push('second')
+    })
+
+    expect(first.accepted).toBe(true)
+    expect(second.accepted).toBe(true)
+    await Promise.resolve()
+    scheduler.cancelProject('repo-a')
+    release.resolve()
+    await first.promise
+    await second.promise
+
+    expect(order).toEqual(['first:start'])
+    expect(recorder.snapshot().operations).toContainEqual(expect.objectContaining({
+      name: 'harvest',
+      lane: 'background',
+      status: 'cancelled',
+      projectKey: 'repo-a',
+      diagnostic: 'project background job cancelled before start',
+    }))
   })
 
   it('records cancelled background jobs after project cancellation settles', async () => {
@@ -121,24 +174,33 @@ describe('JDC Context Engine scheduler', () => {
     })
   })
 
-  it('rate limits background jobs by project and job name', async () => {
-    let clock = 1_000
-    const recorder = createContextPerformanceRecorder({ now: () => clock })
-    const scheduler = createContextScheduler({ recorder, now: () => clock, maxBackgroundPerProject: 1 })
+  it('queues rate-limited background jobs until the project/job interval elapses', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const recorder = createContextPerformanceRecorder({ now: () => Date.now() })
+    const scheduler = createContextScheduler({ recorder, now: () => Date.now(), maxBackgroundPerProject: 1 })
+    const order: string[] = []
 
-    const first = scheduler.enqueueBackground('repo-a', 'harvest', async () => undefined, { minIntervalMs: 30_000 })
+    const first = scheduler.enqueueBackground('repo-a', 'harvest', async () => {
+      order.push('first')
+    }, { minIntervalMs: 30_000 })
     expect(first.accepted).toBe(true)
     if (first.accepted) await first.promise
 
-    clock = 5_000
-    const second = scheduler.enqueueBackground('repo-a', 'harvest', async () => undefined, { minIntervalMs: 30_000 })
-    expect(second.accepted).toBe(false)
-    expect(second.reason).toBe('project_interval_limit')
+    vi.setSystemTime(5_000)
+    const second = scheduler.enqueueBackground('repo-a', 'harvest', async () => {
+      order.push('second')
+    }, { minIntervalMs: 30_000 })
+    expect(second.accepted).toBe(true)
+    await Promise.resolve()
+    expect(order).toEqual(['first'])
 
-    clock = 31_500
-    const third = scheduler.enqueueBackground('repo-a', 'harvest', async () => undefined, { minIntervalMs: 30_000 })
-    expect(third.accepted).toBe(true)
-    if (third.accepted) await third.promise
+    await vi.advanceTimersByTimeAsync(25_999)
+    expect(order).toEqual(['first'])
+
+    await vi.advanceTimersByTimeAsync(1)
+    if (second.accepted) await second.promise
+    expect(order).toEqual(['first', 'second'])
   })
 })
 

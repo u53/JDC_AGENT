@@ -11,6 +11,23 @@ export interface ContextScheduler {
   recorder: ContextPerformanceRecorder
 }
 
+interface QueuedBackgroundJob {
+  projectKey: string
+  name: string
+  task: (signal: AbortSignal) => Promise<void>
+  options: { minIntervalMs?: number }
+  controller: AbortController
+  enqueuedAt: number
+  startedAt?: number
+  resolve: () => void
+}
+
+interface ProjectBackgroundQueue {
+  active: Set<QueuedBackgroundJob>
+  queued: QueuedBackgroundJob[]
+  drainTimer?: ReturnType<typeof setTimeout>
+}
+
 export function createContextScheduler(options: {
   recorder?: ContextPerformanceRecorder
   now?: () => number
@@ -19,7 +36,7 @@ export function createContextScheduler(options: {
   const recorder = options.recorder ?? createContextPerformanceRecorder({ now: options.now })
   const now = options.now ?? Date.now
   const maxBackgroundPerProject = options.maxBackgroundPerProject ?? 1
-  const active = new Map<string, Set<AbortController>>()
+  const backgroundQueues = new Map<string, ProjectBackgroundQueue>()
   const lastStartedAtByProjectJob = new Map<string, number>()
 
   async function runMeasured<T>(lane: ContextOperationLane, name: string, projectKey: string | undefined, task: (signal: AbortSignal) => Promise<T>, timeoutMs?: number, degraded?: T): Promise<T> {
@@ -74,46 +91,174 @@ export function createContextScheduler(options: {
     }
   }
 
+  function getProjectQueue(projectKey: string): ProjectBackgroundQueue {
+    const existing = backgroundQueues.get(projectKey)
+    if (existing) return existing
+    const created: ProjectBackgroundQueue = { active: new Set(), queued: [] }
+    backgroundQueues.set(projectKey, created)
+    return created
+  }
+
+  function deleteProjectQueueIfIdle(projectKey: string, queue: ProjectBackgroundQueue): void {
+    if (queue.active.size > 0 || queue.queued.length > 0 || queue.drainTimer) return
+    if (backgroundQueues.get(projectKey) === queue) backgroundQueues.delete(projectKey)
+  }
+
+  function intervalKey(job: QueuedBackgroundJob): string {
+    return `${job.projectKey}:${job.name}`
+  }
+
+  function delayUntilRunnable(job: QueuedBackgroundJob): number {
+    const minIntervalMs = job.options.minIntervalMs
+    if (!minIntervalMs) return 0
+    const lastStartedAt = lastStartedAtByProjectJob.get(intervalKey(job))
+    if (lastStartedAt === undefined) return 0
+    return Math.max(0, minIntervalMs - (now() - lastStartedAt))
+  }
+
+  function scheduleDrain(projectKey: string, queue: ProjectBackgroundQueue, delayMs: number): void {
+    if (queue.drainTimer) return
+    queue.drainTimer = setTimeout(() => {
+      queue.drainTimer = undefined
+      drainProjectQueue(projectKey)
+    }, delayMs)
+  }
+
+  function backgroundMetadata(job: QueuedBackgroundJob, startedAt: number): { queuedMs: number } | undefined {
+    const queuedMs = Math.max(0, startedAt - job.enqueuedAt)
+    return queuedMs > 0 ? { queuedMs } : undefined
+  }
+
+  function recordQueuedCancellation(job: QueuedBackgroundJob): void {
+    const completedAt = now()
+    recorder.record({
+      name: job.name,
+      lane: 'background',
+      status: 'cancelled',
+      startedAt: job.enqueuedAt,
+      completedAt,
+      projectKey: job.projectKey,
+      diagnostic: 'project background job cancelled before start',
+      metadata: backgroundMetadata(job, completedAt),
+    })
+  }
+
+  function startBackgroundJob(projectKey: string, queue: ProjectBackgroundQueue, job: QueuedBackgroundJob): void {
+    const startedAt = now()
+    job.startedAt = startedAt
+    lastStartedAtByProjectJob.set(intervalKey(job), startedAt)
+    queue.active.add(job)
+    Promise.resolve()
+      .then(() => job.task(job.controller.signal))
+      .then(() => {
+        recorder.record({
+          name: job.name,
+          lane: 'background',
+          status: 'success',
+          startedAt,
+          completedAt: now(),
+          projectKey,
+          metadata: backgroundMetadata(job, startedAt),
+        })
+      })
+      .catch((error) => {
+        recorder.record({
+          name: job.name,
+          lane: 'background',
+          status: job.controller.signal.aborted ? 'cancelled' : 'failed',
+          startedAt,
+          completedAt: now(),
+          projectKey,
+          diagnostic: error instanceof Error ? error.message : String(error),
+          metadata: backgroundMetadata(job, startedAt),
+        })
+      })
+      .finally(() => {
+        queue.active.delete(job)
+        job.resolve()
+        drainProjectQueue(projectKey)
+        deleteProjectQueueIfIdle(projectKey, queue)
+      })
+  }
+
+  function drainProjectQueue(projectKey: string): void {
+    const queue = backgroundQueues.get(projectKey)
+    if (!queue) return
+
+    let soonestDelayMs: number | undefined
+    while (queue.active.size < maxBackgroundPerProject && queue.queued.length > 0) {
+      let selectedIndex = -1
+      for (let index = 0; index < queue.queued.length; index++) {
+        const job = queue.queued[index]!
+        if (job.controller.signal.aborted) {
+          queue.queued.splice(index, 1)
+          recordQueuedCancellation(job)
+          job.resolve()
+          index--
+          continue
+        }
+        const delayMs = delayUntilRunnable(job)
+        if (delayMs <= 0) {
+          selectedIndex = index
+          break
+        }
+        soonestDelayMs = Math.min(soonestDelayMs ?? delayMs, delayMs)
+      }
+
+      if (selectedIndex < 0) break
+      const [job] = queue.queued.splice(selectedIndex, 1)
+      if (job) startBackgroundJob(projectKey, queue, job)
+    }
+
+    if (queue.active.size < maxBackgroundPerProject && queue.queued.length > 0 && soonestDelayMs !== undefined) {
+      scheduleDrain(projectKey, queue, soonestDelayMs)
+    }
+    deleteProjectQueueIfIdle(projectKey, queue)
+  }
+
   return {
     recorder,
     runForeground(name, timeoutMs, task, degraded) {
       return runMeasured('foreground', name, undefined, task, timeoutMs, degraded)
     },
     enqueueBackground(projectKey, name, task, jobOptions = {}) {
-      const startedAt = now()
-      const intervalKey = `${projectKey}:${name}`
-      const lastStartedAt = lastStartedAtByProjectJob.get(intervalKey)
-      if (jobOptions.minIntervalMs && lastStartedAt !== undefined && startedAt - lastStartedAt < jobOptions.minIntervalMs) {
-        recorder.record({ name, lane: 'background', status: 'rejected', startedAt, completedAt: now(), projectKey, diagnostic: 'project_interval_limit' })
-        return { accepted: false, reason: 'project_interval_limit' }
-      }
-      const set = active.get(projectKey) ?? new Set<AbortController>()
-      if (set.size >= maxBackgroundPerProject) {
+      if (maxBackgroundPerProject <= 0) {
+        const startedAt = now()
         recorder.record({ name, lane: 'background', status: 'rejected', startedAt, completedAt: now(), projectKey, diagnostic: 'project_concurrency_limit' })
         return { accepted: false, reason: 'project_concurrency_limit' }
       }
+      const queue = getProjectQueue(projectKey)
       const controller = new AbortController()
-      set.add(controller)
-      active.set(projectKey, set)
-      lastStartedAtByProjectJob.set(intervalKey, startedAt)
-      const promise = Promise.resolve()
-        .then(() => task(controller.signal))
-        .then(() => {
-          recorder.record({ name, lane: 'background', status: 'success', startedAt, completedAt: now(), projectKey })
-        })
-        .catch((error) => {
-          recorder.record({ name, lane: 'background', status: controller.signal.aborted ? 'cancelled' : 'failed', startedAt, completedAt: now(), projectKey, diagnostic: error instanceof Error ? error.message : String(error) })
-        })
-        .finally(() => {
-          set.delete(controller)
-          if (set.size === 0 && active.get(projectKey) === set) active.delete(projectKey)
-        })
+      let resolve!: () => void
+      const promise = new Promise<void>((r) => { resolve = r })
+      const job: QueuedBackgroundJob = {
+        projectKey,
+        name,
+        task,
+        options: jobOptions,
+        controller,
+        enqueuedAt: now(),
+        resolve,
+      }
+      queue.queued.push(job)
+      drainProjectQueue(projectKey)
       return { accepted: true, promise }
     },
     cancelProject(projectKey) {
-      const set = active.get(projectKey)
-      if (!set) return
-      for (const controller of set) controller.abort()
+      const queue = backgroundQueues.get(projectKey)
+      if (!queue) return
+      for (const job of queue.active) job.controller.abort()
+      if (queue.drainTimer) {
+        clearTimeout(queue.drainTimer)
+        queue.drainTimer = undefined
+      }
+      const queued = queue.queued.splice(0)
+      for (const job of queued) {
+        job.controller.abort()
+        recordQueuedCancellation(job)
+        job.resolve()
+      }
+      deleteProjectQueueIfIdle(projectKey, queue)
     },
   }
 }

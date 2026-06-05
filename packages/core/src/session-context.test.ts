@@ -663,7 +663,7 @@ describe('Session JDC Context Engine runtime integration', () => {
     expect(candidateText).toContain('当然，已准备保存。')
   })
 
-  it('skips low-value turns before creating harvest jobs and avoids overlapping background harvest', async () => {
+  it('skips low-value turns before creating harvest jobs and queues overlapping background harvest', async () => {
     const lowValueStore = makeContextStore()
     const lowValueSession = await makeSession({
       provider: providerFromChunks([
@@ -678,13 +678,13 @@ describe('Session JDC Context Engine runtime integration', () => {
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(lowValueStore.savedHarvestJobs).toEqual([])
 
-    const store = makeContextStore({ saveHarvestJobDelayMs: 250 })
+    const store = makeContextStore({ saveHarvestJobDelayMs: 80 })
     const session = await makeSession({
       provider: providerFromChunks([
         { type: 'text_delta', text: 'first harvest' },
         { type: 'message_end', usage: { inputTokens: 9, outputTokens: 3 } },
       ]),
-      contextConfig: { injectionEnabled: false, harvestEnabled: true },
+      contextConfig: { injectionEnabled: false, harvestEnabled: true, harvest: { minIntervalMs: 0 }, performance: { harvestMinIntervalMs: 0 } },
       contextStore: store,
       providerProtocol: 'anthropic',
     })
@@ -692,8 +692,11 @@ describe('Session JDC Context Engine runtime integration', () => {
     await session.sendMessage('Remember the first production context fact.', makeEvents())
     await session.sendMessage('Remember the second production context fact.', makeEvents())
 
-    await waitFor(() => store.savedHarvestJobs.length >= 1)
-    expect(store.savedHarvestJobs).toHaveLength(1)
+    await waitFor(() => store.savedHarvestJobs.length === 2)
+    expect(store.savedHarvestJobs.map(job => job.candidate.userMessage)).toEqual([
+      'Remember the first production context fact.',
+      'Remember the second production context fact.',
+    ])
   })
 
   it('records harvest budget skips as info diagnostics instead of false errors', async () => {

@@ -13,6 +13,10 @@ describe('Context Engine config defaults', () => {
     expect(DEFAULT_CONTEXT_ENGINE_CONFIG.harvest.maxOutputTokens).toBeUndefined()
   })
 
+  it('allows long-running harvest distiller calls in production defaults', () => {
+    expect(DEFAULT_CONTEXT_ENGINE_CONFIG.harvest.timeoutMs).toBeGreaterThanOrEqual(300_000)
+  })
+
   it('parses legacy compatibility caps without making them production defaults', () => {
     const config = resolveContextEngineConfig({
       tokenBudget: {
