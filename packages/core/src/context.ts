@@ -21,53 +21,79 @@ export interface ContextOptions {
   customInstructions?: string
 }
 
-export async function loadProjectMd(cwd: string): Promise<string | null> {
-  // Support multiple conventions: JDCAGNET.md, CLAUDE.md, AGENTS.md, .cursorrules
-  const candidates = [
-    path.join(cwd, 'JDCAGNET.md'),
-    path.join(cwd, '.jdcagnet', 'JDCAGNET.md'),
-    path.join(cwd, 'CLAUDE.md'),
-    path.join(cwd, '.claude', 'CLAUDE.md'),
-    path.join(cwd, 'AGENTS.md'),
-    path.join(cwd, '.github', 'copilot-instructions.md'),
-    path.join(cwd, '.cursorrules'),
-  ]
-  for (const p of candidates) {
-    try { return await readFile(p, 'utf-8') } catch {}
-  }
-  return null
+export interface InstructionSource {
+  ref: string
+  content: string
+  scope: 'global' | 'project' | 'rule'
 }
 
-export async function loadGlobalMd(): Promise<string | null> {
-  // Support both ~/.jdcagnet/JDCAGNET.md and ~/.claude/CLAUDE.md
-  const candidates = [
-    path.join(CONFIG_DIR, 'JDCAGNET.md'),
-    path.join(os.homedir(), '.claude', 'CLAUDE.md'),
-  ]
-  for (const p of candidates) {
-    try { return await readFile(p, 'utf-8') } catch {}
+async function readInstructionCandidate(candidate: { ref: string; fullPath: string; scope: InstructionSource['scope'] }): Promise<InstructionSource | null> {
+  try {
+    return { ref: candidate.ref, content: await readFile(candidate.fullPath, 'utf-8'), scope: candidate.scope }
+  } catch {
+    return null
   }
-  return null
 }
 
-export async function loadProjectRules(cwd: string): Promise<string[]> {
-  // Support both .jdcagnet/rules/ and .claude/rules/
-  const rulesDirs = [
-    path.join(cwd, '.jdcagnet', 'rules'),
-    path.join(cwd, '.claude', 'rules'),
-  ]
-  const contents: string[] = []
-  for (const rulesDir of rulesDirs) {
+export async function loadInstructionSources(cwd: string): Promise<InstructionSource[]> {
+  const sources: InstructionSource[] = []
+
+  for (const candidate of [
+    { ref: '~/.jdcagnet/JDCAGNET.md', fullPath: path.join(CONFIG_DIR, 'JDCAGNET.md'), scope: 'global' as const },
+    { ref: '~/.claude/CLAUDE.md', fullPath: path.join(os.homedir(), '.claude', 'CLAUDE.md'), scope: 'global' as const },
+  ]) {
+    const source = await readInstructionCandidate(candidate)
+    if (source) {
+      sources.push(source)
+      break
+    }
+  }
+
+  for (const candidate of [
+    { ref: 'JDCAGNET.md', fullPath: path.join(cwd, 'JDCAGNET.md'), scope: 'project' as const },
+    { ref: '.jdcagnet/JDCAGNET.md', fullPath: path.join(cwd, '.jdcagnet', 'JDCAGNET.md'), scope: 'project' as const },
+    { ref: 'CLAUDE.md', fullPath: path.join(cwd, 'CLAUDE.md'), scope: 'project' as const },
+    { ref: '.claude/CLAUDE.md', fullPath: path.join(cwd, '.claude', 'CLAUDE.md'), scope: 'project' as const },
+    { ref: 'AGENTS.md', fullPath: path.join(cwd, 'AGENTS.md'), scope: 'project' as const },
+    { ref: '.github/copilot-instructions.md', fullPath: path.join(cwd, '.github', 'copilot-instructions.md'), scope: 'project' as const },
+    { ref: '.cursorrules', fullPath: path.join(cwd, '.cursorrules'), scope: 'project' as const },
+  ]) {
+    const source = await readInstructionCandidate(candidate)
+    if (source) {
+      sources.push(source)
+      break
+    }
+  }
+
+  for (const dir of [
+    { prefix: '.jdcagnet/rules', fullPath: path.join(cwd, '.jdcagnet', 'rules') },
+    { prefix: '.claude/rules', fullPath: path.join(cwd, '.claude', 'rules') },
+  ]) {
     try {
-      const files = await readdir(rulesDir)
-      const mds = files.filter(f => f.endsWith('.md')).sort()
-      for (const f of mds) {
-        const content = await readFile(path.join(rulesDir, f), 'utf-8')
-        contents.push(`# ${f}\n${content}`)
+      const files = (await readdir(dir.fullPath)).filter((file) => file.endsWith('.md')).sort()
+      for (const file of files) {
+        sources.push({
+          ref: `${dir.prefix}/${file}`,
+          content: `# ${file}\n${await readFile(path.join(dir.fullPath, file), 'utf-8')}`,
+          scope: 'rule',
+        })
       }
     } catch {}
   }
-  return contents
+
+  return sources
+}
+
+export async function loadProjectMd(cwd: string): Promise<string | null> {
+  return (await loadInstructionSources(cwd)).find((source) => source.scope === 'project')?.content ?? null
+}
+
+export async function loadGlobalMd(): Promise<string | null> {
+  return (await loadInstructionSources(process.cwd())).find((source) => source.scope === 'global')?.content ?? null
+}
+
+export async function loadProjectRules(cwd: string): Promise<string[]> {
+  return (await loadInstructionSources(cwd)).filter((source) => source.scope === 'rule').map((source) => source.content)
 }
 
 export async function loadActivePlan(cwd: string): Promise<{ fileName: string; content: string; ageMs: number } | null> {
@@ -201,15 +227,16 @@ You can check running tasks with \`task_output\` tool, or wait for the notificat
     })
   }
 
-  // Instructions (globalMd + projectMd + rules combined)
-  const instructionParts: string[] = []
-  const globalMd = await loadGlobalMd()
-  if (globalMd) instructionParts.push(`# Global Instructions\n${globalMd}`)
-  const projectMd = await loadProjectMd(opts.cwd)
-  if (projectMd) instructionParts.push(`# Project Instructions\n${projectMd}`)
-  const rules = await loadProjectRules(opts.cwd)
-  if (rules.length > 0) instructionParts.push(`# Project Rules\n${rules.join('\n\n')}`)
-  if (instructionParts.length > 0) {
+  // Instructions loaded into the system prompt are tracked as carried context.
+  const instructionSources = await loadInstructionSources(opts.cwd)
+  if (instructionSources.length > 0) {
+    const instructionParts: string[] = []
+    const global = instructionSources.filter((source) => source.scope === 'global')
+    const project = instructionSources.filter((source) => source.scope === 'project')
+    const rules = instructionSources.filter((source) => source.scope === 'rule')
+    if (global.length) instructionParts.push(`# Global Instructions\n${global.map((source) => source.content).join('\n\n')}`)
+    if (project.length) instructionParts.push(`# Project Instructions\n${project.map((source) => source.content).join('\n\n')}`)
+    if (rules.length) instructionParts.push(`# Project Rules\n${rules.map((source) => source.content).join('\n\n')}`)
     segments.push({ content: instructionParts.join('\n\n'), cacheable: true })
   }
 
@@ -226,12 +253,9 @@ You can check running tasks with \`task_output\` tool, or wait for the notificat
     segments.push({ content: prefParts.join('\n'), cacheable: true })
   }
 
-  // Dynamic section (git status + date)
-  const dynamicParts: string[] = []
-  if (git.status) dynamicParts.push(`# Git Status\n${git.status}`)
+  // Dynamic section
   const date = new Date().toISOString().split('T')[0]
-  dynamicParts.push(`# Current Date\n${date}`)
-  segments.push({ content: dynamicParts.join('\n\n'), cacheable: false })
+  segments.push({ content: `# Current Date\n${date}`, cacheable: false })
 
   return segments
 }
