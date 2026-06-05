@@ -91,6 +91,7 @@ export function section(
   confidence: number,
   freshness: ContextSection['freshness'],
   sourceProvider: string,
+  ownership?: ContextSection['ownership'],
 ): ContextSection {
   return {
     id: stableId('section', ...idParts),
@@ -103,6 +104,7 @@ export function section(
     freshness,
     sourceProvider,
     tokenEstimate: estimateTokens(content),
+    ...(ownership ? { ownership } : {}),
   }
 }
 

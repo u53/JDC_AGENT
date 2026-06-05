@@ -3,6 +3,7 @@ import {
   ContextBundleSchema,
   ContextCitationSchema,
   ContextFactSchema,
+  ContextRequestSchema,
   DistillerEnvelopeSchema,
   HarvestDecisionSchema,
   MemoryRecordSchema,
@@ -46,6 +47,11 @@ describe('context protocol schemas', () => {
           freshness: 'recent',
           sourceProvider: 'MemorySignalProducer',
           tokenEstimate: 8,
+          ownership: {
+            authority: 'durable_memory',
+            topic: 'memory',
+            conflictPolicy: 'render',
+          },
         },
       ],
       citations: [citation],
@@ -72,6 +78,23 @@ describe('context protocol schemas', () => {
       payload: { currentGoal: 'Implement protocol', activeConstraints: [], confirmedDecisions: [], rejectedDirections: [], openQuestions: [] },
     }
 
+    const request = {
+      sessionId: 'session_1',
+      cwd: '/repo',
+      userMessage: 'fix retry',
+      recentMessages: [],
+      transcriptAlreadyInModel: true,
+      carriedContext: {
+        projectInstructionRefs: ['JDCAGNET.md', 'AGENTS.md'],
+        gitStatusInSystemPrompt: false,
+        taskRefs: ['task_1'],
+      },
+      mode: 'code_edit',
+      model: 'test-model',
+      runtime: {},
+      createdAt: 1,
+    }
+
     expect(ContextCitationSchema.parse(citation).ref).toBe(citation.ref)
     expect(validateContextFact(fact).success).toBe(true)
     expect(validateContextBundle(bundle).success).toBe(true)
@@ -80,6 +103,7 @@ describe('context protocol schemas', () => {
     expect(validateDistillerEnvelope(envelope).success).toBe(true)
     expect(ContextFactSchema.parse(fact).confidence).toBe(0.95)
     expect(ContextBundleSchema.parse(bundle).budget.usedTokens).toBe(8)
+    expect(ContextRequestSchema.parse(request).carriedContext?.projectInstructionRefs).toEqual(['JDCAGNET.md', 'AGENTS.md'])
     expect(MemoryRecordSchema.parse(memoryRecord).scope).toBe('project')
     expect(DistillerEnvelopeSchema.parse(envelope).schemaVersion).toBe(1)
   })

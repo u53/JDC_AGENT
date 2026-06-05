@@ -31,6 +31,39 @@ export const ContextActorSchema = z.enum(['main_session', 'subagent', 'team_pm',
 export const MemoryRecordKindSchema = z.enum(['user_preference', 'project_convention', 'architecture_decision', 'known_issue', 'workflow_hint'])
 export const ContextProviderIdSchema = z.enum(['code', 'project', 'workflow', 'git', 'conversation', 'memory', 'runtime', 'ide'])
 
+const ContextOwnershipSchema = z.object({
+  authority: z.enum([
+    'system_instruction',
+    'project_instruction',
+    'current_user',
+    'live_state',
+    'runtime_evidence',
+    'code_evidence',
+    'durable_memory',
+    'derived_state',
+  ]),
+  topic: z.enum([
+    'project_instruction',
+    'project_profile',
+    'workflow',
+    'git',
+    'task',
+    'runtime',
+    'ide',
+    'code',
+    'memory',
+    'conversation',
+  ]),
+  conflictPolicy: z.enum(['render', 'suppress_if_carried', 'pointer_only']),
+  refs: z.array(z.string()).optional(),
+})
+
+const CarriedContextMetadataSchema = z.object({
+  projectInstructionRefs: z.array(z.string()),
+  gitStatusInSystemPrompt: z.boolean(),
+  taskRefs: z.array(z.string()),
+})
+
 export const ContextOriginSchema = z.object({
   projectKey: nonEmptyStringSchema,
   actor: ContextActorSchema,
@@ -75,6 +108,7 @@ export const ContextRequestSchema = z.object({
   userMessage: z.string(),
   recentMessages: z.array(MessageSchema),
   transcriptAlreadyInModel: z.boolean().optional(),
+  carriedContext: CarriedContextMetadataSchema.optional(),
   mode: ContextModeSchema,
   model: nonEmptyStringSchema,
   tokenBudget: z.number().int().positive().optional(),
@@ -132,6 +166,7 @@ export const ContextSectionSchema = z.object({
   freshness: ContextFreshnessSchema,
   sourceProvider: nonEmptyStringSchema,
   tokenEstimate: z.number().int().nonnegative(),
+  ownership: ContextOwnershipSchema.optional(),
   expiresAt: timestampSchema.optional(),
 })
 

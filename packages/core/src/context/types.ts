@@ -18,6 +18,40 @@ export type MemoryTrustMode = 'manual_review' | 'auto_accept_high_confidence'
 export type MemoryRecordKind = 'user_preference' | 'project_convention' | 'architecture_decision' | 'known_issue' | 'workflow_hint'
 export type ContextProviderId = 'code' | 'project' | 'workflow' | 'git' | 'conversation' | 'memory' | 'runtime' | 'ide'
 export type ContextProviderStatus = 'enabled' | 'disabled' | 'fresh' | 'cached' | 'stale' | 'not_indexed' | 'indexing' | 'timeout' | 'failed' | 'rate_limited'
+export type ContextAuthority =
+  | 'system_instruction'
+  | 'project_instruction'
+  | 'current_user'
+  | 'live_state'
+  | 'runtime_evidence'
+  | 'code_evidence'
+  | 'durable_memory'
+  | 'derived_state'
+export type ContextOwnershipTopic =
+  | 'project_instruction'
+  | 'project_profile'
+  | 'workflow'
+  | 'git'
+  | 'task'
+  | 'runtime'
+  | 'ide'
+  | 'code'
+  | 'memory'
+  | 'conversation'
+export type ContextConflictPolicy = 'render' | 'suppress_if_carried' | 'pointer_only'
+
+export interface ContextOwnership {
+  authority: ContextAuthority
+  topic: ContextOwnershipTopic
+  conflictPolicy: ContextConflictPolicy
+  refs?: string[]
+}
+
+export interface CarriedContextMetadata {
+  projectInstructionRefs: string[]
+  gitStatusInSystemPrompt: boolean
+  taskRefs: string[]
+}
 
 export interface ContextOrigin {
   projectKey: string
@@ -81,6 +115,7 @@ export interface ContextRequest {
    * echo those recent messages again as conversation_state.
    */
   transcriptAlreadyInModel?: boolean
+  carriedContext?: CarriedContextMetadata
   mode: ContextMode
   model: string
   tokenBudget?: number
@@ -141,6 +176,7 @@ export interface ContextSection {
   freshness: ContextFreshness
   sourceProvider: string
   tokenEstimate: number
+  ownership?: ContextOwnership
   expiresAt?: number
 }
 
