@@ -21,6 +21,7 @@ import type { ContextEngineConfig, ContextRequest, HarvestCandidate, HarvestMode
 import { compactMessages, MIN_COMPACT_LENGTH } from './compact.js'
 import { estimateTokens } from './token-estimation.js'
 import { UsageTracker } from './usage-tracker.js'
+import { FileReadStateCache } from './file-read-state.js'
 
 const subSessionHarvestCounts = new Map<string, { total: number; pending: number }>()
 
@@ -65,6 +66,7 @@ export interface SubSessionOptions {
   taskId?: string
   fileScope?: string[]
   parentObjective?: string
+  fileReadState?: FileReadStateCache
   contextEngine?: {
     sessionId?: string
     config?: ContextEngineConfigInput
@@ -82,6 +84,7 @@ export interface SubSessionResult {
   content: string
   turns: number
   toolsUsed: string[]
+  status: 'completed' | 'max_turns_exhausted' | 'aborted'
 }
 
 export function formatExternalMessages(msgs: Array<{ from: string; content: string; intent?: string; priority: string }>): string {
@@ -115,6 +118,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
 
   const permChecker = new PermissionChecker(opts.permissionMode || 'relaxed')
   const toolRunner = new ToolRunner(toolRegistry, cwd, permChecker, onPermissionRequest)
+  toolRunner.fileReadState = opts.fileReadState ?? new FileReadStateCache()
 
   // Register extra tools (e.g., team_report for team workers)
   const extraToolMap = new Map<string, (input: Record<string, unknown>, ctx: any) => Promise<{ content: string; isError?: boolean }>>()
@@ -270,7 +274,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
     // If no tool uses, we're done
     if (toolUses.length === 0) {
       enqueueSubSessionHarvest(opts, contextConfig, contextScheduler, contextSessionId, runLoopId, prompt, harvestAssistantMessages, harvestToolEvents, runLoopStartedAt, modelConfig)
-      return { content: textContent, turns, toolsUsed: [...new Set(toolsUsed)] }
+      return { content: textContent, turns, toolsUsed: [...new Set(toolsUsed)], status: 'completed' }
     }
 
     // Execute tools and collect results
@@ -369,6 +373,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
     content: lastText?.text || '[Sub-agent reached max turns without final response]',
     turns,
     toolsUsed: [...new Set(toolsUsed)],
+    status: signal?.aborted ? 'aborted' : 'max_turns_exhausted',
   }
 }
 
@@ -444,6 +449,7 @@ async function buildSubSessionContextPrompt(
           createdAt: Date.now(),
         }, {
           injectionEnabled: contextConfig.injectionEnabled,
+          includeAgentContract: true,
           store: opts.contextEngine!.store,
           providers: opts.contextEngine!.providers ?? [],
           providerTimeoutMs: performance.providerTimeoutMs,

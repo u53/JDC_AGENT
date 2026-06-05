@@ -13,7 +13,7 @@ vi.mock('../../sub-session.js', async () => {
       opts.onAgentProgress?.({ toolName: 'file_read', toolStatus: 'start', toolCount: 1 })
       opts.onAgentProgress?.({ toolName: 'file_read', toolStatus: 'complete', toolCount: 1 })
       opts.onAgentText?.('Hello world')
-      return { content: 'task complete', turns: 1, toolsUsed: ['file_read'] }
+      return { content: 'task complete', turns: 1, toolsUsed: ['file_read'], status: 'completed' }
     }),
   }
 })
@@ -71,6 +71,30 @@ describe('TeamMember', () => {
     })
     await member.start()
     expect(onComplete).toHaveBeenCalledWith(member.id, expect.objectContaining({ summary: 'task complete' }))
+  })
+
+  it('fails instead of completing when the sub-session exhausts max turns', async () => {
+    vi.mocked(runSubSession).mockResolvedValueOnce({
+      content: '[Sub-agent reached max turns without final response]',
+      turns: 25,
+      toolsUsed: ['Read'],
+      status: 'max_turns_exhausted',
+    } as any)
+    const onComplete = vi.fn()
+    const onFail = vi.fn()
+    const member = new TeamMember({
+      spec: { role: 'explorer', agentType: 'explore' },
+      taskPrompt: 'task',
+      subSessionDeps: mockDeps,
+      onComplete,
+      onFail,
+    })
+
+    await member.start()
+
+    expect(member.getStatus()).toBe('failed')
+    expect(onComplete).not.toHaveBeenCalled()
+    expect(onFail).toHaveBeenCalledWith(member.id, expect.stringContaining('max turns'))
   })
 
   it('passes team worker actor metadata to the sub-session context engine', async () => {

@@ -1217,6 +1217,7 @@ export class Session {
           if (signal.aborted) throw new Error('context injection budget expired')
           const result = await buildContextBundle({ ...request, signal }, {
             injectionEnabled: this.contextConfig.injectionEnabled,
+            includeAgentContract: true,
             store,
             providers: this.getContextProviders(),
             providerTimeoutMs: performance.providerTimeoutMs,
@@ -1493,7 +1494,7 @@ export class Session {
   getTeamStatus(taskId: string): any {
     const task = this.backgroundTasks.getTask(taskId)
     if (!task || task.type !== 'team') return null
-    const team = this.teamRegistry.get(taskId)
+    const team = this.teamRegistry.isArchived(taskId) ? undefined : this.teamRegistry.get(taskId)
     if (!team) {
       // Team is no longer in registry (completed/failed and removed). Try the
       // final snapshot we captured the moment it terminated — that way the UI
@@ -1597,7 +1598,7 @@ export class Session {
       createdAt: Date.now(),
     }
     this.backgroundTasks.sendMessage(taskId, msg)
-    const team = this.teamRegistry.get(taskId)
+    const team = this.teamRegistry.isArchived(taskId) ? undefined : this.teamRegistry.get(taskId)
     if (team) team.sendMessage(msg)
   }
 }

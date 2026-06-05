@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import os from 'node:os'
 import path from 'node:path'
-import { mkdirSync, rmSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import type { SubSessionOptions, SubSessionResult } from '../../sub-session.js'
 import type { ContextFact, RawEvidence } from '../../context/types.js'
 
@@ -11,7 +11,7 @@ vi.mock('../../sub-session.js', async () => {
     ...actual,
     runSubSession: vi.fn(async (opts: SubSessionOptions): Promise<SubSessionResult> => {
       opts.onAgentText?.('Working...')
-      return { content: `Done: ${opts.prompt.slice(0, 20)}`, turns: 1, toolsUsed: [] }
+      return { content: `Done: ${opts.prompt.slice(0, 20)}`, turns: 1, toolsUsed: [], status: 'completed' }
     }),
   }
 })
@@ -137,6 +137,31 @@ describe('Team tools', () => {
     // Just verify execution succeeded (above).
   })
 
+  it('marks the background team failed and clears the registry when startup fails', async () => {
+    const bg = new BackgroundTaskManager(path.join(os.tmpdir(), 'team-tools-startup-fail-' + Date.now()))
+    const registry = new TeamRegistry()
+    const cwdFile = path.join(os.tmpdir(), `team-tools-cwd-file-${Date.now()}`)
+    writeFileSync(cwdFile, 'not a directory')
+    const tool = createTeamTool({
+      teamRegistry: registry,
+      backgroundTasks: bg,
+      buildSubSessionDeps: () => ({ ...mockDeps, cwd: cwdFile }) as any,
+    })
+
+    const result = await tool.execute({
+      objective: 'startup failure should not leave a half initialized team running',
+      members: [{ role: 'explorer', agentType: 'explore' }],
+      tasks: [{ title: 'A', description: 'a' }],
+    } as any, {} as any)
+
+    const task = bg.listAll()[0]
+    expect(result.isError).toBe(true)
+    expect(result.content).toContain('Team startup failed')
+    expect(task.status).toBe('failed')
+    expect(registry.getAll()).toHaveLength(0)
+    rmSync(cwdFile, { force: true })
+  })
+
   it('resolves explicit PM model without changing worker defaults', async () => {
     const bg = new BackgroundTaskManager(path.join(os.tmpdir(), 'team-tools-pm-model-' + Date.now()))
     const registry = new TeamRegistry()
@@ -198,6 +223,52 @@ describe('Team tools', () => {
     expect(result.content).toContain('missing-pm')
     const teamId = bg.listAll()[0]?.id
     registry.get(teamId)?.stop()
+  })
+
+  it('passes a startup signal to the skill router so slow routing can fail open', async () => {
+    const bg = new BackgroundTaskManager(path.join(os.tmpdir(), 'team-tools-skill-router-signal-' + Date.now()))
+    const registry = new TeamRegistry()
+    let firstRouterSignal: AbortSignal | undefined
+    let streamCalls = 0
+    const provider = {
+      name: 'pm-provider',
+      chat: async () => ({ content: [], usage: { inputTokens: 0, outputTokens: 0 } }),
+      stream: async function* (_messages: any[], _tools: any[], _config: any, signal?: AbortSignal) {
+        if (streamCalls++ === 0) firstRouterSignal = signal
+        yield { type: 'text_delta', text: '{"pmSkill":null,"workerSkill":null,"reasoning":"none"}' }
+        yield { type: 'message_end', usage: { inputTokens: 1, outputTokens: 1 } }
+      },
+    }
+    const skill = {
+      name: 'debugging',
+      description: 'debugging methodology',
+      content: 'debug carefully',
+      userInvocable: true,
+      arguments: [],
+      source: 'global',
+      filePath: '/skills/debugging/SKILL.md',
+    } as any
+    const tool = createTeamTool({
+      teamRegistry: registry,
+      backgroundTasks: bg,
+      buildSubSessionDeps,
+      provider: provider as any,
+      modelConfig: { model: 'main-model', maxTokens: 32000, contextWindow: 200000 },
+      getSkillLoader: () => ({
+        getAll: () => [skill],
+        get: () => skill,
+      }) as any,
+    })
+
+    const result = await tool.execute({
+      objective: 'Team startup should not wait forever on skill routing before PM is launched',
+      members: [{ role: 'explorer', responsibility: 'Inspect files', agentType: 'explore' }],
+      tasks: [{ title: 'A', description: 'a' }],
+    } as any, {} as any)
+
+    expect(result.isError).toBeFalsy()
+    expect(firstRouterSignal).toBeDefined()
+    registry.get(bg.listAll()[0]?.id)?.stop()
   })
 
   it('Team tool caps members at 10 (uses maxWorkers)', async () => {
@@ -267,6 +338,25 @@ describe('Team tools', () => {
     // The team may have completed already (mocked subagent returns immediately).
     // If still in registry, full state available; otherwise partial state.
     expect(data.id).toBe(teamId)
+  })
+
+  it('background_status treats archived teams as terminal instead of live runtimes', async () => {
+    const bg = new BackgroundTaskManager(path.join(os.tmpdir(), 'team-tools-archived-status-' + Date.now()))
+    const registry = new TeamRegistry()
+    const teamTool = createTeamTool({ teamRegistry: registry, backgroundTasks: bg, buildSubSessionDeps })
+    await teamTool.execute({
+      objective: 'create a team that will be archived before status is queried',
+    } as any, {} as any)
+    const teamId = bg.listAll()[0].id
+    bg.completeTeam(teamId, { summary: 'done' })
+    registry.remove(teamId)
+
+    const statusTool = createBackgroundStatusTool({ backgroundTasks: bg, teamRegistry: registry })
+    const result = await statusTool.execute({ task_id: teamId } as any, {} as any)
+    const data = JSON.parse(result.content as string)
+
+    expect(data.terminal).toBe(true)
+    expect(data.status).toBe('completed')
   })
 
   it('background_events returns formatted event log', async () => {

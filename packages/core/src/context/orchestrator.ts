@@ -34,6 +34,7 @@ export interface ContextProvider {
 
 export interface BuildContextBundleOptions {
   injectionEnabled?: boolean
+  includeAgentContract?: boolean
   store: ContextStore
   providers?: ContextProvider[]
   providerTimeoutMs?: number
@@ -76,12 +77,13 @@ export async function buildContextBundle(request: ContextRequest, options: Build
     const packStartedAt = now()
     const conflictResolution = resolveContextConflicts(request, rawSections)
     const plan = planContext(request, conflictResolution.sections)
+    const includeAgentContract = options.includeAgentContract === true
     const plannedInputSections = [
-      ...agentContractSections(plan, now()),
+      ...(includeAgentContract ? agentContractSections(plan, now()) : []),
       ...conflictResolution.sections,
     ]
     const plannedSectionIds = new Set(plan.relevantSections)
-    const plannedSections = plannedInputSections.filter((section) => plannedSectionIds.has(section.id) || section.kind === 'agent_contract')
+    const plannedSections = plannedInputSections.filter((section) => plannedSectionIds.has(section.id) || (includeAgentContract && section.kind === 'agent_contract'))
     const ranked = rankContextSections(plannedSections)
     const budgeted = budgetContextSections(ranked, budgetLimits(request, options))
     scheduler.recorder.record({

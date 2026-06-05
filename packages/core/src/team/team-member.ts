@@ -332,6 +332,16 @@ export class TeamMember {
         return
       }
 
+      if (result.status !== 'completed') {
+        const error = result.status === 'max_turns_exhausted'
+          ? `Sub-agent reached max turns without completing the task after ${result.turns} turns.`
+          : 'Sub-agent was aborted before completing the task.'
+        this.status = 'failed'
+        this.lastActivityAt = Date.now()
+        this.opts.onFail?.(this.id, error)
+        return
+      }
+
       const taskResult: TeamTaskResult = {
         summary: result.content,
         findings: [],

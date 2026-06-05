@@ -101,7 +101,6 @@ describe('AgentTool', () => {
       cwd: '/tmp',
     })
     const result = await tool.execute({ prompt: 'do a thing' }, { cwd: '/tmp', signal: controller.signal })
-    // When aborted before first turn, returns empty or max-turns message
-    expect(result.content).toContain('max turns')
+    expect(result.content).toContain('aborted')
   })
 })

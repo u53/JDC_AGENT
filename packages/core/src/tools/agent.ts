@@ -125,6 +125,10 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
             contextEngine,
           })
         }).then(result => {
+          if (result.status !== 'completed') {
+            deps.backgroundTasks!.failAgent(task.id, describeSubSessionFailure(result))
+            return
+          }
           deps.onAgentComplete?.(toolUseId, result)
           deps.backgroundTasks!.completeAgent(task.id, { result: result.content, turns: result.turns, toolsUsed: result.toolsUsed })
         }).catch(err => {
@@ -181,6 +185,10 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
         if (raceResult.type === 'backgrounded') {
           const task = deps.backgroundTasks!.registerAgent(prompt, agentType)
           sessionPromise.then(result => {
+            if (result.status !== 'completed') {
+              deps.backgroundTasks!.failAgent(task.id, describeSubSessionFailure(result))
+              return
+            }
             deps.onAgentComplete?.(toolUseId, result)
             deps.backgroundTasks!.completeAgent(task.id, { result: result.content, turns: result.turns, toolsUsed: result.toolsUsed })
           }).catch(err => {
@@ -193,6 +201,13 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
               modelWarning ? `Model warning: ${modelWarning}` : '',
               `You will receive a <task-notification> when it completes.`,
             ].filter(Boolean).join('\n'),
+          }
+        }
+
+        if (raceResult.result!.status !== 'completed') {
+          return {
+            content: `Sub-agent error: ${describeSubSessionFailure(raceResult.result!)}`,
+            isError: true,
           }
         }
 
@@ -212,6 +227,16 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
       }
     },
   }
+}
+
+function describeSubSessionFailure(result: { status?: string; turns: number; content: string }): string {
+  if (result.status === 'max_turns_exhausted') {
+    return `Sub-agent reached max turns without completing after ${result.turns} turns.`
+  }
+  if (result.status === 'aborted') {
+    return 'Sub-agent was aborted before completing.'
+  }
+  return result.content || 'Sub-agent failed before completing.'
 }
 
 async function resolveContextEngineFailOpen(getter: AgentToolDeps['contextEngine']): Promise<SubSessionOptions['contextEngine'] | undefined> {

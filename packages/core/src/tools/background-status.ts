@@ -42,7 +42,7 @@ export function createBackgroundStatusTool(deps: BackgroundStatusDeps): ToolHand
       }
 
       const team = deps.teamRegistry.get(taskId)
-      if (!team) {
+      if (!team || deps.teamRegistry.isArchived(taskId)) {
         return {
           content: JSON.stringify({
             type: 'team',

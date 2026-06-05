@@ -1,5 +1,6 @@
 import type { ToolContext, ToolRegistry, ToolResult } from './tool-registry.js'
 import { evaluateFileMutationPolicy } from './constraints/file-mutation-policy.js'
+import { FileReadStateCache } from './file-read-state.js'
 import { PermissionChecker } from './permissions.js'
 import type { HookEngine } from './hooks/engine.js'
 import type { FileTracker } from './file-tracker.js'
@@ -24,7 +25,7 @@ export class ToolRunner {
   private hookEngine?: HookEngine
   private sessionId?: string
   fileTracker?: FileTracker
-  fileReadState?: import('./file-read-state.js').FileReadStateCache
+  fileReadState = new FileReadStateCache()
   backgroundTasks?: import('./background-tasks.js').BackgroundTaskManager
   turnIndex = 0
   planMode: 'normal' | 'planning' | 'awaiting_approval' = 'normal'

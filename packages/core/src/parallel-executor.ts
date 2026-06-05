@@ -32,7 +32,7 @@ const JDC_READ_TOOLS = new Set([
   'JdcFiles',
 ])
 
-const LONG_RUNNING_TOOLS = new Set(['Agent', 'Bash', 'Monitor'])
+const LONG_RUNNING_TOOLS = new Set(['Agent', 'Bash', 'Monitor', 'Team'])
 
 const MAX_CONCURRENCY = 5
 
@@ -100,11 +100,11 @@ export class ParallelExecutor {
       is_error: r.isError || false,
     }))
     if (signal.aborted) {
-      return { tool_use_id: id, content: 'Cancelled by user (abort)', is_error: true, aborted: true }
+      return { tool_use_id: id, content: abortMessage(signal), is_error: true, aborted: true }
     }
     const aborted = new Promise<{ tool_use_id: string; content: string; is_error: boolean; aborted: true }>((resolve) => {
       signal.addEventListener('abort', () => {
-        resolve({ tool_use_id: id, content: 'Cancelled by user (abort)', is_error: true, aborted: true })
+        resolve({ tool_use_id: id, content: abortMessage(signal), is_error: true, aborted: true })
       }, { once: true })
     })
     return Promise.race([tool, aborted])
@@ -196,4 +196,12 @@ export class ParallelExecutor {
 
     return results
   }
+}
+
+function abortMessage(signal: AbortSignal): string {
+  const reason = signal.reason
+  if (reason && typeof reason === 'object' && 'name' in reason && (reason as any).name === 'TimeoutError') {
+    return 'Cancelled: tool startup timed out'
+  }
+  return 'Cancelled by user (abort)'
 }

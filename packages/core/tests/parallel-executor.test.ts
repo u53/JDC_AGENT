@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { ParallelExecutor } from '../src/parallel-executor.js'
 import { ToolRegistry } from '../src/tool-registry.js'
 import { ToolRunner } from '../src/tool-runner.js'
@@ -317,5 +317,43 @@ describe('ParallelExecutor', () => {
     // Both should be errors (aborted)
     expect(results[0].is_error).toBe(true)
     expect(results[1].is_error).toBe(true)
+  })
+
+  it('does not apply the default short tool timeout to Team startup', async () => {
+    const timeoutController = new AbortController()
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(timeoutController.signal)
+    try {
+      const registry = new ToolRegistry()
+      let resolveTeam!: () => void
+
+      registry.register({
+        definition: { name: 'Team', description: 'Team', inputSchema: { type: 'object', properties: {} } },
+        execute: async () => {
+          await new Promise<void>(resolve => {
+            resolveTeam = resolve
+          })
+          return { content: 'team started' }
+        },
+      })
+
+      const executor = new ParallelExecutor(createRunner(registry))
+      const promise = executor.executeBatch(
+        [{ type: 'tool_use', id: 'team1', name: 'Team', input: {} }],
+        () => {}
+      )
+
+      timeoutController.abort()
+      let settled = false
+      promise.then(() => { settled = true })
+      await Promise.resolve()
+
+      expect(settled).toBe(false)
+
+      resolveTeam()
+      const results = await promise
+      expect(results[0]).toEqual({ tool_use_id: 'team1', content: 'team started', is_error: false })
+    } finally {
+      timeoutSpy.mockRestore()
+    }
   })
 })

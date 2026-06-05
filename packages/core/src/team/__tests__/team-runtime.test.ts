@@ -13,7 +13,7 @@ vi.mock('../../sub-session.js', async () => {
     runSubSession: vi.fn(async (opts: SubSessionOptions): Promise<SubSessionResult> => {
       // Simulate completion immediately
       opts.onAgentText?.('Working on task')
-      return { content: `Completed: ${opts.prompt.slice(0, 30)}`, turns: 1, toolsUsed: [] }
+      return { content: `Completed: ${opts.prompt.slice(0, 30)}`, turns: 1, toolsUsed: [], status: 'completed' }
     }),
   }
 })

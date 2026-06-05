@@ -32,10 +32,22 @@ describe('Built-in Tools', () => {
     expect(result.content).toContain('1\t')
   })
 
+  it('file_read: reports how to continue when the requested range is partial', async () => {
+    const runner = await setup()
+    const testFile = path.join(tmpDir, 'partial.txt')
+    await writeFile(testFile, 'one\ntwo\nthree\nfour', 'utf-8')
+    const result = await runner.execute('Read', 'id-partial', { file_path: testFile, limit: 2 }, () => {})
+
+    expect(result.content).toContain('1\tone')
+    expect(result.content).toContain('2\ttwo')
+    expect(result.content).toContain('[Showing lines 1-2 of 4. Use offset=2 to continue.]')
+  })
+
   it('file_edit: should replace string', async () => {
     const runner = await setup()
     const testFile = path.join(tmpDir, 'edit.txt')
     await writeFile(testFile, 'hello world', 'utf-8')
+    await runner.execute('Read', 'id-4-read', { file_path: testFile }, () => {})
     const result = await runner.execute('Edit', 'id-4', { file_path: testFile, old_string: 'hello', new_string: 'goodbye' }, () => {})
     expect(result.content).toContain('Successfully')
   })
@@ -44,6 +56,7 @@ describe('Built-in Tools', () => {
     const runner = await setup()
     const testFile = path.join(tmpDir, 'dup.txt')
     await writeFile(testFile, 'aaa bbb aaa', 'utf-8')
+    await runner.execute('Read', 'id-5-read', { file_path: testFile }, () => {})
     const result = await runner.execute('Edit', 'id-5', { file_path: testFile, old_string: 'aaa', new_string: 'ccc' }, () => {})
     expect(result.isError).toBe(true)
     expect(result.content).toContain('2 times')

@@ -52,10 +52,9 @@ describe('JDC Context orchestrator', () => {
     })
 
     expect(result.bundle.id).toBe('bundle_1')
-    expect(result.bundle.sections.map((item) => item.id)).toEqual(['agent_contract_ctx_plan_34a17f9aba757959', 'runtime_live', 'fact_memory_fact'])
-    expect(result.bundle.budget).toEqual({ usedTokens: 95, droppedTokens: 0 })
+    expect(result.bundle.sections.map((item) => item.id)).toEqual(['runtime_live', 'fact_memory_fact'])
+    expect(result.bundle.budget).toEqual({ maxTokens: undefined, usedTokens: 35, droppedTokens: 0 })
     expect(result.renderedPrompt).toContain('<jdc-context-engine bundle="bundle_1">')
-    expect(result.renderedPrompt).toContain('Objective: Fix the runtime cancellation bug')
     expect(store.saveRawEvidence).toHaveBeenCalledWith(evidence)
     expect(store.saveBundleSnapshot).toHaveBeenCalledWith(result.bundle)
   })
@@ -117,7 +116,7 @@ describe('JDC Context orchestrator', () => {
       id: () => 'bundle_no_transcript_echo',
     })
 
-    expect(result.bundle.sections.map((item) => item.id)).toEqual(['agent_contract_ctx_plan_34a17f9aba757959', 'runtime_live'])
+    expect(result.bundle.sections.map((item) => item.id)).toEqual(['runtime_live'])
     expect(result.renderedPrompt).toContain('tool result is already in the model transcript')
     expect(result.renderedPrompt).not.toContain(duplicatedRecentChat)
     expect(result.bundle.diagnostics.some((item) =>
@@ -173,7 +172,7 @@ describe('JDC Context orchestrator', () => {
     expect(result.renderedPrompt).toContain('stale known issue still relevant')
     expect(result.renderedPrompt).not.toContain('stale old convention')
     expect(result.renderedPrompt).toContain('[stale]')
-    expect(result.bundle.sections.map((item) => item.id)).toEqual(['agent_contract_ctx_plan_34a17f9aba757959', 'fact_fact_recent', 'fact_fact_known_issue'])
+    expect(result.bundle.sections.map((item) => item.id)).toEqual(['fact_fact_recent', 'fact_fact_known_issue'])
     expect(result.bundle.diagnostics).toContainEqual(expect.objectContaining({
       source: 'ContextRetriever',
       message: 'Suppressed stale low-value fact fact_stale.',
@@ -325,6 +324,7 @@ describe('JDC Context orchestrator', () => {
       userMessage: '修复登录状态 bug',
     }, {
       injectionEnabled: true,
+      includeAgentContract: true,
       store,
       providers: [],
       now: () => 1_000,

@@ -487,6 +487,7 @@ describe('JDC Context Engine product evals', () => {
       mode: 'code_edit',
     }), {
       injectionEnabled: true,
+      includeAgentContract: true,
       store: makeEvalStore({ facts: [] }),
       providers: [],
       now: () => 1,

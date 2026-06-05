@@ -50,13 +50,17 @@ Usage notes:
       const lines = content.split('\n')
       const effectiveLimit = limit === Infinity ? lines.length : limit
       const slice = lines.slice(offset, offset + effectiveLimit)
+      const endLine = Math.min(offset + effectiveLimit, lines.length)
       const returnedContent = slice.join('\n')
       const numbered = slice.map((line, i) => `${offset + i + 1}\t${line}`).join('\n')
 
       // Record this read for future dedup and fresh-read checks
       context.fileReadState?.recordRead(filePath, offset, limit, lines.length, returnedContent)
 
-      return { content: numbered }
+      const continuation = endLine < lines.length
+        ? `\n[Showing lines ${offset + 1}-${endLine} of ${lines.length}. Use offset=${endLine} to continue.]`
+        : ''
+      return { content: numbered + continuation }
     } catch (err: any) {
       if (err.code === 'ENOENT') {
         return { content: buildFileNotFoundError(filePath, context.cwd), isError: true }

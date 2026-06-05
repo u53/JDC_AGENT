@@ -13,6 +13,7 @@ vi.mock('./config.js', () => ({
 import { ConversationHistory } from './history.js'
 import type { ModelProvider } from './model-provider.js'
 import { Session, type SessionEvents } from './session.js'
+import { TeamRuntime } from './team/team-runtime.js'
 import { runSubSession } from './sub-session.js'
 import { ToolRegistry } from './tool-registry.js'
 import type { Message, ModelConfig, StreamChunk, ToolDefinition } from './types.js'
@@ -937,6 +938,40 @@ describe('Session team model_resolution_warning notification', () => {
 
     expect(sessionAny.pendingNotifications.some((n: any) => n.teamEvent?.includes('Model warning:'))).toBe(true)
     expect(sessionAny.onNotificationReady).toHaveBeenCalled()
+  })
+})
+
+describe('Session team status snapshots', () => {
+  it('returns final snapshots for archived team runtimes', async () => {
+    const session = await makeSession({ contextConfig: { enabled: false } as any })
+    const sessionAny = session as any
+    const bgTask = sessionAny.backgroundTasks.registerTeam('Archived team status', [])
+    const team = new TeamRuntime({
+      id: bgTask.id,
+      objective: 'Archived team status',
+      plan: { members: [], tasks: [] },
+      subSessionDeps: {
+        provider: providerFromChunks([{ type: 'text_delta', text: 'ok' }]),
+        toolRegistry: new ToolRegistry(),
+        modelConfig: { model: 'test-model', maxTokens: 1024, contextWindow: 128_000 },
+        cwd: session.config.cwd,
+      },
+    })
+    sessionAny.teamRegistry.register(team)
+    sessionAny.teamFinalSnapshots.set(bgTask.id, {
+      type: 'team',
+      id: bgTask.id,
+      status: 'completed',
+      members: [],
+      tasks: [],
+    })
+    sessionAny.backgroundTasks.completeTeam(bgTask.id, { summary: 'done' })
+    sessionAny.teamRegistry.remove(bgTask.id)
+
+    const status = session.getTeamStatus(bgTask.id)
+
+    expect(status.finished).toBe(true)
+    expect(status.status).toBe('completed')
   })
 })
 

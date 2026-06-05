@@ -1001,6 +1001,7 @@ export class TeamManagerAI extends TeamManager {
             createdAt: Date.now(),
           }, {
             injectionEnabled: contextConfig.injectionEnabled,
+            includeAgentContract: true,
             store: engine.store,
             providers: engine.providers ?? [],
             providerTimeoutMs: performance.providerTimeoutMs,

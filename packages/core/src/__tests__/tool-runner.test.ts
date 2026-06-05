@@ -64,6 +64,25 @@ describe('ToolRunner file mutation constraints', () => {
     return runner
   }
 
+  it('blocks Edit by default when callers do not inject fresh-read state', async () => {
+    const fs = await import('fs/promises')
+    const targetFile = path.join(tmpDir, 'target.ts')
+    await fs.writeFile(targetFile, 'const value = 1\n')
+    const registry = new ToolRegistry()
+    registry.register(fileEditTool)
+    const runner = new ToolRunner(registry, tmpDir, new PermissionChecker('relaxed'))
+
+    const result = await runner.execute('Edit', 'tool_use_default_state', {
+      file_path: targetFile,
+      old_string: 'const value = 1',
+      new_string: 'const value = 2',
+    }, () => {})
+
+    expect(result.isError).toBe(true)
+    expect(result.content).toContain('Blocked by JDC Agent Constraint Engine')
+    await expect(fs.readFile(targetFile, 'utf-8')).resolves.toBe('const value = 1\n')
+  })
+
   it('blocks Edit before file has been read', async () => {
     const runner = makeConstraintRunner()
 
