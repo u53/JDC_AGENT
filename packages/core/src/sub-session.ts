@@ -431,6 +431,7 @@ async function buildSubSessionContextPrompt(
           cwd: opts.cwd,
           userMessage: prompt,
           recentMessages: messages.slice(-8),
+          transcriptAlreadyInModel: true,
           mode: 'chat',
           model: opts.modelConfig.model,
           runtime: {},

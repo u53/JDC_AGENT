@@ -74,6 +74,7 @@ export const ContextRequestSchema = z.object({
   cwd: nonEmptyStringSchema,
   userMessage: z.string(),
   recentMessages: z.array(MessageSchema),
+  transcriptAlreadyInModel: z.boolean().optional(),
   mode: ContextModeSchema,
   model: nonEmptyStringSchema,
   tokenBudget: z.number().int().positive().optional(),

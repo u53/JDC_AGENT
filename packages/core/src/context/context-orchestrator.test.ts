@@ -83,6 +83,45 @@ describe('JDC Context orchestrator', () => {
     expect(result.renderedPrompt).toContain('<objective>Fix runtime cancellation bug</objective>')
   })
 
+  it('does not render live conversation transcript when messages already carry it', async () => {
+    const duplicatedRecentChat = 'user: retry failed after tool result'
+    const conversation = section({
+      id: 'conversation_live',
+      kind: 'conversation_state',
+      title: 'Conversation state',
+      content: duplicatedRecentChat,
+      freshness: 'live',
+      sourceProvider: 'ConversationSignalProvider',
+      tokenEstimate: 8,
+    })
+    const runtime = section({
+      id: 'runtime_live',
+      kind: 'runtime_state',
+      title: 'Runtime',
+      content: 'tool result is already in the model transcript',
+      freshness: 'live',
+      sourceProvider: 'RuntimeSignalProvider',
+      tokenEstimate: 8,
+    })
+    const store = makeStore({ facts: [] })
+
+    const result = await buildContextBundle({ ...request, transcriptAlreadyInModel: true }, {
+      injectionEnabled: true,
+      store,
+      providers: [
+        { id: 'conversation', collect: async () => providerResult([conversation]) },
+        { id: 'runtime', collect: async () => providerResult([runtime]) },
+      ],
+      now: () => 1_000,
+      id: () => 'bundle_no_transcript_echo',
+    })
+
+    expect(result.bundle.sections.map((item) => item.id)).toEqual(['runtime_live'])
+    expect(result.renderedPrompt).toContain('tool result is already in the model transcript')
+    expect(result.renderedPrompt).not.toContain(duplicatedRecentChat)
+    expect(result.bundle.diagnostics.some((item) => item.message.includes('transcript_already_in_model_messages'))).toBe(true)
+  })
+
   it('does not drop large relevant sections when no explicit token caps are configured', async () => {
     const largeProjectSection = section({
       id: 'project_large',

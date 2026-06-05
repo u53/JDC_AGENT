@@ -1259,6 +1259,7 @@ export class Session {
       cwd: this.config.cwd,
       userMessage,
       recentMessages: this.messages.slice(-8),
+      transcriptAlreadyInModel: true,
       mode: contextModeFromPlanMode(this.planMode),
       model: this.config.modelConfig.model,
       runtime: { toolEvents: this.recentToolEvents.slice(-20), turnIndex: this.turnIndex },

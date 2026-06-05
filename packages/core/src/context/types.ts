@@ -75,6 +75,12 @@ export interface ContextRequest {
   cwd: string
   userMessage: string
   recentMessages: Message[]
+  /**
+   * True when the same provider call will already receive the live transcript
+   * through its normal messages array. Foreground prompt injection should not
+   * echo those recent messages again as conversation_state.
+   */
+  transcriptAlreadyInModel?: boolean
   mode: ContextMode
   model: string
   tokenBudget?: number

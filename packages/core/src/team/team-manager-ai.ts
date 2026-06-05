@@ -988,6 +988,7 @@ export class TeamManagerAI extends TeamManager {
             cwd: this.cwd,
             userMessage: userText,
             recentMessages: recentMessages.slice(-8),
+            transcriptAlreadyInModel: true,
             mode: 'plan',
             model: this.modelConfig.model,
             runtime: { teamId: this.teamId, memberStates: this.getMemberStates() },

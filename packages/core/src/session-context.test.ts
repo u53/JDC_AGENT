@@ -295,6 +295,7 @@ describe('Session JDC Context Engine runtime integration', () => {
         id: 'runtime',
         collect: async (request: ContextRequest) => {
           expect(request.tokenBudget).toBeUndefined()
+          expect(request.transcriptAlreadyInModel).toBe(true)
           return {
             evidence: [],
             sections: [{

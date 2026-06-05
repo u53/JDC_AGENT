@@ -7,7 +7,7 @@ export function planContext(request: ContextRequest, sections: ContextSection[])
   const suppressedSections: Array<{ id: string; reason: string }> = []
 
   for (const section of sections) {
-    const suppression = suppressionReason(section)
+    const suppression = suppressionReason(request, section)
     if (suppression) {
       suppressedSections.push({ id: section.id, reason: suppression })
       continue
@@ -17,7 +17,13 @@ export function planContext(request: ContextRequest, sections: ContextSection[])
 
   return {
     id: `ctx_plan_${hashText(`${request.sessionId}:${request.createdAt}:${request.userMessage}`).slice(0, 16)}`,
-    requestHash: hashText(JSON.stringify({ sessionId: request.sessionId, cwd: request.cwd, userMessage: request.userMessage, mode: request.mode })),
+    requestHash: hashText(JSON.stringify({
+      sessionId: request.sessionId,
+      cwd: request.cwd,
+      userMessage: request.userMessage,
+      mode: request.mode,
+      transcriptAlreadyInModel: request.transcriptAlreadyInModel === true,
+    })),
     intent,
     objective: request.userMessage.trim() || request.mode,
     relevantSections,
@@ -39,7 +45,15 @@ function inferIntent(request: ContextRequest): ContextPlanIntent {
   return 'chat'
 }
 
-function suppressionReason(section: ContextSection): string | null {
+function suppressionReason(request: ContextRequest, section: ContextSection): string | null {
+  if (
+    request.transcriptAlreadyInModel === true &&
+    section.kind === 'conversation_state' &&
+    section.sourceProvider === 'ConversationSignalProvider' &&
+    section.title === 'Conversation state'
+  ) {
+    return 'transcript_already_in_model_messages'
+  }
   const content = section.content.toLowerCase()
   if (section.kind === 'diagnostics' && /model_noop|noop|no durable/.test(content)) return 'low_salience_diagnostic'
   if (section.freshness === 'stale' && isLowValueStaleSection(section)) return 'stale_low_value'
