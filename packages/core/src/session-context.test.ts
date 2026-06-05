@@ -296,6 +296,11 @@ describe('Session JDC Context Engine runtime integration', () => {
         collect: async (request: ContextRequest) => {
           expect(request.tokenBudget).toBeUndefined()
           expect(request.transcriptAlreadyInModel).toBe(true)
+          expect(request.carriedContext).toMatchObject({
+            gitStatusInSystemPrompt: false,
+            projectInstructionRefs: expect.any(Array),
+            taskRefs: expect.any(Array),
+          })
           return {
             evidence: [],
             sections: [{
@@ -333,6 +338,36 @@ describe('Session JDC Context Engine runtime integration', () => {
 
     await fallbackSession.sendMessage('context failure should not fail chat', makeEvents())
     expect(fallbackSession.getMessages().at(-1)?.content).toEqual([{ type: 'text', text: 'still works' }])
+  })
+
+  it('passes active task refs into context requests without copying task content', async () => {
+    let captured: ContextRequest | undefined
+    const session = await makeSession({
+      provider: providerFromChunks([
+        { type: 'text_delta', text: 'done' },
+        { type: 'message_end', usage: { inputTokens: 1, outputTokens: 1 } },
+      ]),
+      contextConfig: { injectionEnabled: true, harvestEnabled: false },
+      contextStore: makeContextStore(),
+      contextProviders: [{
+        id: 'runtime',
+        collect: async (request: ContextRequest) => {
+          captured = request
+          return {
+            evidence: [],
+            sections: [],
+            diagnostics: [],
+            health: { id: 'runtime', status: 'enabled', updatedAt: 1 },
+          }
+        },
+      }],
+    })
+
+    ;(session as any).taskStore.create('Fix retry UI', 'Make automatic retry visible')
+    await session.sendMessage('continue current task', makeEvents())
+
+    expect(captured?.carriedContext?.taskRefs.length).toBeGreaterThan(0)
+    expect(JSON.stringify(captured?.carriedContext)).not.toContain('Fix retry UI')
   })
 
   it('does not inject context when injection is disabled but can still enqueue harvest after runLoop completion', async () => {

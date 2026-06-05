@@ -989,6 +989,11 @@ export class TeamManagerAI extends TeamManager {
             userMessage: userText,
             recentMessages: recentMessages.slice(-8),
             transcriptAlreadyInModel: true,
+            carriedContext: {
+              projectInstructionRefs: [],
+              gitStatusInSystemPrompt: false,
+              taskRefs: [],
+            },
             mode: 'plan',
             model: this.modelConfig.model,
             runtime: { teamId: this.teamId, memberStates: this.getMemberStates() },

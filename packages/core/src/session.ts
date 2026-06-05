@@ -8,7 +8,7 @@ import { ToolRegistry } from './tool-registry.js'
 import { ToolRunner, type ToolExecutionEvent, type PermissionCallback } from './tool-runner.js'
 import { registerBuiltinTools } from './tools/index.js'
 import { ConversationHistory } from './history.js'
-import { assembleSystemPrompt } from './context.js'
+import { assembleSystemPrompt, loadInstructionSources } from './context.js'
 import { getContextEnginePromptSegment } from './context-engine/index.js'
 import { loadAppConfig, getConfigDir } from './config.js'
 import { PermissionChecker } from './permissions.js'
@@ -1205,7 +1205,7 @@ export class Session {
 
   private async injectContextForRunLoop(userMessage: string): Promise<void> {
     if (!this.contextConfig.enabled) return
-    const request = this.createContextRequest(userMessage)
+    const request = await this.createContextRequest(userMessage)
     const performance = this.contextPerformanceConfig()
     let renderedPrompt = ''
     try {
@@ -1244,7 +1244,19 @@ export class Session {
     }
   }
 
-  private createContextRequest(userMessage: string): ContextRequest {
+  private async buildCarriedContextMetadata() {
+    const instructionSources = await loadInstructionSources(this.config.cwd)
+    const activeTasks = this.history.getActiveTasks(this.id)
+    return {
+      projectInstructionRefs: instructionSources
+        .filter((source) => source.scope === 'project' || source.scope === 'rule')
+        .map((source) => source.ref),
+      gitStatusInSystemPrompt: false,
+      taskRefs: activeTasks.map((task) => String(task.id)),
+    }
+  }
+
+  private async createContextRequest(userMessage: string): Promise<ContextRequest> {
     const ide = this.ideContext ? {
       activeFile: this.ideContext.filePath,
       selection: this.ideContext.selection && this.ideContext.text ? {
@@ -1253,6 +1265,7 @@ export class Session {
         endLine: this.ideContext.selection.end.line,
       } : undefined,
     } : undefined
+    const carriedContext = await this.buildCarriedContextMetadata()
 
     return {
       sessionId: this.id,
@@ -1260,6 +1273,7 @@ export class Session {
       userMessage,
       recentMessages: this.messages.slice(-8),
       transcriptAlreadyInModel: true,
+      carriedContext,
       mode: contextModeFromPlanMode(this.planMode),
       model: this.config.modelConfig.model,
       runtime: { toolEvents: this.recentToolEvents.slice(-20), turnIndex: this.turnIndex },

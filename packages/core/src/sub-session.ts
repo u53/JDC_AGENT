@@ -432,6 +432,11 @@ async function buildSubSessionContextPrompt(
           userMessage: prompt,
           recentMessages: messages.slice(-8),
           transcriptAlreadyInModel: true,
+          carriedContext: {
+            projectInstructionRefs: [],
+            gitStatusInSystemPrompt: false,
+            taskRefs: [],
+          },
           mode: 'chat',
           model: opts.modelConfig.model,
           runtime: {},
