@@ -88,6 +88,47 @@ describe('ContextPlanner', () => {
     expect(plan.suppressedSections).toEqual([])
   })
 
+  it('reports missing relevant code evidence for code_edit turns', () => {
+    const plan = planContext(makeRequest({ mode: 'code_edit', userMessage: 'Fix the bug' }), [
+      section({ id: 'project_profile', kind: 'project_profile', title: 'Project', content: 'JDCAGNET' }),
+    ])
+
+    expect(plan.missingEvidence).toContainEqual({
+      kind: 'relevant_code',
+      reason: 'Code edit turns require target file or symbol evidence before mutation.',
+    })
+  })
+
+  it('reports missing runtime or code evidence for debug turns', () => {
+    const plan = planContext(makeRequest({ mode: 'debug', userMessage: 'Debug the failure' }), [
+      section({ id: 'project_profile', kind: 'project_profile', title: 'Project', content: 'JDCAGNET' }),
+    ])
+
+    expect(plan.missingEvidence).toContainEqual({
+      kind: 'runtime_or_code',
+      reason: 'Debug turns require observed runtime output, relevant code, or both.',
+    })
+  })
+
+  it('reports missing diff or relevant code evidence for review turns', () => {
+    const plan = planContext(makeRequest({ mode: 'review', userMessage: 'Review the change' }), [
+      section({ id: 'project_profile', kind: 'project_profile', title: 'Project', content: 'JDCAGNET' }),
+    ])
+
+    expect(plan.missingEvidence).toContainEqual({
+      kind: 'diff_or_relevant_code',
+      reason: 'Review turns require changed-file, git, or relevant code evidence.',
+    })
+  })
+
+  it('does not report missing evidence for code_edit turns with relevant code', () => {
+    const plan = planContext(makeRequest({ mode: 'code_edit', userMessage: 'Fix the bug' }), [
+      section({ id: 'code', kind: 'relevant_code', title: 'Code', content: 'packages/core/src/context/planner.ts' }),
+    ])
+
+    expect(plan.missingEvidence).toEqual([])
+  })
+
   it('does not hard-suppress high-value stale or low-confidence sections', () => {
     const plan = planContext(makeRequest({ mode: 'chat', userMessage: 'continue current task' }), [
       section({ id: 'stale_goal', kind: 'user_intent', title: 'Current Goal', content: 'Finish Task 4', freshness: 'stale', confidence: 0.9 }),
@@ -97,6 +138,7 @@ describe('ContextPlanner', () => {
     expect(plan.relevantSections).toEqual(['stale_goal', 'low_conf_known_issue'])
     expect(plan.suppressedSections).toEqual([])
   })
+
 })
 
 function makeRequest(overrides: Partial<ContextRequest>): ContextRequest {

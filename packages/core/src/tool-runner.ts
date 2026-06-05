@@ -1,4 +1,5 @@
 import type { ToolContext, ToolRegistry, ToolResult } from './tool-registry.js'
+import { evaluateFileMutationPolicy } from './constraints/file-mutation-policy.js'
 import { PermissionChecker } from './permissions.js'
 import type { HookEngine } from './hooks/engine.js'
 import type { FileTracker } from './file-tracker.js'
@@ -55,6 +56,21 @@ export class ToolRunner {
     const handler = this.registry.get(toolName)
     if (!handler) {
       const result: ToolResult = { content: `Unknown tool: ${toolName}`, isError: true }
+      onEvent({ type: 'error', toolName, toolUseId, result })
+      return result
+    }
+
+    const mutationPolicyDecision = evaluateFileMutationPolicy({
+      toolName,
+      input,
+      cwd: this.cwd,
+      fileReadState: this.fileReadState,
+    })
+    if (mutationPolicyDecision.decision === 'block') {
+      const result: ToolResult = {
+        content: `Blocked by JDC Agent Constraint Engine: ${mutationPolicyDecision.reason}`,
+        isError: true,
+      }
       onEvent({ type: 'error', toolName, toolUseId, result })
       return result
     }

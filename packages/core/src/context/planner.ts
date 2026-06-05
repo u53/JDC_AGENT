@@ -28,9 +28,36 @@ export function planContext(request: ContextRequest, sections: ContextSection[])
     objective: request.userMessage.trim() || request.mode,
     relevantSections,
     suppressedSections,
-    missingEvidence: [],
+    missingEvidence: missingEvidenceFor(intent, sections),
     diagnostics: [],
   }
+}
+
+function missingEvidenceFor(intent: ContextPlanIntent, sections: ContextSection[]): Array<{ kind: string; reason: string }> {
+  const kinds = new Set(sections.map((section) => section.kind))
+
+  if (intent === 'code_edit' && !kinds.has('relevant_code')) {
+    return [{
+      kind: 'relevant_code',
+      reason: 'Code edit turns require target file or symbol evidence before mutation.',
+    }]
+  }
+
+  if (intent === 'debug' && !kinds.has('runtime_state') && !kinds.has('relevant_code')) {
+    return [{
+      kind: 'runtime_or_code',
+      reason: 'Debug turns require observed runtime output, relevant code, or both.',
+    }]
+  }
+
+  if (intent === 'review' && !kinds.has('git_state') && !kinds.has('relevant_code')) {
+    return [{
+      kind: 'diff_or_relevant_code',
+      reason: 'Review turns require changed-file, git, or relevant code evidence.',
+    }]
+  }
+
+  return []
 }
 
 function inferIntent(request: ContextRequest): ContextPlanIntent {
@@ -59,6 +86,7 @@ function isLowValueStaleSection(section: ContextSection): boolean {
 }
 
 function isRelevant(intent: ContextPlanIntent, section: ContextSection): boolean {
+  if (section.kind === 'agent_contract') return ['debug', 'code_edit', 'review', 'plan', 'memory_update'].includes(intent)
   if (section.kind === 'user_intent') return ['chat', 'debug', 'code_edit', 'review', 'plan', 'memory_update'].includes(intent)
   if (section.kind === 'memory') return true
   if (intent === 'debug') return ['runtime_state', 'diagnostics', 'relevant_code', 'ide_state', 'memory', 'project_profile', 'user_intent'].includes(section.kind)

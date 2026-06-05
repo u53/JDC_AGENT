@@ -68,6 +68,7 @@ Each edit's old_string must be unique in the file at the point it's applied.`,
     }
 
     await writeFile(filePath, content, 'utf-8')
+    context.fileReadState?.invalidate(filePath)
     if (context.fileTracker && context.toolUseId) {
       await context.fileTracker.recordChange(filePath, original, content, context.toolUseId, context.turnIndex || 0)
     }

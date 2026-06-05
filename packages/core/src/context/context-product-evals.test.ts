@@ -480,6 +480,23 @@ describe('JDC Context Engine product evals', () => {
     expect(sameProject.renderedPrompt).toContain('Checkout task fixed validation handling')
     expect(otherProject.renderedPrompt).not.toContain('Checkout task fixed validation handling')
   })
+
+  it('surfaces a model-visible contract for code edits without relevant code evidence', async () => {
+    const result = await buildContextBundle(makeEvalRequest({
+      userMessage: '修复登录状态 bug',
+      mode: 'code_edit',
+    }), {
+      injectionEnabled: true,
+      store: makeEvalStore({ facts: [] }),
+      providers: [],
+      now: () => 1,
+      id: () => 'ctx_agent_contract_eval',
+    })
+
+    expect(result.renderedPrompt).toContain('agent_contract')
+    expect(result.renderedPrompt).toContain('Missing evidence')
+    expect(result.renderedPrompt).toContain('Existing files must be read with fresh content before mutation.')
+  })
 })
 
 function tempProject(): string {

@@ -38,8 +38,8 @@ describe('context protocol schemas', () => {
       sections: [
         {
           id: 'section_1',
-          kind: 'memory',
-          title: 'Memory',
+          kind: 'agent_contract',
+          title: 'Agent Contract',
           content: fact.content,
           citations: [citation],
           priority: 1,

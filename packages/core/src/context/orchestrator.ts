@@ -76,8 +76,12 @@ export async function buildContextBundle(request: ContextRequest, options: Build
     const packStartedAt = now()
     const conflictResolution = resolveContextConflicts(request, rawSections)
     const plan = planContext(request, conflictResolution.sections)
+    const plannedInputSections = [
+      ...agentContractSections(plan, now()),
+      ...conflictResolution.sections,
+    ]
     const plannedSectionIds = new Set(plan.relevantSections)
-    const plannedSections = conflictResolution.sections.filter((section) => plannedSectionIds.has(section.id))
+    const plannedSections = plannedInputSections.filter((section) => plannedSectionIds.has(section.id) || section.kind === 'agent_contract')
     const ranked = rankContextSections(plannedSections)
     const budgeted = budgetContextSections(ranked, budgetLimits(request, options))
     scheduler.recorder.record({
@@ -285,6 +289,32 @@ function budgetLimits(request: ContextRequest, options: BuildContextBundleOption
   return {
     maxTokens: request.tokenBudget,
   }
+}
+
+function agentContractSections(plan: ContextPlan, _createdAt: number): ContextSection[] {
+  if (!plan.missingEvidence.length) return []
+
+  const content = [
+    `Intent: ${plan.intent}`,
+    `Objective: ${plan.objective}`,
+    'Missing evidence:',
+    ...plan.missingEvidence.map((missing) => `- ${missing.kind}: ${missing.reason}`),
+    'Policy: Existing files must be read with fresh content before mutation.',
+  ].join('\n')
+
+  return [{
+    id: `agent_contract_${plan.id}`,
+    kind: 'agent_contract',
+    title: 'Agent run contract',
+    content,
+    citations: [],
+    priority: 100,
+    confidence: 1,
+    freshness: 'live',
+    sourceProvider: 'JdcAgentConstraintEngine',
+    tokenEstimate: Math.ceil(content.length / 4),
+    ownership: { authority: 'system_instruction', topic: 'task', conflictPolicy: 'render' },
+  }]
 }
 
 function sectionFromFact(fact: ContextFact): ContextSection {

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import type { ContextSection } from './types.js'
 
 const KIND_WEIGHT: Record<ContextSection['kind'], number> = {
+  agent_contract: 1_400,
   user_intent: 1_300,
   runtime_state: 900,
   ide_state: 800,

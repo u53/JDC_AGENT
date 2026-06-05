@@ -50,10 +50,11 @@ Usage notes:
       const lines = content.split('\n')
       const effectiveLimit = limit === Infinity ? lines.length : limit
       const slice = lines.slice(offset, offset + effectiveLimit)
+      const returnedContent = slice.join('\n')
       const numbered = slice.map((line, i) => `${offset + i + 1}\t${line}`).join('\n')
 
-      // Record this read for future dedup checks
-      context.fileReadState?.recordRead(filePath, offset, limit)
+      // Record this read for future dedup and fresh-read checks
+      context.fileReadState?.recordRead(filePath, offset, limit, lines.length, returnedContent)
 
       return { content: numbered }
     } catch (err: any) {
