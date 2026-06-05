@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveContextConflicts } from './conflict-resolver.js'
+import { ContextDiagnosticSchema } from './schemas.js'
 import type { ContextRequest, ContextSection } from './types.js'
 
 describe('Context conflict resolver', () => {
@@ -25,6 +26,9 @@ describe('Context conflict resolver', () => {
 
     expect(result.sections.map((item) => item.id)).toEqual(['runtime_live'])
     expect(result.suppressed).toEqual([{ id: 'conversation_live', reason: 'transcript_already_in_model_messages' }])
+    expect(ContextDiagnosticSchema.safeParse(result.diagnostics[0]).success).toBe(true)
+    expect(result.diagnostics[0]).toMatchObject({ visibleInPrimaryUi: false })
+    expect(result.diagnostics[0]?.citation).toBeUndefined()
   })
 
   it('suppresses git state when detailed git status is already carried by system prompt', () => {

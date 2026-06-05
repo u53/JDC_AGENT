@@ -31,7 +31,10 @@ export function resolveContextConflicts(request: ContextRequest, sections: Conte
     diagnostics: suppressed.map((item) => {
       const section = sections.find((candidate) => candidate.id === item.id)
       const label = section ? `${section.kind} "${section.title}"` : item.id
-      return diagnostic('ContextConflictResolver', 'info', `Suppressed context section ${item.id} (${label}): ${item.reason}.`, request.createdAt, false as never)
+      return {
+        ...diagnostic('ContextConflictResolver', 'info', `Suppressed context section ${item.id} (${label}): ${item.reason}.`, request.createdAt),
+        visibleInPrimaryUi: false,
+      }
     }),
   }
 }
