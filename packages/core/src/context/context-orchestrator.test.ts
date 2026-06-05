@@ -93,6 +93,7 @@ describe('JDC Context orchestrator', () => {
       freshness: 'live',
       sourceProvider: 'ConversationSignalProvider',
       tokenEstimate: 8,
+      ownership: { authority: 'derived_state', topic: 'conversation', conflictPolicy: 'suppress_if_carried' },
     })
     const runtime = section({
       id: 'runtime_live',
@@ -119,7 +120,10 @@ describe('JDC Context orchestrator', () => {
     expect(result.bundle.sections.map((item) => item.id)).toEqual(['runtime_live'])
     expect(result.renderedPrompt).toContain('tool result is already in the model transcript')
     expect(result.renderedPrompt).not.toContain(duplicatedRecentChat)
-    expect(result.bundle.diagnostics.some((item) => item.message.includes('transcript_already_in_model_messages'))).toBe(true)
+    expect(result.bundle.diagnostics.some((item) =>
+      item.source === 'ContextConflictResolver' &&
+      item.message.includes('transcript_already_in_model_messages')
+    )).toBe(true)
   })
 
   it('does not drop large relevant sections when no explicit token caps are configured', async () => {

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { budgetContextSections, type ContextBudgetLimits, type DroppedContextSection } from './budgeter.js'
+import { resolveContextConflicts } from './conflict-resolver.js'
 import { planContext } from './planner.js'
 import { renderContextBundle } from './prompt-renderer.js'
 import { rankContextSections } from './ranker.js'
@@ -73,9 +74,10 @@ export async function buildContextBundle(request: ContextRequest, options: Build
       ...storeFacts.map((fact) => sectionFromFact(fact)),
     ]
     const packStartedAt = now()
-    const plan = planContext(request, rawSections)
+    const conflictResolution = resolveContextConflicts(request, rawSections)
+    const plan = planContext(request, conflictResolution.sections)
     const plannedSectionIds = new Set(plan.relevantSections)
-    const plannedSections = rawSections.filter((section) => plannedSectionIds.has(section.id))
+    const plannedSections = conflictResolution.sections.filter((section) => plannedSectionIds.has(section.id))
     const ranked = rankContextSections(plannedSections)
     const budgeted = budgetContextSections(ranked, budgetLimits(request, options))
     scheduler.recorder.record({
@@ -97,7 +99,8 @@ export async function buildContextBundle(request: ContextRequest, options: Build
     const bundle = makeBundle(request, createId(), now(), budgeted.sections, uniqueCitations(budgeted.sections), [
       ...providerResults.diagnostics,
       ...storeFacts.diagnostics,
-      ...diagnosticsFromPlan(plan, rawSections, now()),
+      ...conflictResolution.diagnostics,
+      ...diagnosticsFromPlan(plan, conflictResolution.sections, now()),
     ], budgeted.budget, options.actorProfile)
 
     const saveBundleSideEffects = async () => {
@@ -273,6 +276,7 @@ async function persistDiagnostics(store: ContextStore, diagnostics: ContextDiagn
 
 function shouldPersistDiagnostic(item: ContextDiagnostic): boolean {
   if (item.source === 'ContextStore' && item.level !== 'info') return true
+  if (item.source === 'ContextConflictResolver' && item.message.startsWith('Suppressed context section ')) return true
   if (item.source !== 'ContextPlanner' || item.visibleInPrimaryUi !== false) return false
   return item.message.startsWith('Suppressed context section ') || /^Suppressed \d+ additional context sections/.test(item.message)
 }

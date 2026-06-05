@@ -69,7 +69,7 @@ describe('ContextPlanner', () => {
     }
   })
 
-  it('suppresses live conversation transcript when provider messages already carry it', () => {
+  it('leaves authority conflict decisions to the conflict resolver', () => {
     const plan = planContext(makeRequest({
       userMessage: '继续修复重试',
       transcriptAlreadyInModel: true,
@@ -78,24 +78,14 @@ describe('ContextPlanner', () => {
         id: 'conversation_live',
         kind: 'conversation_state',
         title: 'Conversation state',
-        content: 'user: 继续修复重试',
+        content: 'state summary, not raw transcript',
         freshness: 'live',
         sourceProvider: 'ConversationSignalProvider',
       }),
-      section({
-        id: 'stored_memory',
-        kind: 'memory',
-        title: 'Stored memory',
-        content: 'Retry UI should show cancel while waiting.',
-        sourceProvider: 'MemorySignalProvider',
-      }),
     ])
 
-    expect(plan.relevantSections).toEqual(['stored_memory'])
-    expect(plan.suppressedSections).toContainEqual({
-      id: 'conversation_live',
-      reason: 'transcript_already_in_model_messages',
-    })
+    expect(plan.relevantSections).toEqual(['conversation_live'])
+    expect(plan.suppressedSections).toEqual([])
   })
 
   it('does not hard-suppress high-value stale or low-confidence sections', () => {

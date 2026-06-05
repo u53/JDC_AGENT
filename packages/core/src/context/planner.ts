@@ -45,15 +45,7 @@ function inferIntent(request: ContextRequest): ContextPlanIntent {
   return 'chat'
 }
 
-function suppressionReason(request: ContextRequest, section: ContextSection): string | null {
-  if (
-    request.transcriptAlreadyInModel === true &&
-    section.kind === 'conversation_state' &&
-    section.sourceProvider === 'ConversationSignalProvider' &&
-    section.title === 'Conversation state'
-  ) {
-    return 'transcript_already_in_model_messages'
-  }
+function suppressionReason(_request: ContextRequest, section: ContextSection): string | null {
   const content = section.content.toLowerCase()
   if (section.kind === 'diagnostics' && /model_noop|noop|no durable/.test(content)) return 'low_salience_diagnostic'
   if (section.freshness === 'stale' && isLowValueStaleSection(section)) return 'stale_low_value'
