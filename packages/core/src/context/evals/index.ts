@@ -8,6 +8,7 @@ import { classifyHarvestCandidate, prepareCandidateForDistillation, rejectUnsafe
 import { enqueueHarvest, runHarvestJob } from '../harvest.js'
 import { captureHarvestModelBinding } from '../model-binding.js'
 import { renderContextBundle } from '../prompt-renderer.js'
+import { collectProjectContext } from '../providers/project-provider.js'
 import { collectRuntimeContext } from '../providers/runtime-provider.js'
 import { DEFAULT_CONTEXT_ENGINE_CONFIG } from '../config.js'
 import { CONTEXT_STORE_SCHEMA_VERSION, closeContextStore, openContextStore } from '../store.js'
@@ -217,6 +218,36 @@ export function createGateFContextEvalCases(): ContextEvalCase[] {
           assert.equal(report.providerHealth[0]?.status, 'timeout')
         } finally {
           await closeContextStore({ cwd: fixture.cwd })
+          fixture.cleanup()
+        }
+      },
+    },
+    {
+      id: 'product-context-authority-project-instructions',
+      category: 'context_quality',
+      name: 'Context authority suppresses system-carried project instructions',
+      run: async () => {
+        const fixture = makeProjectFixture()
+        try {
+          writeFileSync(path.join(fixture.cwd, 'JDCAGNET.md'), 'Instruction: do not duplicate.')
+          writeFileSync(path.join(fixture.cwd, 'README.md'), 'Readable project overview.')
+          const report = await buildContextBundle(makeEvalRequest({
+            cwd: fixture.cwd,
+            carriedContext: {
+              projectInstructionRefs: ['JDCAGNET.md'],
+              gitStatusInSystemPrompt: false,
+              taskRefs: [],
+            },
+          }), {
+            injectionEnabled: true,
+            store: makeEvalStore(),
+            providers: [{ id: 'project', collect: (request) => collectProjectContext(request) }],
+            now: () => 1,
+            id: () => 'ctx_authority_eval',
+          })
+          assert.equal(report.renderedPrompt.includes('Instruction: do not duplicate.'), false)
+          assert.equal(report.renderedPrompt.includes('Readable project overview.'), true)
+        } finally {
           fixture.cleanup()
         }
       },

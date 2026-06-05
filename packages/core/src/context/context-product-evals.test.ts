@@ -148,6 +148,30 @@ describe('JDC Context Engine product evals', () => {
     expect(result.dropped).toEqual([])
   })
 
+  it('does not inject project instruction files already carried by the system prompt', async () => {
+    const cwd = tempProject()
+    writeFileSync(path.join(cwd, 'JDCAGNET.md'), 'Instruction: prefer pnpm.')
+    writeFileSync(path.join(cwd, 'README.md'), 'README project overview.')
+
+    const result = await buildContextBundle(request({
+      cwd,
+      userMessage: 'How should I test this project?',
+      carriedContext: {
+        projectInstructionRefs: ['JDCAGNET.md'],
+        gitStatusInSystemPrompt: false,
+        taskRefs: [],
+      },
+    }), {
+      injectionEnabled: true,
+      store: makeEvalStore(),
+      providers: [{ id: 'project', collect: (req) => collectProjectContext(req) }],
+      id: () => 'ctx_authority_project',
+    })
+
+    expect(result.renderedPrompt).not.toContain('Instruction: prefer pnpm.')
+    expect(result.renderedPrompt).toContain('README project overview.')
+  })
+
   it('injects accepted project memory through the memory provider', async () => {
     const store = makeEvalStore({
       facts: [makeEvalFact({

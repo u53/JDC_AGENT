@@ -25,6 +25,7 @@ describe('JDC Context Engine Gate F eval harness', () => {
       'product-cross-session-project-fact',
       'product-model-noop-not-primary-context',
       'product-foreground-context-budget',
+      'product-context-authority-project-instructions',
       'store-schema-migration',
       'store-schema-rebuild',
       'store-failure-fallback',
