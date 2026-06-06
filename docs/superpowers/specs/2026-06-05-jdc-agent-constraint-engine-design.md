@@ -1517,6 +1517,16 @@ Phase 3 implementation decision:
 - `VerificationLedger` records changed files as pending and updates them from recognized shell verification commands.
 - Stop/TurnEnd enforcement remains deferred to Phase 5; Phase 3 only records the state Phase 5 will consume.
 
+Phase 4 implementation decision:
+
+- Evidence requirements are explicit structured context requirements derived from user requests or caller-provided requirements.
+- The context orchestrator propagates those requirements to the planner, retriever, and providers before collection.
+- The retriever boosts accepted facts when requirement files, symbols, or doc refs match fact metadata or citations.
+- The mixed-language query tokenizer preserves paths, filenames, camelCase symbols, quoted terms, CJK terms, and requirement terms for retrieval.
+- The code provider schedules background index warmup and returns safe explicit-path fallback code evidence when index-backed retrieval is unavailable.
+- Repo Map V1 derives from the existing indexed snapshot and JDC tool data; it does not scan the project or impose hidden local token caps.
+- Provider fallback remains protocol-safe and does not introduce artificial local token caps.
+
 The first slice should be intentionally narrow and high-impact:
 
 1. Add fresh-read APIs to `FileReadStateCache`.
@@ -1531,3 +1541,13 @@ This slice proves the product direction immediately. It prevents real hallucinat
 ## Next Step After Approval
 
 After this design is approved, create an implementation plan that splits Phase 1 and Phase 2 into test-first tasks. Do not start with Repo Wiki, embeddings, or UI. The system must first prove that constraints are enforced in the main tool path.
+
+## Phase 4 implementation decision
+
+- Evidence requirements are explicit structured context requirements derived from user requests or caller-provided requirements.
+- The context orchestrator propagates evidence requirements to providers, the planner, and the accepted-fact retriever before collection and planning.
+- The accepted-fact retriever boosts facts by requirement file, symbol, and document-reference matches.
+- Mixed-language query tokenization preserves paths, filenames, camelCase symbols, and caller-provided requirement terms.
+- The code provider schedules background index warm-up and returns safe explicit-path fallback evidence when index-backed retrieval is unavailable.
+- Repo Map V1 derives from existing indexed snapshot and tool data; it does not scan the repository or impose hidden local token caps.
+- Provider fallback remains protocol-safe, and Phase 4 does not introduce artificial local token caps.

@@ -2,9 +2,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { ContextEngine } from '../context-engine/engine.js'
+import { createContextEngineTools } from '../tools/context-engine-tools.js'
 import { buildContextBundle } from './orchestrator.js'
+import { retrieveContextFacts } from './retriever.js'
 import { closeContextStore, openContextStore } from './store.js'
 import { makeEvalFact, makeEvalRequest, makeEvalSection, makeEvalStore } from './evals/assertions.js'
+import { collectCodeContext } from './providers/code-provider.js'
 import { collectMemoryContext } from './providers/memory-provider.js'
 import { collectProjectContext } from './providers/project-provider.js'
 import { collectWorkflowContext } from './providers/workflow-provider.js'
@@ -479,6 +483,185 @@ describe('JDC Context Engine product evals', () => {
 
     expect(sameProject.renderedPrompt).toContain('Checkout task fixed validation handling')
     expect(otherProject.renderedPrompt).not.toContain('Checkout task fixed validation handling')
+  })
+
+  it('propagates mixed-language explicit code requirements into code retrieval', async () => {
+    const cwd = tempProject()
+    writeProjectFile(cwd, 'packages/core/src/session.ts', [
+      'export function backgroundTasks() {',
+      '  return new Map<string, Promise<void>>()',
+      '}',
+    ].join('\n'))
+    writeProjectFile(cwd, 'packages/core/src/unrelated.ts', 'export function unrelatedFeature() { return false }\n')
+    const engine = new ContextEngine(cwd)
+    await engine.index()
+    let seenRequirements: ContextRequest['evidenceRequirements']
+
+    const result = await buildContextBundle(request({
+      cwd,
+      sessionId: 'session_phase4_mixed_language',
+      userMessage: '修复 packages/core/src/session.ts 里面 backgroundTasks 的 completion 记录',
+      mode: 'code_edit',
+    }), {
+      injectionEnabled: true,
+      store: makeEvalStore(),
+      providers: [{
+        id: 'code',
+        collect: async (contextRequest) => {
+          seenRequirements = contextRequest.evidenceRequirements
+          return collectCodeContext(contextRequest, { contextEngine: engine, maxNodes: 5 })
+        },
+      }],
+      now: () => 4_000,
+      id: () => 'ctx_phase4_mixed_language',
+    })
+
+    expect(seenRequirements).toEqual([
+      expect.objectContaining({
+        kind: 'relevant_code',
+        priority: 'must',
+        relatedFiles: ['packages/core/src/session.ts'],
+        relatedSymbols: ['backgroundTasks'],
+      }),
+    ])
+    expect(result.renderedPrompt).toContain('backgroundTasks')
+    expect(result.renderedPrompt).toContain('packages/core/src/session.ts')
+    expect(result.renderedPrompt).not.toContain('unrelatedFeature')
+    expect(result.bundle.diagnostics.map((item) => item.message).join('\n')).not.toContain('Missing relevant_code evidence')
+    expect(result.providerHealth[0]).toMatchObject({ id: 'code', status: 'enabled' })
+  })
+
+  it('boosts accepted facts by requirement file, symbol, and doc matches', async () => {
+    const targetFact = makeEvalFact({
+      id: 'background_tasks_design_fact',
+      kind: 'architecture_decision',
+      content: 'Background task completion records are handled by the session runtime.',
+      confidence: 0.55,
+      citations: [
+        { id: 'cit_background_tasks_session', type: 'file', ref: 'packages/core/src/session.ts' },
+        { id: 'cit_background_tasks_design', type: 'file', ref: 'docs/design.md' },
+      ],
+      relatedFiles: ['packages/core/src/session.ts'],
+      relatedSymbols: ['backgroundTasks'],
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    const genericFact = makeEvalFact({
+      id: 'generic_fix_fact',
+      kind: 'workflow_rule',
+      content: '修复这个问题时先看最近的日志。',
+      confidence: 1,
+      citations: [{ id: 'cit_generic_fix', type: 'message', ref: 'generic_fix' }],
+      relatedFiles: ['packages/core/src/runtime.ts'],
+      relatedSymbols: ['runtimeLogs'],
+      createdAt: 10,
+      updatedAt: 10,
+    })
+
+    const result = await retrieveContextFacts(makeEvalRequest({
+      userMessage: '修复这个问题',
+      evidenceRequirements: [{
+        id: 'req_relevant_code',
+        kind: 'relevant_code',
+        reason: 'Need the background task completion implementation and design note.',
+        query: '修复 backgroundTasks completion',
+        priority: 'must',
+        relatedFiles: ['packages/core/src/session.ts'],
+        relatedSymbols: ['backgroundTasks'],
+        docRefs: ['docs/design.md'],
+        languageHints: ['typescript'],
+      }],
+    }), {
+      store: makeEvalStore({ facts: [genericFact, targetFact] }),
+      now: () => 20,
+    })
+
+    expect(result.facts[0]).toMatchObject({
+      fact: { id: 'background_tasks_design_fact' },
+      reasons: expect.arrayContaining(['requirement_file_match', 'requirement_symbol_match', 'requirement_doc_match']),
+    })
+  })
+
+  it('returns explicit-path fallback code evidence while scheduling background warmup', async () => {
+    const cwd = tempProject()
+    writeProjectFile(cwd, 'packages/core/src/session.ts', 'export const backgroundTasks = new Map<string, Promise<void>>()\n')
+    const store = makeEvalStore()
+    let indexCalls = 0
+    const engine = {
+      isIndexed: () => false,
+      index: async () => {
+        indexCalls += 1
+      },
+    }
+
+    const result = await buildContextBundle(request({
+      cwd,
+      sessionId: 'session_phase4_fallback',
+      userMessage: '修复 packages/core/src/session.ts 里的 backgroundTasks',
+      mode: 'code_edit',
+      evidenceRequirements: [{
+        id: 'req_relevant_code',
+        kind: 'relevant_code',
+        reason: 'Need code evidence for the explicit file and symbol.',
+        query: '修复 packages/core/src/session.ts 里的 backgroundTasks',
+        priority: 'must',
+        relatedFiles: ['packages/core/src/session.ts'],
+        relatedSymbols: ['backgroundTasks'],
+        docRefs: [],
+        languageHints: ['typescript'],
+      }],
+    }), {
+      injectionEnabled: true,
+      store,
+      providers: [{ id: 'code', collect: (contextRequest) => collectCodeContext(contextRequest, { contextEngine: engine as any }) }],
+      now: () => 5_000,
+      id: () => 'ctx_phase4_fallback',
+    })
+
+    expect(result.providerHealth[0]).toMatchObject({ id: 'code', status: 'indexing', backgroundJob: { status: 'queued' } })
+    expect(result.renderedPrompt).toContain('Fallback code matches while index warms')
+    expect(result.renderedPrompt).toContain('packages/core/src/session.ts')
+    expect(result.renderedPrompt).toContain('backgroundTasks')
+    expect(store.savedRawEvidence.some((item) => item.metadata.file === 'packages/core/src/session.ts' && item.metadata.fallback === true)).toBe(true)
+    expect(indexCalls).toBe(0)
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(indexCalls).toBe(1)
+  })
+
+  it('renders repo map context and the indexed JdcFiles tool surface without local caps', async () => {
+    const cwd = tempProject()
+    writeProjectFile(cwd, 'src/main.ts', 'import { helper } from "./helper"\nexport function main() { return helper() }\n')
+    writeProjectFile(cwd, 'src/helper.ts', 'export function helper() { return true }\n')
+    writeProjectFile(cwd, 'src/main.test.ts', 'export function mainTest() { return main() }\n')
+    const engine = new ContextEngine(cwd)
+    await engine.index()
+
+    const result = await buildContextBundle(request({
+      cwd,
+      sessionId: 'session_phase4_repo_map',
+      userMessage: '写 repo map 计划',
+      mode: 'plan',
+    }), {
+      injectionEnabled: true,
+      store: makeEvalStore(),
+      providers: [{ id: 'code', collect: (contextRequest) => collectCodeContext(contextRequest, { contextEngine: engine }) }],
+      now: () => 6_000,
+      id: () => 'ctx_phase4_repo_map',
+    })
+
+    expect(result.bundle.sections.some((section) => section.kind === 'code_map' && section.content.includes('src/main.ts'))).toBe(true)
+    expect(result.renderedPrompt).toContain('typescript: 3 files')
+    expect(result.bundle.budget.droppedTokens).toBe(0)
+
+    const jdcFiles = createContextEngineTools().find((tool) => tool.definition.name === 'JdcFiles')
+    expect(jdcFiles).toBeDefined()
+    const filesResult = await jdcFiles!.execute({}, { cwd, turnIndex: 0, contextEngine: engine } as any)
+
+    expect(filesResult.isError).toBeFalsy()
+    expect(filesResult.content).toContain('Languages:')
+    expect(filesResult.content).toContain('src/main.ts')
+    expect(filesResult.content).toContain('function main')
   })
 
   it('surfaces a model-visible contract for code edits without relevant code evidence', async () => {
