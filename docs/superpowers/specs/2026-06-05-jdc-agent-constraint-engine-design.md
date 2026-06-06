@@ -1507,6 +1507,16 @@ Phase 1/2 implementation decision:
 - Missing evidence is rendered through an `agent_contract` context section so every model sees the runtime requirement.
 - Stop/TurnEnd verification is deferred to the next implementation plan.
 
+Phase 3 implementation decision:
+
+- `ToolRunner` owns a `ConstraintPolicyRuntime`.
+- Product PreToolUse gates run after permission and plan-mode checks, before project/user PreToolUse hooks.
+- Product PostToolUse gates run after tool execution, before project/user PostToolUse hooks.
+- File tools return structured `ToolResult.metadata` so product policy does not parse user-facing tool output.
+- `PolicyEventLedger` records bounded in-memory product policy events for blocked and recorded actions.
+- `VerificationLedger` records changed files as pending and updates them from recognized shell verification commands.
+- Stop/TurnEnd enforcement remains deferred to Phase 5; Phase 3 only records the state Phase 5 will consume.
+
 The first slice should be intentionally narrow and high-impact:
 
 1. Add fresh-read APIs to `FileReadStateCache`.
