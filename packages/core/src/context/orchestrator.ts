@@ -5,6 +5,7 @@ import { planContext } from './planner.js'
 import { renderContextBundle } from './prompt-renderer.js'
 import { rankContextSections } from './ranker.js'
 import { retrieveContextFacts } from './retriever.js'
+import { deriveContextEvidenceRequirements } from './retrieval-requirements.js'
 import { createContextScheduler, type ContextScheduler } from './scheduler.js'
 import type { ContextStore, ContextStoreResult } from './store.js'
 import type {
@@ -65,18 +66,21 @@ export async function buildContextBundle(request: ContextRequest, options: Build
     return { bundle, renderedPrompt: '', dropped: [], providerHealth: [] }
   }
 
+  const evidenceRequirements = request.evidenceRequirements ?? deriveContextEvidenceRequirements(request)
+  const requestWithRequirements: ContextRequest = evidenceRequirements.length ? { ...request, evidenceRequirements } : request
+
   try {
-    const storeFacts = await loadStoreFacts(request, options.store, now, scheduler, options.actorProfile)
-    throwIfAborted(request.signal)
-    const providerResults = await collectProviderResults(request, options.providers ?? [], now, scheduler, options.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS)
-    throwIfAborted(request.signal)
+    const storeFacts = await loadStoreFacts(requestWithRequirements, options.store, now, scheduler, options.actorProfile)
+    throwIfAborted(requestWithRequirements.signal)
+    const providerResults = await collectProviderResults(requestWithRequirements, options.providers ?? [], now, scheduler, options.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS)
+    throwIfAborted(requestWithRequirements.signal)
     const rawSections = [
       ...providerResults.sections,
       ...storeFacts.map((fact) => sectionFromFact(fact)),
     ]
     const packStartedAt = now()
-    const conflictResolution = resolveContextConflicts(request, rawSections)
-    const plan = planContext(request, conflictResolution.sections)
+    const conflictResolution = resolveContextConflicts(requestWithRequirements, rawSections)
+    const plan = planContext(requestWithRequirements, conflictResolution.sections)
     const includeAgentContract = options.includeAgentContract === true
     const plannedInputSections = [
       ...(includeAgentContract ? agentContractSections(plan, now()) : []),
@@ -85,14 +89,14 @@ export async function buildContextBundle(request: ContextRequest, options: Build
     const plannedSectionIds = new Set(plan.relevantSections)
     const plannedSections = plannedInputSections.filter((section) => plannedSectionIds.has(section.id) || (includeAgentContract && section.kind === 'agent_contract'))
     const ranked = rankContextSections(plannedSections)
-    const budgeted = budgetContextSections(ranked, budgetLimits(request, options))
+    const budgeted = budgetContextSections(ranked, budgetLimits(requestWithRequirements, options))
     scheduler.recorder.record({
       name: 'context:pack-assemble',
       lane: 'foreground',
       status: 'success',
       startedAt: packStartedAt,
       completedAt: now(),
-      projectKey: request.cwd,
+      projectKey: requestWithRequirements.cwd,
       metadata: {
         rawSectionCount: rawSections.length,
         plannedSectionCount: plannedSections.length,
@@ -102,7 +106,7 @@ export async function buildContextBundle(request: ContextRequest, options: Build
         droppedSectionCount: budgeted.dropped.length,
       },
     })
-    const bundle = makeBundle(request, createId(), now(), budgeted.sections, uniqueCitations(budgeted.sections), [
+    const bundle = makeBundle(requestWithRequirements, createId(), now(), budgeted.sections, uniqueCitations(budgeted.sections), [
       ...providerResults.diagnostics,
       ...storeFacts.diagnostics,
       ...conflictResolution.diagnostics,
@@ -110,18 +114,18 @@ export async function buildContextBundle(request: ContextRequest, options: Build
     ], budgeted.budget, options.actorProfile)
 
     const saveBundleSideEffects = async () => {
-      throwIfAborted(request.signal)
-      const persistenceDiagnostics = await persistProviderEvidence(options.store, providerResults.evidence, now, request.signal)
+      throwIfAborted(requestWithRequirements.signal)
+      const persistenceDiagnostics = await persistProviderEvidence(options.store, providerResults.evidence, now, requestWithRequirements.signal)
       bundle.diagnostics.push(...persistenceDiagnostics)
 
-      throwIfAborted(request.signal)
+      throwIfAborted(requestWithRequirements.signal)
       const snapshotResult = await options.store.saveBundleSnapshot(bundle)
       bundle.diagnostics.push(...diagnosticsFromStoreResult(snapshotResult, 'saveBundleSnapshot', now))
-      throwIfAborted(request.signal)
+      throwIfAborted(requestWithRequirements.signal)
       const quotaResult = await options.store.enforceQuotas()
       bundle.diagnostics.push(...diagnosticsFromStoreResult(quotaResult, 'enforceQuotas', now))
-      throwIfAborted(request.signal)
-      await persistDiagnostics(options.store, bundle.diagnostics, request.signal)
+      throwIfAborted(requestWithRequirements.signal)
+      await persistDiagnostics(options.store, bundle.diagnostics, requestWithRequirements.signal)
     }
     const batchResult = options.store.withWriteBatch
       ? await options.store.withWriteBatch('saveContextBundle', saveBundleSideEffects)
@@ -136,7 +140,7 @@ export async function buildContextBundle(request: ContextRequest, options: Build
       providerHealth: providerResults.health,
     }
   } catch (error) {
-    const bundle = emptyBundle(request, createId(), now(), [diagnostic('ContextOrchestrator', 'error', errorMessage(error), now())])
+    const bundle = emptyBundle(requestWithRequirements, createId(), now(), [diagnostic('ContextOrchestrator', 'error', errorMessage(error), now())])
     return { bundle, renderedPrompt: '', dropped: [], providerHealth: [] }
   }
 }
@@ -145,7 +149,7 @@ async function loadStoreFacts(request: ContextRequest, store: ContextStore, now:
   // Product contract: durable project facts are retrieval-ranked without a
   // hidden row/result window. Explicit debug caps can be passed by callers in
   // future, but the Engine must not silently forget large projects.
-  const retrieved = await retrieveContextFacts(request, { store, now, actorProfile, recorder: scheduler.recorder, projectKey: request.cwd })
+  const retrieved = await retrieveContextFacts(request, { store, now, actorProfile, recorder: scheduler.recorder, projectKey: request.cwd, evidenceRequirements: request.evidenceRequirements })
   return Object.assign(dedupeFacts(retrieved.facts.map((item) => item.fact)), { diagnostics: retrieved.diagnostics })
 }
 

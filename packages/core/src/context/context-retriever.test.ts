@@ -47,6 +47,53 @@ describe('ContextRetriever', () => {
     }))
   })
 
+  it('boosts facts whose related files satisfy evidence requirements', async () => {
+    const result = await retrieveContextFacts({ ...request, userMessage: '修复 session completion' }, {
+      now: () => 10_000,
+      store: makeStore([
+        fact({ id: 'generic', content: 'General project fact', relatedFiles: [] }),
+        fact({ id: 'session_fact', content: 'Session completion policy', relatedFiles: ['packages/core/src/session.ts'] }),
+      ]),
+      evidenceRequirements: [{
+        id: 'req_relevant_code',
+        kind: 'relevant_code',
+        reason: 'Need session code.',
+        query: '修复 session completion',
+        priority: 'must',
+        relatedFiles: ['packages/core/src/session.ts'],
+        relatedSymbols: [],
+        docRefs: [],
+        languageHints: [],
+      }],
+    })
+
+    expect(result.facts[0]?.fact.id).toBe('session_fact')
+    expect(result.facts[0]?.reasons).toContain('requirement_file_match')
+  })
+
+  it('boosts facts whose related symbols satisfy evidence requirements', async () => {
+    const result = await retrieveContextFacts({ ...request, userMessage: '修复 backgroundTasks' }, {
+      store: makeStore([
+        fact({ id: 'generic', content: 'General project fact', relatedSymbols: [] }),
+        fact({ id: 'background_tasks', content: 'Background task completion rules', relatedSymbols: ['backgroundTasks'] }),
+      ]),
+      evidenceRequirements: [{
+        id: 'req_relevant_code',
+        kind: 'relevant_code',
+        reason: 'Need symbol code.',
+        query: '修复 backgroundTasks',
+        priority: 'must',
+        relatedFiles: [],
+        relatedSymbols: ['backgroundTasks'],
+        docRefs: [],
+        languageHints: [],
+      }],
+    })
+
+    expect(result.facts[0]?.fact.id).toBe('background_tasks')
+    expect(result.facts[0]?.reasons).toContain('requirement_symbol_match')
+  })
+
   it('does not return stale low-value facts by default', async () => {
     const store = makeStore([
       fact({ id: 'stale_pref', kind: 'user_preference', content: 'Use the old release process.', freshness: 'stale' }),

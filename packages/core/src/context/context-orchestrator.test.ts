@@ -37,6 +37,38 @@ describe('JDC Context orchestrator', () => {
     expect(result.bundle.budget).toEqual({ usedTokens: 0, droppedTokens: 0 })
   })
 
+  it('passes derived evidence requirements to providers before planning sections', async () => {
+    const store = makeStore()
+    const seen: unknown[] = []
+
+    await buildContextBundle({
+      ...request,
+      mode: 'chat',
+      userMessage: '修复 packages/core/src/session.ts 的 backgroundTasks',
+    }, {
+      store,
+      providers: [{
+        id: 'code',
+        collect: async (req) => {
+          seen.push(req.evidenceRequirements)
+          return {
+            evidence: [],
+            sections: [],
+            diagnostics: [],
+            health: { id: 'code' as const, status: 'enabled' as const, updatedAt: req.createdAt },
+          }
+        },
+      }],
+      id: () => 'ctx_requirements_visible',
+    })
+
+    expect(seen[0]).toEqual([expect.objectContaining({
+      kind: 'relevant_code',
+      relatedFiles: ['packages/core/src/session.ts'],
+      relatedSymbols: ['backgroundTasks'],
+    })])
+  })
+
   it('builds a ranked, budgeted bundle from live providers and stored facts, then persists evidence and snapshots', async () => {
     const runtime = section({ id: 'runtime_live', kind: 'runtime_state', content: 'live runtime error', priority: 10, freshness: 'live', confidence: 0.7, sourceProvider: 'RuntimeSignalProvider', tokenEstimate: 30 })
     const memory = fact({ id: 'memory_fact', kind: 'project_convention', content: 'cached preference', freshness: 'cached', confidence: 0.95 })
@@ -332,7 +364,7 @@ describe('JDC Context orchestrator', () => {
     })
 
     expect(result.renderedPrompt).toContain('<section kind="agent_contract"')
-    expect(result.renderedPrompt).toContain('Code edit turns require target file or symbol evidence before mutation.')
+    expect(result.renderedPrompt).toContain('Code edit turns need target file or symbol evidence before mutation.')
     expect(result.bundle.sections.some((section) => section.kind === 'agent_contract')).toBe(true)
   })
 

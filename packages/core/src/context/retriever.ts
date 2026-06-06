@@ -1,4 +1,4 @@
-import type { ActorContextProfile, ContextDiagnostic, ContextFact, ContextFactKind, ContextFactStatus, ContextRequest } from './types.js'
+import type { ActorContextProfile, ContextDiagnostic, ContextEvidenceRequirement, ContextFact, ContextFactKind, ContextFactStatus, ContextRequest } from './types.js'
 import type { ContextStore } from './store.js'
 import type { ContextPerformanceRecorder } from './performance.js'
 
@@ -41,6 +41,7 @@ export interface ContextRetrievalOptions {
   status?: ContextFactStatus
   recorder?: ContextPerformanceRecorder
   projectKey?: string
+  evidenceRequirements?: ContextEvidenceRequirement[]
   now?: () => number
 }
 
@@ -81,8 +82,9 @@ export async function retrieveContextFacts(request: ContextRequest, options: Con
     }
     candidateCount = loaded.value.length
 
+    const requirements = options.evidenceRequirements ?? request.evidenceRequirements ?? []
     const scored = loaded.value
-      .map((fact) => scoreFact(fact, query, now, options.citationTextLookup, options.actorProfile))
+      .map((fact) => scoreFact(fact, query, now, options.citationTextLookup, options.actorProfile, requirements))
       .filter((item) => {
         if (!options.includeInactive && isInactiveLifecycleFact(item.fact)) {
           diagnostics.push(makeDiagnostic(`Suppressed inactive lifecycle fact ${item.fact.id}.`, now()))
@@ -130,7 +132,7 @@ export async function retrieveContextFacts(request: ContextRequest, options: Con
   }
 }
 
-function scoreFact(fact: ContextFact, query: string, now: () => number, citationTextLookup: Map<string, string[]> | undefined, actorProfile: ActorContextProfile | undefined): RetrievedContextFact {
+function scoreFact(fact: ContextFact, query: string, now: () => number, citationTextLookup: Map<string, string[]> | undefined, actorProfile: ActorContextProfile | undefined, evidenceRequirements: ContextEvidenceRequirement[]): RetrievedContextFact {
   const reasons: string[] = []
   let score = 0
 
@@ -168,8 +170,40 @@ function scoreFact(fact: ContextFact, query: string, now: () => number, citation
   const actorScore = scoreActorProfile(fact, actorProfile)
   score += actorScore.score
   reasons.push(...actorScore.reasons)
+  const requirementScore = scoreEvidenceRequirements(fact, evidenceRequirements)
+  score += requirementScore.score
+  reasons.push(...requirementScore.reasons)
 
   return { fact, score, reasons: [...new Set(reasons)] }
+}
+
+function scoreEvidenceRequirements(fact: ContextFact, requirements: ContextEvidenceRequirement[]): { score: number; reasons: string[] } {
+  let score = 0
+  const reasons: string[] = []
+  const factFiles = new Set((fact.relatedFiles ?? []).map(normalizeComparable))
+  const factSymbols = new Set((fact.relatedSymbols ?? []).map(normalizeComparable))
+  const factCitationRefs = new Set(fact.citations.map((citation) => normalizeComparable(citation.ref)))
+
+  for (const requirement of requirements) {
+    if (requirement.relatedFiles.some((file) => factFiles.has(normalizeComparable(file)) || factCitationRefs.has(normalizeComparable(file)))) {
+      score += requirement.priority === 'must' ? 80 : 35
+      reasons.push('requirement_file_match')
+    }
+    if (requirement.relatedSymbols.some((symbol) => factSymbols.has(normalizeComparable(symbol)))) {
+      score += requirement.priority === 'must' ? 70 : 30
+      reasons.push('requirement_symbol_match')
+    }
+    if (requirement.docRefs.some((doc) => factCitationRefs.has(normalizeComparable(doc)))) {
+      score += requirement.priority === 'must' ? 50 : 25
+      reasons.push('requirement_doc_match')
+    }
+  }
+
+  return { score, reasons: [...new Set(reasons)] }
+}
+
+function normalizeComparable(value: string): string {
+  return value.replace(/\\/g, '/').toLowerCase()
 }
 
 function compareRetrievedFacts(a: RetrievedContextFact, b: RetrievedContextFact): number {
