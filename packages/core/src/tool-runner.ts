@@ -1,5 +1,5 @@
 import type { ToolContext, ToolRegistry, ToolResult } from './tool-registry.js'
-import { evaluateFileMutationPolicy } from './constraints/file-mutation-policy.js'
+import { ConstraintPolicyRuntime } from './constraints/policy-runtime.js'
 import { FileReadStateCache } from './file-read-state.js'
 import { PermissionChecker } from './permissions.js'
 import type { HookEngine } from './hooks/engine.js'
@@ -26,6 +26,7 @@ export class ToolRunner {
   private sessionId?: string
   fileTracker?: FileTracker
   fileReadState = new FileReadStateCache()
+  constraintRuntime = new ConstraintPolicyRuntime()
   backgroundTasks?: import('./background-tasks.js').BackgroundTaskManager
   turnIndex = 0
   planMode: 'normal' | 'planning' | 'awaiting_approval' = 'normal'
@@ -57,21 +58,6 @@ export class ToolRunner {
     const handler = this.registry.get(toolName)
     if (!handler) {
       const result: ToolResult = { content: `Unknown tool: ${toolName}`, isError: true }
-      onEvent({ type: 'error', toolName, toolUseId, result })
-      return result
-    }
-
-    const mutationPolicyDecision = evaluateFileMutationPolicy({
-      toolName,
-      input,
-      cwd: this.cwd,
-      fileReadState: this.fileReadState,
-    })
-    if (mutationPolicyDecision.decision === 'block') {
-      const result: ToolResult = {
-        content: `Blocked by JDC Agent Constraint Engine: ${mutationPolicyDecision.reason}`,
-        isError: true,
-      }
       onEvent({ type: 'error', toolName, toolUseId, result })
       return result
     }
@@ -110,6 +96,22 @@ export class ToolRunner {
       }
     }
 
+    const productPreToolUse = this.constraintRuntime.preToolUse({
+      toolName,
+      toolUseId,
+      input,
+      cwd: this.cwd,
+      fileReadState: this.fileReadState,
+    })
+    if (productPreToolUse.decision === 'block') {
+      const result: ToolResult = {
+        content: `Blocked by JDC Agent Constraint Engine: ${productPreToolUse.reason}`,
+        isError: true,
+      }
+      onEvent({ type: 'error', toolName, toolUseId, result })
+      return result
+    }
+
     onEvent({ type: 'start', toolName, toolUseId, input })
 
     // PreToolUse hooks
@@ -143,6 +145,14 @@ export class ToolRunner {
 
     try {
       const result = await handler.execute(input, context)
+      this.constraintRuntime.postToolUse({
+        toolName,
+        toolUseId,
+        input,
+        cwd: this.cwd,
+        fileReadState: this.fileReadState,
+        result,
+      })
 
       // PostToolUse hooks
       if (this.hookEngine) {

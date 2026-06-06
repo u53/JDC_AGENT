@@ -1,7 +1,8 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import type { HookEngine } from '../hooks/engine.js'
 import { FileReadStateCache } from '../file-read-state.js'
 import { PermissionChecker } from '../permissions.js'
 import { fileEditTool } from '../tools/file-edit.js'
@@ -63,6 +64,59 @@ describe('ToolRunner file mutation constraints', () => {
     runner.fileReadState = new FileReadStateCache()
     return runner
   }
+
+  it('runs product pre gate before project hooks', async () => {
+    const registry = new ToolRegistry()
+    registry.register(fileEditTool)
+    const hookEngine = {
+      runPreToolUse: vi.fn(async () => ({})),
+      runPostToolUse: vi.fn(async () => ({})),
+    }
+    const runner = new ToolRunner(
+      registry,
+      tmpDir,
+      new PermissionChecker('relaxed'),
+      undefined,
+      hookEngine as unknown as HookEngine
+    )
+
+    const result = await runner.execute(
+      'Edit',
+      'edit_1',
+      { file_path: targetPath, old_string: 'const value = 1\n', new_string: 'const value = 2\n' },
+      () => {}
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content).toContain('Blocked by JDC Agent Constraint Engine')
+    expect(hookEngine.runPreToolUse).not.toHaveBeenCalled()
+  })
+
+  it('records file reads through the product post gate', async () => {
+    const registry = new ToolRegistry()
+    registry.register(fileReadTool)
+    registry.register(fileEditTool)
+    const runner = new ToolRunner(registry, tmpDir, new PermissionChecker('relaxed'))
+
+    const readResult = await runner.execute('Read', 'read_1', { file_path: targetPath }, () => {})
+    expect(readResult.isError).not.toBe(true)
+
+    const editResult = await runner.execute(
+      'Edit',
+      'edit_1',
+      { file_path: targetPath, old_string: 'const value = 1\n', new_string: 'const value = 2\n' },
+      () => {}
+    )
+
+    expect(editResult.isError).not.toBe(true)
+    expect(runner.constraintRuntime.verificationLedger.getChangedFiles()).toEqual([
+      expect.objectContaining({
+        filePath: targetPath,
+        status: 'pending',
+        changedByToolUseId: 'edit_1',
+      }),
+    ])
+  })
 
   it('blocks Edit by default when callers do not inject fresh-read state', async () => {
     const fs = await import('fs/promises')

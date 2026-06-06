@@ -54,9 +54,6 @@ Usage notes:
       const returnedContent = slice.join('\n')
       const numbered = slice.map((line, i) => `${offset + i + 1}\t${line}`).join('\n')
 
-      // Record this read for future dedup and fresh-read checks
-      context.fileReadState?.recordRead(filePath, offset, limit, lines.length, returnedContent)
-
       const continuation = endLine < lines.length
         ? `\n[Showing lines ${offset + 1}-${endLine} of ${lines.length}. Use offset=${endLine} to continue.]`
         : ''
