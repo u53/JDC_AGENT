@@ -85,9 +85,11 @@ describe('Jdc* tools', () => {
     expect(res.content).toContain('function compute')
   })
 
-  it('JdcFiles lists indexed files', async () => {
+  it('JdcFiles lists indexed files with language groups and representative symbols', async () => {
     const res = await tools.JdcFiles.execute({}, makeContext(cwd, engine))
-    expect(res.content).toContain('src/util.ts')
-    expect(res.content).toContain('src/main.ts')
+    expect(res.content).toContain('Languages:')
+    expect(res.content).toContain('typescript: 2 files, 2 symbols')
+    expect(res.content).toContain('src/util.ts (source, typescript, 1 symbols) Top symbols: function compute')
+    expect(res.content).toContain('src/main.ts (entrypoint, typescript, 1 symbols) Top symbols: function run')
   })
 })

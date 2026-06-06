@@ -9,6 +9,7 @@ import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 import { EngineQuery, type SymbolLocation } from '../context-engine/query.js'
 import type { ContextEngine } from '../context-engine/engine.js'
 import { getContextEngine } from '../context-engine/index.js'
+import { buildRepoMap, renderRepoMap } from '../context-engine/repo-map.js'
 import { ensureCodeIndexJob } from '../context/providers/code-provider.js'
 
 // Cache one EngineQuery per engine instance (keyed by cwd via the engine).
@@ -312,15 +313,10 @@ const jdcFiles: ToolHandler = {
     if (!q) return noEngine()
     const engine = resolveEngine(context)!
     const filter = input.path ? String(input.path) : ''
-    const files = engine
-      .getStore()
-      .allFiles()
-      .filter((f) => !filter || f.filePath.startsWith(filter))
-      .sort((a, b) => a.filePath.localeCompare(b.filePath))
-    if (files.length === 0) return { content: 'No indexed files.' }
-    const lines = files.map((f) => `${f.filePath} (${f.language}, ${f.symbols.length} symbols)`)
+    const repoMap = buildRepoMap(engine.getStore(), { pathPrefix: filter })
+    if (repoMap.files.length === 0) return { content: 'No indexed files.' }
     const stats = engine.stats()
-    return withStatus(context, `${stats.files} files, ${stats.symbols} symbols indexed.\n\n${lines.join('\n')}`)
+    return withStatus(context, `${stats.files} files, ${stats.symbols} symbols indexed.\n\n${renderRepoMap(repoMap)}`)
   },
 }
 
