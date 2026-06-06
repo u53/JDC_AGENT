@@ -3,6 +3,7 @@ import { getContextEngine } from '../../context-engine/index.js'
 import type { ContextEngine, IndexProgress } from '../../context-engine/engine.js'
 import type { ContextDiagnostic, ContextRequest, ProviderHealth } from '../types.js'
 import { createContextScheduler, type BackgroundRejectReason, type ContextScheduler } from '../scheduler.js'
+import { collectFallbackCodeEvidence, type FallbackCodeEvidenceResult } from './code-fallback.js'
 import {
   citationFor,
   diagnostic,
@@ -55,13 +56,22 @@ export async function collectCodeContext(request: ContextRequest, options: CodeP
     const engine = options.contextEngine ?? (options.getContextEngine ?? getContextEngine)(request.cwd)
     const reindex = options.reindex === true || requestedReindex(request)
     const healthOnly = options.healthOnly === true || requestedHealthOnly(request)
-    if (!engine.isIndexed()) return unindexedProviderResult(request, reindex ? ensureCodeIndexJob(request.cwd, engine, nowFromRequest(request), options.scheduler) : getCodeIndexJob(request.cwd))
+    if (!engine.isIndexed()) {
+      if (healthOnly) return unindexedProviderResult(request, getCodeIndexJob(request.cwd))
+      const fallback = await collectFallbackCodeEvidence({ cwd: request.cwd, requirements: request.evidenceRequirements ?? [], query: request.userMessage })
+      const indexJob = ensureCodeIndexJob(request.cwd, engine, nowFromRequest(request), options.scheduler)
+      return unindexedProviderResult(request, indexJob, fallback)
+    }
     const indexJob = reindex ? ensureCodeIndexJob(request.cwd, engine, nowFromRequest(request), options.scheduler) : getCodeIndexJob(request.cwd)
     if (!indexJob && !reindex) codeIndexJobs.delete(request.cwd)
     if (healthOnly) return indexedProviderHealthResult(request, indexJob)
 
-    const query = new EngineQuery(engine)
-    const result = await query.context(request.userMessage, options.maxNodes ?? 10, options.includeCode !== false)
+    const result = await queryIndexedCodeContext(engine, request, options).catch(async (error) => {
+      const fallback = await collectFallbackCodeEvidence({ cwd: request.cwd, requirements: request.evidenceRequirements ?? [], query: request.userMessage })
+      if (fallback.matches.length) return fallbackProviderResult(request, fallback, error, indexJob)
+      throw error
+    })
+    if ('fallback' in result) return result.fallback
     const capturedAt = nowFromRequest(request)
     const evidence = []
 
@@ -205,21 +215,25 @@ export function getCodeIndexJobStatus(cwd: string): CodeIndexJobStatus | undefin
   return { ...status, cancelable: false, error: error === undefined ? undefined : error instanceof Error ? error.message : String(error) }
 }
 
-function unindexedProviderResult(request: ContextRequest, job?: CodeIndexJob) {
+function unindexedProviderResult(request: ContextRequest, job?: CodeIndexJob, fallback?: FallbackCodeEvidenceResult) {
   const createdAt = nowFromRequest(request)
   const rejectReason = schedulerRejectReason(job?.error)
+  const { evidence: fallbackEvidence, sections: fallbackSections } = fallbackCodeContext(request, fallback, createdAt)
+  const fallbackMessage = fallbackEvidence.length > 0
+    ? ' Fallback code evidence was collected for this turn.'
+    : ''
   const message = job
     ? rejectReason
-      ? `Code index was deferred by scheduler (${rejectReason}); retry shortly.`
+      ? `Code index was deferred by scheduler (${rejectReason}); retry shortly.${fallbackMessage}`
       : job.status === 'failed'
-      ? `Code index failed in the background: ${job.error instanceof Error ? job.error.message : String(job.error)}`
-      : `Code index is not ready; explicit reindex job is ${job.status}. Refresh returned cached provider state.`
-    : 'Code index is not ready; run an explicit reindex to build code context. Refresh returned cached provider state.'
+      ? `Code index failed in the background: ${job.error instanceof Error ? job.error.message : String(job.error)}${fallbackMessage}`
+      : `Code index is warming in the background; job is ${job.status}.${fallbackMessage}`
+    : 'Code index is not ready; provider health is read-only and did not start indexing.'
   const diag = diagnostic(SOURCE, job?.status === 'failed' ? 'error' : 'warning', message, createdAt)
   const health = providerHealth('code', job ? rejectReason ? 'rate_limited' : job.status === 'failed' ? 'failed' : 'indexing' : 'not_indexed', createdAt, diag)
   return {
-    evidence: [],
-    sections: [],
+    evidence: fallbackEvidence,
+    sections: fallbackSections,
     diagnostics: [diag],
     health: job ? withIndexJob(health, job) : health,
   }
@@ -235,6 +249,63 @@ function indexedProviderHealthResult(request: ContextRequest, job?: CodeIndexJob
     diagnostics: [] as ContextDiagnostic[],
     health: job ? withIndexJob(health, job) : health,
   }
+}
+
+async function queryIndexedCodeContext(engine: ContextEngine, request: ContextRequest, options: CodeProviderOptions) {
+  const query = new EngineQuery(engine)
+  return request.evidenceRequirements?.length
+    ? await query.contextForRequirements({
+      objective: request.userMessage,
+      requirements: request.evidenceRequirements,
+      activeFile: typeof request.ide?.activeFile === 'string' ? request.ide.activeFile : undefined,
+      maxNodes: options.maxNodes ?? 10,
+      includeCode: options.includeCode !== false,
+    })
+    : await query.context(request.userMessage, options.maxNodes ?? 10, options.includeCode !== false)
+}
+
+function fallbackProviderResult(request: ContextRequest, fallback: FallbackCodeEvidenceResult, error: unknown, job?: CodeIndexJob) {
+  const createdAt = nowFromRequest(request)
+  const { evidence, sections } = fallbackCodeContext(request, fallback, createdAt)
+  const diag = diagnostic(SOURCE, 'warning', `Code index query failed; returning fallback code evidence for this turn: ${error instanceof Error ? error.message : String(error)}`, createdAt)
+  return {
+    fallback: {
+      evidence,
+      sections,
+      diagnostics: [diag],
+      health: job ? withIndexJob(providerHealth('code', job.status === 'failed' ? 'failed' : 'indexing', createdAt, diag), job) : providerHealth('code', 'enabled', createdAt, diag),
+    },
+  }
+}
+
+function fallbackCodeContext(request: ContextRequest, fallback: FallbackCodeEvidenceResult | undefined, capturedAt: number) {
+  const evidence = (fallback?.matches ?? []).map((match) => rawEvidence(
+    request,
+    SOURCE,
+    'file',
+    match.preview,
+    { file: match.file, line: match.line, fallback: true, reason: match.reason },
+    capturedAt,
+  ))
+  const citations = evidence.map((item) => {
+    const metadata = item.metadata as { file?: unknown; line?: unknown }
+    return citationFor(item, typeof metadata.file === 'string' ? metadata.file : item.id, typeof metadata.line === 'number' ? metadata.line : undefined)
+  })
+  const sections = fallback && evidence.length
+    ? [section(
+      [request.sessionId, SOURCE, request.userMessage, 'fallback'],
+      'relevant_code',
+      'Fallback code matches',
+      fallback.content,
+      citations,
+      65,
+      0.55,
+      'live',
+      SOURCE,
+      { authority: 'code_evidence', topic: 'code', conflictPolicy: 'render' },
+    )]
+    : []
+  return { evidence, sections }
 }
 
 function schedulerRejectReason(error: unknown): BackgroundRejectReason | undefined {
