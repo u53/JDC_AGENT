@@ -2,6 +2,7 @@ import type { FileReadStateCache } from '../file-read-state.js'
 import type { ToolResult } from '../tool-registry.js'
 import { evaluateFileMutationPolicy } from './file-mutation-policy.js'
 import { PolicyEventLedger } from './policy-events.js'
+import { classifyVerificationCommand } from './tool-output-classifier.js'
 import { VerificationLedger } from './verification-ledger.js'
 
 export type ConstraintPreToolDecision = { decision: 'allow' } | { decision: 'block'; reason: string }
@@ -53,41 +54,65 @@ export class ConstraintPolicyRuntime {
   }
 
   postToolUse(context: ConstraintPostToolContext): void {
-    if (context.result.isError) return
+    const command = context.result.metadata?.command
+    if (context.result.isError && !command) return
 
-    const fileRead = context.result.metadata?.fileRead
-    if (fileRead) {
-      context.fileReadState.recordRead(
-        fileRead.filePath,
-        fileRead.offset,
-        fileRead.limit,
-        fileRead.totalLines,
-        fileRead.content
-      )
-      this.policyEvents.record({
-        phase: 'post_tool_use',
-        source: 'ToolResultMetadata',
-        decision: 'record',
-        toolName: context.toolName,
-        toolUseId: context.toolUseId,
-        cwd: context.cwd,
-      })
+    if (!context.result.isError) {
+      const fileRead = context.result.metadata?.fileRead
+      if (fileRead) {
+        context.fileReadState.recordRead(
+          fileRead.filePath,
+          fileRead.offset,
+          fileRead.limit,
+          fileRead.totalLines,
+          fileRead.content
+        )
+        this.policyEvents.record({
+          phase: 'post_tool_use',
+          source: 'ToolResultMetadata',
+          decision: 'record',
+          toolName: context.toolName,
+          toolUseId: context.toolUseId,
+          cwd: context.cwd,
+        })
+      }
+
+      for (const mutation of context.result.metadata?.mutations ?? []) {
+        context.fileReadState.invalidate(mutation.filePath)
+        this.verificationLedger.recordMutation({
+          filePath: mutation.filePath,
+          toolUseId: context.toolUseId ?? '',
+        })
+        this.policyEvents.record({
+          phase: 'post_tool_use',
+          source: 'VerificationLedger',
+          decision: 'record',
+          toolName: context.toolName,
+          toolUseId: context.toolUseId,
+          cwd: context.cwd,
+        })
+      }
     }
 
-    for (const mutation of context.result.metadata?.mutations ?? []) {
-      context.fileReadState.invalidate(mutation.filePath)
-      this.verificationLedger.recordMutation({
-        filePath: mutation.filePath,
-        toolUseId: context.toolUseId ?? '',
-      })
-      this.policyEvents.record({
-        phase: 'post_tool_use',
-        source: 'VerificationLedger',
-        decision: 'record',
-        toolName: context.toolName,
-        toolUseId: context.toolUseId,
-        cwd: context.cwd,
-      })
+    if (command) {
+      const classified = classifyVerificationCommand(command.command)
+      if (classified) {
+        this.verificationLedger.recordCommand({
+          toolUseId: context.toolUseId ?? '',
+          command: command.command,
+          kind: classified.kind,
+          status: command.exitCode === 0 && !context.result.isError ? 'passed' : 'failed',
+          output: context.result.content,
+        })
+        this.policyEvents.record({
+          phase: 'post_tool_use',
+          source: 'VerificationLedger',
+          decision: 'record',
+          toolName: context.toolName,
+          toolUseId: context.toolUseId,
+          cwd: context.cwd,
+        })
+      }
     }
   }
 }

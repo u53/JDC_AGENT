@@ -97,4 +97,80 @@ describe('ConstraintPolicyRuntime', () => {
       }),
     ])
   })
+
+  it('marks pending changed files verified after a successful verification command', () => {
+    const runtime = new ConstraintPolicyRuntime({ now: () => 10 })
+    const fileReadState = new FileReadStateCache()
+
+    runtime.postToolUse({
+      toolName: 'Edit',
+      toolUseId: 'edit_1',
+      input: { file_path: filePath },
+      cwd: tmpDir,
+      fileReadState,
+      result: {
+        content: 'Successfully edited',
+        metadata: { mutations: [{ filePath, kind: 'edit' }] },
+      },
+    })
+
+    runtime.postToolUse({
+      toolName: 'Bash',
+      toolUseId: 'bash_1',
+      input: { command: 'pnpm --filter @jdcagnet/core build' },
+      cwd: tmpDir,
+      fileReadState,
+      result: {
+        content: 'build ok',
+        metadata: { command: { shell: 'bash', command: 'pnpm --filter @jdcagnet/core build', exitCode: 0 } },
+      },
+    })
+
+    expect(runtime.verificationLedger.getChangedFiles()[0]).toMatchObject({
+      status: 'verified',
+      verifiedByToolUseId: 'bash_1',
+    })
+  })
+
+  it('records failed verification commands even when tool result is an error', () => {
+    const runtime = new ConstraintPolicyRuntime({ now: () => 10 })
+    const fileReadState = new FileReadStateCache()
+
+    runtime.postToolUse({
+      toolName: 'Edit',
+      toolUseId: 'edit_1',
+      input: { file_path: filePath },
+      cwd: tmpDir,
+      fileReadState,
+      result: {
+        content: 'Successfully edited',
+        metadata: { mutations: [{ filePath, kind: 'edit' }] },
+      },
+    })
+
+    runtime.postToolUse({
+      toolName: 'Bash',
+      toolUseId: 'bash_1',
+      input: { command: 'pnpm test' },
+      cwd: tmpDir,
+      fileReadState,
+      result: {
+        content: 'test failed',
+        isError: true,
+        metadata: { command: { shell: 'bash', command: 'pnpm test', exitCode: 1 } },
+      },
+    })
+
+    expect(runtime.verificationLedger.getCommands()[0]).toMatchObject({
+      toolUseId: 'bash_1',
+      command: 'pnpm test',
+      kind: 'test',
+      status: 'failed',
+      output: 'test failed',
+    })
+    expect(runtime.verificationLedger.getChangedFiles()[0]).toMatchObject({
+      status: 'failed',
+      verificationFailure: 'test failed',
+    })
+  })
 })

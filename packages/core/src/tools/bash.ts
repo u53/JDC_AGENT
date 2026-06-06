@@ -253,7 +253,17 @@ The shell runs in a non-interactive environment (CI=true, GIT_TERMINAL_PROMPT=0,
           ? output.slice(0, 50000) + `\n\n... [${output.length - 100000} bytes truncated] ...\n\n` + output.slice(-50000)
           : output
 
-        resolve({ content: truncated || '(no output)', isError: code !== 0 })
+        resolve({
+          content: truncated || '(no output)',
+          isError: code !== 0,
+          metadata: {
+            command: {
+              shell: 'bash',
+              command,
+              exitCode: code,
+            },
+          },
+        })
       })
 
       proc.on('error', (err) => {
