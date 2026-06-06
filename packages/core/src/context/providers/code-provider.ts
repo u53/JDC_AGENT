@@ -1,4 +1,5 @@
 import { EngineQuery } from '../../context-engine/query.js'
+import { buildRepoMap, renderRepoMap } from '../../context-engine/repo-map.js'
 import { getContextEngine } from '../../context-engine/index.js'
 import type { ContextEngine, IndexProgress } from '../../context-engine/engine.js'
 import type { ContextDiagnostic, ContextRequest, ProviderHealth } from '../types.js'
@@ -98,6 +99,22 @@ export async function collectCodeContext(request: ContextRequest, options: CodeP
       contentParts.push(`Source snippets:\n${result.keyCode.map((snippet) => `- ${snippet.symbol} — ${snippet.file}`).join('\n')}`)
     }
 
+    const repoMap = buildRepoMap(engine.getStore())
+    const repoMapSection = repoMap.files.length
+      ? section(
+        [request.sessionId, SOURCE, 'repo_map', request.userMessage],
+        'code_map',
+        'Repository map',
+        renderRepoMap(repoMap),
+        [],
+        70,
+        0.82,
+        'live',
+        SOURCE,
+        { authority: 'code_evidence', topic: 'code', conflictPolicy: 'render' },
+      )
+      : undefined
+
     const sections = contentParts.length
       ? [section(
         [request.sessionId, SOURCE, request.userMessage],
@@ -112,6 +129,7 @@ export async function collectCodeContext(request: ContextRequest, options: CodeP
         { authority: 'code_evidence', topic: 'code', conflictPolicy: 'render' },
       )]
       : []
+    if (repoMapSection) sections.push(repoMapSection)
 
     return {
       evidence,
