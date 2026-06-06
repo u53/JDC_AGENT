@@ -3,9 +3,11 @@
 
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import type { ContextEvidenceRequirement } from '../context/types.js'
 import type { ContextEngine } from './engine.js'
 import { CallGraph } from './graph/call-graph.js'
 import { hotFiles, workingChanges, type GitHotFile, type GitChange } from './git/git-context.js'
+import { tokenizeQueryText, type QueryToken } from './query-tokenizer.js'
 import type { SymbolNode } from './types.js'
 
 export interface SymbolLocation {
@@ -30,6 +32,16 @@ export interface ContextResult {
   keyCode: { file: string; symbol: string; code: string }[]
   gitHotFiles?: GitHotFile[]
   gitChanges?: GitChange[]
+}
+
+export interface RequirementContextInput {
+  objective: string
+  requirements: ContextEvidenceRequirement[]
+  activeFile?: string
+  changedFiles?: string[]
+  languageHints?: string[]
+  maxNodes?: number
+  includeCode?: boolean
 }
 
 export class EngineQuery {
@@ -110,18 +122,67 @@ export class EngineQuery {
 
   /** Composite entry point: search + node + callers/callees for top match. */
   async context(task: string, maxNodes = 20, includeCode = true): Promise<ContextResult> {
-    const terms = task.split(/[^A-Za-z0-9_]+/).filter((t) => t.length >= 3)
+    const tokens = tokenizeQueryText(task)
+    const entry = this.entrySymbolsForTokens(tokens, maxNodes)
+    return this.contextFromEntry(task, entry, maxNodes, includeCode)
+  }
+
+  async contextForRequirements(input: RequirementContextInput): Promise<ContextResult> {
+    const queryText = [
+      input.objective,
+      ...input.requirements.map((requirement) => requirement.query),
+      ...(input.activeFile ? [input.activeFile] : []),
+      ...(input.changedFiles ?? []),
+      ...input.requirements.flatMap((requirement) => [
+        ...requirement.relatedFiles,
+        ...requirement.relatedSymbols,
+        ...requirement.docRefs,
+        ...requirement.languageHints,
+      ]),
+      ...(input.languageHints ?? []),
+    ].join(' ')
+    const tokens = tokenizeQueryText(queryText)
+    const entry = this.entrySymbolsForTokens(tokens, input.maxNodes ?? 20)
+    return this.contextFromEntry(queryText, entry, input.maxNodes ?? 20, input.includeCode !== false)
+  }
+
+  private entrySymbolsForTokens(tokens: QueryToken[], maxNodes: number): SymbolNode[] {
     const seen = new Set<string>()
     const entry: SymbolNode[] = []
-    for (const term of terms) {
-      for (const s of this.engine.searchSymbols(term, 5)) {
-        if (!seen.has(s.id)) {
-          seen.add(s.id)
-          entry.push(s)
+    const sorted = [...tokens].sort((a, b) => b.weight - a.weight || b.value.length - a.value.length)
+
+    for (const token of sorted) {
+      const limit = token.kind === 'symbol' ? 8 : 5
+      for (const symbol of this.engine.searchSymbols(token.value, limit)) {
+        if (!seen.has(symbol.id)) {
+          seen.add(symbol.id)
+          entry.push(symbol)
         }
       }
       if (entry.length >= maxNodes) break
     }
+
+    if (entry.length < maxNodes) {
+      for (const token of sorted.filter((item) => item.kind === 'path')) {
+        for (const file of this.engine.getStore().allFiles()) {
+          if (!file.filePath.toLowerCase().includes(token.value.toLowerCase())) continue
+          for (const symbol of file.symbols) {
+            if (!seen.has(symbol.id)) {
+              seen.add(symbol.id)
+              entry.push(symbol)
+            }
+            if (entry.length >= maxNodes) break
+          }
+          if (entry.length >= maxNodes) break
+        }
+        if (entry.length >= maxNodes) break
+      }
+    }
+
+    return entry.slice(0, maxNodes)
+  }
+
+  private async contextFromEntry(task: string, entry: SymbolNode[], maxNodes: number, includeCode: boolean): Promise<ContextResult> {
     const related: SymbolNode[] = []
     const relSeen = new Set(entry.map((s) => s.id))
     for (const s of entry.slice(0, 5)) {

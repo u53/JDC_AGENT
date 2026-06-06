@@ -111,11 +111,23 @@ const jdcContext: ToolHandler = {
     const q = await getQuery(context)
     if (q === 'not_ready') return notReady()
     if (!q) return noEngine()
-    const res = await q.context(
-      String(input.task),
-      Number(input.maxNodes) || 20,
-      input.includeCode !== false,
-    )
+    const task = String(input.task)
+    const res = await q.contextForRequirements({
+      objective: task,
+      requirements: [{
+        id: 'tool_req_relevant_code',
+        kind: 'relevant_code',
+        reason: 'JdcContext requests relevant code for the provided task.',
+        query: task,
+        priority: 'must',
+        relatedFiles: [],
+        relatedSymbols: [],
+        docRefs: [],
+        languageHints: [],
+      }],
+      maxNodes: Number(input.maxNodes) || 20,
+      includeCode: input.includeCode !== false,
+    })
     const parts: string[] = []
     if (res.entryPoints.length) {
       parts.push('## Entry points\n' + res.entryPoints.map(fmtLoc).join('\n'))
