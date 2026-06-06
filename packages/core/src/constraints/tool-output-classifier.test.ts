@@ -9,6 +9,7 @@ describe('classifyVerificationCommand', () => {
     ['pytest tests/test_api.py -q', 'test'],
     ['cargo test', 'test'],
     ['go test ./...', 'test'],
+    ['cd packages/core && pnpm build', 'build'],
     ['pnpm lint', 'lint'],
   ])('classifies %s as %s', (command, kind) => {
     expect(classifyVerificationCommand(command)).toEqual({ kind })
@@ -17,5 +18,8 @@ describe('classifyVerificationCommand', () => {
   it('ignores non-verification commands', () => {
     expect(classifyVerificationCommand('git status --short')).toBeUndefined()
     expect(classifyVerificationCommand('ls packages/core/src')).toBeUndefined()
+    expect(classifyVerificationCommand('echo "pnpm test"')).toBeUndefined()
+    expect(classifyVerificationCommand('echo ok # pnpm build')).toBeUndefined()
+    expect(classifyVerificationCommand('printf "vitest"')).toBeUndefined()
   })
 })

@@ -4,6 +4,7 @@ import { FileReadStateCache } from './file-read-state.js'
 import { PermissionChecker } from './permissions.js'
 import type { HookEngine } from './hooks/engine.js'
 import type { FileTracker } from './file-tracker.js'
+import type { BackgroundShell } from './background-tasks.js'
 import { isPlanModeToolAllowed } from './tools/enter-plan-mode.js'
 
 export interface ToolExecutionEvent {
@@ -16,6 +17,14 @@ export interface ToolExecutionEvent {
 }
 
 export type PermissionCallback = (request: { toolName: string; input: Record<string, unknown> }) => Promise<boolean>
+
+export interface BackgroundShellCompletion {
+  shell: BackgroundShell
+  taskId: string
+  command: string
+  exitCode: number | null
+  output: string
+}
 
 export class ToolRunner {
   private registry: ToolRegistry
@@ -46,6 +55,27 @@ export class ToolRunner {
     this.onPermissionRequest = onPermissionRequest
     this.hookEngine = hookEngine
     this.sessionId = sessionId
+  }
+
+  recordBackgroundShellCompletion(completion: BackgroundShellCompletion): void {
+    this.constraintRuntime.postToolUse({
+      toolName: completion.shell === 'powershell' ? 'Powershell' : 'Bash',
+      toolUseId: completion.taskId,
+      input: { command: completion.command, run_in_background: true },
+      cwd: this.cwd,
+      fileReadState: this.fileReadState,
+      result: {
+        content: completion.output || '(no output)',
+        isError: completion.exitCode !== 0,
+        metadata: {
+          command: {
+            shell: completion.shell,
+            command: completion.command,
+            exitCode: completion.exitCode,
+          },
+        },
+      },
+    })
   }
 
   async execute(

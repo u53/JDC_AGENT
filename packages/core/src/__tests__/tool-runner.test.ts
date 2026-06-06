@@ -118,6 +118,39 @@ describe('ToolRunner file mutation constraints', () => {
     ])
   })
 
+  it('records background shell verification completion in the product ledger', async () => {
+    const registry = new ToolRegistry()
+    const runner = new ToolRunner(registry, tmpDir, new PermissionChecker('relaxed'))
+    runner.constraintRuntime.postToolUse({
+      toolName: 'Edit',
+      toolUseId: 'edit_1',
+      input: { file_path: targetPath },
+      cwd: tmpDir,
+      fileReadState: runner.fileReadState,
+      result: {
+        content: 'Successfully edited',
+        metadata: { mutations: [{ filePath: targetPath, kind: 'edit' }] },
+      },
+    })
+
+    runner.recordBackgroundShellCompletion({
+      shell: 'bash',
+      taskId: 'task_1',
+      command: 'pnpm --filter @jdcagnet/core build',
+      exitCode: 0,
+      output: 'build ok',
+    })
+
+    expect(runner.constraintRuntime.verificationLedger.getChangedFiles()).toEqual([
+      expect.objectContaining({
+        filePath: targetPath,
+        status: 'verified',
+        changedByToolUseId: 'edit_1',
+        verifiedByToolUseId: 'task_1',
+      }),
+    ])
+  })
+
   it('blocks Edit by default when callers do not inject fresh-read state', async () => {
     const fs = await import('fs/promises')
     const targetFile = path.join(tmpDir, 'target.ts')

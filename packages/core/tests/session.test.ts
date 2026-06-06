@@ -5,6 +5,8 @@ import type { ModelProvider } from '../src/model-provider.js'
 import type { SessionEvents, Message, StreamChunk } from '../src/index.js'
 import path from 'node:path'
 import os from 'node:os'
+import { platform } from 'node:process'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
 
 function providerFromText(text: string): ModelProvider {
   return {
@@ -104,5 +106,75 @@ describe('Session retry', () => {
     expect(stored.filter(message => message.role === 'assistant')).toHaveLength(2)
     expect(completed).toHaveLength(2)
     retryHistory.close()
+  })
+})
+
+describe('Session background shell verification ledger', () => {
+  it('records background shell completion in the active tool runner runtime', async () => {
+    const cwd = path.join(os.tmpdir(), `jdcagnet-bg-ledger-${Date.now()}`)
+    const dbPath = path.join(os.tmpdir(), `jdcagnet-bg-ledger-${Date.now()}.db`)
+    await mkdir(cwd, { recursive: true })
+    const history = new ConversationHistory(dbPath)
+    await history.ensureReady()
+    history.createSession('bg-ledger-session', 'BgLedgerProject', cwd)
+    const session = new Session(
+      {
+        id: 'bg-ledger-session',
+        projectName: 'BgLedgerProject',
+        cwd,
+        modelConfig: { model: 'test-model', maxTokens: 1024 },
+      },
+      providerFromText('ok'),
+      history,
+    )
+    await session.ensureHooksReady()
+    const internals = session as unknown as {
+      toolRunner: import('../src/tool-runner.js').ToolRunner
+      backgroundTasks: import('../src/background-tasks.js').BackgroundTaskManager
+    }
+    const targetPath = path.join(cwd, 'src/a.ts')
+    internals.toolRunner.constraintRuntime.postToolUse({
+      toolName: 'Edit',
+      toolUseId: 'edit_1',
+      input: { file_path: targetPath },
+      cwd,
+      fileReadState: internals.toolRunner.fileReadState,
+      result: {
+        content: 'Successfully edited',
+        metadata: { mutations: [{ filePath: targetPath, kind: 'edit' }] },
+      },
+    })
+
+    try {
+      const notification = new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('background task did not complete')), 5000)
+        session.onNotificationReady = () => {
+          clearTimeout(timeout)
+          resolve()
+        }
+      })
+      const fakeBin = path.join(cwd, 'bin')
+      await mkdir(fakeBin, { recursive: true })
+      const fakePnpm = path.join(fakeBin, platform === 'win32' ? 'pnpm.cmd' : 'pnpm')
+      await writeFile(
+        fakePnpm,
+        platform === 'win32' ? '@echo off\r\necho build ok\r\n' : '#!/bin/sh\necho build ok\n',
+        { mode: 0o755 },
+      )
+      internals.backgroundTasks.spawn('pnpm build', cwd, { ...process.env, PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}` }, 'bash')
+      await notification
+
+      expect(internals.toolRunner.constraintRuntime.verificationLedger.getChangedFiles()).toEqual([
+        expect.objectContaining({
+          filePath: targetPath,
+          status: 'verified',
+          changedByToolUseId: 'edit_1',
+        }),
+      ])
+    } finally {
+      history.close()
+      await rm(cwd, { recursive: true, force: true })
+      await rm(dbPath, { force: true })
+    }
   })
 })

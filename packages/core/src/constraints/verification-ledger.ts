@@ -79,7 +79,6 @@ export class VerificationLedger {
   private applyCommandToPendingChanges(command: VerificationCommandRecord): void {
     for (const record of this.changedFiles.values()) {
       if (record.changedAt > command.createdAt) continue
-      if (record.status === 'verified') continue
 
       record.updatedAt = this.now()
       if (command.status === 'passed') {

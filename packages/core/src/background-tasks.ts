@@ -8,10 +8,13 @@ import { findGitBash } from './utils/shell-detection.js'
 
 export type TaskType = 'shell' | 'agent' | 'team'
 
+export type BackgroundShell = 'bash' | 'powershell'
+
 export interface BackgroundTask {
   id: string
   type: TaskType
   command?: string
+  shell?: BackgroundShell
   prompt?: string
   agentType?: string
   pid: number
@@ -63,7 +66,7 @@ export class BackgroundTaskManager {
     if (next) next.resolve()
   }
 
-  spawn(command: string, cwd: string, env?: Record<string, string>): BackgroundTask {
+  spawn(command: string, cwd: string, env?: Record<string, string>, shell?: BackgroundShell): BackgroundTask {
     const id = uuid().slice(0, 8)
     const logFile = path.join(this.logDir, `${id}.log`)
     writeFileSync(logFile, '')
@@ -100,6 +103,7 @@ export class BackgroundTaskManager {
       id,
       type: 'shell',
       command,
+      shell,
       pid: proc.pid || 0,
       status: 'running',
       logFile,

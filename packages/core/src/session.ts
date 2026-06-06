@@ -185,12 +185,22 @@ export class Session {
     this.contextScheduler = this.createContextScheduler()
     this.backgroundTasks.setOnComplete((task) => {
       if (task.type === 'shell') {
+        const output = this.backgroundTasks.getOutput(task.id, 50)
+        if (task.command && task.shell) {
+          this.toolRunner.recordBackgroundShellCompletion({
+            shell: task.shell,
+            taskId: task.id,
+            command: task.command,
+            exitCode: task.exitCode ?? null,
+            output,
+          })
+        }
         this.pendingNotifications.push({
           type: 'shell_complete',
           taskId: task.id,
           status: task.status as 'completed' | 'failed',
           command: task.command,
-          output: this.backgroundTasks.getOutput(task.id, 50),
+          output,
           exitCode: task.exitCode,
         })
       } else {

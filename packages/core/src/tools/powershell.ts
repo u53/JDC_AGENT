@@ -120,7 +120,7 @@ ${edition === 'core' ? '- Use && for conditional chaining, ; for unconditional' 
       const env = getNonInteractiveEnv(context.cwd)
 
       if (input.run_in_background && context.backgroundTasks) {
-        const task = context.backgroundTasks.spawn(command, context.cwd, env)
+        const task = context.backgroundTasks.spawn(command, context.cwd, env, 'powershell')
         return { content: `Background task started: ${task.id}\nCommand: ${command}\nUse task_output tool to check results.` }
       }
 
