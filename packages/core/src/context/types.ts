@@ -10,6 +10,9 @@ export type ContextFactKind = 'project_profile' | 'architecture_decision' | 'mod
 export const AUTO_ACCEPT_CONTEXT_FACT_KINDS = ['project_profile', 'architecture_decision', 'module_boundary', 'project_convention', 'workflow_rule', 'code_entrypoint', 'runtime_error_chain', 'team_decision', 'task_result', 'artifact_summary', 'qa_issue'] as const satisfies readonly ContextFactKind[]
 export type AutoAcceptContextFactKind = typeof AUTO_ACCEPT_CONTEXT_FACT_KINDS[number]
 export type ContextSectionKind = 'agent_contract' | 'user_intent' | 'project_profile' | 'code_map' | 'relevant_code' | 'git_state' | 'memory' | 'conversation_state' | 'runtime_state' | 'ide_state' | 'diagnostics'
+export type ContextEvidenceRequirementKind = 'relevant_code' | 'runtime_or_code' | 'diff_or_relevant_code' | 'project_doc' | 'repo_map'
+export type ContextEvidenceRequirementPriority = 'must' | 'should'
+export type ContextEvidenceRequirementStatus = 'missing' | 'satisfied'
 export type SkipReason = 'greeting_or_smalltalk' | 'no_new_fact' | 'too_short' | 'duplicate_of_existing_context' | 'low_confidence' | 'sensitive_content' | 'rate_limited' | 'model_noop' | 'cancelled' | 'timeout'
 export type HarvestStatus = 'queued' | 'classified' | 'distilling' | 'validating' | 'accepted' | 'pending_review' | 'rejected' | 'skipped' | 'failed'
 export type ProviderProtocol = 'anthropic' | 'openai-chat' | 'openai-responses'
@@ -104,6 +107,19 @@ export interface ContextCitation {
   hash?: string
 }
 
+export interface ContextEvidenceRequirement {
+  id: string
+  kind: ContextEvidenceRequirementKind
+  reason: string
+  query: string
+  priority: ContextEvidenceRequirementPriority
+  relatedFiles: string[]
+  relatedSymbols: string[]
+  docRefs: string[]
+  languageHints: string[]
+  status?: ContextEvidenceRequirementStatus
+}
+
 export interface ContextRequest {
   sessionId: string
   cwd: string
@@ -119,6 +135,7 @@ export interface ContextRequest {
   mode: ContextMode
   model: string
   tokenBudget?: number
+  evidenceRequirements?: ContextEvidenceRequirement[]
   runtime: RuntimeSnapshot
   ide?: IdeSnapshot
   signal?: AbortSignal
@@ -197,7 +214,8 @@ export interface ContextPlan {
   objective: string
   relevantSections: string[]
   suppressedSections: Array<{ id: string; reason: string }>
-  missingEvidence: Array<{ kind: string; reason: string }>
+  evidenceRequirements: ContextEvidenceRequirement[]
+  missingEvidence: ContextEvidenceRequirement[]
   diagnostics: ContextDiagnostic[]
 }
 

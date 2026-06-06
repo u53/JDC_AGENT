@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto'
-import type { ContextPlan, ContextPlanIntent, ContextRequest, ContextSection } from './types.js'
+import { deriveContextEvidenceRequirements } from './retrieval-requirements.js'
+import type { ContextEvidenceRequirement, ContextPlan, ContextPlanIntent, ContextRequest, ContextSection } from './types.js'
 
 export function planContext(request: ContextRequest, sections: ContextSection[]): ContextPlan {
   const intent = inferIntent(request)
+  const evidenceRequirements = request.evidenceRequirements ?? deriveContextEvidenceRequirements(request)
   const relevantSections: string[] = []
   const suppressedSections: Array<{ id: string; reason: string }> = []
 
@@ -28,36 +30,25 @@ export function planContext(request: ContextRequest, sections: ContextSection[])
     objective: request.userMessage.trim() || request.mode,
     relevantSections,
     suppressedSections,
-    missingEvidence: missingEvidenceFor(intent, sections),
+    evidenceRequirements,
+    missingEvidence: missingEvidenceFor(intent, sections, evidenceRequirements),
     diagnostics: [],
   }
 }
 
-function missingEvidenceFor(intent: ContextPlanIntent, sections: ContextSection[]): Array<{ kind: string; reason: string }> {
-  const kinds = new Set(sections.map((section) => section.kind))
+function missingEvidenceFor(_intent: ContextPlanIntent, sections: ContextSection[], requirements: ContextEvidenceRequirement[]): ContextEvidenceRequirement[] {
+  return requirements
+    .filter((requirement) => !requirementSatisfied(requirement, sections))
+    .map((requirement) => ({ ...requirement, status: 'missing' }))
+}
 
-  if (intent === 'code_edit' && !kinds.has('relevant_code')) {
-    return [{
-      kind: 'relevant_code',
-      reason: 'Code edit turns require target file or symbol evidence before mutation.',
-    }]
-  }
-
-  if (intent === 'debug' && !kinds.has('runtime_state') && !kinds.has('relevant_code')) {
-    return [{
-      kind: 'runtime_or_code',
-      reason: 'Debug turns require observed runtime output, relevant code, or both.',
-    }]
-  }
-
-  if (intent === 'review' && !kinds.has('git_state') && !kinds.has('relevant_code')) {
-    return [{
-      kind: 'diff_or_relevant_code',
-      reason: 'Review turns require changed-file, git, or relevant code evidence.',
-    }]
-  }
-
-  return []
+function requirementSatisfied(requirement: ContextEvidenceRequirement, sections: ContextSection[]): boolean {
+  if (requirement.kind === 'relevant_code') return sections.some((section) => section.kind === 'relevant_code')
+  if (requirement.kind === 'runtime_or_code') return sections.some((section) => section.kind === 'runtime_state' || section.kind === 'relevant_code')
+  if (requirement.kind === 'diff_or_relevant_code') return sections.some((section) => section.kind === 'git_state' || section.kind === 'relevant_code')
+  if (requirement.kind === 'repo_map') return sections.some((section) => section.kind === 'code_map')
+  if (requirement.kind === 'project_doc') return sections.some((section) => section.kind === 'project_profile')
+  return false
 }
 
 function inferIntent(request: ContextRequest): ContextPlanIntent {

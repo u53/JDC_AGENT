@@ -88,15 +88,55 @@ describe('ContextPlanner', () => {
     expect(plan.suppressedSections).toEqual([])
   })
 
+  it('uses request evidenceRequirements when checking missing evidence', () => {
+    const plan = planContext(makeRequest({ userMessage: '修复 session.ts', mode: 'chat', evidenceRequirements: [{
+      id: 'req_relevant_code',
+      kind: 'relevant_code',
+      reason: 'Need code.',
+      query: '修复 session.ts',
+      priority: 'must',
+      relatedFiles: ['packages/core/src/session.ts'],
+      relatedSymbols: [],
+      docRefs: [],
+      languageHints: [],
+    }] }), [])
+
+    expect(plan.evidenceRequirements).toHaveLength(1)
+    expect(plan.missingEvidence).toEqual([expect.objectContaining({
+      id: 'req_relevant_code',
+      kind: 'relevant_code',
+      status: 'missing',
+    })])
+  })
+
+  it('marks relevant code requirement satisfied when relevant_code exists', () => {
+    const plan = planContext(makeRequest({
+      userMessage: '修复 session.ts',
+      evidenceRequirements: [{
+        id: 'req_relevant_code',
+        kind: 'relevant_code',
+        reason: 'Need code.',
+        query: '修复 session.ts',
+        priority: 'must',
+        relatedFiles: ['packages/core/src/session.ts'],
+        relatedSymbols: [],
+        docRefs: [],
+        languageHints: [],
+      }],
+    }), [section({ id: 'code_1', kind: 'relevant_code', content: 'session source' })])
+
+    expect(plan.missingEvidence).toEqual([])
+  })
+
   it('reports missing relevant code evidence for code_edit turns', () => {
     const plan = planContext(makeRequest({ mode: 'code_edit', userMessage: 'Fix the bug' }), [
       section({ id: 'project_profile', kind: 'project_profile', title: 'Project', content: 'JDCAGNET' }),
     ])
 
-    expect(plan.missingEvidence).toContainEqual({
+    expect(plan.missingEvidence).toContainEqual(expect.objectContaining({
       kind: 'relevant_code',
-      reason: 'Code edit turns require target file or symbol evidence before mutation.',
-    })
+      status: 'missing',
+    }))
   })
 
   it('reports missing runtime or code evidence for debug turns', () => {
@@ -104,10 +144,10 @@ describe('ContextPlanner', () => {
       section({ id: 'project_profile', kind: 'project_profile', title: 'Project', content: 'JDCAGNET' }),
     ])
 
-    expect(plan.missingEvidence).toContainEqual({
+    expect(plan.missingEvidence).toContainEqual(expect.objectContaining({
       kind: 'runtime_or_code',
-      reason: 'Debug turns require observed runtime output, relevant code, or both.',
-    })
+      status: 'missing',
+    }))
   })
 
   it('reports missing diff or relevant code evidence for review turns', () => {
@@ -115,10 +155,10 @@ describe('ContextPlanner', () => {
       section({ id: 'project_profile', kind: 'project_profile', title: 'Project', content: 'JDCAGNET' }),
     ])
 
-    expect(plan.missingEvidence).toContainEqual({
+    expect(plan.missingEvidence).toContainEqual(expect.objectContaining({
       kind: 'diff_or_relevant_code',
-      reason: 'Review turns require changed-file, git, or relevant code evidence.',
-    })
+      status: 'missing',
+    }))
   })
 
   it('does not report missing evidence for code_edit turns with relevant code', () => {
