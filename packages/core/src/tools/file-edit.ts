@@ -56,7 +56,10 @@ Usage notes:
         if (context.fileTracker && context.toolUseId) {
           await context.fileTracker.recordChange(filePath, content, updated, context.toolUseId, context.turnIndex || 0)
         }
-        return { content: `Successfully replaced ${occurrences} occurrences in ${filePath}` }
+        return {
+          content: `Successfully replaced ${occurrences} occurrences in ${filePath}`,
+          metadata: { mutations: [{ filePath, kind: 'edit' }] },
+        }
       }
 
       const occurrences = content.split(oldStr).length - 1
@@ -72,7 +75,10 @@ Usage notes:
         await context.fileTracker.recordChange(filePath, content, updated, context.toolUseId, context.turnIndex || 0)
       }
 
-      return { content: `Successfully edited ${filePath}` }
+      return {
+        content: `Successfully edited ${filePath}`,
+        metadata: { mutations: [{ filePath, kind: 'edit' }] },
+      }
     } catch (err: any) {
       if (err.code === 'ENOENT') {
         return { content: buildFileNotFoundError(filePath, context.cwd), isError: true }

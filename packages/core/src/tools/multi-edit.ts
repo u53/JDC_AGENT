@@ -72,6 +72,9 @@ Each edit's old_string must be unique in the file at the point it's applied.`,
     if (context.fileTracker && context.toolUseId) {
       await context.fileTracker.recordChange(filePath, original, content, context.toolUseId, context.turnIndex || 0)
     }
-    return { content: `Successfully applied ${edits.length} edits to ${filePath}` }
+    return {
+      content: `Successfully applied ${edits.length} edits to ${filePath}`,
+      metadata: { mutations: [{ filePath, kind: 'multi_edit' }] },
+    }
   },
 }

@@ -60,7 +60,18 @@ Usage notes:
       const continuation = endLine < lines.length
         ? `\n[Showing lines ${offset + 1}-${endLine} of ${lines.length}. Use offset=${endLine} to continue.]`
         : ''
-      return { content: numbered + continuation }
+      return {
+        content: numbered + continuation,
+        metadata: {
+          fileRead: {
+            filePath,
+            offset,
+            limit,
+            totalLines: lines.length,
+            content: returnedContent,
+          },
+        },
+      }
     } catch (err: any) {
       if (err.code === 'ENOENT') {
         return { content: buildFileNotFoundError(filePath, context.cwd), isError: true }

@@ -50,7 +50,10 @@ Usage notes:
         await context.fileTracker.recordChange(filePath, contentBefore, contentInput, context.toolUseId, context.turnIndex || 0)
       }
 
-      return { content: `Successfully wrote to ${filePath}` }
+      return {
+        content: `Successfully wrote to ${filePath}`,
+        metadata: { mutations: [{ filePath, kind: 'write' }] },
+      }
     } catch (err: any) {
       return { content: `Error writing file: ${err.message}`, isError: true }
     }

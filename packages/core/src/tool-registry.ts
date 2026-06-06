@@ -18,9 +18,29 @@ export interface ToolContext {
   contextEngine?: import('./context-engine/engine.js').ContextEngine
 }
 
+export interface ToolResultMetadata {
+  fileRead?: {
+    filePath: string
+    offset: number
+    limit: number
+    totalLines: number
+    content: string
+  }
+  mutations?: Array<{
+    filePath: string
+    kind: 'edit' | 'multi_edit' | 'write'
+  }>
+  command?: {
+    shell: 'bash' | 'powershell'
+    command: string
+    exitCode: number | null
+  }
+}
+
 export interface ToolResult {
   content: string
   isError?: boolean
+  metadata?: ToolResultMetadata
 }
 
 export class ToolRegistry {
