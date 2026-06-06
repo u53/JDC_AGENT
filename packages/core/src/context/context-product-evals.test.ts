@@ -629,29 +629,60 @@ describe('JDC Context Engine product evals', () => {
     expect(indexCalls).toBe(1)
   })
 
-  it('renders repo map context and the indexed JdcFiles tool surface without local caps', async () => {
+  it('renders repo map context only when planning or repo-map evidence is requested, and keeps it compact', async () => {
     const cwd = tempProject()
     writeProjectFile(cwd, 'src/main.ts', 'import { helper } from "./helper"\nexport function main() { return helper() }\n')
     writeProjectFile(cwd, 'src/helper.ts', 'export function helper() { return true }\n')
     writeProjectFile(cwd, 'src/main.test.ts', 'export function mainTest() { return main() }\n')
+    writeProjectFile(cwd, 'src/secondary.ts', 'export function secondary() { return true }\n')
     const engine = new ContextEngine(cwd)
     await engine.index()
+
+    const normal = await buildContextBundle(request({
+      cwd,
+      sessionId: 'session_phase4_repo_map_normal',
+      userMessage: '解释 helper',
+      mode: 'code_edit',
+    }), {
+      injectionEnabled: true,
+      store: makeEvalStore(),
+      providers: [{ id: 'code', collect: (contextRequest) => collectCodeContext(contextRequest, { contextEngine: engine, maxNodes: 5 }) }],
+      now: () => 6_000,
+      id: () => 'ctx_phase4_repo_map_normal',
+    })
+
+    expect(normal.bundle.sections.some((section) => section.kind === 'code_map')).toBe(false)
 
     const result = await buildContextBundle(request({
       cwd,
       sessionId: 'session_phase4_repo_map',
       userMessage: '写 repo map 计划',
       mode: 'plan',
+      evidenceRequirements: [{
+        id: 'req_repo_map',
+        kind: 'repo_map',
+        reason: 'Need a compact repository map for planning.',
+        query: '写 repo map 计划',
+        priority: 'should',
+        relatedFiles: [],
+        relatedSymbols: [],
+        docRefs: [],
+        languageHints: ['typescript'],
+      }],
     }), {
       injectionEnabled: true,
       store: makeEvalStore(),
-      providers: [{ id: 'code', collect: (contextRequest) => collectCodeContext(contextRequest, { contextEngine: engine }) }],
+      providers: [{ id: 'code', collect: (contextRequest) => collectCodeContext(contextRequest, { contextEngine: engine, maxNodes: 2 }) }],
       now: () => 6_000,
       id: () => 'ctx_phase4_repo_map',
     })
 
-    expect(result.bundle.sections.some((section) => section.kind === 'code_map' && section.content.includes('src/main.ts'))).toBe(true)
-    expect(result.renderedPrompt).toContain('typescript: 3 files')
+    const repoMapSection = result.bundle.sections.find((section) => section.kind === 'code_map')
+    const filesBlock = repoMapSection?.content.split('\n## Languages')[0] ?? ''
+    expect(repoMapSection?.content).toContain('src/main.ts')
+    expect(filesBlock.match(/^- src\/\S+ \(/gm)?.length).toBeLessThanOrEqual(2)
+    expect(result.renderedPrompt).toContain('typescript: 2 files')
+    expect(result.renderedPrompt).not.toContain('src/secondary.ts')
     expect(result.bundle.budget.droppedTokens).toBe(0)
 
     const jdcFiles = createContextEngineTools().find((tool) => tool.definition.name === 'JdcFiles')

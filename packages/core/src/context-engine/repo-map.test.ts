@@ -98,6 +98,39 @@ describe('buildRepoMap', () => {
     expect(unavailableStore.allFiles).toHaveBeenCalledTimes(1)
   })
 
+  it('applies explicit compact limits to selected files, symbols, import edges, and top symbols', () => {
+    const store = new IndexStore()
+    for (const [filePath, symbolName] of [
+      ['src/alpha.ts', 'alpha'],
+      ['src/beta.ts', 'beta'],
+      ['src/gamma.ts', 'gamma'],
+    ] as const) {
+      store.upsertFile(file({
+        filePath,
+        language: 'typescript',
+        symbols: [
+          symbol(filePath, symbolName, 'function', 1, `export function ${symbolName}()`),
+          symbol(filePath, `${symbolName}Helper`, 'function', 2, `export function ${symbolName}Helper()`),
+        ],
+        imports: [{ localName: `${symbolName}Dep`, source: './dep', filePath, line: 1 }],
+      }))
+    }
+
+    const map = buildRepoMap(store, {
+      objective: 'beta',
+      maxFiles: 2,
+      maxSymbols: 1,
+      maxImportEdges: 1,
+      maxTopSymbolsPerFile: 1,
+    })
+
+    expect(map.files).toHaveLength(2)
+    expect(map.files[0]?.path).toBe('src/beta.ts')
+    expect(map.symbols).toHaveLength(1)
+    expect(map.importEdges).toHaveLength(1)
+    expect(map.files.every((entry) => entry.topSymbols.length <= 1)).toBe(true)
+  })
+
   it('renders deterministic file, language, symbol, and import sections', () => {
     const store = new IndexStore()
     store.upsertFile(file({

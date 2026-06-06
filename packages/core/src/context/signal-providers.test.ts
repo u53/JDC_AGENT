@@ -98,8 +98,8 @@ describe('context signal providers', () => {
     expect(sectionCitations(result).every((citation) => citation.hash === undefined)).toBe(true)
   })
 
-  it('returns cached-only code health without starting indexing when the engine is not indexed', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'jdc-code-provider-cached-'))
+  it('returns fallback code health and queues background warmup when the engine is not indexed', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'jdc-code-provider-warmup-'))
     const releaseIndex = deferred<void>()
     const engine = {
       isIndexed: vi.fn(() => false),
@@ -110,16 +110,16 @@ describe('context signal providers', () => {
       contextEngine: engine as any,
     })
 
-    expect(result.health).toMatchObject({ id: 'code', status: 'not_indexed' })
-    expect(result.health.backgroundJob).toBeUndefined()
-    expect(result.health.diagnostic?.message).toContain('explicit reindex')
+    expect(result.health).toMatchObject({ id: 'code', status: 'indexing', backgroundJob: { status: 'queued' } })
+    expect(result.health.diagnostic?.message).toContain('warming')
     expect(result.sections).toEqual([])
     expect(result.evidence).toEqual([])
     expect(engine.index).not.toHaveBeenCalled()
 
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(engine.index).not.toHaveBeenCalled()
+    expect(engine.index).toHaveBeenCalledTimes(1)
     releaseIndex.resolve()
+    await releaseIndex.promise
   })
 
   it('queues explicit code reindex after returning cached health when the engine is not indexed', async () => {

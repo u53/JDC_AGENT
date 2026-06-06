@@ -239,7 +239,7 @@ describe('JDC Context Engine inspect and refresh tools', () => {
     expect(payload.bundle.budget.droppedTokens).toBe(0)
   })
 
-  it('returns cached-only refresh state for an unindexed code provider without starting indexing', async () => {
+  it('returns fallback refresh state and queues background warmup for an unindexed code provider', async () => {
     const releaseIndex = deferred<void>()
     const engine = {
       isIndexed: vi.fn(() => false),
@@ -248,20 +248,22 @@ describe('JDC Context Engine inspect and refresh tools', () => {
     const codeProvider = vi.fn((request) => collectCodeContext(request, { contextEngine: engine as any }))
     const store = makeStore()
 
-    const payload = await refreshContextProviders({ sessionId: 'session_1', cwd: '/repo', providers: ['code'] }, {
+    const payload = await refreshContextProviders({ sessionId: 'session_1', cwd: '/repo-refresh-warmup', providers: ['code'] }, {
       store,
       providers: [{ id: 'code', collect: codeProvider }],
       now: () => 3_000,
-      id: () => 'ctx_refresh_not_indexed',
+      id: () => 'ctx_refresh_warmup',
     })
 
-    expect(ContextRefreshPayloadSchema.parse(payload).providerHealth[0]).toMatchObject({ id: 'code', status: 'not_indexed' })
-    expect(payload.providerHealth[0]?.backgroundJob).toBeUndefined()
+    expect(ContextRefreshPayloadSchema.parse(payload).providerHealth[0]).toMatchObject({ id: 'code', status: 'indexing', backgroundJob: { status: 'queued' } })
     expect(payload.bundle.sections).toEqual([])
     expect(codeProvider).toHaveBeenCalledTimes(1)
     expect(engine.index).not.toHaveBeenCalled()
 
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(engine.index).toHaveBeenCalledTimes(1)
     releaseIndex.resolve()
+    await releaseIndex.promise
   })
 
   it('loads provider health without building bundles or starting code indexing', async () => {
@@ -274,7 +276,7 @@ describe('JDC Context Engine inspect and refresh tools', () => {
     const codeHealth = vi.fn((request) => collectCodeContext(request, { contextEngine: engine as any, healthOnly: true }).then((result) => result.health))
     const store = makeStore()
 
-    const providerHealth = await getContextProviderHealth({ sessionId: 'session_1', cwd: '/repo', providers: ['code'] }, {
+    const providerHealth = await getContextProviderHealth({ sessionId: 'session_1', cwd: '/repo-health-only', providers: ['code'] }, {
       store,
       providers: [{ id: 'code', collect: codeProvider, health: codeHealth }],
       now: () => 3_000,

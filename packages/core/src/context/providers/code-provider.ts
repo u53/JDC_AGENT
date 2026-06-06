@@ -1,5 +1,5 @@
 import { EngineQuery } from '../../context-engine/query.js'
-import { buildRepoMap, renderRepoMap } from '../../context-engine/repo-map.js'
+import { buildRepoMap, renderRepoMap, type RepoMapOptions } from '../../context-engine/repo-map.js'
 import { getContextEngine } from '../../context-engine/index.js'
 import type { ContextEngine, IndexProgress } from '../../context-engine/engine.js'
 import type { ContextDiagnostic, ContextRequest, ProviderHealth } from '../types.js'
@@ -99,8 +99,9 @@ export async function collectCodeContext(request: ContextRequest, options: CodeP
       contentParts.push(`Source snippets:\n${result.keyCode.map((snippet) => `- ${snippet.symbol} — ${snippet.file}`).join('\n')}`)
     }
 
-    const repoMap = buildRepoMap(engine.getStore())
-    const repoMapSection = repoMap.files.length
+    const repoMapOptions = repoMapRequestOptions(request, options)
+    const repoMap = repoMapOptions ? buildRepoMap(engine.getStore(), repoMapOptions) : undefined
+    const repoMapSection = repoMap?.files.length
       ? section(
         [request.sessionId, SOURCE, 'repo_map', request.userMessage],
         'code_map',
@@ -328,6 +329,19 @@ function fallbackCodeContext(request: ContextRequest, fallback: FallbackCodeEvid
 
 function schedulerRejectReason(error: unknown): BackgroundRejectReason | undefined {
   return error === 'project_concurrency_limit' || error === 'project_interval_limit' ? error : undefined
+}
+
+function repoMapRequestOptions(request: ContextRequest, options: CodeProviderOptions): RepoMapOptions | undefined {
+  const requiresRepoMap = request.mode === 'plan' || request.evidenceRequirements?.some((requirement) => requirement.kind === 'repo_map') === true
+  if (!requiresRepoMap) return undefined
+  const maxFiles = Math.max(1, options.maxNodes ?? 12)
+  return {
+    objective: request.evidenceRequirements?.find((requirement) => requirement.kind === 'repo_map')?.query || request.userMessage,
+    maxFiles,
+    maxSymbols: maxFiles,
+    maxImportEdges: maxFiles,
+    maxTopSymbolsPerFile: 1,
+  }
 }
 
 function requestedReindex(request: ContextRequest): boolean {
