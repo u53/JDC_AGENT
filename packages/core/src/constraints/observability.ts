@@ -75,7 +75,7 @@ interface ExtractedAgentContract {
 export function buildConstraintObservabilitySnapshot(input: BuildConstraintObservabilitySnapshotInput): ConstraintObservabilitySnapshot {
   const inspectedAt = input.inspectedAt ?? Date.now()
   const policyEvents = input.runtime.policyEvents.list()
-  const blockedActions = policyEvents.filter((event) => event.decision === 'block')
+  const blockedActions = activeBlockedActions(policyEvents)
   const changedFiles = input.runtime.verificationLedger.getChangedFiles()
   const requirements = input.runtime.verificationLedger.getRequirements()
   const commands = input.runtime.verificationLedger.getCommands()
@@ -100,6 +100,16 @@ export function buildConstraintObservabilitySnapshot(input: BuildConstraintObser
     contextHealth,
     policyEvents,
   }
+}
+
+function activeBlockedActions(policyEvents: PolicyEvent[]): PolicyEvent[] {
+  const blocked: PolicyEvent[] = []
+  for (let index = policyEvents.length - 1; index >= 0; index -= 1) {
+    const event = policyEvents[index]
+    if (event.decision !== 'block') break
+    blocked.unshift(event)
+  }
+  return blocked
 }
 
 function deriveStatus(input: {

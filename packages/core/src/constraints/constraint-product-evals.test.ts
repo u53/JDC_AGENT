@@ -94,7 +94,7 @@ describe('JDC Agent Constraint Engine Phase 3 product evals', () => {
       inspectedAt: 1_700_000_000_500,
     })
 
-    expect(pendingSnapshot.status).toBe('blocked')
+    expect(pendingSnapshot.status).toBe('needs_verification')
     expect(pendingSnapshot.verification.status).toBe('pending')
     expect(pendingSnapshot.verification.changedFiles).toEqual([
       expect.objectContaining({ filePath: targetPath, status: 'pending', changedByToolUseId: 'edit_allowed' }),

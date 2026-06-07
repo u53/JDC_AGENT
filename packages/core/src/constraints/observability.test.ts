@@ -33,6 +33,48 @@ describe('buildConstraintObservabilitySnapshot', () => {
     expect(snapshot.summary.primary).toBe('有操作被约束拦截')
   })
 
+  it('treats old block events as history after a newer successful edit is verified', () => {
+    const runtime = new ConstraintPolicyRuntime({ now: () => 1_700_000_000_000 })
+
+    runtime.policyEvents.record({
+      phase: 'pre_tool_use',
+      source: 'FileMutationPolicy',
+      decision: 'block',
+      toolName: 'Edit',
+      toolUseId: 'edit_blocked',
+      cwd: '/repo',
+      reason: '/repo/src/app.ts has not been read in this session.',
+    })
+    runtime.policyEvents.record({
+      phase: 'pre_tool_use',
+      source: 'FileMutationPolicy',
+      decision: 'allow',
+      toolName: 'Edit',
+      toolUseId: 'edit_allowed',
+      cwd: '/repo',
+    })
+    runtime.verificationLedger.recordMutation({ filePath: 'src/app.ts', toolUseId: 'edit_allowed' })
+    runtime.verificationLedger.recordCommand({
+      toolUseId: 'bash_1',
+      command: 'pnpm --filter @jdcagnet/core test',
+      kind: 'test',
+      status: 'passed',
+      output: 'ok',
+    })
+
+    const snapshot = buildConstraintObservabilitySnapshot({
+      runtime,
+      cwd: '/repo',
+      inspectedAt: 1_700_000_000_500,
+    })
+
+    expect(snapshot.status).toBe('verified')
+    expect(snapshot.blockedActions).toEqual([])
+    expect(snapshot.policyEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ decision: 'block', toolUseId: 'edit_blocked' }),
+    ]))
+  })
+
   it('reports pending verification after mutations', () => {
     const runtime = new ConstraintPolicyRuntime({ now: () => 100 })
     runtime.verificationLedger.recordMutation({ filePath: 'packages/core/src/session.ts', toolUseId: 'edit_1' })
