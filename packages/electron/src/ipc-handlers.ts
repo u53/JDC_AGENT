@@ -335,6 +335,12 @@ export function registerIpcHandlers(sessionManager: SessionManager, services: De
     return ContextRefreshPayloadSchema.parse(result)
   })
 
+  ipcMain.handle(IPC_CHANNELS.CONSTRAINT_INSPECT, async (_event, payload = {}) => {
+    const input = contextPayload(payload)
+    if (!input.sessionId) throw new Error('sessionId is required for constraint inspect')
+    return sessionManager.inspectConstraints(String(input.sessionId))
+  })
+
   ipcMain.handle(IPC_CHANNELS.CONTEXT_HARVEST_LIST, async (_event, payload = {}) => {
     const input = contextPayload(payload)
     const cwd = resolveContextIpcCwd(sessionManager, input)

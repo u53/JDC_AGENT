@@ -1,4 +1,4 @@
-import type { AppConfig, Message, StreamChunk, ToolExecutionEvent } from '@jdcagnet/core'
+import type { AppConfig, ConstraintObservabilitySnapshot, Message, StreamChunk, ToolExecutionEvent } from '@jdcagnet/core'
 
 export interface McpServerState {
   name: string
@@ -65,6 +65,7 @@ declare global {
       backgroundList: (sessionId: string) => Promise<unknown[]>
       backgroundStop: (sessionId: string, taskId: string) => Promise<unknown>
       backgroundOutput: (sessionId: string, taskId: string, tail?: number) => Promise<unknown>
+      constraintInspect: (sessionId: string) => Promise<ConstraintObservabilitySnapshot>
       onBackgroundStateChanged: (callback: (data: { sessionId: string }) => void) => () => void
       onBackgroundNotification: (callback: (data: { sessionId: string }) => void) => () => void
       // Team Mode
@@ -185,5 +186,10 @@ export const ipc = {
       on('background:state-changed', (_e, data) => cb(data as any)),
     onNotification: (cb: (data: { sessionId: string }) => void) =>
       on('background:notification', (_e, data) => cb(data as any)),
+  },
+
+  constraint: {
+    inspect: (sessionId: string) =>
+      invoke('constraint:inspect', { sessionId }) as Promise<ConstraintObservabilitySnapshot>,
   },
 }

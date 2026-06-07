@@ -101,6 +101,7 @@ const api = {
   backgroundList: (sessionId: string) => ipcRenderer.invoke('background:list', { sessionId }),
   backgroundStop: (sessionId: string, taskId: string) => ipcRenderer.invoke('background:stop', { sessionId, taskId }),
   backgroundOutput: (sessionId: string, taskId: string, tail?: number) => ipcRenderer.invoke('background:output', { sessionId, taskId, tail }),
+  constraintInspect: (sessionId: string) => ipcRenderer.invoke('constraint:inspect', { sessionId }),
   onBackgroundStateChanged: (callback: (data: { sessionId: string }) => void) => {
     const listener = (_event: unknown, data: any) => callback(data)
     ipcRenderer.on('background:state-changed', listener)

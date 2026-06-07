@@ -801,6 +801,29 @@ describe('Session JDC Context Engine runtime integration', () => {
     expect(capturedRequest?.modelProfile).toMatchObject({ id: 'strict_tool_grounding', evidenceStrictness: 'strict' })
   })
 
+  it('inspects the current constraint runtime for UI observability', async () => {
+    const session = await makeSession()
+    const runtime = (session as any).toolRunner.constraintRuntime
+    runtime.verificationLedger.recordMutation({ filePath: 'packages/core/src/session.ts', toolUseId: 'edit_1' })
+
+    const snapshot = session.inspectConstraints({
+      status: 'empty',
+      inspectedAt: 200,
+      bundle: null,
+      acceptedProjectFacts: [],
+      droppedSections: [],
+      providerHealth: [],
+      providerTimings: [],
+      harvestQueue: { jobs: [], summary: { queued: 0, classified: 0, distilling: 0, validating: 0, accepted: 0, pending_review: 0, rejected: 0, skipped: 0, failed: 0 } },
+      memoryReview: { rejected: [] },
+      diagnostics: [],
+    })
+
+    expect(snapshot.status).toBe('needs_verification')
+    expect(snapshot.cwd).toBe((session as any).config.cwd)
+    expect(snapshot.verification.changedFiles[0]).toMatchObject({ filePath: 'packages/core/src/session.ts' })
+  })
+
   it('refreshes model profile before retrying after provider changes', async () => {
     const observedProfiles: Array<string | undefined> = []
     const session = await makeSession({

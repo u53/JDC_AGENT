@@ -7,6 +7,7 @@ import {
   McpManager, loadMcpConfig, saveMcpConfig, type McpServerConfig, type McpServerState,
   IdeManager, type IdeConnection, type OpenDiffParams, type OpenDiffResult, type DiagnosticFile,
   compressImageForAPI, getContextEngine, ensureCodeIndexJob, resolveConfiguredModel, type ConfiguredModelResolution,
+  inspectContext, type ConstraintObservabilitySnapshot,
 } from '@jdcagnet/core'
 import type { ToolExecutionEvent } from '@jdcagnet/core'
 import { Notification, type BrowserWindow } from 'electron'
@@ -605,6 +606,13 @@ export class SessionManager {
     const session = this.sessions.get(sessionId)
     if (!session) return []
     return session.getFileTracker().getFileHistory(filePath)
+  }
+
+  async inspectConstraints(sessionId: string): Promise<ConstraintObservabilitySnapshot> {
+    const session = this.sessions.get(sessionId)
+    if (!session) throw new Error('Session not found')
+    const context = await inspectContext({ sessionId }, { cwd: session.getCwd() })
+    return session.inspectConstraints(context)
   }
 
   async rewindFile(sessionId: string, snapshotId: string) {

@@ -35,6 +35,8 @@ import { classifyError, getMaxRetries, getRetryDelay } from './retry.js'
 import { UsageTracker, type UsageSnapshot } from './usage-tracker.js'
 import { FileTracker } from './file-tracker.js'
 import { FileReadStateCache } from './file-read-state.js'
+import type { ContextInspectPayload } from './tools/context-inspect.js'
+import { buildConstraintObservabilitySnapshot, type ConstraintObservabilitySnapshot } from './constraints/observability.js'
 import {
   ParallelExecutor,
   isEagerExecutableTool,
@@ -615,6 +617,19 @@ export class Session {
 
   getFileTracker(): FileTracker {
     return this.fileTracker
+  }
+
+  getCwd(): string {
+    return this.config.cwd
+  }
+
+  inspectConstraints(context?: ContextInspectPayload | null): ConstraintObservabilitySnapshot {
+    return buildConstraintObservabilitySnapshot({
+      runtime: this.toolRunner.constraintRuntime,
+      cwd: this.config.cwd,
+      context,
+      modelProfile: this.config.modelConfig.modelProfile ?? this.modelProfile,
+    })
   }
 
   getPlanMode(): string {

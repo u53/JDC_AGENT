@@ -89,6 +89,7 @@ export const IPC_CHANNELS = {
   // JDC Context Engine
   CONTEXT_INSPECT: 'context:inspect',
   CONTEXT_REFRESH: 'context:refresh',
+  CONSTRAINT_INSPECT: 'constraint:inspect',
   CONTEXT_HARVEST_LIST: 'context:harvest:list',
   CONTEXT_MEMORY_LIST: 'context:memory:list',
   CONTEXT_MEMORY_ACCEPT: 'context:memory:accept',
