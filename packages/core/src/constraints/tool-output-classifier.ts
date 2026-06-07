@@ -13,6 +13,7 @@ function classifyCommandSegment(segment: string): VerificationKind | undefined {
   const normalized = stripShellComment(segment).trim().toLowerCase()
   if (!normalized) return undefined
 
+  if (/^git\s+diff\s+--check\b/.test(normalized)) return 'diff_check'
   if (/^(vitest|jest|mocha|pytest)\b/.test(normalized)) return 'test'
   if (/^go\s+test\b/.test(normalized)) return 'test'
   if (/^cargo\s+test\b/.test(normalized)) return 'test'

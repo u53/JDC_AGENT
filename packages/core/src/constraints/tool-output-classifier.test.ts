@@ -15,6 +15,11 @@ describe('classifyVerificationCommand', () => {
     expect(classifyVerificationCommand(command)).toEqual({ kind })
   })
 
+  it('classifies git diff check as diff_check verification', () => {
+    expect(classifyVerificationCommand('git diff --check')).toEqual({ kind: 'diff_check' })
+    expect(classifyVerificationCommand('cd packages/core && git diff --check')).toEqual({ kind: 'diff_check' })
+  })
+
   it('ignores non-verification commands', () => {
     expect(classifyVerificationCommand('git status --short')).toBeUndefined()
     expect(classifyVerificationCommand('ls packages/core/src')).toBeUndefined()

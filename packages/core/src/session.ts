@@ -60,6 +60,8 @@ import { classifyHarvestCandidate } from './context/safety.js'
 import { assistantMessagesContainProjectSummary, isHarvestConfirmationSaveTurn } from './context/harvest-router.js'
 import { captureHarvestModelBinding } from './context/model-binding.js'
 import { createProviderDistillerModelClient } from './context/distillers/index.js'
+import { deriveVerificationRequirements } from './constraints/verification-requirements.js'
+import { evaluateTurnEndGate } from './constraints/turn-end-gate.js'
 import { hashContent } from './context/providers/shared.js'
 import { createContextScheduler, type ContextScheduler } from './context/scheduler.js'
 import type { ContextEngineConfig, ContextRequest, HarvestCandidate, HarvestModelBinding, ProviderProtocol } from './context/types.js'
@@ -1074,6 +1076,9 @@ export class Session {
       // OpenAI Responses API often interleaves text/function_call within one response,
       // which renders as text being split by tool cards. Group them into a clean structure.
       const reorderedContent = reorderAssistantContent(assistantContent)
+      if (!hasToolUse) {
+        await this.applyTurnEndGateDisclosure(reorderedContent, runLoopUserMessage, events)
+      }
 
       const assistantMessage: Message = {
         id: uuid(),
@@ -1183,6 +1188,29 @@ export class Session {
 
     this.abortController = null
     this.currentEvents = undefined
+  }
+
+  private async applyTurnEndGateDisclosure(content: any[], userMessage: string, events: SessionEvents): Promise<void> {
+    const ledger = this.toolRunner.constraintRuntime.verificationLedger
+    const changedFiles = ledger.getChangedFiles()
+    if (changedFiles.length === 0) return
+
+    const plan = await deriveVerificationRequirements({
+      cwd: this.config.cwd,
+      changedFiles: changedFiles.map(file => file.filePath),
+      userMessage,
+    })
+    ledger.setRequirements(plan.requirements)
+
+    const decision = evaluateTurnEndGate({
+      changedFiles: ledger.getChangedFiles(),
+      requirements: ledger.getRequirements(),
+      assistantText: textFromContent(content),
+    })
+    if (decision.action !== 'append_disclosure') return
+
+    appendTextContent(content, decision.disclosure)
+    events.onStreamChunk({ type: 'text_delta', text: decision.disclosure })
   }
 
   private async invalidateStaleFileFactsAfterRunLoop(): Promise<void> {
@@ -1691,6 +1719,19 @@ function latestUserText(messages: Message[]): string {
   const message = [...messages].reverse().find(item => item.role === 'user')
   if (!message) return ''
   return message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+}
+
+function textFromContent(content: any[]): string {
+  return content.flatMap(block => block.type === 'text' ? [block.text || ''] : []).join('')
+}
+
+function appendTextContent(content: any[], text: string): void {
+  const lastText = [...content].reverse().find(block => block.type === 'text')
+  if (lastText) {
+    lastText.text = `${lastText.text || ''}${text}`
+    return
+  }
+  content.push({ type: 'text', text })
 }
 
 function stripThinkingForHarvest(message: Message): Message {

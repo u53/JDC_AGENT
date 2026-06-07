@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -33,6 +33,74 @@ afterEach(async () => {
 })
 
 describe('Session JDC Context Engine runtime integration', () => {
+  it('appends verification disclosure when final answer follows an unverified edit', async () => {
+    const session = await makeSession({
+      provider: providerFromChunks([
+        ...assistantToolUseChunks('toolu_write', 'Write', { file_path: 'src/app.ts', content: 'export const value = 1\n' }),
+        { type: 'text_delta', text: 'Done, fixed.' },
+        { type: 'message_end', usage: { inputTokens: 8, outputTokens: 4 } },
+      ]),
+      contextConfig: { enabled: false } as any,
+    })
+    seedVerificationProject(session.config.cwd)
+    ;(session as any).permissionChecker.allowForSession('Write')
+    const events = makeEvents()
+
+    await session.sendMessage('修复 src/app.ts', events)
+
+    const finalAssistant = (events.onMessageComplete as any).mock.calls
+      .map((call: [Message]) => call[0])
+      .filter((message: Message) => message.role === 'assistant')
+      .at(-1)
+    expect(textFromMessages(finalAssistant ? [finalAssistant] : [])).toContain('Verification status: Verification not completed.')
+    expect(events.onStreamChunk).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'text_delta',
+      text: expect.stringContaining('Verification status: Verification not completed.'),
+    }))
+  })
+
+  it('appends failed verification disclosure when a required command failed', async () => {
+    const session = await makeSession({
+      provider: providerFromChunks([
+        ...assistantToolUseChunks('toolu_write', 'Write', { file_path: 'src/app.ts', content: 'export const value = 1\n' }),
+        ...assistantToolUseChunks('toolu_test', 'Bash', { command: 'pnpm test' }),
+        { type: 'text_delta', text: 'All done.' },
+        { type: 'message_end', usage: { inputTokens: 8, outputTokens: 4 } },
+      ]),
+      contextConfig: { enabled: false } as any,
+    })
+    seedVerificationProject(session.config.cwd)
+    session.registerTool({
+      definition: {
+        name: 'Bash',
+        description: 'Test Bash override',
+        inputSchema: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] },
+      },
+      execute: async () => ({
+        content: '1 failed',
+        isError: true,
+        metadata: { command: { shell: 'bash', command: 'pnpm test', exitCode: 1 } },
+      }),
+    })
+    ;(session as any).permissionChecker.allowForSession('Write')
+    ;(session as any).permissionChecker.allowForSession('Bash')
+    const events = makeEvents()
+
+    await session.sendMessage('修复 src/app.ts', events)
+
+    const finalAssistant = (events.onMessageComplete as any).mock.calls
+      .map((call: [Message]) => call[0])
+      .filter((message: Message) => message.role === 'assistant')
+      .at(-1)
+    const finalText = textFromMessages(finalAssistant ? [finalAssistant] : [])
+    expect(finalText).toContain('Verification status: Verification failed.')
+    expect(finalText).toContain('1 failed')
+    expect(events.onStreamChunk).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'text_delta',
+      text: expect.stringContaining('Verification status: Verification failed.'),
+    }))
+  })
+
   it('does not expose legacy SaveMemory after JDC Memory Review takes over', async () => {
     const session = await makeSession({ contextConfig: { enabled: false } as any })
     const defs = (session as any).toolRegistry.getDefinitions().map((definition: ToolDefinition) => definition.name)
@@ -681,10 +749,7 @@ describe('Session JDC Context Engine runtime integration', () => {
 
     const store = makeContextStore({ saveHarvestJobDelayMs: 80 })
     const session = await makeSession({
-      provider: providerFromChunks([
-        { type: 'text_delta', text: 'first harvest' },
-        { type: 'message_end', usage: { inputTokens: 9, outputTokens: 3 } },
-      ]),
+      provider: providerWithTurnTexts(['first harvest', 'second harvest']),
       contextConfig: { injectionEnabled: false, harvestEnabled: true, harvest: { minIntervalMs: 0 }, performance: { harvestMinIntervalMs: 0 } },
       contextStore: store,
       providerProtocol: 'anthropic',
@@ -976,15 +1041,34 @@ describe('Session team status snapshots', () => {
 })
 
 function providerFromChunks(chunks: StreamChunk[], inspectMessages?: (messages: Message[], config: ModelConfig) => void, providerName = 'test-provider', metadata: Record<string, unknown> = {}): ModelProvider {
+  let offset = 0
   return {
     ...metadata,
     name: providerName,
     chat: async () => ({ content: [], usage: { inputTokens: 0, outputTokens: 0 } }),
     stream: async function* (messages: Message[], _tools: ToolDefinition[], config: ModelConfig) {
       inspectMessages?.(messages, config)
-      for (const chunk of chunks) yield chunk
+      while (offset < chunks.length) {
+        const chunk = chunks[offset++]!
+        yield chunk
+        if (chunk.type === 'message_end') break
+      }
     },
   } as ModelProvider
+}
+
+function assistantToolUseChunks(id: string, name: string, input: Record<string, unknown>): StreamChunk[] {
+  return [
+    { type: 'tool_use_start', toolUse: { id, name, input: '' } },
+    { type: 'tool_use_delta', toolUse: { id, name, input: JSON.stringify(input) } },
+    { type: 'tool_use_end' },
+    { type: 'message_end', usage: { inputTokens: 8, outputTokens: 4 } },
+  ]
+}
+
+function seedVerificationProject(cwd: string): void {
+  writeFileSync(path.join(cwd, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n')
+  writeFileSync(path.join(cwd, 'package.json'), JSON.stringify({ scripts: { test: 'vitest run', build: 'tsc' } }))
 }
 
 function providerWithDistillerNoop(chunks: StreamChunk[]): ModelProvider {

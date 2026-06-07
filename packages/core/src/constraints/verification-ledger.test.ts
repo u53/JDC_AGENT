@@ -85,4 +85,236 @@ describe('VerificationLedger', () => {
 
     expect(ledger.getChangedFiles()[0].status).toBe('pending')
   })
+
+  it('tracks verification requirements and marks matching commands passed', () => {
+    const ledger = new VerificationLedger({ now: () => 100 })
+    ledger.recordMutation({ filePath: 'src/app.ts', toolUseId: 'edit_1' })
+    ledger.setRequirements([{
+      id: 'verify_test',
+      kind: 'test',
+      command: 'pnpm test',
+      status: 'pending',
+      files: ['src/app.ts'],
+      reason: 'test script covers changed files.',
+    }])
+
+    ledger.recordCommand({
+      toolUseId: 'bash_1',
+      command: 'pnpm test',
+      kind: 'test',
+      status: 'passed',
+      output: 'ok',
+    })
+
+    expect(ledger.getRequirements()).toEqual([expect.objectContaining({
+      id: 'verify_test',
+      status: 'passed',
+      satisfiedByToolUseId: 'bash_1',
+    })])
+  })
+
+  it('keeps failed requirements visible for the turn-end gate', () => {
+    const ledger = new VerificationLedger({ now: () => 100 })
+    ledger.recordMutation({ filePath: 'src/app.ts', toolUseId: 'edit_1' })
+    ledger.setRequirements([{
+      id: 'verify_test',
+      kind: 'test',
+      command: 'pnpm test',
+      status: 'pending',
+      files: ['src/app.ts'],
+      reason: 'test script covers changed files.',
+    }])
+
+    ledger.recordCommand({
+      toolUseId: 'bash_1',
+      command: 'pnpm test',
+      kind: 'test',
+      status: 'failed',
+      output: '1 failed',
+    })
+
+    expect(ledger.getRequirements()).toEqual([expect.objectContaining({
+      id: 'verify_test',
+      status: 'failed',
+      failure: '1 failed',
+    })])
+  })
+
+  it('preserves passed requirements only when replacement describes the same work', () => {
+    const ledger = new VerificationLedger({ now: () => 100 })
+    ledger.setRequirements([{
+      id: 'verify_test',
+      kind: 'test',
+      command: 'pnpm test',
+      status: 'pending',
+      files: ['src/app.ts'],
+      reason: 'test script covers changed files.',
+    }])
+    ledger.recordCommand({
+      toolUseId: 'bash_1',
+      command: 'pnpm test',
+      kind: 'test',
+      status: 'passed',
+      output: 'ok',
+    })
+
+    ledger.setRequirements([
+      {
+        id: 'verify_test',
+        kind: 'test',
+        command: 'pnpm test',
+        status: 'pending',
+        files: ['src/app.ts'],
+        reason: 'test script covers changed files.',
+      },
+      {
+        id: 'verify_build',
+        kind: 'build',
+        command: 'pnpm build',
+        status: 'pending',
+        files: ['src/app.ts'],
+        reason: 'build script covers changed files.',
+      },
+    ])
+
+    expect(ledger.getRequirements()).toEqual([
+      expect.objectContaining({
+        id: 'verify_test',
+        status: 'passed',
+        satisfiedByToolUseId: 'bash_1',
+        reason: 'test script covers changed files.',
+      }),
+      expect.objectContaining({
+        id: 'verify_build',
+        status: 'pending',
+      }),
+    ])
+  })
+
+  it('resets a passed requirement when replacement covers different files', () => {
+    let currentTime = 100
+    const ledger = new VerificationLedger({ now: () => currentTime })
+    ledger.recordMutation({ filePath: 'src/app.ts', toolUseId: 'edit_1' })
+    ledger.setRequirements([{
+      id: 'verify_test',
+      kind: 'test',
+      command: 'pnpm test',
+      status: 'pending',
+      files: ['src/app.ts'],
+      reason: 'test script covers changed files.',
+    }])
+    currentTime = 200
+    ledger.recordCommand({
+      toolUseId: 'bash_1',
+      command: 'pnpm test',
+      kind: 'test',
+      status: 'passed',
+      output: 'ok',
+    })
+
+    currentTime = 300
+    ledger.recordMutation({ filePath: 'src/other.ts', toolUseId: 'edit_2' })
+    ledger.setRequirements([{
+      id: 'verify_test',
+      kind: 'test',
+      command: 'pnpm test',
+      status: 'pending',
+      files: ['src/other.ts'],
+      reason: 'test script covers changed files.',
+    }])
+
+    expect(ledger.getRequirements()).toEqual([expect.objectContaining({
+      id: 'verify_test',
+      status: 'pending',
+      files: ['src/other.ts'],
+    })])
+  })
+
+  it('removes requirements omitted from the replacement set', () => {
+    const ledger = new VerificationLedger({ now: () => 100 })
+    ledger.setRequirements([
+      {
+        id: 'verify_test',
+        kind: 'test',
+        command: 'pnpm test',
+        status: 'pending',
+        files: ['src/app.ts'],
+        reason: 'test script covers changed files.',
+      },
+      {
+        id: 'verify_build',
+        kind: 'build',
+        command: 'pnpm build',
+        status: 'unavailable',
+        files: ['src/app.ts'],
+        reason: 'No build script found in package.json.',
+      },
+    ])
+
+    ledger.setRequirements([{
+      id: 'verify_diff_check',
+      kind: 'diff_check',
+      command: 'git diff --check',
+      status: 'pending',
+      files: ['docs/phase5.md'],
+      reason: 'Documentation-only changes require whitespace/conflict-marker verification.',
+    }])
+
+    expect(ledger.getRequirements()).toEqual([expect.objectContaining({ id: 'verify_diff_check' })])
+  })
+
+  it('applies existing command history to requirements derived after commands run', () => {
+    let currentTime = 100
+    const ledger = new VerificationLedger({ now: () => currentTime })
+    ledger.recordMutation({ filePath: 'src/app.ts', toolUseId: 'edit_1' })
+    currentTime = 200
+    ledger.recordCommand({
+      toolUseId: 'bash_1',
+      command: 'pnpm test',
+      kind: 'test',
+      status: 'failed',
+      output: '1 failed',
+    })
+
+    ledger.setRequirements([{
+      id: 'verify_test',
+      kind: 'test',
+      command: 'pnpm test',
+      status: 'pending',
+      files: ['src/app.ts'],
+      reason: 'test script covers changed files.',
+    }])
+
+    expect(ledger.getRequirements()).toEqual([expect.objectContaining({
+      id: 'verify_test',
+      status: 'failed',
+      satisfiedByToolUseId: 'bash_1',
+      failure: '1 failed',
+    })])
+  })
+
+  it('reads pending and unavailable requirements separately', () => {
+    const ledger = new VerificationLedger({ now: () => 100 })
+    ledger.setRequirements([
+      {
+        id: 'verify_test',
+        kind: 'test',
+        command: 'pnpm test',
+        status: 'pending',
+        files: ['src/app.ts'],
+        reason: 'test script covers changed files.',
+      },
+      {
+        id: 'verify_build',
+        kind: 'build',
+        command: 'pnpm build',
+        status: 'unavailable',
+        files: ['src/app.ts'],
+        reason: 'No build script found in package.json.',
+      },
+    ])
+
+    expect(ledger.getPendingRequirements()).toEqual([expect.objectContaining({ id: 'verify_test' })])
+    expect(ledger.getUnavailableRequirements()).toEqual([expect.objectContaining({ id: 'verify_build' })])
+  })
 })

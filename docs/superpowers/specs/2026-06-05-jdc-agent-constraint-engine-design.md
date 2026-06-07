@@ -1065,6 +1065,16 @@ Verification requirements should be visible in the final answer:
 - skipped with reason;
 - unavailable with reason.
 
+Phase 5 implementation decision:
+
+- Verification requirements are derived from changed files, root package scripts, package-manager lockfiles, and docs-only changes.
+- `VerificationLedger` stores both changed-file records and verification requirement records.
+- Shell command metadata updates matching verification requirements by kind.
+- `git diff --check` is classified as `diff_check` verification for docs and whitespace-sensitive changes.
+- `Session.runLoop()` applies a deterministic TurnEnd gate before final assistant messages are persisted.
+- Phase 5 appends disclosure for pending, unavailable, skipped, or failed verification; it does not silently run commands or add model-assisted final-claim checking.
+- UI observability and model profile strictness remain deferred to later phases.
+
 ## UI Design Requirements
 
 The UI should make constraints visible without turning normal users into operators.

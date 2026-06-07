@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { evaluateTurnEndGate } from '../constraints/turn-end-gate.js'
 import { ContextEngine } from '../context-engine/engine.js'
 import { createContextEngineTools } from '../tools/context-engine-tools.js'
 import { buildContextBundle } from './orchestrator.js'
@@ -711,6 +712,61 @@ describe('JDC Context Engine product evals', () => {
     expect(result.renderedPrompt).toContain('agent_contract')
     expect(result.renderedPrompt).toContain('Missing evidence')
     expect(result.renderedPrompt).toContain('Existing files must be read with fresh content before mutation.')
+  })
+
+  it('Phase 5 eval: final answer discloses pending verification after edit', () => {
+    const decision = evaluateTurnEndGate({
+      changedFiles: [{
+        filePath: 'packages/core/src/session.ts',
+        changedByToolUseId: 'edit_1',
+        changedAt: 100,
+        status: 'pending',
+        updatedAt: 100,
+      }],
+      requirements: [{
+        id: 'verify_test',
+        kind: 'test',
+        command: 'pnpm test',
+        status: 'pending',
+        files: ['packages/core/src/session.ts'],
+        reason: 'test script covers changed files.',
+      }],
+      assistantText: '修好了。',
+    })
+
+    expect(decision).toEqual(expect.objectContaining({ action: 'append_disclosure' }))
+    if (decision.action === 'append_disclosure') {
+      expect(decision.disclosure).toContain('Verification not completed')
+    }
+  })
+
+  it('Phase 5 eval: final answer discloses failed verification', () => {
+    const decision = evaluateTurnEndGate({
+      changedFiles: [{
+        filePath: 'packages/core/src/session.ts',
+        changedByToolUseId: 'edit_1',
+        changedAt: 100,
+        status: 'failed',
+        verificationFailure: '1 failed',
+        updatedAt: 100,
+      }],
+      requirements: [{
+        id: 'verify_test',
+        kind: 'test',
+        command: 'pnpm test',
+        status: 'failed',
+        files: ['packages/core/src/session.ts'],
+        reason: 'test script covers changed files.',
+        failure: '1 failed',
+      }],
+      assistantText: 'All done.',
+    })
+
+    expect(decision).toEqual(expect.objectContaining({ action: 'append_disclosure', severity: 'error' }))
+    if (decision.action === 'append_disclosure') {
+      expect(decision.disclosure).toContain('Verification failed')
+      expect(decision.disclosure).toContain('1 failed')
+    }
   })
 })
 

@@ -173,4 +173,33 @@ describe('ConstraintPolicyRuntime', () => {
       verificationFailure: 'test failed',
     })
   })
+
+  it('records git diff check as a passed verification command', () => {
+    const runtime = new ConstraintPolicyRuntime({ now: () => 100 })
+    runtime.verificationLedger.setRequirements([{
+      id: 'verify_diff_check',
+      kind: 'diff_check',
+      command: 'git diff --check',
+      status: 'pending',
+      files: ['docs/plan.md'],
+      reason: 'Docs-only changes require diff check.',
+    }])
+
+    runtime.postToolUse({
+      toolName: 'Bash',
+      toolUseId: 'bash_1',
+      input: { command: 'git diff --check' },
+      cwd: '/repo',
+      fileReadState: new FileReadStateCache(),
+      result: {
+        content: '',
+        metadata: { command: { shell: 'bash', command: 'git diff --check', exitCode: 0 } },
+      },
+    })
+
+    expect(runtime.verificationLedger.getRequirements()[0]).toMatchObject({
+      id: 'verify_diff_check',
+      status: 'passed',
+    })
+  })
 })
