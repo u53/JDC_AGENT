@@ -17,7 +17,10 @@ function snapshot(overrides: Partial<ConstraintObservabilitySnapshot> = {}): Con
     verification: {
       status: 'pending',
       changedFiles: [{ filePath: 'src/app.ts', changedByToolUseId: 'edit_1', changedAt: 1, status: 'pending', updatedAt: 1 }],
-      requirements: [{ id: 'verify_test', kind: 'test', command: 'pnpm test', status: 'pending', files: ['src/app.ts'], reason: 'covers edit', coveredChangedAt: 1 }],
+      requirements: [
+        { id: 'verify_test', kind: 'test', command: 'pnpm test', status: 'pending', files: ['src/app.ts'], reason: 'covers edit', coveredChangedAt: 1 },
+        { id: 'verify_typecheck', kind: 'typecheck', command: 'pnpm tsc --noEmit', status: 'pending', files: ['src/app.ts'], reason: 'TypeScript 变更需要类型检查', coveredChangedAt: 1 },
+      ],
       commands: [],
     },
     contextHealth: { status: 'available', latestBundleId: 'ctx_1', providerCount: 3, unhealthyProviderCount: 1, diagnostics: [] },
@@ -35,6 +38,13 @@ describe('ConstraintStatusPanel', () => {
     expect(html).toContain('任务意图')
     expect(html).toContain('code_edit')
     expect(html).toContain('src/app.ts')
+    expect(html).toContain('需要验证')
+    expect(html).toContain('测试')
+    expect(html).toContain('类型检查')
+    expect(html).toContain('待验证')
+    expect(html).toContain('pnpm test')
+    expect(html).toContain('pnpm tsc --noEmit')
+    expect(html).toContain('covers edit')
     expect(html).toContain('strict_tool_grounding')
   })
 

@@ -63,6 +63,29 @@ export function ConstraintStatusPanel({ snapshot, loading, error, advancedVisibl
         </section>
       )}
 
+      {snapshot.verification.requirements.filter(isActionableRequirement).length > 0 && (
+        <section className="space-y-2">
+          <div className="text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]">需要验证</div>
+          {snapshot.verification.requirements.filter(isActionableRequirement).map((requirement) => (
+            <div key={requirement.id} className="rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2">
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <Badge tone={requirement.status === 'failed' ? 'bad' : 'warn'}>{verificationRequirementKindLabel(requirement.kind)}</Badge>
+                  <Badge tone={requirement.status === 'failed' ? 'bad' : 'warn'}>{verificationRequirementStatusLabel(requirement.status)}</Badge>
+                </div>
+                {requirement.command && <span className="min-w-0 whitespace-normal break-words font-mono text-[11px] text-[var(--text)] [overflow-wrap:anywhere]">{requirement.command}</span>}
+              </div>
+              {requirement.reason && <div className="mt-1 whitespace-normal break-words text-[11px] text-[var(--muted)] [overflow-wrap:anywhere]">{requirement.reason}</div>}
+              {requirement.files.length > 0 && (
+                <div className="mt-1 whitespace-normal break-words font-mono text-[10px] text-[var(--muted)] [overflow-wrap:anywhere]">
+                  {requirement.files.join(', ')}
+                </div>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
+
       {snapshot.verification.changedFiles.length > 0 && (
         <section className="space-y-2">
           <div className="text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]">已修改文件</div>
@@ -120,6 +143,27 @@ function verificationLabel(status: ConstraintObservabilitySnapshot['verification
 function contextHealthLabel(snapshot: ConstraintObservabilitySnapshot): string {
   if (snapshot.contextHealth.providerCount === 0) return statusLabel(snapshot.contextHealth.status)
   return `${snapshot.contextHealth.providerCount - snapshot.contextHealth.unhealthyProviderCount}/${snapshot.contextHealth.providerCount}`
+}
+
+function isActionableRequirement(requirement: ConstraintObservabilitySnapshot['verification']['requirements'][number]): boolean {
+  return requirement.status === 'pending' || requirement.status === 'failed' || requirement.status === 'unavailable'
+}
+
+function verificationRequirementKindLabel(kind: string): string {
+  if (kind === 'test') return '测试'
+  if (kind === 'build') return '构建'
+  if (kind === 'lint') return '检查'
+  if (kind === 'typecheck') return '类型检查'
+  if (kind === 'manual') return '手动检查'
+  if (kind === 'diff' || kind === 'diff_check') return '差异检查'
+  return kind
+}
+
+function verificationRequirementStatusLabel(status: string): string {
+  if (status === 'pending') return '待验证'
+  if (status === 'failed') return '验证失败'
+  if (status === 'unavailable') return '不可用'
+  return status
 }
 
 function changedFileStatusLabel(status: string): string {
