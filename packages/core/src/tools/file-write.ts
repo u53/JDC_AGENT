@@ -44,7 +44,6 @@ Usage notes:
 
       await mkdir(path.dirname(filePath), { recursive: true })
       await writeFile(filePath, contentInput, 'utf-8')
-      context.fileReadState?.invalidate(filePath)
 
       if (context.fileTracker && context.toolUseId) {
         await context.fileTracker.recordChange(filePath, contentBefore, contentInput, context.toolUseId, context.turnIndex || 0)

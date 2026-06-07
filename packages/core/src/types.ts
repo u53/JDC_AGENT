@@ -98,6 +98,24 @@ export interface PromptSegment {
 
 export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
+export interface ToolResultRetentionConfig {
+  /**
+   * Legacy pre-compaction cleanup. Defaults to false because the product
+   * prioritizes evidence retention over token conservation.
+   */
+  microCompact?: boolean
+  /** Maximum chars kept for successful tool_result blocks that survive compaction. */
+  keptToolResultChars?: number
+  /** Maximum chars kept for error tool_result blocks that survive compaction. */
+  keptErrorToolResultChars?: number
+  /** Maximum chars from old successful tool_result blocks shown to the summarizer. */
+  summaryToolResultChars?: number
+  /** Maximum chars from old error tool_result blocks shown to the summarizer. */
+  summaryErrorToolResultChars?: number
+  /** Total chars from all old tool_result blocks shown to the summarizer. */
+  summaryTotalToolResultChars?: number
+}
+
 export interface ModelConfig {
   model: string
   maxTokens: number
@@ -106,6 +124,7 @@ export interface ModelConfig {
   effort?: ReasoningEffort
   contextWindow?: number
   compressAt?: number
+  toolResultRetention?: ToolResultRetentionConfig
   /**
    * Stable identifier for cache routing. Same value across calls of the
    * same role (main session / PM / specific worker role / skill router) so

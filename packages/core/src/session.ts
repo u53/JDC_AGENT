@@ -708,6 +708,10 @@ export class Session {
   }
 
   private microCompact(): void {
+    if (this.config.modelConfig.toolResultRetention?.microCompact !== true) {
+      return
+    }
+
     const snapshot = this.usageTracker.getSnapshot()
     let mutated = false
 

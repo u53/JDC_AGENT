@@ -1,4 +1,5 @@
-import type { FileReadStateCache } from '../file-read-state.js'
+import { readFileSync } from 'node:fs'
+import type { FileReadStateCache, MutationSnapshotOptions } from '../file-read-state.js'
 import type { ToolResult } from '../tool-registry.js'
 import { evaluateFileMutationPolicy } from './file-mutation-policy.js'
 import { PolicyEventLedger } from './policy-events.js'
@@ -78,7 +79,12 @@ export class ConstraintPolicyRuntime {
       }
 
       for (const mutation of context.result.metadata?.mutations ?? []) {
-        context.fileReadState.invalidate(mutation.filePath)
+        try {
+          const content = readFileSync(mutation.filePath, 'utf-8')
+          context.fileReadState.recordMutationSnapshot(mutation.filePath, content, mutationSnapshotOptions(context.toolName, context.input))
+        } catch {
+          context.fileReadState.invalidate(mutation.filePath)
+        }
         this.verificationLedger.recordMutation({
           filePath: mutation.filePath,
           toolUseId: context.toolUseId ?? '',
@@ -115,4 +121,27 @@ export class ConstraintPolicyRuntime {
       }
     }
   }
+}
+
+function mutationSnapshotOptions(toolName: string, input: Record<string, unknown>): MutationSnapshotOptions {
+  if (toolName === 'Edit') {
+    const oldText = typeof input.old_string === 'string' ? input.old_string : undefined
+    const newText = typeof input.new_string === 'string' ? input.new_string : undefined
+    if (oldText !== undefined && newText !== undefined) {
+      return { replacements: [{ oldText, newText, replaceAll: input.replace_all === true }] }
+    }
+  }
+
+  if (toolName === 'MultiEdit' && Array.isArray(input.edits)) {
+    const replacements = input.edits.flatMap((edit): NonNullable<MutationSnapshotOptions['replacements']> => {
+      if (!edit || typeof edit !== 'object') return []
+      const record = edit as Record<string, unknown>
+      return typeof record.old_string === 'string' && typeof record.new_string === 'string'
+        ? [{ oldText: record.old_string, newText: record.new_string }]
+        : []
+    })
+    return replacements.length > 0 ? { replacements } : {}
+  }
+
+  return {}
 }

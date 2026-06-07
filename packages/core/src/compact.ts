@@ -102,7 +102,40 @@ Output format:
 
 export const KEEP_RECENT = 6
 export const MIN_COMPACT_LENGTH = KEEP_RECENT + 2
-const MAX_KEPT_TOOL_RESULT_CHARS = 1200
+const DEFAULT_KEPT_TOOL_RESULT_CHARS = 8_000
+const DEFAULT_KEPT_ERROR_TOOL_RESULT_CHARS = 16_000
+const DEFAULT_SUMMARY_TOOL_RESULT_CHARS = 4_000
+const DEFAULT_SUMMARY_ERROR_TOOL_RESULT_CHARS = 8_000
+const DEFAULT_SUMMARY_TOTAL_TOOL_RESULT_CHARS = 24_000
+
+function retentionBudget(
+  config: ModelConfig,
+  isError: boolean | undefined,
+  kind: 'kept' | 'summary'
+): number {
+  const retention = config.toolResultRetention
+  if (kind === 'kept') {
+    return isError
+      ? retention?.keptErrorToolResultChars ?? DEFAULT_KEPT_ERROR_TOOL_RESULT_CHARS
+      : retention?.keptToolResultChars ?? DEFAULT_KEPT_TOOL_RESULT_CHARS
+  }
+  return isError
+    ? retention?.summaryErrorToolResultChars ?? DEFAULT_SUMMARY_ERROR_TOOL_RESULT_CHARS
+    : retention?.summaryToolResultChars ?? DEFAULT_SUMMARY_TOOL_RESULT_CHARS
+}
+
+function summaryTotalBudget(config: ModelConfig): number {
+  return config.toolResultRetention?.summaryTotalToolResultChars ?? DEFAULT_SUMMARY_TOTAL_TOOL_RESULT_CHARS
+}
+
+function headTail(text: string, maxChars: number, label: string): string {
+  if (text.length <= maxChars) return text
+  const marker = `\n[${label} — original ${text.length} chars, ${text.length - maxChars} chars removed.]\n`
+  const bodyBudget = Math.max(0, maxChars - marker.length)
+  const headChars = Math.ceil(bodyBudget / 2)
+  const tailChars = Math.floor(bodyBudget / 2)
+  return `${text.slice(0, headChars)}${marker}${text.slice(text.length - tailChars)}`
+}
 
 export type CompactStatus = 'compacted' | 'skipped' | 'failed'
 export type CompactSkipReason = 'too_short'
@@ -155,11 +188,11 @@ export async function compactMessages(
   }
 
   const toCompress = messages.slice(0, cutIndex)
-  const toKeep = trimKeptToolResults(messages.slice(cutIndex))
+  const toKeep = trimKeptToolResults(messages.slice(cutIndex), config)
 
   const compactConfig: ModelConfig = { ...config, systemPrompt: COMPACT_PROMPT, maxTokens: 16384 }
   const compactMsgs: Message[] = [
-    ...sanitizeForSummaryPrompt(toCompress),
+    ...sanitizeForSummaryPrompt(toCompress, config),
     {
       id: uuid(),
       role: 'user',
@@ -263,10 +296,11 @@ function pickCutIndex(messages: Message[], desired: number): number {
   return cut
 }
 
-function sanitizeForSummaryPrompt(messages: Message[]): Message[] {
+function sanitizeForSummaryPrompt(messages: Message[], config: ModelConfig): Message[] {
   // The summarizer model only needs textual content; passing tool_use without
   // its matching tool_result (or vice versa) confuses providers and may be
   // rejected. Replace tool blocks with concise text descriptors.
+  const toolResultBudgets = allocateSummaryToolResultBudgets(messages, config)
   return messages.map(msg => {
     const newContent: ContentBlock[] = msg.content.map(block => {
       if (block.type === 'tool_use') {
@@ -274,7 +308,13 @@ function sanitizeForSummaryPrompt(messages: Message[]): Message[] {
         return { type: 'text', text: `[tool call: ${block.name}(${inputPreview})]` }
       }
       if (block.type === 'tool_result') {
-        const preview = typeof block.content === 'string' ? block.content.slice(0, 500) : ''
+        const raw = typeof block.content === 'string' ? block.content : ''
+        const blockBudget = toolResultBudgets.get(block) ?? 0
+        if (blockBudget <= 0) {
+          const errMark = block.is_error ? ' (error)' : ''
+          return { type: 'text', text: `[tool result${errMark}: Tool result summary evidence budget exhausted — original ${raw.length} chars omitted.]` }
+        }
+        const preview = headTail(raw, blockBudget, 'Tool result summarized with head and tail')
         const errMark = block.is_error ? ' (error)' : ''
         return { type: 'text', text: `[tool result${errMark}: ${preview}]` }
       }
@@ -284,20 +324,50 @@ function sanitizeForSummaryPrompt(messages: Message[]): Message[] {
   })
 }
 
-function trimKeptToolResults(messages: Message[]): Message[] {
+function allocateSummaryToolResultBudgets(messages: Message[], config: ModelConfig): Map<ContentBlock, number> {
+  const allocations = new Map<ContentBlock, number>()
+  const blocks: Array<{ block: ContentBlock; index: number }> = []
+
+  messages.forEach((msg, msgIndex) => {
+    msg.content.forEach((block, blockIndex) => {
+      if (block.type === 'tool_result') {
+        blocks.push({ block, index: msgIndex * 1_000 + blockIndex })
+      }
+    })
+  })
+
+  let remaining = summaryTotalBudget(config)
+  const prioritized = [...blocks].sort((a, b) => {
+    const aError = a.block.type === 'tool_result' && a.block.is_error ? 1 : 0
+    const bError = b.block.type === 'tool_result' && b.block.is_error ? 1 : 0
+    if (aError !== bError) return bError - aError
+    return b.index - a.index
+  })
+
+  for (const { block } of prioritized) {
+    if (block.type !== 'tool_result') continue
+    const budget = Math.min(retentionBudget(config, block.is_error, 'summary'), remaining)
+    allocations.set(block, budget)
+    remaining -= budget
+  }
+
+  return allocations
+}
+
+function trimKeptToolResults(messages: Message[], config: ModelConfig): Message[] {
   return messages.map(msg => {
     let changed = false
     const newContent: ContentBlock[] = msg.content.map(block => {
-      if (block.type !== 'tool_result' || block.content.length <= MAX_KEPT_TOOL_RESULT_CHARS) {
-        return block
-      }
+      if (block.type !== 'tool_result') return block
+
+      const budget = retentionBudget(config, block.is_error, 'kept')
+      if (block.content.length <= budget) return block
 
       changed = true
-      const removed = block.content.length - MAX_KEPT_TOOL_RESULT_CHARS
       const errMark = block.is_error ? ' error' : ''
       return {
         ...block,
-        content: `${block.content.slice(0, MAX_KEPT_TOOL_RESULT_CHARS)}\n[Tool result truncated during compaction${errMark} — original ${block.content.length} chars, ${removed} chars removed.]`,
+        content: headTail(block.content, budget, `Tool result truncated during compaction${errMark}`),
       }
     })
 

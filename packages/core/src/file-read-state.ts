@@ -8,6 +8,16 @@ export interface FreshReadCheckOptions {
   requireFullFile?: boolean
 }
 
+export interface MutationReplacement {
+  oldText: string
+  newText: string
+  replaceAll?: boolean
+}
+
+export interface MutationSnapshotOptions {
+  replacements?: MutationReplacement[]
+}
+
 export type FreshReadCheck =
   | { ok: true; entry: FileReadEntry; reason?: never; message?: never }
   | { ok: false; reason: FreshReadFailureReason; message: string; entry?: FileReadEntry }
@@ -50,6 +60,50 @@ export class FileReadStateCache {
    * Record that a file was read. Call after a successful file_read.
    */
   recordRead(filePath: string, offset: number, limit: number, totalLines = Number.POSITIVE_INFINITY, content = ''): void {
+    this.recordEntry(filePath, offset, limit, totalLines, content, true)
+  }
+
+  /**
+   * Record the current file content after a successful mutation. Mutation
+   * snapshots inherit the ranges that were already visible; they do not expand
+   * partial reads into full-file coverage.
+   */
+  recordMutationSnapshot(filePath: string, content: string, options: MutationSnapshotOptions = {}): void {
+    const totalLines = content.split('\n').length
+    const existingEntries = [...(this.cache.get(filePath) ?? [])]
+    if (existingEntries.length === 0) {
+      this.recordEntry(filePath, 0, totalLines, totalLines, content, false)
+      return
+    }
+
+    const fullFileEntry = existingEntries.find((entry) => entry.fullFile)
+    if (fullFileEntry) {
+      this.recordEntry(filePath, 0, totalLines, totalLines, content, false)
+      return
+    }
+
+    const seenContent = new Set<string>()
+    for (let index = existingEntries.length - 1; index >= 0; index -= 1) {
+      const entry = existingEntries[index]
+      const updatedEntryContent = applyReplacements(entry.content, options.replacements ?? [])
+      if (!updatedEntryContent || seenContent.has(updatedEntryContent)) continue
+      seenContent.add(updatedEntryContent)
+
+      const offset = uniqueLineOffset(content, updatedEntryContent)
+      if (offset === undefined) continue
+      const limit = updatedEntryContent.split('\n').length
+      this.recordEntry(filePath, offset, limit, totalLines, updatedEntryContent, false)
+    }
+  }
+
+  private recordEntry(
+    filePath: string,
+    offset: number,
+    limit: number,
+    totalLines: number,
+    content: string,
+    fromRead: boolean
+  ): void {
     try {
       const stat = statSync(filePath)
       const effectiveLimit = limit === Infinity ? totalLines : limit
@@ -63,7 +117,7 @@ export class FileReadStateCache {
         fullFile,
         contentHash: hashText(content),
         content,
-        fromRead: true,
+        fromRead,
       }
       const entries = this.cache.get(filePath) ?? []
       entries.push(entry)
@@ -105,7 +159,11 @@ export class FileReadStateCache {
   checkFreshRead(filePath: string, options: FreshReadCheckOptions = {}): FreshReadCheck {
     const entries = this.cache.get(filePath) ?? []
     if (entries.length === 0) {
-      return { ok: false, reason: 'not_read', message: `${filePath} has not been read in this session.` }
+      return {
+        ok: false,
+        reason: 'not_read',
+        message: `${filePath} has not been read in this session. Missing edit anchor: ${this.previewRequiredText(options.requiredText)}.`,
+      }
     }
 
     const freshEntries = entries.filter((entry) => this.isEntryFresh(filePath, entry))
@@ -124,7 +182,7 @@ export class FileReadStateCache {
         return {
           ok: false,
           reason: 'range_not_read',
-          message: `${filePath} was read only in ranges. Read the entire file before overwriting it.`,
+          message: `${filePath} was read only in ranges. Read the entire file before overwriting it. Read ranges: ${this.describeEntries(freshEntries)}.`,
           entry: freshEntries.at(-1),
         }
       }
@@ -139,7 +197,7 @@ export class FileReadStateCache {
       return {
         ok: false,
         reason: 'range_not_read',
-        message: `${filePath} was read only in ranges that do not include the edit anchor. Read the relevant range before editing.`,
+        message: `${filePath} was read only in ranges that do not include the edit anchor. Read the relevant range before editing. Read ranges: ${this.describeEntries(freshEntries)}. Missing edit anchor: ${this.previewRequiredText(requiredText)}.`,
         entry: freshEntries.at(-1),
       }
     }
@@ -154,6 +212,25 @@ export class FileReadStateCache {
 
   get size(): number {
     return this.entryOrder.length
+  }
+
+  private describeEntries(entries: FileReadEntry[]): string {
+    if (entries.length === 0) return 'none'
+    return entries
+      .map((entry) => {
+        const start = entry.offset + 1
+        const effectiveLimit = entry.limit === Infinity ? entry.totalLines : entry.limit
+        const end = Math.min(entry.offset + effectiveLimit, entry.totalLines)
+        const source = entry.fromRead ? 'Read' : 'mutation snapshot'
+        return `${source} lines ${start}-${end}${entry.fullFile ? ' (full file)' : ''}`
+      })
+      .join('; ')
+  }
+
+  private previewRequiredText(requiredText?: string): string {
+    if (!requiredText) return '(none)'
+    const normalized = requiredText.replace(/\s+/g, ' ').trim()
+    return normalized.length > 160 ? `${normalized.slice(0, 157)}...` : normalized
   }
 
   private isEntryFresh(filePath: string, entry: FileReadEntry): boolean {
@@ -207,4 +284,30 @@ export class FileReadStateCache {
 
 function hashText(text: string): string {
   return createHash('sha1').update(text).digest('hex')
+}
+
+function applyReplacements(text: string, replacements: MutationReplacement[]): string {
+  let updated = text
+  for (const replacement of replacements) {
+    if (!updated.includes(replacement.oldText)) continue
+    updated = replacement.replaceAll
+      ? updated.split(replacement.oldText).join(replacement.newText)
+      : updated.replace(replacement.oldText, replacement.newText)
+  }
+  return updated
+}
+
+function uniqueLineOffset(content: string, snippet: string): number | undefined {
+  const contentLines = content.split('\n')
+  const snippetLines = snippet.split('\n')
+  let matchOffset: number | undefined
+
+  for (let offset = 0; offset <= contentLines.length - snippetLines.length; offset += 1) {
+    const candidate = contentLines.slice(offset, offset + snippetLines.length).join('\n')
+    if (candidate !== snippet) continue
+    if (matchOffset !== undefined) return undefined
+    matchOffset = offset
+  }
+
+  return matchOffset
 }

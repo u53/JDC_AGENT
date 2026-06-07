@@ -251,6 +251,48 @@ describe('Session JDC Context Engine runtime integration', () => {
     expect(textFromMessages(foregroundMessages)).not.toContain('seed user 0')
   })
 
+  it('does not micro-compact old tool results by default', async () => {
+    const session = await makeSession({
+      contextConfig: { enabled: false } as any,
+      modelConfig: { contextWindow: 128_000, compressAt: 0.9 },
+    })
+    ;(session as any).messages = Array.from({ length: 12 }, (_, i) => ({
+      id: `u${i}`,
+      role: 'user' as const,
+      content: [{ type: 'tool_result' as const, tool_use_id: `toolu_${i}`, content: `result ${i}\n${'x'.repeat(600)}`, is_error: false }],
+      timestamp: i,
+    }))
+    ;(session as any).usageTracker.getSnapshot = () => ({ contextUsedPercent: 50 })
+
+    ;(session as any).microCompact()
+
+    expect(textFromMessages(session.getMessages())).toContain('result 0')
+    expect(textFromMessages(session.getMessages())).toContain('result 11')
+    expect(textFromMessages(session.getMessages())).not.toContain('Tool result cleared')
+  })
+
+  it('keeps legacy micro-compact available when explicitly enabled', async () => {
+    const session = await makeSession({
+      contextConfig: { enabled: false } as any,
+      modelConfig: {
+        contextWindow: 128_000,
+        compressAt: 0.9,
+        toolResultRetention: { microCompact: true },
+      },
+    })
+    ;(session as any).messages = Array.from({ length: 12 }, (_, i) => ({
+      id: `u${i}`,
+      role: 'user' as const,
+      content: [{ type: 'tool_result' as const, tool_use_id: `toolu_${i}`, content: `result ${i}\n${'x'.repeat(600)}`, is_error: false }],
+      timestamp: i,
+    }))
+    ;(session as any).usageTracker.getSnapshot = () => ({ contextUsedPercent: 50 })
+
+    ;(session as any).microCompact()
+
+    expect(textFromMessages(session.getMessages())).toContain('Tool result cleared')
+  })
+
   it('continues prompt_too_long recovery with trimmed recent tool results', async () => {
     const largeOutput = `start\n${'x'.repeat(12_000)}\nend`
     let mainCalls = 0
@@ -304,7 +346,8 @@ describe('Session JDC Context Engine runtime integration', () => {
     expect(textFromMessages(continuedMessages)).toContain('Recovered after prompt too long.')
     expect(textFromMessages(continuedMessages)).toContain('recover and keep going')
     expect(textFromMessages(continuedMessages)).toContain('Tool result truncated')
-    expect(textFromMessages(continuedMessages)).not.toContain('end')
+    expect(textFromMessages(continuedMessages)).toContain('start')
+    expect(textFromMessages(continuedMessages)).toContain('end')
     expect(textFromMessages(session.getMessages())).toContain('continued after prompt compact')
   })
 

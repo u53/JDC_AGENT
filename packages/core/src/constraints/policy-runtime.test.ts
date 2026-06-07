@@ -98,6 +98,27 @@ describe('ConstraintPolicyRuntime', () => {
     ])
   })
 
+  it('records mutation snapshots by reading the changed file from disk', async () => {
+    const runtime = new ConstraintPolicyRuntime({ now: () => 10 })
+    const fileReadState = new FileReadStateCache()
+    fileReadState.recordRead(filePath, 0, 2000, 2, 'const value = 1\n')
+    await writeFile(filePath, 'const value = 2\n', 'utf-8')
+
+    runtime.postToolUse({
+      toolName: 'Edit',
+      toolUseId: 'edit_1',
+      input: { file_path: filePath },
+      cwd: tmpDir,
+      fileReadState,
+      result: {
+        content: 'Successfully edited',
+        metadata: { mutations: [{ filePath, kind: 'edit' }] },
+      },
+    })
+
+    expect(fileReadState.checkFreshRead(filePath, { requiredText: 'const value = 2' }).ok).toBe(true)
+  })
+
   it('marks pending changed files verified after a successful verification command', () => {
     const runtime = new ConstraintPolicyRuntime({ now: () => 10 })
     const fileReadState = new FileReadStateCache()

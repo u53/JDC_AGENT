@@ -3,8 +3,6 @@ import path from 'node:path'
 import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 import { buildFileNotFoundError } from '../utils/path-suggestions.js'
 
-export const FILE_UNCHANGED_MESSAGE = 'File unchanged since last read. The content from the earlier file_read result in this conversation is still current — refer to that instead of re-reading.'
-
 export const fileReadTool: ToolHandler = {
   definition: {
     name: 'Read',
@@ -12,8 +10,8 @@ export const fileReadTool: ToolHandler = {
 
 Usage notes:
 - By default reads up to 2000 lines. Use offset and limit for large files.
-- Do NOT re-read a file you just edited — the edit was successful if no error was returned.
-- If you re-read an unchanged file, you'll get a stub message pointing you to the earlier result.
+- Re-reading returns the current file content so later edits can rely on visible context.
+- After a successful edit or write, the mutation is recorded as fresh state; re-read only when you need visible context.
 - When you already know which part of the file you need, only read that part — important for larger files.
 - This tool can read text files of any type. For binary files, it returns an error.
 - When you need to understand code before modifying it, always read the relevant file first.`,
@@ -39,11 +37,6 @@ Usage notes:
 
     const offset = (input.offset as number) || 0
     const limit = (input.limit as number) || 2000
-
-    // Dedup: if we've already read this exact range and the file hasn't changed, return stub
-    if (context.fileReadState?.canDedup(filePath, offset, limit)) {
-      return { content: FILE_UNCHANGED_MESSAGE }
-    }
 
     try {
       const content = await readFile(filePath, 'utf-8')

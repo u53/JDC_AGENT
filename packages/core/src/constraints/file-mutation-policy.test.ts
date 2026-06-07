@@ -69,6 +69,13 @@ describe('evaluateFileMutationPolicy', () => {
       decision: 'block',
       reason: expect.stringContaining('edit anchor'),
     })
+    if (decision.decision !== 'block') {
+      throw new Error('Expected MultiEdit to be blocked')
+    }
+    expect(decision.reason).toContain('Read ranges:')
+    expect(decision.reason).toContain('lines 1-1')
+    expect(decision.reason).toContain('Missing edit anchor:')
+    expect(decision.reason).toContain('const beta = 2')
   })
 
   it('allows Write for a new file', () => {

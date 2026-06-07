@@ -52,7 +52,6 @@ Usage notes:
         const occurrences = content.split(oldStr).length - 1
         const updated = content.replaceAll(oldStr, newStr)
         await writeFile(filePath, updated, 'utf-8')
-        context.fileReadState?.invalidate(filePath)
         if (context.fileTracker && context.toolUseId) {
           await context.fileTracker.recordChange(filePath, content, updated, context.toolUseId, context.turnIndex || 0)
         }
@@ -69,7 +68,6 @@ Usage notes:
 
       const updated = content.replace(oldStr, newStr)
       await writeFile(filePath, updated, 'utf-8')
-      context.fileReadState?.invalidate(filePath)
 
       if (context.fileTracker && context.toolUseId) {
         await context.fileTracker.recordChange(filePath, content, updated, context.toolUseId, context.turnIndex || 0)

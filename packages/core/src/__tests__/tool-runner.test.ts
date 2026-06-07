@@ -217,7 +217,7 @@ describe('ToolRunner file mutation constraints', () => {
     await expect(readFile(targetPath, 'utf-8')).resolves.toBe('const value = 1\n')
   })
 
-  it('blocks Edit after MultiEdit mutates the file until it is read again', async () => {
+  it('allows Edit after MultiEdit records a mutation snapshot without re-reading', async () => {
     const runner = makeConstraintRunner()
 
     const readResult = await runner.execute('Read', 'tu-read-before-multiedit', { file_path: 'target.ts' }, () => {})
@@ -233,7 +233,6 @@ describe('ToolRunner file mutation constraints', () => {
       () => {}
     )
     expect(multiEditResult.isError).not.toBe(true)
-    expect(runner.fileReadState?.size).toBe(0)
 
     const editResult = await runner.execute(
       'Edit',
@@ -242,8 +241,7 @@ describe('ToolRunner file mutation constraints', () => {
       () => {}
     )
 
-    expect(editResult.isError).toBe(true)
-    expect(editResult.content).toContain('Blocked by JDC Agent Constraint Engine')
-    await expect(readFile(targetPath, 'utf-8')).resolves.toBe('const value = 2\n')
+    expect(editResult.isError).not.toBe(true)
+    await expect(readFile(targetPath, 'utf-8')).resolves.toBe('const value = 3\n')
   })
 })

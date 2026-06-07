@@ -65,6 +65,21 @@ describe('Built-in Tools', () => {
     })
   })
 
+  it('file_write: returns structured mutation metadata without full content snapshots', async () => {
+    const tmp = await mkdtemp(path.join(os.tmpdir(), 'jdc-write-metadata-large-'))
+    const file = path.join(tmp, 'created.ts')
+    const content = `start\n${'x'.repeat(10_000)}\nend\n`
+
+    const result = await fileWriteTool.execute({ file_path: file, content }, { cwd: tmp })
+
+    expect(result.isError).not.toBe(true)
+    expect(result.metadata).toEqual({
+      mutations: [{ filePath: file, kind: 'write' }],
+    })
+    expect(JSON.stringify(result.metadata)).not.toContain('start')
+    expect(JSON.stringify(result.metadata)).not.toContain('end')
+  })
+
   it('file_read: reports how to continue when the requested range is partial', async () => {
     const runner = await setup()
     const testFile = path.join(tmpDir, 'partial.txt')
@@ -76,6 +91,20 @@ describe('Built-in Tools', () => {
     expect(result.content).toContain('[Showing lines 1-2 of 4. Use offset=2 to continue.]')
   })
 
+  it('file_read: returns real content when re-reading an unchanged range', async () => {
+    const runner = await setup()
+    const testFile = path.join(tmpDir, 'reread.txt')
+    await writeFile(testFile, 'alpha\nbeta\n', 'utf-8')
+
+    const first = await runner.execute('Read', 'id-reread-1', { file_path: testFile }, () => {})
+    const second = await runner.execute('Read', 'id-reread-2', { file_path: testFile }, () => {})
+
+    expect(first.content).toContain('1\talpha')
+    expect(second.content).toContain('1\talpha')
+    expect(second.content).toContain('2\tbeta')
+    expect(second.content).not.toContain('File unchanged since last read')
+  })
+
   it('file_edit: should replace string', async () => {
     const runner = await setup()
     const testFile = path.join(tmpDir, 'edit.txt')
@@ -83,6 +112,28 @@ describe('Built-in Tools', () => {
     await runner.execute('Read', 'id-4-read', { file_path: testFile }, () => {})
     const result = await runner.execute('Edit', 'id-4', { file_path: testFile, old_string: 'hello', new_string: 'goodbye' }, () => {})
     expect(result.content).toContain('Successfully')
+  })
+
+  it('file_edit: supports consecutive edits after mutation snapshot without re-reading', async () => {
+    const runner = await setup()
+    const testFile = path.join(tmpDir, 'consecutive-edit.txt')
+    await writeFile(testFile, 'const alpha = 1\nconst beta = 2\n', 'utf-8')
+
+    await runner.execute('Read', 'id-consecutive-read', { file_path: testFile }, () => {})
+    const first = await runner.execute('Edit', 'id-consecutive-edit-1', {
+      file_path: testFile,
+      old_string: 'const alpha = 1',
+      new_string: 'const alpha = 10',
+    }, () => {})
+    const second = await runner.execute('Edit', 'id-consecutive-edit-2', {
+      file_path: testFile,
+      old_string: 'const beta = 2',
+      new_string: 'const beta = 20',
+    }, () => {})
+
+    expect(first.isError).not.toBe(true)
+    expect(second.isError).not.toBe(true)
+    expect(second.content).toContain('Successfully')
   })
 
   it('file_edit: should error on non-unique string', async () => {

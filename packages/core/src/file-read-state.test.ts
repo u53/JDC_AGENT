@@ -47,6 +47,19 @@ describe('FileReadStateCache fresh read checks', () => {
     })
   })
 
+  it('includes read range diagnostics when an edit anchor is outside the read ranges', () => {
+    const cache = new FileReadStateCache()
+    cache.recordRead(filePath, 0, 1, 2, 'const alpha = 1')
+
+    const result = cache.checkFreshRead(filePath, { requiredText: 'const beta = 2' })
+
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('Read ranges:')
+    expect(result.message).toContain('lines 1-1')
+    expect(result.message).toContain('Missing edit anchor:')
+    expect(result.message).toContain('const beta = 2')
+  })
+
   it('reports stale when the file changed after it was read', async () => {
     const cache = new FileReadStateCache()
     cache.recordRead(filePath, 0, 2000, 2, 'const alpha = 1\nconst beta = 2')
@@ -92,6 +105,50 @@ describe('FileReadStateCache fresh read checks', () => {
     cache.recordRead(filePath, 0, 2000, 2, 'const alpha = 10\nconst beta = 2')
 
     expect(cache.canDedup(filePath, 0, 2000)).toBe(true)
+  })
+
+  it('accepts a fresh mutation snapshot after a file changes', async () => {
+    const cache = new FileReadStateCache()
+    await writeFile(filePath, 'const alpha = 10\nconst beta = 2\n', 'utf-8')
+
+    cache.recordMutationSnapshot(filePath, 'const alpha = 10\nconst beta = 2\n')
+
+    expect(cache.checkFreshRead(filePath, { requiredText: 'const alpha = 10' }).ok).toBe(true)
+    expect(cache.canDedup(filePath, 0, 3)).toBe(false)
+  })
+
+  it('does not let a mutation snapshot satisfy anchors outside previously read ranges', async () => {
+    const cache = new FileReadStateCache()
+    cache.recordRead(filePath, 0, 1, 2, 'const alpha = 1')
+    await writeFile(filePath, 'const alpha = 10\nconst beta = 2\n', 'utf-8')
+
+    cache.recordMutationSnapshot(filePath, 'const alpha = 10\nconst beta = 2\n', {
+      replacements: [{ oldText: 'const alpha = 1', newText: 'const alpha = 10' }],
+    })
+
+    expect(cache.checkFreshRead(filePath, { requiredText: 'const alpha = 10' }).ok).toBe(true)
+    expect(cache.checkFreshRead(filePath, { requiredText: 'const beta = 2' })).toMatchObject({
+      ok: false,
+      reason: 'range_not_read',
+    })
+  })
+
+  it('does not remap partial mutation snapshots by stale line offsets after insertion', async () => {
+    const cache = new FileReadStateCache()
+    cache.recordRead(filePath, 0, 1, 3, 'const alpha = 1')
+    cache.recordRead(filePath, 2, 1, 3, 'const gamma = 3')
+    await writeFile(filePath, 'const alpha = 10\nconst inserted = 99\nconst beta = 2\nconst gamma = 3\n', 'utf-8')
+
+    cache.recordMutationSnapshot(filePath, 'const alpha = 10\nconst inserted = 99\nconst beta = 2\nconst gamma = 3\n', {
+      replacements: [{ oldText: 'const alpha = 1', newText: 'const alpha = 10\nconst inserted = 99' }],
+    })
+
+    expect(cache.checkFreshRead(filePath, { requiredText: 'const alpha = 10' }).ok).toBe(true)
+    expect(cache.checkFreshRead(filePath, { requiredText: 'const gamma = 3' }).ok).toBe(true)
+    expect(cache.checkFreshRead(filePath, { requiredText: 'const beta = 2' })).toMatchObject({
+      ok: false,
+      reason: 'range_not_read',
+    })
   })
 
   it('reports missing when a previously read file is deleted', async () => {
