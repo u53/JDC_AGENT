@@ -1,4 +1,4 @@
-import type { ContextInspectPayload, MemorySearchPayload } from '@jdcagnet/core'
+import type { ConstraintObservabilitySnapshot, ContextInspectPayload, MemorySearchPayload } from '@jdcagnet/core'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useContextStore, type ContextProviderHealth } from '../../stores/context-store'
@@ -154,6 +154,27 @@ const extendedProviders: ContextProviderHealth = [
   { id: 'git', status: 'timeout', updatedAt: 1_700_000_000_600 },
   { id: 'project', status: 'not_indexed', updatedAt: 1_700_000_000_700 },
 ]
+
+const constraintSnapshot: ConstraintObservabilitySnapshot = {
+  status: 'needs_verification',
+  inspectedAt: 1_700_000_000_000,
+  cwd: '/repo',
+  intent: 'code_edit',
+  objective: 'Fix login bug',
+  modelProfile: { id: 'strict_tool_grounding', evidenceStrictness: 'strict', maxParallelToolCalls: 2 },
+  summary: { primary: '修改等待验证', secondary: '1 个文件需要验证。' },
+  evidence: { status: 'not_required', missing: [] },
+  blockedActions: [],
+  verification: {
+    status: 'pending',
+    changedFiles: [{ filePath: 'src/app.ts', changedByToolUseId: 'edit_1', changedAt: 1, status: 'pending', updatedAt: 1 }],
+    requirements: [],
+    commands: [],
+  },
+  contextHealth: { status: 'available', latestBundleId: 'bundle-1', providerCount: 4, unhealthyProviderCount: 2, diagnostics: [] },
+  policyEvents: [],
+}
+
 describe('context inspectability panels', () => {
   beforeEach(() => {
     useContextStore.getState().reset()
@@ -170,6 +191,7 @@ describe('context inspectability panels', () => {
         memoryReview={request({ accepted: acceptedMemory, rejected: payload.memoryReview.rejected })}
         providerHealth={request(extendedProviders)}
         refresh={request(null)}
+        constraint={request(constraintSnapshot)}
         advancedVisible
         onReloadDiagnostics={() => {}}
         onReindexCode={() => {}}
@@ -182,7 +204,7 @@ describe('context inspectability panels', () => {
     expect(html).toContain('项目记忆')
     expect(html).toContain('当前上下文')
     expect(html).toContain('团队沉淀')
-    expect(html).toContain('引擎状态')
+    expect(html).toContain('约束状态')
     expect(html).toContain('context-panel-scroll')
     expect(html).not.toContain('高级诊断</button>')
     expect(html).not.toContain('Inspect')
@@ -207,6 +229,7 @@ describe('context inspectability panels', () => {
         memoryReview={request({ accepted: acceptedMemory, rejected: payload.memoryReview.rejected })}
         providerHealth={request(extendedProviders)}
         refresh={request(null)}
+        constraint={request(constraintSnapshot)}
         advancedVisible
         onReloadDiagnostics={() => {}}
         onReindexCode={() => {}}
@@ -233,6 +256,7 @@ describe('context inspectability panels', () => {
         memoryReview={request({ accepted: acceptedMemory, rejected: payload.memoryReview.rejected })}
         providerHealth={request(extendedProviders)}
         refresh={request(null)}
+        constraint={request(constraintSnapshot)}
         advancedVisible={false}
         onReloadDiagnostics={() => {}}
         onReindexCode={() => {}}
@@ -255,6 +279,7 @@ describe('context inspectability panels', () => {
         memoryReview={request({ accepted: acceptedMemory, rejected: payload.memoryReview.rejected })}
         providerHealth={request(extendedProviders)}
         refresh={request(null)}
+        constraint={request(constraintSnapshot)}
         advancedVisible
         onReloadDiagnostics={() => {}}
         onReindexCode={() => {}}
@@ -277,6 +302,7 @@ describe('context inspectability panels', () => {
         memoryReview={request({ accepted: acceptedMemory, rejected: payload.memoryReview.rejected })}
         providerHealth={request(extendedProviders)}
         refresh={request(null)}
+        constraint={request(constraintSnapshot)}
         onReloadDiagnostics={() => {}}
         onReindexCode={() => {}}
         onReadProviderStatus={() => {}}
@@ -320,6 +346,7 @@ describe('context inspectability panels', () => {
         memoryReview={request({ accepted: acceptedMemory, rejected: noisyPayload.memoryReview.rejected })}
         providerHealth={request(extendedProviders)}
         refresh={request(null)}
+        constraint={request(constraintSnapshot)}
         onReloadDiagnostics={() => {}}
         onReindexCode={() => {}}
         onReadProviderStatus={() => {}}
@@ -346,6 +373,7 @@ describe('context inspectability panels', () => {
         memoryReview={request({ accepted: acceptedMemory, rejected: payload.memoryReview.rejected })}
         providerHealth={request(extendedProviders)}
         refresh={request(null)}
+        constraint={request(constraintSnapshot)}
         onReloadDiagnostics={() => {}}
         onReindexCode={() => {}}
         onReadProviderStatus={() => {}}

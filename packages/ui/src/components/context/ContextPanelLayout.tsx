@@ -1,4 +1,4 @@
-import type { ContextInspectPayload } from '@jdcagnet/core'
+import type { ConstraintObservabilitySnapshot, ContextInspectPayload } from '@jdcagnet/core'
 import type { ContextHarvestQueue, ContextMemoryReview, ContextProviderHealth, ContextRefreshState, ContextRequestState } from '../../stores/context-store'
 import { ContextAdvancedDiagnosticsPanel } from './ContextAdvancedDiagnosticsPanel'
 import { ContextCurrentPanel } from './ContextCurrentPanel'
@@ -6,10 +6,11 @@ import { ContextFactsPanel } from './ContextFactsPanel'
 import { ContextInspectPanel } from './ContextInspectPanel'
 import { Badge, formatPercent, freshnessLabel, kindLabel, PanelFrame, PanelState } from './ContextPanelPrimitives'
 import { ContextTeamPanel } from './ContextTeamPanel'
+import { ConstraintStatusPanel } from './ConstraintStatusPanel'
 
-export type ContextTab = 'understanding' | 'facts' | 'current' | 'team' | 'status' | 'advanced'
+export type ContextTab = 'constraints' | 'understanding' | 'facts' | 'current' | 'team' | 'status' | 'advanced'
 
-export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect, harvest, memoryReview, providerHealth, refresh, advancedVisible = false, onReloadDiagnostics, onReindexCode, onReadProviderStatus }: {
+export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect, harvest, memoryReview, providerHealth, refresh, constraint, advancedVisible = false, onReloadDiagnostics, onReindexCode, onReadProviderStatus }: {
   sessionId: string | null
   activeTab: ContextTab
   onTabChange: (tab: ContextTab) => void
@@ -18,6 +19,7 @@ export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect,
   memoryReview: ContextRequestState<ContextMemoryReview>
   providerHealth: ContextRequestState<ContextProviderHealth>
   refresh: ContextRequestState<ContextRefreshState>
+  constraint: ContextRequestState<ConstraintObservabilitySnapshot>
   advancedVisible?: boolean
   onReloadDiagnostics: () => void
   onReindexCode: () => void
@@ -31,8 +33,8 @@ export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect,
     )
   }
 
-  const tabs = contextTabs(inspect.data, memoryReview.data, providerHealth.data)
-  const effectiveTab = activeTab === 'advanced' && !advancedVisible ? 'status' : activeTab
+  const tabs = contextTabs(inspect.data, memoryReview.data, providerHealth.data, constraint.data)
+  const effectiveTab = activeTab === 'advanced' && !advancedVisible ? 'constraints' : activeTab
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--panel)]">
@@ -58,6 +60,7 @@ export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect,
       </div>
 
       <div className="context-panel-scroll min-h-0 flex-1 overflow-y-auto p-3">
+        {effectiveTab === 'constraints' && <ConstraintStatusPanel snapshot={constraint.data} loading={constraint.loading} error={constraint.error} advancedVisible={advancedVisible} />}
         {effectiveTab === 'understanding' && <ContextProjectUnderstandingPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
         {effectiveTab === 'facts' && <ContextFactsPanel acceptedMemory={memoryReview.data?.accepted ?? null} projectFacts={inspect.data?.acceptedProjectFacts ?? []} loading={memoryReview.loading || inspect.loading} error={memoryReview.error ?? inspect.error} />}
         {effectiveTab === 'current' && <ContextCurrentPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
@@ -80,16 +83,25 @@ export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect,
   )
 }
 
-function contextTabs(inspect: ContextInspectPayload | null, memoryReview: ContextMemoryReview | null, providerHealth: ContextProviderHealth | null) {
+function contextTabs(inspect: ContextInspectPayload | null, memoryReview: ContextMemoryReview | null, providerHealth: ContextProviderHealth | null, constraint: ConstraintObservabilitySnapshot | null) {
   const factCount = (memoryReview?.accepted?.results.length ?? 0) + (inspect?.acceptedProjectFacts.length ?? 0)
   const teamCount = (inspect?.acceptedProjectFacts ?? []).filter((fact) => isTeamFactKind(fact.kind)).length
   return [
+    { id: 'constraints' as const, label: '约束状态', badge: constraintBadge(constraint) },
     { id: 'understanding' as const, label: '项目理解', badge: inspect?.acceptedProjectFacts.length || null },
     { id: 'facts' as const, label: '项目记忆', badge: factCount || null },
     { id: 'current' as const, label: '当前上下文', badge: inspect?.bundle?.sections.length ?? null },
     { id: 'team' as const, label: '团队沉淀', badge: teamCount || null },
     { id: 'status' as const, label: '引擎状态', badge: providerHealth?.length || null },
   ]
+}
+
+function constraintBadge(snapshot: ConstraintObservabilitySnapshot | null): string | number | null {
+  if (!snapshot) return null
+  if (snapshot.blockedActions.length > 0) return snapshot.blockedActions.length
+  if (snapshot.evidence.missing.length > 0) return snapshot.evidence.missing.length
+  if (snapshot.verification.changedFiles.length > 0) return snapshot.verification.changedFiles.length
+  return snapshot.status === 'verified' ? '已验' : null
 }
 
 function ContextProjectUnderstandingPanel({ payload, loading, error }: {

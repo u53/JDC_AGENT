@@ -4,12 +4,13 @@ import { useContextStore } from '../../stores/context-store'
 import { ContextPanelLayout, type ContextTab } from './ContextPanelLayout'
 
 export function ContextPanel({ sessionId }: { sessionId: string | null }) {
-  const [tab, setTab] = useState<ContextTab>('understanding')
+  const [tab, setTab] = useState<ContextTab>('constraints')
   const inspect = useContextStore((state) => state.inspect)
   const harvest = useContextStore((state) => state.harvest)
   const memoryReview = useContextStore((state) => state.memoryReview)
   const providerHealth = useContextStore((state) => state.providerHealth)
   const refresh = useContextStore((state) => state.refresh)
+  const constraint = useContextStore((state) => state.constraint)
   const loadProjectContext = useContextStore((state) => state.loadProjectContext)
   const loadInspect = useContextStore((state) => state.loadInspect)
   const loadProviderHealth = useContextStore((state) => state.loadProviderHealth)
@@ -17,7 +18,7 @@ export function ContextPanel({ sessionId }: { sessionId: string | null }) {
   const reset = useContextStore((state) => state.reset)
 
   useEffect(() => {
-    setTab('understanding')
+    setTab('constraints')
     if (!sessionId) {
       reset()
       return
@@ -50,6 +51,7 @@ export function ContextPanel({ sessionId }: { sessionId: string | null }) {
       memoryReview={memoryReview}
       providerHealth={providerHealth}
       refresh={refresh}
+      constraint={constraint}
       advancedVisible={import.meta.env.DEV === true}
       onReloadDiagnostics={reloadDiagnostics}
       onReindexCode={reindexCode}
