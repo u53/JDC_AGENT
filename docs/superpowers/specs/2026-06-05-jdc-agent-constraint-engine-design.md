@@ -839,6 +839,14 @@ Initial implementation can be simpler:
 
 Future implementation can add model-assisted final-response claim checking.
 
+## Phase 7 Observability Decision
+
+Constraint Engine observability is a read-only product surface, not another gate. `ConstraintObservabilitySnapshot` is derived from the existing policy event log, verification ledger, model profile, and latest JDC Context Engine inspect payload. Building the snapshot must not mutate runtime state, change policy decisions, start full indexing, or satisfy evidence on its own.
+
+The primary UI surface is a Chinese-first `约束状态` tab shown before the lower-level engine diagnostics. It answers non-operator questions first: whether an action was blocked, what evidence is missing, which edits still need verification, and which model profile is active. Raw policy events and provider diagnostics remain advanced/debug affordances so the status panel explains constraints without exposing implementation noise.
+
+The Electron read path requires a loaded session and throws for unknown session ids instead of activating sessions from panel reads. This preserves the Context Engine contract that panel reads are cached/read-only and do not start heavy background work.
+
 ## Agent Run Contract Prompt Block
 
 The model still needs a concise action contract in the prompt, but it must be generated from runtime state.
