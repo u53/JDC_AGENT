@@ -75,6 +75,11 @@ export {
 } from './tools/memory-write.js'
 export { compressImageForAPI, type CompressedImage } from './utils/image-resizer.js'
 export {
+  buildConstraintObservabilitySnapshot,
+  type ConstraintObservabilitySnapshot,
+  type ConstraintObservabilityStatus,
+} from './constraints/observability.js'
+export {
   resolveConfiguredModel,
   type ConfiguredModelGroup,
   type ConfiguredModelEntry,
