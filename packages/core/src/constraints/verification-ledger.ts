@@ -187,33 +187,42 @@ function commandsCoverSameScript(requirementCommand: string, actualCommand: stri
 }
 
 function parsePackageScriptCommand(command: string): { manager: string, script: string, filters: string[] } | undefined {
-  const normalized = command.trim().replace(/\s+/g, ' ')
-  const segment = normalized.split('&&').map(part => part.trim()).find(part => /^(pnpm|npm|yarn|bun)\b/.test(part))
-  if (!segment) return undefined
+  const segments = command.trim().replace(/\s+/g, ' ').split('&&').map(part => part.trim()).filter(Boolean)
+  let cwdFilter: string | undefined
 
-  const tokens = segment.split(' ')
-  const manager = tokens[0]
-  const filters: string[] = []
-  let script: string | undefined
-  for (let index = 1; index < tokens.length; index += 1) {
-    const token = tokens[index]
-    if (token === '--filter' && tokens[index + 1]) {
-      filters.push(tokens[index + 1])
-      index += 1
+  for (const segment of segments) {
+    const cdMatch = segment.match(/^cd (?<path>(?:\.\/)?packages\/[^\s/&|;]+)(?:\s|$)/)
+    if (cdMatch?.groups?.path) {
+      cwdFilter = packageScopeForPackagePath(cdMatch.groups.path)
       continue
     }
-    if (token.startsWith('--filter=')) {
-      filters.push(token.slice('--filter='.length))
-      continue
+
+    if (!/^(pnpm|npm|yarn|bun)\b/.test(segment)) continue
+    const tokens = segment.split(' ')
+    const manager = tokens[0]
+    const filters: string[] = cwdFilter ? [cwdFilter] : []
+    let script: string | undefined
+    for (let index = 1; index < tokens.length; index += 1) {
+      const token = tokens[index]
+      if (token === '--filter' && tokens[index + 1]) {
+        filters.push(tokens[index + 1])
+        index += 1
+        continue
+      }
+      if (token.startsWith('--filter=')) {
+        filters.push(token.slice('--filter='.length))
+        continue
+      }
+      if (token === 'run') continue
+      if (!token.startsWith('-')) {
+        script = token
+        break
+      }
     }
-    if (token === 'run') continue
-    if (!token.startsWith('-')) {
-      script = token
-      break
-    }
+    if (script && ['build', 'test', 'typecheck', 'lint'].includes(script)) return { manager, script, filters }
   }
-  if (!script || !['build', 'test', 'typecheck', 'lint'].includes(script)) return undefined
-  return { manager, script, filters }
+
+  return undefined
 }
 
 function packageFiltersCoverFiles(filters: string[], files: string[]): boolean {
@@ -229,6 +238,12 @@ function packageFiltersCoverFiles(filters: string[], files: string[]): boolean {
 function packageScopeForFile(filePath: string): string | undefined {
   const normalized = filePath.replace(/\\/g, '/')
   const match = normalized.match(/^packages\/([^/]+)\//)
+  return match ? `@jdcagnet/${match[1]}` : undefined
+}
+
+function packageScopeForPackagePath(packagePath: string): string | undefined {
+  const normalized = packagePath.replace(/^\.\//, '').replace(/\\/g, '/')
+  const match = normalized.match(/^packages\/([^/]+)$/)
   return match ? `@jdcagnet/${match[1]}` : undefined
 }
 

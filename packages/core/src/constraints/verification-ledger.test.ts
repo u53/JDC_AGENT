@@ -408,6 +408,71 @@ describe('VerificationLedger', () => {
     }))
   })
 
+  it('does not match cwd-scoped verification commands for a different package scope', () => {
+    let currentTime = 100
+    const ledger = new VerificationLedger({ now: () => currentTime })
+    ledger.recordMutation({ filePath: 'packages/ui/src/App.tsx', toolUseId: 'edit_1' })
+    ledger.setRequirements([{
+      id: 'verify_build',
+      kind: 'build',
+      command: 'pnpm build',
+      status: 'pending',
+      files: ['packages/ui/src/App.tsx'],
+      reason: 'build script covers changed files.',
+    }])
+
+    currentTime = 200
+    ledger.recordCommand({
+      toolUseId: 'bash_1',
+      command: 'cd packages/core && pnpm build',
+      kind: 'build',
+      status: 'passed',
+      output: 'ok',
+    })
+
+    expect(ledger.getRequirements()).toEqual([expect.objectContaining({
+      id: 'verify_build',
+      status: 'pending',
+    })])
+    expect(evaluateTurnEndGate({
+      changedFiles: ledger.getChangedFiles(),
+      requirements: ledger.getRequirements(),
+      assistantText: 'Done.',
+    })).toEqual(expect.objectContaining({
+      action: 'append_disclosure',
+      severity: 'warning',
+    }))
+  })
+
+  it('matches cwd-scoped verification commands for the changed package scope', () => {
+    let currentTime = 100
+    const ledger = new VerificationLedger({ now: () => currentTime })
+    ledger.recordMutation({ filePath: 'packages/ui/src/App.tsx', toolUseId: 'edit_1' })
+    ledger.setRequirements([{
+      id: 'verify_build',
+      kind: 'build',
+      command: 'pnpm build',
+      status: 'pending',
+      files: ['packages/ui/src/App.tsx'],
+      reason: 'build script covers changed files.',
+    }])
+
+    currentTime = 200
+    ledger.recordCommand({
+      toolUseId: 'bash_1',
+      command: 'cd packages/ui && pnpm build',
+      kind: 'build',
+      status: 'passed',
+      output: 'ok',
+    })
+
+    expect(ledger.getRequirements()).toEqual([expect.objectContaining({
+      id: 'verify_build',
+      status: 'passed',
+      satisfiedByToolUseId: 'bash_1',
+    })])
+  })
+
   it('matches focused package verification commands for the changed package scope', () => {
     let currentTime = 100
     const ledger = new VerificationLedger({ now: () => currentTime })
