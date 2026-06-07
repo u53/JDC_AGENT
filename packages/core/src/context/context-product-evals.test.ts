@@ -16,6 +16,7 @@ import { collectWorkflowContext } from './providers/workflow-provider.js'
 import { hashContent } from './providers/shared.js'
 import { recordTeamArtifactEvidence } from './team-ledger.js'
 import { classifyHarvestCandidate } from './safety.js'
+import { strictToolGroundingProfile } from '../model-profile.js'
 import type { ContextProvider, ContextProviderResult } from './orchestrator.js'
 import type { ContextRequest } from './types.js'
 
@@ -769,6 +770,46 @@ describe('JDC Context Engine product evals', () => {
       expect(decision.disclosure).toContain('Verification failed')
       expect(decision.disclosure).toContain('1 failed')
     }
+  })
+
+  it('Phase 6 eval: strict model profile renders explicit evidence contract', async () => {
+    const result = await buildContextBundle(makeEvalRequest({
+      mode: 'code_edit',
+      userMessage: '修复登录状态 bug',
+      modelProfile: strictToolGroundingProfile({
+        id: 'strict_eval',
+        providerPattern: 'ollama',
+        modelPattern: 'glm*',
+      }),
+    }), {
+      injectionEnabled: true,
+      includeAgentContract: true,
+      store: makeEvalStore(),
+      providers: [],
+      now: () => 1_000,
+      id: () => 'phase6_strict_contract',
+    })
+
+    expect(result.renderedPrompt).toContain('Model profile: strict_eval')
+    expect(result.renderedPrompt).toContain('Evidence strictness: strict')
+    expect(result.renderedPrompt).toContain('Strict profile instructions:')
+  })
+
+  it('Phase 6 eval: standard profile avoids strict-only contract noise', async () => {
+    const result = await buildContextBundle(makeEvalRequest({
+      mode: 'code_edit',
+      userMessage: '修复登录状态 bug',
+    }), {
+      injectionEnabled: true,
+      includeAgentContract: true,
+      store: makeEvalStore(),
+      providers: [],
+      now: () => 1_000,
+      id: () => 'phase6_standard_contract',
+    })
+
+    expect(result.renderedPrompt).toContain('Agent run contract')
+    expect(result.renderedPrompt).not.toContain('Strict profile instructions:')
   })
 })
 

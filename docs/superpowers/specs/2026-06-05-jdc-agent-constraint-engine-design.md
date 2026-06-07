@@ -1561,3 +1561,12 @@ After this design is approved, create an implementation plan that splits Phase 1
 - The code provider schedules background index warm-up and returns safe explicit-path fallback evidence when index-backed retrieval is unavailable.
 - Repo Map V1 derives from existing indexed snapshot and tool data; it does not scan the repository or impose hidden local token caps.
 - Provider fallback remains protocol-safe, and Phase 4 does not introduce artificial local token caps.
+
+## Phase 6 implementation decision
+
+- Model capability profiles are deterministic runtime policy records selected by provider id, model id, optional override, and configured profile list.
+- Profiles tune evidence strictness, prompt-contract verbosity, default plan depth, and read-tool parallelism.
+- Profiles do not bypass Phase 1-5 gates; file mutation, verification requirement derivation, command-result tracking, and TurnEnd disclosure remain authoritative.
+- Strict profiles render explicit model-visible instructions in both the base prompt and the JDC Context Engine `agent_contract` section.
+- Standard profiles keep the contract compact and avoid strict-only repeated reminders.
+- UI profile management and model-assisted final-claim checking remain deferred to later phases.

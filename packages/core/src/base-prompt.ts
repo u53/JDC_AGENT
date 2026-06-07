@@ -1,4 +1,5 @@
 import type { ToolDefinition } from './types.js'
+import type { ModelCapabilityProfile } from './model-profile.js'
 import { findGitBash, findPowerShell } from './utils/shell-detection.js'
 
 export interface PromptEnvironment {
@@ -16,6 +17,7 @@ export interface PromptOptions {
   environment: PromptEnvironment
   mcpServers?: { name: string; toolCount: number; tools?: string[]; instructions?: string }[]
   permissionMode?: string
+  modelProfile?: ModelCapabilityProfile
 }
 
 export function getBasePrompt(opts: PromptOptions): string {
@@ -25,6 +27,7 @@ export function getBasePrompt(opts: PromptOptions): string {
   const sections: string[] = [
     getIdentitySection(),
     getSystemSection(permissionMode),
+    getModelProfileSection(opts.modelProfile),
     getJdcCodeOperatingContractSection(toolNames),
     getDoingTasksSection(),
     getActionsSection(),
@@ -58,6 +61,53 @@ function getIdentitySection(): string {
 You are JDCAGNET, an AI-powered coding assistant running as a desktop application. You write the code so developers can focus on what matters: designing systems, exploring solutions, and making decisions. You work alongside users to exchange ideas, identify problems, and narrow down the right approach before diving into implementation.
 
 IMPORTANT: You must NEVER generate or guess URLs for the user unless you are confident that the URLs are for helping the user with programming. You may use URLs provided by the user in their messages or local files.`
+}
+
+function getModelProfileSection(profile?: ModelCapabilityProfile): string {
+  if (!profile) {
+    return `# Model Profile Adaptation
+
+Profile: standard_default
+Evidence strictness: standard
+Contract verbosity: normal
+Parallel read tool preference: default
+
+Use the normal JDC CODE operating contract. Existing runtime gates still enforce read-before-write and final verification disclosure.`
+  }
+
+  const lines = [
+    '# Model Profile Adaptation',
+    '',
+    `Profile: ${profile.id}`,
+    `Evidence strictness: ${profile.evidenceStrictness}`,
+    `Contract verbosity: ${profile.contractVerbosity}`,
+    `Default plan depth: ${profile.defaultPlanDepth}`,
+    `Parallel read tool preference: no more than ${profile.maxParallelToolCalls} parallel read tool calls.`,
+  ]
+
+  if (profile.evidenceStrictness === 'strict') {
+    lines.push(
+      '',
+      '- Use short, explicit, stepwise action contracts before edits.',
+      '- Treat missing file or symbol evidence as blocking until a tool supplies it.',
+      `- Prefer no more than ${profile.maxParallelToolCalls} parallel read tool calls unless the task is pure discovery.`,
+      '- After mutation, run verification or clearly disclose why verification is pending.'
+    )
+  } else if (profile.evidenceStrictness === 'relaxed') {
+    lines.push(
+      '',
+      '- You may use compact contracts when evidence is already present.',
+      '- Runtime gates still control mutation and final verification disclosure.'
+    )
+  } else {
+    lines.push(
+      '',
+      '- Use the normal JDC CODE operating contract.',
+      '- Runtime gates still control mutation and final verification disclosure.'
+    )
+  }
+
+  return lines.join('\n')
 }
 
 function getSystemSection(permissionMode?: string): string {

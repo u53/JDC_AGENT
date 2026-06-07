@@ -1,3 +1,4 @@
+import type { ModelCapabilityProfile } from '../model-profile.js'
 import type { Message, ModelConfig } from '../types.js'
 
 export type ContextMode = 'chat' | 'debug' | 'code_edit' | 'review' | 'plan'
@@ -134,6 +135,7 @@ export interface ContextRequest {
   carriedContext?: CarriedContextMetadata
   mode: ContextMode
   model: string
+  modelProfile?: ModelCapabilityProfile
   tokenBudget?: number
   evidenceRequirements?: ContextEvidenceRequirement[]
   runtime: RuntimeSnapshot

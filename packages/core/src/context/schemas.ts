@@ -102,6 +102,21 @@ const IdeSnapshotSchema = z.record(z.unknown())
 const ToolExecutionEventSchema = z.object({ id: nonEmptyStringSchema }).passthrough()
 const ModelConfigSchema = z.object({ model: nonEmptyStringSchema, maxTokens: z.number().int().positive() }).passthrough()
 
+const ModelProfileSchema = z.object({
+  id: nonEmptyStringSchema,
+  label: z.string(),
+  match: z.object({ providerPattern: z.string(), modelPattern: z.string() }),
+  reasoningReliability: z.enum(['low', 'medium', 'high']),
+  toolDiscipline: z.enum(['low', 'medium', 'high']),
+  contextUseDiscipline: z.enum(['low', 'medium', 'high']),
+  evidenceStrictness: z.enum(['strict', 'standard', 'relaxed']),
+  contractVerbosity: z.enum(['compact', 'normal', 'explicit']),
+  requiresCompactActionContracts: z.boolean(),
+  defaultPlanDepth: z.enum(['brief', 'normal', 'detailed']),
+  maxParallelToolCalls: z.number().int().min(1).max(5),
+  requireStepwiseVerification: z.boolean(),
+})
+
 export const ContextRequestSchema = z.object({
   sessionId: nonEmptyStringSchema,
   cwd: nonEmptyStringSchema,
@@ -111,6 +126,7 @@ export const ContextRequestSchema = z.object({
   carriedContext: CarriedContextMetadataSchema.optional(),
   mode: ContextModeSchema,
   model: nonEmptyStringSchema,
+  modelProfile: ModelProfileSchema.optional(),
   tokenBudget: z.number().int().positive().optional(),
   runtime: RuntimeSnapshotSchema,
   ide: IdeSnapshotSchema.optional(),

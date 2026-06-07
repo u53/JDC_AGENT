@@ -83,7 +83,7 @@ export async function buildContextBundle(request: ContextRequest, options: Build
     const plan = planContext(requestWithRequirements, conflictResolution.sections)
     const includeAgentContract = options.includeAgentContract === true
     const plannedInputSections = [
-      ...(includeAgentContract ? agentContractSections(plan, now()) : []),
+      ...(includeAgentContract ? agentContractSections(plan, now(), requestWithRequirements.modelProfile) : []),
       ...conflictResolution.sections,
     ]
     const plannedSectionIds = new Set(plan.relevantSections)
@@ -297,15 +297,21 @@ function budgetLimits(request: ContextRequest, options: BuildContextBundleOption
   }
 }
 
-function agentContractSections(plan: ContextPlan, _createdAt: number): ContextSection[] {
+function agentContractSections(plan: ContextPlan, _createdAt: number, modelProfile?: ContextRequest['modelProfile']): ContextSection[] {
   if (!plan.missingEvidence.length) return []
 
   const content = [
+    'Agent run contract',
     `Intent: ${plan.intent}`,
     `Objective: ${plan.objective}`,
+    ...(modelProfile ? [
+      `Model profile: ${modelProfile.id}`,
+      `Evidence strictness: ${modelProfile.evidenceStrictness}`,
+    ] : []),
     'Missing evidence:',
     ...plan.missingEvidence.map((missing) => `- ${missing.kind}: ${missing.reason}`),
     'Policy: Existing files must be read with fresh content before mutation.',
+    ...agentContractProfileLines(modelProfile),
   ].join('\n')
 
   return [{
@@ -321,6 +327,16 @@ function agentContractSections(plan: ContextPlan, _createdAt: number): ContextSe
     tokenEstimate: Math.ceil(content.length / 4),
     ownership: { authority: 'system_instruction', topic: 'task', conflictPolicy: 'render' },
   }]
+}
+
+function agentContractProfileLines(modelProfile?: ContextRequest['modelProfile']): string[] {
+  if (!modelProfile || modelProfile.evidenceStrictness !== 'strict') return []
+  return [
+    'Strict profile instructions:',
+    '- Read target files before mutation.',
+    '- Use one evidence-gathering step at a time when file targets are unclear.',
+    '- Do not claim completion until verification has run or the final response discloses the gap.',
+  ]
 }
 
 function sectionFromFact(fact: ContextFact): ContextSection {

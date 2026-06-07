@@ -1,3 +1,4 @@
+import { ParallelExecutor } from './parallel-executor.js'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -763,6 +764,91 @@ describe('Session JDC Context Engine runtime integration', () => {
       'Remember the first production context fact.',
       'Remember the second production context fact.',
     ])
+  })
+
+  it('injects the resolved strict model profile into system and context prompts', async () => {
+    let observedSystemPrompt = ''
+    let capturedRequest: ContextRequest | undefined
+    const session = await makeSession({
+      provider: providerFromChunks([
+        { type: 'text_delta', text: 'ok' },
+        { type: 'message_end', usage: { inputTokens: 10, outputTokens: 2 } },
+      ], (_messages, config) => {
+        observedSystemPrompt = textFromSystemPrompt(config.systemPrompt)
+      }, 'ollama'),
+      modelConfig: { model: 'glm-4.5', maxTokens: 1024, contextWindow: 128_000 },
+      contextConfig: { enabled: true, injectionEnabled: true, providerToggles: {}, harvestEnabled: false } as any,
+      contextProviders: [{
+        id: 'runtime',
+        collect: async (request: ContextRequest) => {
+          capturedRequest = request
+          return {
+            evidence: [],
+            sections: [],
+            diagnostics: [],
+            health: { id: 'runtime', status: 'enabled', updatedAt: 1 },
+          }
+        },
+      }],
+    })
+
+    await session.sendMessage('修复 src/app.ts', makeEvents())
+
+    expect(observedSystemPrompt).toContain('# Model Profile Adaptation')
+    expect(observedSystemPrompt).toContain('Evidence strictness: strict')
+    expect(observedSystemPrompt).toContain('Strict profile instructions:')
+    expect(capturedRequest?.modelProfile).toMatchObject({ id: 'strict_tool_grounding', evidenceStrictness: 'strict' })
+  })
+
+  it('refreshes model profile before retrying after provider changes', async () => {
+    const observedProfiles: Array<string | undefined> = []
+    const session = await makeSession({
+      provider: providerFromChunks([
+        { type: 'text_delta', text: 'strict turn' },
+        { type: 'message_end', usage: { inputTokens: 10, outputTokens: 2 } },
+      ], (_messages, config) => {
+        observedProfiles.push(config.modelProfile?.id)
+      }, 'ollama'),
+      modelConfig: { model: 'glm-4.5', maxTokens: 1024, contextWindow: 128_000 },
+      contextConfig: { enabled: false, injectionEnabled: false, providerToggles: {}, harvestEnabled: false } as any,
+    })
+
+    await session.sendMessage('修复 src/app.ts', makeEvents())
+    session.updateProvider(
+      providerFromChunks([
+        { type: 'text_delta', text: 'standard retry' },
+        { type: 'message_end', usage: { inputTokens: 10, outputTokens: 2 } },
+      ], (_messages, config) => {
+        observedProfiles.push(config.modelProfile?.id)
+      }, 'anthropic'),
+      { model: 'claude-sonnet-4-6', maxTokens: 1024, contextWindow: 128_000 },
+    )
+
+    await session.retryLastTurn(makeEvents())
+
+    expect(observedProfiles).toEqual(['strict_tool_grounding', 'standard_default'])
+  })
+
+  it('applies resolved model profile read concurrency to the parallel executor', async () => {
+    const session = await makeSession({
+      provider: providerFromChunks([
+        { type: 'text_delta', text: 'ok' },
+        { type: 'message_end', usage: { inputTokens: 10, outputTokens: 2 } },
+      ], undefined, 'ollama'),
+      modelConfig: { model: 'glm-4.5', maxTokens: 1024, contextWindow: 128_000 },
+      contextConfig: { enabled: false, injectionEnabled: false, providerToggles: {}, harvestEnabled: false } as any,
+    })
+    const setMaxReadConcurrency = vi.spyOn(ParallelExecutor.prototype, 'setMaxReadConcurrency')
+
+    await session.sendMessage('修复 src/app.ts', makeEvents())
+
+    expect(setMaxReadConcurrency).toHaveBeenCalledWith(2)
+    expect((session as any).config.modelConfig.modelProfile).toMatchObject({
+      id: 'strict_tool_grounding',
+      maxParallelToolCalls: 2,
+    })
+
+    setMaxReadConcurrency.mockRestore()
   })
 
   it('records harvest budget skips as info diagnostics instead of false errors', async () => {

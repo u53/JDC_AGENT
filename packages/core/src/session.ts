@@ -41,6 +41,7 @@ import {
   shouldCancelSiblingToolsOnReadError,
   type ToolBatchResult,
 } from './parallel-executor.js'
+import { resolveModelCapabilityProfile, strictToolGroundingProfile, type ModelCapabilityProfile } from './model-profile.js'
 import { BackgroundTaskManager } from './background-tasks.js'
 import { createTaskOutputTool } from './tools/task-output.js'
 import { monitorTool } from './tools/monitor.js'
@@ -138,6 +139,7 @@ export class Session {
   private contextProtocol?: ProviderProtocol
   private contextModelGroupId?: string
   private contextBaseUrl?: string
+  private modelProfile?: ModelCapabilityProfile
   private recentToolEvents: ToolExecutionEvent[] = []
   private turnIndex = 0
   private runLoopFileSnapshot: Set<string> = new Set()
@@ -229,13 +231,19 @@ export class Session {
     this.toolRegistry.register(createTodoWriteTool(this.taskStore))
     this.toolRegistry.register(createTaskOutputTool(this.backgroundTasks))
     this.toolRegistry.register(monitorTool)
+    const session = this
+    const liveProvider: ModelProvider = {
+      get name() { return session.provider.name },
+      chat: (messages, tools, modelConfig, signal) => session.provider.chat(messages, tools, modelConfig, signal),
+      stream: (messages, tools, modelConfig, signal) => session.provider.stream(messages, tools, modelConfig, signal),
+    }
     // Team Mode tools
     const onSubAgentUsage = (u: { inputTokens: number; outputTokens: number; cacheCreationInputTokens?: number; cacheReadInputTokens?: number }) => {
       this.usageTracker.addSubAgentTurn(u)
       this.history.saveUsage(this.id, this.usageTracker.serialize())
     }
     const buildTeamSubSessionDeps = () => ({
-      provider: this.provider,
+      provider: liveProvider,
       toolRegistry: this.toolRegistry,
       modelConfig: this.config.modelConfig,
       cwd: this.config.cwd,
@@ -258,7 +266,7 @@ export class Session {
       teamRegistry: this.teamRegistry,
       backgroundTasks: this.backgroundTasks,
       buildSubSessionDeps: buildTeamSubSessionDeps as any,
-      provider: this.provider,
+      provider: liveProvider,
       modelConfig: this.config.modelConfig,
       resolveModel: (modelId: string) => this.resolveModel?.(modelId) ?? modelResolverUnavailable(modelId),
       getSkillLoader: () => this.skillLoader,
@@ -380,7 +388,7 @@ export class Session {
 
     // Register AgentTool for sub-agent dispatch
     this.toolRegistry.register(createAgentTool({
-      provider: this.provider,
+      provider: liveProvider,
       toolRegistry: this.toolRegistry,
       modelConfig: this.config.modelConfig,
       cwd: this.config.cwd,
@@ -493,7 +501,7 @@ export class Session {
 
   updateProvider(provider: ModelProvider, modelConfig: ModelConfig): void {
     this.provider = provider
-    this.config.modelConfig = { ...this.config.modelConfig, ...modelConfig }
+    Object.assign(this.config.modelConfig, modelConfig)
     if (modelConfig.contextWindow) {
       this.usageTracker.setContextWindow(modelConfig.contextWindow)
       // Bridge lastInputTokens to a model-aware estimate so swapping context
@@ -629,63 +637,6 @@ export class Session {
     await this.ensureHooksReady()
     await this.ensureSkillsReady()
     this.syncMcpTools()
-
-    // Assemble system prompt with current tool list
-    const toolDefs = this.toolRegistry.getDefinitions()
-    const toolNames = toolDefs.map(d => d.name)
-    const mcpServers = this.mcpManager?.getServerStates()
-      .filter(s => s.status === 'connected')
-      .map(s => ({ name: s.name, toolCount: s.tools.length, tools: s.tools.map(t => t.name), instructions: s.instructions }))
-
-    const appConfig = loadAppConfig()
-    this.config.modelConfig.systemPrompt = await assembleSystemPrompt({
-      cwd: this.config.cwd,
-      toolDefs,
-      toolNames,
-      mcpServers,
-      skills: this.skillLoader.getAll().map(s => ({ name: s.name, description: s.description, argumentHint: s.argumentHint })),
-      language: appConfig.language,
-      customInstructions: appConfig.customInstructions,
-    })
-
-    // Inject active tasks into context
-    const activeTasks = this.history.getActiveTasks(this.id)
-    if (activeTasks.length > 0 && Array.isArray(this.config.modelConfig.systemPrompt)) {
-      const taskLines = activeTasks.map(t => `- [${t.status}] #${t.id}: ${t.subject}`).join('\n')
-      this.config.modelConfig.systemPrompt.push({
-        content: `<tasks>\nCurrent tasks for this session:\n${taskLines}\n</tasks>`,
-        cacheable: false,
-      })
-    }
-
-    // Inject available models for sub-agent dispatch
-    const modelGroups = appConfig.modelGroups
-    if (modelGroups?.groups && Array.isArray(this.config.modelConfig.systemPrompt)) {
-      const modelLines: string[] = []
-      for (const group of modelGroups.groups) {
-        if (group.models?.length) {
-          for (const m of group.models) {
-            const active = m.id === modelGroups.activeModelId ? ' (current)' : ''
-            modelLines.push(`- ${m.name} [${group.name}] (modelId: "${group.id}:${m.modelId}")${active}`)
-          }
-        }
-      }
-      if (modelLines.length > 0) {
-        this.config.modelConfig.systemPrompt.push({
-          content: `<available-models>\nWhen dispatching sub-agents or creating teams, you can specify a modelId to use a different model. Available models:\n${modelLines.join('\n')}\nIMPORTANT: When the user asks to use a specific model (e.g. "用公司的deepseek"), you MUST pass the corresponding modelId value. For teams, include it in the objective text (e.g. "使用模型: <modelId>") so the PM knows which model to assign to workers.\n</available-models>`,
-          cacheable: false,
-        })
-      }
-    }
-
-    // Inject JDC Context Engine prompt segment — always available, no index gate.
-    const engineSegment = getContextEnginePromptSegment()
-    if (engineSegment.segment && Array.isArray(this.config.modelConfig.systemPrompt)) {
-      this.config.modelConfig.systemPrompt.push({
-        content: engineSegment.segment,
-        cacheable: engineSegment.cacheable,
-      })
-    }
 
     const content: import('./types.js').ContentBlock[] = [{ type: 'text', text }]
     if (extraContent && extraContent.length > 0) {
@@ -874,6 +825,7 @@ export class Session {
   private async runLoop(events: SessionEvents): Promise<void> {
     this.abortController = new AbortController()
     this.currentEvents = events
+    await this.prepareSystemPromptForRunLoop()
     this.config.modelConfig.systemPrompt = removeContextPromptSegments(this.config.modelConfig.systemPrompt)
 
     const runLoopStartedAt = Date.now()
@@ -1295,6 +1247,85 @@ export class Session {
     }
   }
 
+  private resolveCurrentModelProfile(appConfig: Record<string, any>): ModelCapabilityProfile {
+    const configuredProfiles = Array.isArray(appConfig.modelProfiles?.profiles)
+      ? appConfig.modelProfiles.profiles
+      : [
+          strictToolGroundingProfile({
+            id: 'strict_tool_grounding',
+            providerPattern: 'ollama',
+            modelPattern: 'glm*',
+          }),
+        ]
+    return resolveModelCapabilityProfile({
+      providerId: this.provider.name,
+      modelId: this.config.modelConfig.model,
+      overrideProfileId: typeof appConfig.modelProfiles?.overrideProfileId === 'string'
+        ? appConfig.modelProfiles.overrideProfileId
+        : undefined,
+      profiles: configuredProfiles,
+    })
+  }
+
+  private async prepareSystemPromptForRunLoop(): Promise<void> {
+    const toolDefs = this.toolRegistry.getDefinitions()
+    const toolNames = toolDefs.map(d => d.name)
+    const mcpServers = this.mcpManager?.getServerStates()
+      .filter(s => s.status === 'connected')
+      .map(s => ({ name: s.name, toolCount: s.tools.length, tools: s.tools.map(t => t.name), instructions: s.instructions }))
+
+    const appConfig = loadAppConfig()
+    this.modelProfile = this.resolveCurrentModelProfile(appConfig)
+    this.config.modelConfig.modelProfile = this.modelProfile
+    this.parallelExecutor.setMaxReadConcurrency(this.modelProfile.maxParallelToolCalls)
+    this.config.modelConfig.systemPrompt = await assembleSystemPrompt({
+      cwd: this.config.cwd,
+      toolDefs,
+      toolNames,
+      mcpServers,
+      skills: this.skillLoader.getAll().map(s => ({ name: s.name, description: s.description, argumentHint: s.argumentHint })),
+      language: appConfig.language,
+      customInstructions: appConfig.customInstructions,
+      modelProfile: this.modelProfile,
+    })
+
+    const activeTasks = this.history.getActiveTasks(this.id)
+    if (activeTasks.length > 0 && Array.isArray(this.config.modelConfig.systemPrompt)) {
+      const taskLines = activeTasks.map(t => `- [${t.status}] #${t.id}: ${t.subject}`).join('\n')
+      this.config.modelConfig.systemPrompt.push({
+        content: `<tasks>\nCurrent tasks for this session:\n${taskLines}\n</tasks>`,
+        cacheable: false,
+      })
+    }
+
+    const modelGroups = appConfig.modelGroups
+    if (modelGroups?.groups && Array.isArray(this.config.modelConfig.systemPrompt)) {
+      const modelLines: string[] = []
+      for (const group of modelGroups.groups) {
+        if (group.models?.length) {
+          for (const m of group.models) {
+            const active = m.id === modelGroups.activeModelId ? ' (current)' : ''
+            modelLines.push(`- ${m.name} [${group.name}] (modelId: "${group.id}:${m.modelId}")${active}`)
+          }
+        }
+      }
+      if (modelLines.length > 0) {
+        this.config.modelConfig.systemPrompt.push({
+          content: `<available-models>\nWhen dispatching sub-agents or creating teams, you can specify a modelId to use a different model. Available models:\n${modelLines.join('\n')}\nIMPORTANT: When the user asks to use a specific model (e.g. "用公司的deepseek"), you MUST pass the corresponding modelId value. For teams, include it in the objective text (e.g. "使用模型: <modelId>") so the PM knows which model to assign to workers.\n</available-models>`,
+          cacheable: false,
+        })
+      }
+    }
+
+    const engineSegment = getContextEnginePromptSegment()
+    if (engineSegment.segment && Array.isArray(this.config.modelConfig.systemPrompt)) {
+      this.config.modelConfig.systemPrompt.push({
+        content: engineSegment.segment,
+        cacheable: engineSegment.cacheable,
+      })
+    }
+  }
+
   private async createContextRequest(userMessage: string): Promise<ContextRequest> {
     const ide = this.ideContext ? {
       activeFile: this.ideContext.filePath,
@@ -1315,6 +1346,7 @@ export class Session {
       carriedContext,
       mode: contextModeFromPlanMode(this.planMode),
       model: this.config.modelConfig.model,
+      modelProfile: this.modelProfile,
       runtime: { toolEvents: this.recentToolEvents.slice(-20), turnIndex: this.turnIndex },
       ...(ide ? { ide } : {}),
       createdAt: Date.now(),

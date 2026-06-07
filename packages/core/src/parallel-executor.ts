@@ -34,7 +34,16 @@ const JDC_READ_TOOLS = new Set([
 
 const LONG_RUNNING_TOOLS = new Set(['Agent', 'Bash', 'Monitor', 'Team'])
 
-const MAX_CONCURRENCY = 5
+const DEFAULT_MAX_READ_CONCURRENCY = 5
+
+export interface ParallelExecutorOptions {
+  maxReadConcurrency?: number
+}
+
+function clampReadConcurrency(value: number | undefined): number {
+  if (!Number.isFinite(value)) return DEFAULT_MAX_READ_CONCURRENCY
+  return Math.max(1, Math.min(DEFAULT_MAX_READ_CONCURRENCY, Math.floor(value!)))
+}
 
 function isReadTool(name: string): boolean {
   return READ_TOOLS.has(name) || JDC_READ_TOOLS.has(name) || name.startsWith('Jdc')
@@ -58,6 +67,11 @@ class Semaphore {
 
   constructor(private limit: number) {}
 
+  setLimit(limit: number): void {
+    this.limit = limit
+    this.drain()
+  }
+
   async acquire(): Promise<void> {
     if (this.running < this.limit) {
       this.running++
@@ -67,9 +81,14 @@ class Semaphore {
   }
 
   release(): void {
-    this.running--
-    const next = this.queue.shift()
-    if (next) {
+    this.running = Math.max(0, this.running - 1)
+    this.drain()
+  }
+
+  private drain(): void {
+    while (this.running < this.limit) {
+      const next = this.queue.shift()
+      if (!next) return
       this.running++
       next()
     }
@@ -77,7 +96,18 @@ class Semaphore {
 }
 
 export class ParallelExecutor {
-  constructor(private toolRunner: ToolRunner) {}
+  private maxReadConcurrency: number
+  private readSemaphore: Semaphore
+
+  constructor(private toolRunner: ToolRunner, options: ParallelExecutorOptions = {}) {
+    this.maxReadConcurrency = clampReadConcurrency(options.maxReadConcurrency)
+    this.readSemaphore = new Semaphore(this.maxReadConcurrency)
+  }
+
+  setMaxReadConcurrency(maxReadConcurrency: number): void {
+    this.maxReadConcurrency = clampReadConcurrency(maxReadConcurrency)
+    this.readSemaphore.setLimit(this.maxReadConcurrency)
+  }
 
   /**
    * Execute a single tool, but abandon the promise if the signal aborts
@@ -136,13 +166,12 @@ export class ParallelExecutor {
     // Execute reads in parallel
     let readHadError = false
     if (readIndices.length > 0) {
-      const semaphore = new Semaphore(MAX_CONCURRENCY)
       const readPromises = readIndices.map(async (idx) => {
         if (batchAbort.signal.aborted) {
           results[idx] = { tool_use_id: blocks[idx].id, content: 'Cancelled: sibling tool failed', is_error: true }
           return
         }
-        await semaphore.acquire()
+        await this.readSemaphore.acquire()
         try {
           if (batchAbort.signal.aborted) {
             results[idx] = { tool_use_id: blocks[idx].id, content: 'Cancelled: sibling tool failed', is_error: true }
@@ -159,7 +188,7 @@ export class ParallelExecutor {
             readHadError = true
           }
         } finally {
-          semaphore.release()
+          this.readSemaphore.release()
         }
       })
       await Promise.all(readPromises)

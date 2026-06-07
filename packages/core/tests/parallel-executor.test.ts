@@ -285,6 +285,116 @@ describe('ParallelExecutor', () => {
     expect(maxConcurrent).toBe(5)
   })
 
+  it('limits read tool concurrency from executor options', async () => {
+    let active = 0
+    let maxActive = 0
+    const registry = new ToolRegistry()
+    registry.register({
+      definition: { name: 'Read', description: 'Read', inputSchema: { type: 'object', properties: {} } },
+      execute: async () => {
+        active += 1
+        maxActive = Math.max(maxActive, active)
+        await new Promise(resolve => setTimeout(resolve, 20))
+        active -= 1
+        return { content: 'ok' }
+      },
+    })
+    const executor = new ParallelExecutor(createRunner(registry), { maxReadConcurrency: 2 })
+
+    await executor.executeBatch([
+      { type: 'tool_use', id: 'read_1', name: 'Read', input: {} },
+      { type: 'tool_use', id: 'read_2', name: 'Read', input: {} },
+      { type: 'tool_use', id: 'read_3', name: 'Read', input: {} },
+      { type: 'tool_use', id: 'read_4', name: 'Read', input: {} },
+    ], () => undefined)
+
+    expect(maxActive).toBeLessThanOrEqual(2)
+  })
+
+  it('updates read tool concurrency after construction', async () => {
+    let active = 0
+    let maxActive = 0
+    const registry = new ToolRegistry()
+    registry.register({
+      definition: { name: 'Read', description: 'Read', inputSchema: { type: 'object', properties: {} } },
+      execute: async () => {
+        active += 1
+        maxActive = Math.max(maxActive, active)
+        await new Promise(resolve => setTimeout(resolve, 20))
+        active -= 1
+        return { content: 'ok' }
+      },
+    })
+    const executor = new ParallelExecutor(createRunner(registry))
+    executor.setMaxReadConcurrency(1)
+
+    await executor.executeBatch([
+      { type: 'tool_use', id: 'read_1', name: 'Read', input: {} },
+      { type: 'tool_use', id: 'read_2', name: 'Read', input: {} },
+    ], () => undefined)
+
+    expect(maxActive).toBe(1)
+  })
+
+  it('clamps configured read concurrency to the supported range', async () => {
+    let active = 0
+    let maxActive = 0
+    const registry = new ToolRegistry()
+    registry.register({
+      definition: { name: 'Read', description: 'Read', inputSchema: { type: 'object', properties: {} } },
+      execute: async () => {
+        active += 1
+        maxActive = Math.max(maxActive, active)
+        await new Promise(resolve => setTimeout(resolve, 20))
+        active -= 1
+        return { content: 'ok' }
+      },
+    })
+    const executor = new ParallelExecutor(createRunner(registry), { maxReadConcurrency: Number.POSITIVE_INFINITY })
+
+    await executor.executeBatch([
+      { type: 'tool_use', id: 'read_1', name: 'Read', input: {} },
+      { type: 'tool_use', id: 'read_2', name: 'Read', input: {} },
+      { type: 'tool_use', id: 'read_3', name: 'Read', input: {} },
+      { type: 'tool_use', id: 'read_4', name: 'Read', input: {} },
+      { type: 'tool_use', id: 'read_5', name: 'Read', input: {} },
+      { type: 'tool_use', id: 'read_6', name: 'Read', input: {} },
+    ], () => undefined)
+
+    expect(maxActive).toBeLessThanOrEqual(5)
+  })
+
+  it('limits eager read tools across sibling batches', async () => {
+    let active = 0
+    let maxActive = 0
+    const registry = new ToolRegistry()
+    registry.register({
+      definition: { name: 'Read', description: 'Read', inputSchema: { type: 'object', properties: {} } },
+      execute: async () => {
+        active += 1
+        maxActive = Math.max(maxActive, active)
+        await new Promise(resolve => setTimeout(resolve, 20))
+        active -= 1
+        return { content: 'ok' }
+      },
+    })
+    registry.register({
+      definition: { name: 'Write', description: 'Write', inputSchema: { type: 'object', properties: {} } },
+      execute: async () => ({ content: 'write ok' }),
+    })
+    const executor = new ParallelExecutor(createRunner(registry), { maxReadConcurrency: 2 })
+
+    await executor.executeBatch([
+      { type: 'tool_use', id: 'read_1', name: 'Read', input: {} },
+      { type: 'tool_use', id: 'write_1', name: 'Write', input: {} },
+      { type: 'tool_use', id: 'read_2', name: 'Read', input: {} },
+      { type: 'tool_use', id: 'read_3', name: 'Read', input: {} },
+      { type: 'tool_use', id: 'read_4', name: 'Read', input: {} },
+    ], () => undefined)
+
+    expect(maxActive).toBeLessThanOrEqual(2)
+  })
+
   it('should respect external abort signal', async () => {
     const registry = new ToolRegistry()
 

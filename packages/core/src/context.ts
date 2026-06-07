@@ -6,6 +6,7 @@ import path from 'node:path'
 import os from 'node:os'
 import { getBasePrompt } from './base-prompt.js'
 import type { ToolDefinition, PromptSegment } from './types.js'
+import type { ModelCapabilityProfile } from './model-profile.js'
 
 const execFileAsync = promisify(execFile)
 const CONFIG_DIR = path.join(os.homedir(), '.jdcagnet')
@@ -19,6 +20,7 @@ export interface ContextOptions {
   skills?: { name: string; description: string; argumentHint?: string; trigger?: string }[]
   language?: string
   customInstructions?: string
+  modelProfile?: ModelCapabilityProfile
 }
 
 export interface InstructionSource {
@@ -171,6 +173,7 @@ export async function assembleSystemPrompt(opts: ContextOptions): Promise<Prompt
       environment: env,
       mcpServers: opts.mcpServers,
       permissionMode: opts.permissionMode,
+      modelProfile: opts.modelProfile,
     }),
     cacheable: true,
   })

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mainSessionProfile } from './actor-profile.js'
 import { buildContextBundle } from './orchestrator.js'
+import { strictToolGroundingProfile } from '../model-profile.js'
 import type { ContextStoreResult } from './store.js'
 import type { ContextFact, ContextRequest, ContextSection, RawEvidence } from './types.js'
 
@@ -364,8 +365,83 @@ describe('JDC Context orchestrator', () => {
     })
 
     expect(result.renderedPrompt).toContain('<section kind="agent_contract"')
+    expect(result.renderedPrompt).toContain('Intent: code_edit')
+    expect(result.renderedPrompt).toContain('Objective:')
     expect(result.renderedPrompt).toContain('Code edit turns need target file or symbol evidence before mutation.')
     expect(result.bundle.sections.some((section) => section.kind === 'agent_contract')).toBe(true)
+  })
+
+  it('renders explicit agent contract text for strict model profiles', async () => {
+    const store = makeStore({ facts: [] })
+
+    const result = await buildContextBundle({
+      ...request,
+      mode: 'code_edit',
+      userMessage: '修复登录状态 bug',
+      modelProfile: strictToolGroundingProfile({ id: 'strict_local', providerPattern: 'ollama', modelPattern: 'glm*' }),
+    }, {
+      injectionEnabled: true,
+      includeAgentContract: true,
+      store,
+      providers: [],
+      now: () => 1_000,
+      id: () => 'bundle_strict_agent_contract',
+    })
+
+    expect(result.renderedPrompt).toContain('<section kind="agent_contract"')
+    expect(result.renderedPrompt).toContain('Intent: code_edit')
+    expect(result.renderedPrompt).toContain('Objective:')
+    expect(result.renderedPrompt).toContain('Model profile: strict_local')
+    expect(result.renderedPrompt).toContain('Evidence strictness: strict')
+    expect(result.renderedPrompt).toContain('Strict profile instructions:')
+    expect(result.renderedPrompt).toContain('Read target files before mutation.')
+    expect(result.renderedPrompt).toContain('Use one evidence-gathering step at a time when file targets are unclear.')
+    expect(result.renderedPrompt).toContain('Do not claim completion until verification has run or the final response discloses the gap.')
+    expect(result.renderedPrompt).toContain('Missing evidence:')
+    expect(result.renderedPrompt).toContain('Policy: Existing files must be read with fresh content before mutation.')
+  })
+
+  it('does not render agent contract when missing evidence is empty even with strict model profile', async () => {
+    const store = makeStore({ facts: [] })
+
+    const result = await buildContextBundle({
+      ...request,
+      mode: 'chat',
+      userMessage: 'Tell me about the repository conventions',
+      modelProfile: strictToolGroundingProfile({ id: 'strict_local', providerPattern: 'ollama', modelPattern: 'glm*' }),
+    }, {
+      injectionEnabled: true,
+      includeAgentContract: true,
+      store,
+      providers: [],
+      now: () => 1_000,
+      id: () => 'bundle_strict_no_missing',
+    })
+
+    expect(result.renderedPrompt).not.toContain('<section kind="agent_contract"')
+    expect(result.renderedPrompt).not.toContain('Missing evidence:')
+  })
+
+  it('keeps standard agent contract compact', async () => {
+    const store = makeStore({ facts: [] })
+
+    const result = await buildContextBundle({
+      ...request,
+      mode: 'code_edit',
+      userMessage: '修复登录状态 bug',
+    }, {
+      injectionEnabled: true,
+      includeAgentContract: true,
+      store,
+      providers: [],
+      now: () => 1_000,
+      id: () => 'bundle_standard_agent_contract',
+    })
+
+    expect(result.renderedPrompt).toContain('Agent run contract')
+    expect(result.renderedPrompt).toContain('Intent: code_edit')
+    expect(result.renderedPrompt).toContain('Objective:')
+    expect(result.renderedPrompt).not.toContain('Strict profile instructions:')
   })
 
   it('adds provider diagnostics and continues when one provider fails', async () => {

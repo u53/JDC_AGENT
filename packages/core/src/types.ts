@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { ModelCapabilityProfile } from './model-profile.js'
 
 export type MessageRole = 'user' | 'assistant' | 'system'
 
@@ -120,6 +121,12 @@ export interface ModelConfig {
    * session id.
    */
   cacheUser?: string
+  /**
+   * Runtime model capability profile. When set, the system prompt includes
+   * a Model Profile Adaptation section so the model sees strict, standard,
+   * or relaxed evidence/contract expectations.
+   */
+  modelProfile?: ModelCapabilityProfile
   /**
    * UI/host-facing progress for provider-level stream retries. Providers call
    * this only when retrying is still protocol-safe: before any chunks have
