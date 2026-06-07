@@ -1,4 +1,4 @@
-import type { ContextInspectPayload, ContextRefreshPayload, MemorySearchPayload } from '@jdcagnet/core'
+import type { ConstraintObservabilitySnapshot, ContextInspectPayload, ContextRefreshPayload, MemorySearchPayload } from '@jdcagnet/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useContextStore, type ContextProviderHealth, type ContextRejectedMemoryReview } from './context-store'
 
@@ -133,6 +133,18 @@ const refreshPayload: ContextRefreshPayload = {
   diagnostics: [],
 }
 
+const constraintPayload: ConstraintObservabilitySnapshot = {
+  status: 'idle',
+  inspectedAt: 1_700_000_001_000,
+  cwd: '/repo',
+  summary: { primary: '约束状态正常', secondary: '没有未处理的阻塞、证据缺口或验证缺口。' },
+  evidence: { status: 'not_required', missing: [] },
+  blockedActions: [],
+  verification: { status: 'not_required', changedFiles: [], requirements: [], commands: [] },
+  contextHealth: { status: 'available', providerCount: 0, unhealthyProviderCount: 0, diagnostics: [] },
+  policyEvents: [],
+}
+
 describe('context store', () => {
   beforeEach(() => {
     useContextStore.getState().reset()
@@ -166,6 +178,7 @@ describe('context store', () => {
       if (channel === 'context:inspect') return inspectPayload
       if (channel === 'context:memory:list') return acceptedMemoryPayload
       if (channel === 'context:providers:health') return cachedProviderHealth
+      if (channel === 'constraint:inspect') return constraintPayload
       throw new Error(`unexpected channel ${channel}`)
     })
 
@@ -182,6 +195,81 @@ describe('context store', () => {
     expect(state.memoryReview.data?.accepted?.results[0]?.content).toBe('Use project-local context persistence.')
     expect(state.memoryReview.data?.rejected[0]?.rejectionReason).toBe('Missing citations')
     expect(state.providerHealth.data).toEqual(cachedProviderHealth)
+  })
+
+  it('loads constraint inspection with project context', async () => {
+    const invoke = installInvoke((channel: string) => {
+      if (channel === 'context:inspect') return inspectPayload
+      if (channel === 'context:memory:list') return { results: [] }
+      if (channel === 'context:providers:health') return []
+      if (channel === 'constraint:inspect') {
+        return {
+          status: 'needs_verification',
+          inspectedAt: 1_700_000_000_000,
+          cwd: '/repo',
+          summary: { primary: '修改等待验证', secondary: '1 个文件需要验证。' },
+          evidence: { status: 'not_required', missing: [] },
+          blockedActions: [],
+          verification: {
+            status: 'pending',
+            changedFiles: [{ filePath: 'src/app.ts', changedByToolUseId: 'edit_1', changedAt: 1, status: 'pending', updatedAt: 1 }],
+            requirements: [],
+            commands: [],
+          },
+          contextHealth: { status: 'available', latestBundleId: 'ctx_1', providerCount: 0, unhealthyProviderCount: 0, diagnostics: [] },
+          policyEvents: [],
+        }
+      }
+      throw new Error(`unexpected channel ${channel}`)
+    })
+
+    await useContextStore.getState().loadProjectContext({ sessionId: 'sess-1' })
+
+    expect(invoke).toHaveBeenCalledWith('constraint:inspect', { sessionId: 'sess-1' })
+    expect(useContextStore.getState().constraint.data?.status).toBe('needs_verification')
+  })
+
+  it('does not let stale constraint inspect results overwrite the active session', async () => {
+    const sessionAConstraint = deferred<any>()
+    const invoke = installInvoke((channel: string, input?: unknown) => {
+      const sessionId = (input as any)?.sessionId
+      if (channel === 'context:inspect') return { ...inspectPayload, inspectedAt: sessionId === 'session_b' ? 2 : 1 }
+      if (channel === 'context:memory:list') return { results: [] }
+      if (channel === 'context:providers:health') return []
+      if (channel === 'constraint:inspect' && sessionId === 'session_a') return sessionAConstraint.promise
+      if (channel === 'constraint:inspect' && sessionId === 'session_b') {
+        return {
+          status: 'verified',
+          inspectedAt: 2,
+          cwd: '/repo',
+          summary: { primary: '修改已验证', secondary: '当前已记录覆盖修改的验证。' },
+          evidence: { status: 'not_required', missing: [] },
+          blockedActions: [],
+          verification: { status: 'passed', changedFiles: [], requirements: [], commands: [] },
+          contextHealth: { status: 'available', providerCount: 0, unhealthyProviderCount: 0, diagnostics: [] },
+          policyEvents: [],
+        }
+      }
+      return null
+    })
+
+    const loadA = useContextStore.getState().loadProjectContext({ sessionId: 'session_a' })
+    await useContextStore.getState().loadProjectContext({ sessionId: 'session_b' })
+    sessionAConstraint.resolve({
+      status: 'blocked',
+      inspectedAt: 1,
+      cwd: '/repo',
+      summary: { primary: '有操作被约束拦截', secondary: '旧会话结果' },
+      evidence: { status: 'not_required', missing: [] },
+      blockedActions: [],
+      verification: { status: 'not_required', changedFiles: [], requirements: [], commands: [] },
+      contextHealth: { status: 'available', providerCount: 0, unhealthyProviderCount: 0, diagnostics: [] },
+      policyEvents: [],
+    })
+    await loadA
+
+    expect(invoke).toHaveBeenCalledWith('constraint:inspect', { sessionId: 'session_b' })
+    expect(useContextStore.getState().constraint.data?.status).toBe('verified')
   })
 
   it('keeps inspect data when accepted memory and provider health fail during project context load', async () => {

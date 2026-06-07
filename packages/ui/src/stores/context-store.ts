@@ -1,4 +1,4 @@
-import type { ContextInspectPayload, ContextRefreshInput, ContextRefreshPayload, MemorySearchPayload } from '@jdcagnet/core'
+import type { ConstraintObservabilitySnapshot, ContextInspectPayload, ContextRefreshInput, ContextRefreshPayload, MemorySearchPayload } from '@jdcagnet/core'
 import { create } from 'zustand'
 
 export interface ContextInspectInput {
@@ -45,6 +45,7 @@ export type ContextProviderHealthItem = Omit<ContextInspectPayload['providerHeal
 }
 export type ContextProviderHealth = ContextProviderHealthItem[]
 export type ContextRefreshState = ContextRefreshPayload
+export type ConstraintInspectState = ConstraintObservabilitySnapshot
 
 export interface ContextRequestState<T> {
   data: T | null
@@ -59,11 +60,13 @@ interface ContextStoreState {
   memoryReview: ContextRequestState<ContextMemoryReview>
   providerHealth: ContextRequestState<ContextProviderHealth>
   refresh: ContextRequestState<ContextRefreshState>
+  constraint: ContextRequestState<ConstraintInspectState>
   loadProjectContext: (input: ContextProjectContextInput) => Promise<void>
   loadInspect: (input?: ContextInspectInput) => Promise<void>
   loadHarvestQueue: (input?: ContextInspectInput) => Promise<void>
   loadMemoryReview: (input?: ContextInspectInput) => Promise<void>
   loadProviderHealth: (input: ContextRefreshInput) => Promise<void>
+  loadConstraintInspect: (input: ContextProjectContextInput) => Promise<void>
   refreshProviders: (input: ContextRefreshInput) => Promise<void>
   acceptMemoryCandidate: (candidateId: string, sessionId: string) => Promise<void>
   rejectMemoryCandidate: (candidateId: string, sessionId: string) => Promise<void>
@@ -91,7 +94,7 @@ async function invokeContract<T>(channel: string, input?: unknown): Promise<T> {
   return api.invoke(channel, input) as Promise<T>
 }
 
-type ContextRequestKey = 'inspect' | 'harvest' | 'memoryReview' | 'providerHealth' | 'refresh'
+type ContextRequestKey = 'inspect' | 'harvest' | 'memoryReview' | 'providerHealth' | 'refresh' | 'constraint'
 
 const requestTokens: Record<ContextRequestKey, number> = {
   inspect: 0,
@@ -99,6 +102,7 @@ const requestTokens: Record<ContextRequestKey, number> = {
   memoryReview: 0,
   providerHealth: 0,
   refresh: 0,
+  constraint: 0,
 }
 
 let activeSessionId: string | undefined
@@ -137,6 +141,7 @@ export const useContextStore = create<ContextStoreState>((set) => ({
   memoryReview: emptyRequest(),
   providerHealth: emptyRequest(),
   refresh: emptyRequest(),
+  constraint: emptyRequest(),
 
   loadProjectContext: async (input) => {
     const sessionId = input.sessionId
@@ -145,27 +150,32 @@ export const useContextStore = create<ContextStoreState>((set) => ({
     const harvestToken = nextRequestToken('harvest')
     const memoryReviewToken = nextRequestToken('memoryReview')
     const providerHealthToken = nextRequestToken('providerHealth')
+    const constraintToken = nextRequestToken('constraint')
     if (sessionChanged) nextRequestToken('refresh')
     set((state) => ({
       inspect: { ...state.inspect, loading: true, error: null },
       harvest: { ...state.harvest, loading: true, error: null },
       memoryReview: { ...state.memoryReview, loading: true, error: null },
       providerHealth: { ...state.providerHealth, loading: true, error: null },
+      constraint: { ...state.constraint, loading: true, error: null },
       ...(sessionChanged ? { refresh: emptyRequest() } : {}),
     }))
-    const [inspectResult, acceptedResult, providerHealthResult] = await Promise.allSettled([
+    const [inspectResult, acceptedResult, providerHealthResult, constraintResult] = await Promise.allSettled([
       invokeContract<ContextInspectPayload>('context:inspect', { sessionId }),
       invokeContract<ContextAcceptedMemoryReview>('context:memory:list', { limit: 50, sessionId }),
       invokeContract<ContextProviderHealth>('context:providers:health', { sessionId, userMessage: '读取 JDC 上下文引擎提供方状态。', mode: 'debug' } satisfies ContextRefreshInput),
+      invokeContract<ConstraintInspectState>('constraint:inspect', { sessionId }),
     ])
     const loadedAt = Date.now()
     const currentSession = isCurrentSession(sessionId)
     const inspectData = inspectResult.status === 'fulfilled' ? inspectResult.value : null
     const accepted = acceptedResult.status === 'fulfilled' ? acceptedResult.value : null
     const providerHealth = providerHealthResult.status === 'fulfilled' ? providerHealthResult.value : null
+    const constraintData = constraintResult.status === 'fulfilled' ? constraintResult.value : null
     const inspectError = settledError(inspectResult)
     const memoryError = settledError(acceptedResult)
     const providerHealthError = settledError(providerHealthResult)
+    const constraintError = settledError(constraintResult)
 
     set((state) => ({
       ...(currentSession && isLatestRequest('inspect', inspectToken)
@@ -198,6 +208,11 @@ export const useContextStore = create<ContextStoreState>((set) => ({
             ? { providerHealth: { data: inspectData.providerHealth as ContextProviderHealth, loading: false, error: providerHealthError, loadedAt } }
             : { providerHealth: { ...state.providerHealth, loading: false, error: providerHealthError } }
         : {}),
+      ...(currentSession && isLatestRequest('constraint', constraintToken)
+        ? constraintData
+          ? { constraint: { data: constraintData, loading: false, error: null, loadedAt } }
+          : { constraint: { ...state.constraint, data: null, loading: false, error: constraintError } }
+        : {}),
     }))
   },
 
@@ -210,13 +225,14 @@ export const useContextStore = create<ContextStoreState>((set) => ({
     if (sessionChanged) {
       nextRequestToken('providerHealth')
       nextRequestToken('refresh')
+      nextRequestToken('constraint')
     }
     const providerHealthToken = requestTokens.providerHealth
     set((state) => ({
       inspect: { ...state.inspect, loading: true, error: null },
       harvest: { ...state.harvest, loading: true, error: null },
       memoryReview: { ...state.memoryReview, loading: true, error: null },
-      ...(sessionChanged ? { providerHealth: emptyRequest(), refresh: emptyRequest() } : {}),
+      ...(sessionChanged ? { providerHealth: emptyRequest(), refresh: emptyRequest(), constraint: emptyRequest() } : {}),
     }))
     try {
       const data = await invokeContract<ContextInspectPayload>('context:inspect', input)
@@ -276,6 +292,18 @@ export const useContextStore = create<ContextStoreState>((set) => ({
       if (isLatestRequest('providerHealth', token) && isCurrentSession(sessionId)) set({ providerHealth: { data, loading: false, error: null, loadedAt: Date.now() } })
     } catch (error) {
       if (isLatestRequest('providerHealth', token) && isCurrentSession(sessionId)) set((state) => ({ providerHealth: { ...state.providerHealth, data: null, loading: false, error: requestError(error) } }))
+    }
+  },
+
+  loadConstraintInspect: async (input) => {
+    const sessionId = input.sessionId
+    const token = nextRequestToken('constraint')
+    set((state) => ({ constraint: { ...state.constraint, loading: true, error: null } }))
+    try {
+      const data = await invokeContract<ConstraintInspectState>('constraint:inspect', { sessionId })
+      if (isLatestRequest('constraint', token) && isCurrentSession(sessionId)) set({ constraint: { data, loading: false, error: null, loadedAt: Date.now() } })
+    } catch (error) {
+      if (isLatestRequest('constraint', token) && isCurrentSession(sessionId)) set((state) => ({ constraint: { ...state.constraint, data: null, loading: false, error: requestError(error) } }))
     }
   },
 
@@ -341,6 +369,7 @@ export const useContextStore = create<ContextStoreState>((set) => ({
       memoryReview: emptyRequest(),
       providerHealth: emptyRequest(),
       refresh: emptyRequest(),
+      constraint: emptyRequest(),
     })
   },
 }))
