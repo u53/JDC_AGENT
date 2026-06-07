@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { TeamManagerAI } from '../team-manager-ai.js'
+import { strictToolGroundingProfile } from '../../model-profile.js'
 import type { ModelProvider } from '../../model-provider.js'
+import type { ContextProvider } from '../../context/orchestrator.js'
+import type { ContextRequest } from '../../context/types.js'
 import type { Message, ModelConfig, StreamChunk, ToolDefinition } from '../../types.js'
 
 class DeferredProvider implements ModelProvider {
@@ -34,6 +37,22 @@ class DeferredProvider implements ModelProvider {
 }
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0))
+
+function systemPromptText(systemPrompt: ModelConfig['systemPrompt']): string {
+  if (!Array.isArray(systemPrompt)) return typeof systemPrompt === 'string' ? systemPrompt : ''
+  return systemPrompt.map(segment => segment.content).join('\n')
+}
+
+function makeContextStore() {
+  return {
+    saveRawEvidence: async () => ({ ok: true, value: undefined, diagnostics: [] }),
+    saveBundleSnapshot: async () => ({ ok: true, value: undefined, diagnostics: [] }),
+    saveDiagnostic: async () => ({ ok: true, value: undefined, diagnostics: [] }),
+    queryFacts: async () => ({ ok: true, value: [], diagnostics: [] }),
+    listAcceptedProjectFacts: async () => ({ ok: true, value: [], diagnostics: [] }),
+    enforceQuotas: async () => ({ ok: true, value: { deletedFacts: 0, deletedBundles: 0, deletedRawEvidence: 0, deletedRejectedCandidates: 0 }, diagnostics: [] }),
+  }
+}
 
 async function waitFor(predicate: () => boolean, timeoutMs = 250): Promise<void> {
   const start = Date.now()
@@ -86,5 +105,47 @@ describe('TeamManagerAI scheduling', () => {
     const actions = manager.consumeAIActions()
     expect(actions).toHaveLength(1)
     expect(actions[0]).toMatchObject({ type: 'reply', message: '当前只剩收尾任务。' })
+  })
+
+  it('passes strict model profile into PM context contracts', async () => {
+    const provider = new DeferredProvider()
+    const actionsReady: string[] = []
+    let capturedRequest: ContextRequest | undefined
+    const strictProfile = strictToolGroundingProfile({ id: 'strict_team_pm', providerPattern: 'test', modelPattern: 'weak-pm' })
+    const contextProviders: ContextProvider[] = [{
+      id: 'conversation',
+      collect: async (request) => {
+        capturedRequest = request
+        return { evidence: [], sections: [], diagnostics: [], health: { id: 'conversation', status: 'enabled', updatedAt: 1 } }
+      },
+    }]
+    const manager = new TeamManagerAI({
+      initialTasks: [{ title: 'A', description: 'do A' }],
+      provider,
+      modelConfig: { model: 'weak-pm', maxTokens: 1000, modelProfile: strictProfile },
+      memberStates: () => [],
+      cwd: '/tmp/team-manager-ai-test',
+      teamId: 'team_test',
+      objective: 'Fix src/app.ts without enough repository evidence.',
+      onActionsReady: () => actionsReady.push('ready'),
+      contextEngine: {
+        sessionId: 'team_pm_strict_profile',
+        config: { enabled: true, injectionEnabled: true, harvestEnabled: false },
+        store: makeContextStore() as any,
+        providers: contextProviders,
+        id: () => 'ctx_team_pm_strict_profile',
+      },
+    })
+
+    manager.triggerProactiveCheck({ kind: 'task_completed', taskId: manager.getTasks()[0].id })
+    await waitFor(() => provider.calls.length === 1)
+
+    const promptText = systemPromptText(provider.calls[0].config.systemPrompt)
+    expect(promptText).toContain('Model profile: strict_team_pm')
+    expect(promptText).toContain('Strict profile instructions:')
+    expect(capturedRequest?.modelProfile).toMatchObject({ id: 'strict_team_pm', evidenceStrictness: 'strict' })
+
+    provider.respond(0, '[]')
+    await flush()
   })
 })

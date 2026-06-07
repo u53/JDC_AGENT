@@ -262,13 +262,14 @@ export class Session {
         },
       } : {}),
     })
+    const resolveModelWithProfile = (modelId: string) => this.resolveRuntimeModelWithProfile(modelId)
     this.toolRegistry.register(createTeamTool({
       teamRegistry: this.teamRegistry,
       backgroundTasks: this.backgroundTasks,
       buildSubSessionDeps: buildTeamSubSessionDeps as any,
       provider: liveProvider,
       modelConfig: this.config.modelConfig,
-      resolveModel: (modelId: string) => this.resolveModel?.(modelId) ?? modelResolverUnavailable(modelId),
+      resolveModel: resolveModelWithProfile,
       getSkillLoader: () => this.skillLoader,
       onUsage: onSubAgentUsage,
       onTeamEvent: this._teamEventHandler = (teamId, event) => {
@@ -395,7 +396,7 @@ export class Session {
       onToolEvent: undefined,
       onPermissionRequest,
       isSubAgent: false,
-      resolveModel: (modelId: string) => this.resolveModel?.(modelId) ?? modelResolverUnavailable(modelId),
+      resolveModel: resolveModelWithProfile,
       backgroundTasks: this.backgroundTasks,
       onAgentProgress: (agentToolUseId, event) => {
         this.currentEvents?.onAgentProgress?.(agentToolUseId, event)
@@ -1247,8 +1248,8 @@ export class Session {
     }
   }
 
-  private resolveCurrentModelProfile(appConfig: Record<string, any>): ModelCapabilityProfile {
-    const configuredProfiles = Array.isArray(appConfig.modelProfiles?.profiles)
+  private configuredModelProfiles(appConfig: Record<string, any>): ModelCapabilityProfile[] {
+    return Array.isArray(appConfig.modelProfiles?.profiles)
       ? appConfig.modelProfiles.profiles
       : [
           strictToolGroundingProfile({
@@ -1257,14 +1258,42 @@ export class Session {
             modelPattern: 'glm*',
           }),
         ]
+  }
+
+  private configuredModelProfileOverride(appConfig: Record<string, any>): string | undefined {
+    return typeof appConfig.modelProfiles?.overrideProfileId === 'string'
+      ? appConfig.modelProfiles.overrideProfileId
+      : undefined
+  }
+
+  private resolveModelProfileFor(providerId: string, modelId: string, appConfig: Record<string, any>): ModelCapabilityProfile {
     return resolveModelCapabilityProfile({
-      providerId: this.provider.name,
-      modelId: this.config.modelConfig.model,
-      overrideProfileId: typeof appConfig.modelProfiles?.overrideProfileId === 'string'
-        ? appConfig.modelProfiles.overrideProfileId
-        : undefined,
-      profiles: configuredProfiles,
+      providerId,
+      modelId,
+      overrideProfileId: this.configuredModelProfileOverride(appConfig),
+      profiles: this.configuredModelProfiles(appConfig),
     })
+  }
+
+  private resolveRuntimeModelWithProfile(modelId: string): RuntimeModelResolution {
+    const resolution = this.resolveModel?.(modelId) ?? modelResolverUnavailable(modelId)
+    if (resolution.status !== 'resolved') return resolution
+    const appConfig = loadAppConfig()
+    return {
+      ...resolution,
+      modelConfig: {
+        ...resolution.modelConfig,
+        modelProfile: resolution.modelConfig.modelProfile ?? this.resolveModelProfileFor(
+          resolution.provider.name,
+          resolution.modelConfig.model,
+          appConfig,
+        ),
+      },
+    }
+  }
+
+  private resolveCurrentModelProfile(appConfig: Record<string, any>): ModelCapabilityProfile {
+    return this.resolveModelProfileFor(this.provider.name, this.config.modelConfig.model, appConfig)
   }
 
   private async prepareSystemPromptForRunLoop(): Promise<void> {

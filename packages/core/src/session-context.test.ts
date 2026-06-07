@@ -1,4 +1,5 @@
 import { ParallelExecutor } from './parallel-executor.js'
+import { strictToolGroundingProfile } from './model-profile.js'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -851,6 +852,23 @@ describe('Session JDC Context Engine runtime integration', () => {
     setMaxReadConcurrency.mockRestore()
   })
 
+  it('adds resolved model profiles to modelId override runtime configs', async () => {
+    const session = await makeSession()
+    session.resolveModel = (modelId: string) => ({
+      status: 'resolved',
+      provider: providerFromChunks([], undefined, 'ollama'),
+      modelConfig: { model: modelId, maxTokens: 1024, contextWindow: 128_000 },
+    })
+
+    const resolution = (session as any).resolveRuntimeModelWithProfile('glm-override')
+
+    expect(resolution.status).toBe('resolved')
+    expect(resolution.modelConfig.modelProfile).toMatchObject({
+      id: 'strict_tool_grounding',
+      evidenceStrictness: 'strict',
+    })
+  })
+
   it('records harvest budget skips as info diagnostics instead of false errors', async () => {
     const store = makeContextStore()
     const session = await makeSession({
@@ -943,6 +961,45 @@ describe('Sub-session JDC Context Engine runtime integration', () => {
       contextWindow: 32_000,
     })
     expect(JSON.stringify(store.savedHarvestJobs[0]?.candidate)).not.toContain('hidden sub-session reasoning')
+  })
+
+  it('passes strict model profile into sub-session context contracts', async () => {
+    const store = makeContextStore()
+    const dir = makeTempDir()
+    let capturedRequest: ContextRequest | undefined
+    const strictProfile = strictToolGroundingProfile({ id: 'strict_sub_session', providerPattern: 'test', modelPattern: 'weak-*' })
+
+    const result = await runSubSession({
+      prompt: 'Fix src/app.ts without enough repository evidence.',
+      provider: providerFromChunks([
+        { type: 'text_delta', text: 'strict sub-session done' },
+        { type: 'message_end', usage: { inputTokens: 9, outputTokens: 4 } },
+      ], (_messages, config) => {
+        const promptText = textFromSystemPrompt(config.systemPrompt)
+        expect(promptText).toContain('Model profile: strict_sub_session')
+        expect(promptText).toContain('Strict profile instructions:')
+      }),
+      toolRegistry: new ToolRegistry(),
+      modelConfig: { model: 'weak-agent', maxTokens: 1024, contextWindow: 32_000, modelProfile: strictProfile },
+      cwd: dir,
+      maxTurns: 1,
+      contextEngine: {
+        sessionId: 'sub_session_strict_profile',
+        config: { enabled: true, injectionEnabled: true, harvestEnabled: false },
+        store,
+        providers: [{
+          id: 'conversation',
+          collect: async (request) => {
+            capturedRequest = request
+            return { evidence: [], sections: [], diagnostics: [], health: { id: 'conversation', status: 'enabled', updatedAt: 1 } }
+          },
+        }],
+        id: () => 'ctx_sub_strict_profile',
+      },
+    })
+
+    expect(result.content).toBe('strict sub-session done')
+    expect(capturedRequest?.modelProfile).toMatchObject({ id: 'strict_sub_session', evidenceStrictness: 'strict' })
   })
 
   it('captures sub-session provider metadata without defaulting to Anthropic or storing reasoning metadata', async () => {

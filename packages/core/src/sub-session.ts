@@ -444,6 +444,7 @@ async function buildSubSessionContextPrompt(
           },
           mode: 'chat',
           model: opts.modelConfig.model,
+          modelProfile: opts.modelConfig.modelProfile,
           runtime: {},
           signal,
           createdAt: Date.now(),

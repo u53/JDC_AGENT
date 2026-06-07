@@ -996,6 +996,7 @@ export class TeamManagerAI extends TeamManager {
             },
             mode: 'plan',
             model: this.modelConfig.model,
+            modelProfile: this.modelConfig.modelProfile,
             runtime: { teamId: this.teamId, memberStates: this.getMemberStates() },
             signal,
             createdAt: Date.now(),
