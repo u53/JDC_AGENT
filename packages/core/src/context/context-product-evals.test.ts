@@ -730,6 +730,7 @@ describe('JDC Context Engine product evals', () => {
         status: 'pending',
         files: ['packages/core/src/session.ts'],
         reason: 'test script covers changed files.',
+        coveredChangedAt: 100,
       }],
       assistantText: '修好了。',
     })
@@ -757,6 +758,7 @@ describe('JDC Context Engine product evals', () => {
         status: 'failed',
         files: ['packages/core/src/session.ts'],
         reason: 'test script covers changed files.',
+        coveredChangedAt: 100,
         failure: '1 failed',
       }],
       assistantText: 'All done.',

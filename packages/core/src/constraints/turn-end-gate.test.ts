@@ -18,6 +18,7 @@ function requirement(input: Partial<VerificationRequirementRecord> = {}): Verifi
     status: 'pending',
     files: ['src/app.ts'],
     reason: 'test script covers changed files.',
+    coveredChangedAt: 100,
     ...input,
   }
 }

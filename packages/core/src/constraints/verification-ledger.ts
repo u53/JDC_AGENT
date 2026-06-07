@@ -26,6 +26,7 @@ export interface VerificationCommandRecord {
 
 export interface VerificationRequirementRecord extends VerificationRequirement {
   kind: VerificationKind
+  coveredChangedAt: number
   satisfiedByToolUseId?: string
   failure?: string
   updatedAt?: number
@@ -82,15 +83,17 @@ export class VerificationLedger {
     }
 
     for (const requirement of requirements) {
+      const coveredChangedAt = this.requirementChangedAt(requirement)
       const existing = this.requirements.get(requirement.id)
-      if (existing && existing.status === 'passed' && sameRequirementWork(existing, requirement)) continue
+      if (existing && existing.status === 'passed' && sameRequirementWork(existing, requirement, coveredChangedAt)) continue
       this.requirements.set(requirement.id, {
         ...requirement,
         kind: requirement.kind,
+        coveredChangedAt,
         updatedAt: this.now(),
       })
       for (const command of this.commands) {
-        if (command.createdAt >= this.requirementChangedAt(requirement)) {
+        if (command.createdAt >= coveredChangedAt) {
           this.applyCommandToRequirement(this.requirements.get(requirement.id)!, command)
         }
       }
@@ -146,7 +149,7 @@ export class VerificationLedger {
   }
 
   private applyCommandToRequirement(requirement: VerificationRequirementRecord, command: VerificationCommandRecord): void {
-    if (requirement.kind !== command.kind || requirement.command !== command.command) return
+    if (requirement.kind !== command.kind || !commandsCoverSameScript(requirement.command, command.command)) return
 
     requirement.updatedAt = this.now()
     requirement.satisfiedByToolUseId = command.toolUseId
@@ -168,8 +171,25 @@ export class VerificationLedger {
   }
 }
 
-function sameRequirementWork(existing: VerificationRequirementRecord, next: VerificationRequirement): boolean {
-  return existing.kind === next.kind && existing.command === next.command && sameStringArray(existing.files, next.files)
+function sameRequirementWork(existing: VerificationRequirementRecord, next: VerificationRequirement, coveredChangedAt: number): boolean {
+  return existing.kind === next.kind
+    && commandsCoverSameScript(existing.command, next.command)
+    && existing.coveredChangedAt === coveredChangedAt
+    && sameStringArray(existing.files, next.files)
+}
+
+function commandsCoverSameScript(requirementCommand: string, actualCommand: string): boolean {
+  if (requirementCommand === actualCommand) return true
+  const requirement = parsePackageScriptCommand(requirementCommand)
+  const actual = parsePackageScriptCommand(actualCommand)
+  return Boolean(requirement && actual && requirement.script === actual.script)
+}
+
+function parsePackageScriptCommand(command: string): { manager: string, script: string } | undefined {
+  const normalized = command.trim().replace(/\s+/g, ' ')
+  const match = normalized.match(/(?:^|&& )(?<manager>pnpm|npm|yarn|bun)(?: --filter \S+)?(?: run)? (?<script>build|test|typecheck|lint)(?:$|\s| --)/)
+  if (!match?.groups) return undefined
+  return { manager: match.groups.manager, script: match.groups.script }
 }
 
 function sameStringArray(left: string[], right: string[]): boolean {
