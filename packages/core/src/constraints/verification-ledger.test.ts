@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { VerificationLedger } from './verification-ledger.js'
+import { evaluateTurnEndGate } from './turn-end-gate.js'
 
 describe('VerificationLedger', () => {
   it('marks changed files pending until a verification command passes', () => {
@@ -367,6 +368,72 @@ describe('VerificationLedger', () => {
       status: 'failed',
       satisfiedByToolUseId: 'bash_1',
       failure: '1 failed',
+    })])
+  })
+
+  it('does not match focused verification commands for a different package scope', () => {
+    let currentTime = 100
+    const ledger = new VerificationLedger({ now: () => currentTime })
+    ledger.recordMutation({ filePath: 'packages/core/src/session.ts', toolUseId: 'edit_1' })
+    ledger.setRequirements([{
+      id: 'verify_build',
+      kind: 'build',
+      command: 'pnpm build',
+      status: 'pending',
+      files: ['packages/core/src/session.ts'],
+      reason: 'build script covers changed files.',
+    }])
+
+    currentTime = 200
+    ledger.recordCommand({
+      toolUseId: 'bash_1',
+      command: 'pnpm --filter @jdcagnet/ui build',
+      kind: 'build',
+      status: 'passed',
+      output: 'ok',
+    })
+
+    expect(ledger.getChangedFiles()[0]).toMatchObject({ status: 'verified', verifiedByToolUseId: 'bash_1' })
+    expect(ledger.getRequirements()).toEqual([expect.objectContaining({
+      id: 'verify_build',
+      status: 'pending',
+    })])
+    expect(evaluateTurnEndGate({
+      changedFiles: ledger.getChangedFiles(),
+      requirements: ledger.getRequirements(),
+      assistantText: 'Done.',
+    })).toEqual(expect.objectContaining({
+      action: 'append_disclosure',
+      severity: 'warning',
+    }))
+  })
+
+  it('matches focused package verification commands for the changed package scope', () => {
+    let currentTime = 100
+    const ledger = new VerificationLedger({ now: () => currentTime })
+    ledger.recordMutation({ filePath: 'packages/core/src/session.ts', toolUseId: 'edit_1' })
+    ledger.setRequirements([{
+      id: 'verify_build',
+      kind: 'build',
+      command: 'pnpm build',
+      status: 'pending',
+      files: ['packages/core/src/session.ts'],
+      reason: 'build script covers changed files.',
+    }])
+
+    currentTime = 200
+    ledger.recordCommand({
+      toolUseId: 'bash_1',
+      command: 'pnpm --filter @jdcagnet/core build',
+      kind: 'build',
+      status: 'passed',
+      output: 'ok',
+    })
+
+    expect(ledger.getRequirements()).toEqual([expect.objectContaining({
+      id: 'verify_build',
+      status: 'passed',
+      satisfiedByToolUseId: 'bash_1',
     })])
   })
 

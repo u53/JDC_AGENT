@@ -149,7 +149,7 @@ export class VerificationLedger {
   }
 
   private applyCommandToRequirement(requirement: VerificationRequirementRecord, command: VerificationCommandRecord): void {
-    if (requirement.kind !== command.kind || !commandsCoverSameScript(requirement.command, command.command)) return
+    if (requirement.kind !== command.kind || !commandsCoverSameScript(requirement.command, command.command, requirement.files)) return
 
     requirement.updatedAt = this.now()
     requirement.satisfiedByToolUseId = command.toolUseId
@@ -173,23 +173,70 @@ export class VerificationLedger {
 
 function sameRequirementWork(existing: VerificationRequirementRecord, next: VerificationRequirement, coveredChangedAt: number): boolean {
   return existing.kind === next.kind
-    && commandsCoverSameScript(existing.command, next.command)
+    && commandsCoverSameScript(existing.command, next.command, next.files)
     && existing.coveredChangedAt === coveredChangedAt
     && sameStringArray(existing.files, next.files)
 }
 
-function commandsCoverSameScript(requirementCommand: string, actualCommand: string): boolean {
+function commandsCoverSameScript(requirementCommand: string, actualCommand: string, files: string[]): boolean {
   if (requirementCommand === actualCommand) return true
   const requirement = parsePackageScriptCommand(requirementCommand)
   const actual = parsePackageScriptCommand(actualCommand)
-  return Boolean(requirement && actual && requirement.script === actual.script)
+  if (!requirement || !actual || requirement.script !== actual.script) return false
+  return packageFiltersCoverFiles(actual.filters, files)
 }
 
-function parsePackageScriptCommand(command: string): { manager: string, script: string } | undefined {
+function parsePackageScriptCommand(command: string): { manager: string, script: string, filters: string[] } | undefined {
   const normalized = command.trim().replace(/\s+/g, ' ')
-  const match = normalized.match(/(?:^|&& )(?<manager>pnpm|npm|yarn|bun)(?: --filter \S+)?(?: run)? (?<script>build|test|typecheck|lint)(?:$|\s| --)/)
-  if (!match?.groups) return undefined
-  return { manager: match.groups.manager, script: match.groups.script }
+  const segment = normalized.split('&&').map(part => part.trim()).find(part => /^(pnpm|npm|yarn|bun)\b/.test(part))
+  if (!segment) return undefined
+
+  const tokens = segment.split(' ')
+  const manager = tokens[0]
+  const filters: string[] = []
+  let script: string | undefined
+  for (let index = 1; index < tokens.length; index += 1) {
+    const token = tokens[index]
+    if (token === '--filter' && tokens[index + 1]) {
+      filters.push(tokens[index + 1])
+      index += 1
+      continue
+    }
+    if (token.startsWith('--filter=')) {
+      filters.push(token.slice('--filter='.length))
+      continue
+    }
+    if (token === 'run') continue
+    if (!token.startsWith('-')) {
+      script = token
+      break
+    }
+  }
+  if (!script || !['build', 'test', 'typecheck', 'lint'].includes(script)) return undefined
+  return { manager, script, filters }
+}
+
+function packageFiltersCoverFiles(filters: string[], files: string[]): boolean {
+  if (filters.length === 0) return true
+  const requiredPackages = new Set(files.map(packageScopeForFile).filter((scope): scope is string => Boolean(scope)))
+  if (requiredPackages.size === 0) return true
+  for (const requiredPackage of requiredPackages) {
+    if (!filters.some(filter => packageFilterMatchesScope(filter, requiredPackage))) return false
+  }
+  return true
+}
+
+function packageScopeForFile(filePath: string): string | undefined {
+  const normalized = filePath.replace(/\\/g, '/')
+  const match = normalized.match(/^packages\/([^/]+)\//)
+  return match ? `@jdcagnet/${match[1]}` : undefined
+}
+
+function packageFilterMatchesScope(filter: string, scope: string): boolean {
+  const normalized = filter.replace(/^['"]|['"]$/g, '')
+  if (normalized === scope) return true
+  const unscoped = scope.split('/').at(-1)
+  return Boolean(unscoped && (normalized === unscoped || normalized === `./packages/${unscoped}` || normalized === `packages/${unscoped}`))
 }
 
 function sameStringArray(left: string[], right: string[]): boolean {
