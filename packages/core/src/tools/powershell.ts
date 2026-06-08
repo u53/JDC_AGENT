@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 import { getNonInteractiveEnv } from './bash.js'
+import { powerShellCommandArgs } from '../utils/powershell-encoding.js'
 
 export type PowerShellEdition = 'core' | 'desktop'
 
@@ -134,7 +135,7 @@ ${edition === 'core' ? '- Use && for conditional chaining, ; for unconditional' 
       const cwdTracking = `\n; $_ec = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } elseif ($?) { 0 } else { 1 }\n; (Get-Location).Path | Out-File -FilePath '${escapedCwdFile}' -Encoding utf8 -NoNewline\n; exit $_ec`
       const fullCommand = command + cwdTracking
 
-      const shellArgs = ['-NoProfile', '-NonInteractive', '-Command', fullCommand]
+      const shellArgs = powerShellCommandArgs(fullCommand)
 
       return new Promise((resolve) => {
         const proc = spawn(shellPath, shellArgs, {

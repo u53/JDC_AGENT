@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 import { findGitBash } from '../utils/shell-detection.js'
+import { powerShellCommandArgs } from '../utils/powershell-encoding.js'
 
 export const monitorTool: ToolHandler = {
   definition: {
@@ -44,7 +45,7 @@ export const monitorTool: ToolHandler = {
           shellArgs = ['-c', command]
         } else {
           shellCmd = 'powershell.exe'
-          shellArgs = ['-NoProfile', '-NonInteractive', '-Command', command]
+          shellArgs = powerShellCommandArgs(command)
         }
       } else {
         shellCmd = 'sh'

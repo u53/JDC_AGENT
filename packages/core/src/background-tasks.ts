@@ -4,7 +4,8 @@ import { v4 as uuid } from 'uuid'
 import path from 'node:path'
 import { RingBuffer } from './team/team-mailbox.js'
 import type { TeamEvent, TeamMemberSpec, TeamMessage } from './team/team-types.js'
-import { findGitBash } from './utils/shell-detection.js'
+import { findGitBash, findPowerShell } from './utils/shell-detection.js'
+import { powerShellCommandArgs } from './utils/powershell-encoding.js'
 
 export type TaskType = 'shell' | 'agent' | 'team'
 
@@ -75,15 +76,18 @@ export class BackgroundTaskManager {
     let shellCmd: string
     let shellArgs: string[]
 
-    if (isWindows) {
+    if (isWindows && shell === 'powershell') {
+      shellCmd = findPowerShell() ?? 'powershell.exe'
+      shellArgs = powerShellCommandArgs(command)
+    } else if (isWindows) {
       const gitBashPath = findGitBash()
       if (gitBashPath) {
         shellCmd = gitBashPath
         shellArgs = ['--login', '-c', command]
       } else {
         // Fall back to PowerShell if no Git Bash
-        shellCmd = 'powershell.exe'
-        shellArgs = ['-NoProfile', '-NonInteractive', '-Command', command]
+        shellCmd = findPowerShell() ?? 'powershell.exe'
+        shellArgs = powerShellCommandArgs(command)
       }
     } else {
       const userShell = process.env.SHELL || '/bin/bash'
