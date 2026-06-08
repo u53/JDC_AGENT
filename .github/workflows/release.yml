@@ -12,6 +12,8 @@ permissions:
 jobs:
   release-mac:
     runs-on: macos-latest
+    env:
+      ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
     steps:
       - uses: actions/checkout@v4
 
@@ -28,9 +30,30 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Cache Electron downloads
+        uses: actions/cache@v4
+        with:
+          path: .electron-cache
+          key: ${{ runner.os }}-electron-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
+
       - run: pip install setuptools
 
-      - run: pnpm install
+      - name: Install dependencies
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm install; then
+              exit 0
+            fi
+            status=$?
+            if [ "$attempt" -eq 3 ]; then
+              exit "$status"
+            fi
+            echo "pnpm install failed on attempt $attempt/3; retrying..."
+            sleep $((attempt * 20))
+          done
 
       - run: pnpm build
 
@@ -68,6 +91,8 @@ jobs:
 
   release-windows:
     runs-on: windows-latest
+    env:
+      ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
     steps:
       - uses: actions/checkout@v4
 
@@ -84,9 +109,30 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Cache Electron downloads
+        uses: actions/cache@v4
+        with:
+          path: .electron-cache
+          key: ${{ runner.os }}-electron-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
+
       - run: pip install setuptools
 
-      - run: pnpm install
+      - name: Install dependencies
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm install; then
+              exit 0
+            fi
+            status=$?
+            if [ "$attempt" -eq 3 ]; then
+              exit "$status"
+            fi
+            echo "pnpm install failed on attempt $attempt/3; retrying..."
+            sleep $((attempt * 20))
+          done
 
       - run: pnpm build
 
