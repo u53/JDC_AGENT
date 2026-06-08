@@ -98,7 +98,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
 
   if (!team) {
     return (
-      <div className="flex flex-col h-full min-h-0 bg-[var(--panel)]">
+      <div className="flex flex-col h-full min-h-0 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_94%,transparent),color-mix(in_srgb,var(--bg)_86%,transparent))]">
         <Header title={`Team ${taskId.slice(0, 8)}`} onClose={onClose} />
         <div className="flex-1 flex items-center justify-center text-[12px] text-[var(--muted)]">
           Loading…
@@ -115,14 +115,14 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
     : null
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-[var(--panel)]">
+    <div className="flex flex-col h-full min-h-0 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_94%,transparent),color-mix(in_srgb,var(--bg)_86%,transparent))]">
       <Header
         title={team.objective}
         status={team.status}
         onClose={onClose}
       />
 
-      <div className="flex-shrink-0 flex border-b border-[var(--border)] px-3 gap-1">
+      <div className="context-panel-scroll flex-shrink-0 flex gap-1 overflow-x-auto border-b border-[var(--border)] px-3 py-2">
         <TabButton active={tab === 'overview'} onClick={() => setTab('overview')}>
           Overview
         </TabButton>
@@ -139,7 +139,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
 
             <Section title="Project Manager">
               {team.manager ? (
-                <div className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5">
+                <div className="rounded-[8px] border border-[color-mix(in_srgb,var(--accent)_12%,var(--border))] bg-[color-mix(in_srgb,var(--surface-2)_46%,transparent)] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
                   <div className="flex items-center justify-between">
                     <div className="text-[13px] text-[var(--text)]">{team.manager.name}</div>
                     <StatusBadge status={team.manager.status} />
@@ -172,7 +172,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
                 {(team.tasks ?? []).map((t: any) => (
                   <li
                     key={t.id}
-                    className="flex items-center gap-2 text-[12px] px-2 py-1.5 rounded-md border border-[var(--border)] bg-[var(--bg)]"
+                    className="flex items-center gap-2 text-[12px] px-2.5 py-2 rounded-[7px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)]"
                   >
                     <span className="text-[11px] w-3 flex-shrink-0">{taskIcon(t.status)}</span>
                     <span className="flex-1 truncate text-[var(--text)]">{t.title}</span>
@@ -196,7 +196,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
         ) : (
           <div className="h-full flex flex-col">
             <div className="flex-1 min-h-0 overflow-y-auto p-3">
-              <pre className="text-[11px] leading-[1.55] font-mono text-[var(--muted)] whitespace-pre-wrap break-all m-0">
+              <pre className="text-[11px] leading-[1.55] font-mono text-[var(--muted)] whitespace-pre-wrap break-all m-0 rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_38%,transparent)] p-3">
                 {events.length === 0 ? '(no events yet)' : events.slice(-200).join('\n')}
               </pre>
               <div ref={eventsEndRef} />
@@ -219,10 +219,10 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
                 key={a.intent}
                 disabled={isFinished}
                 onClick={() => sendMessage(a.intent, a.message)}
-                className={`text-[11px] px-2.5 py-1 rounded-full border transition-all duration-150 ${
+                className={`text-[11px] px-2.5 py-1 rounded-[7px] border transition-all duration-150 active:translate-y-px ${
                   isActive
                     ? 'border-[var(--accent)] text-[var(--accent)] bg-[var(--accent-soft)] scale-95'
-                    : 'border-[var(--border)] bg-[var(--bg)] text-[var(--text)] hover:border-[var(--accent)] hover:text-[var(--accent)]'
+                    : 'border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)] text-[var(--text)] hover:border-[var(--accent)] hover:text-[var(--accent)]'
                 } disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-[var(--border)] disabled:hover:text-[var(--text)]`}
               >
                 {a.label}
@@ -232,7 +232,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
         </div>
         <div className="flex items-center gap-1.5">
           <div
-            className={`text-[11px] px-2 py-1.5 rounded-md border border-[var(--border)] bg-[var(--surface-2)] text-[var(--muted)] flex items-center gap-1 ${
+            className={`text-[11px] px-2 py-1.5 rounded-[7px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_54%,transparent)] text-[var(--muted)] flex items-center gap-1 ${
               isFinished ? 'opacity-40' : ''
             }`}
             title="Messages are routed through the Project Manager. Tell the PM what you want and it will broadcast or assign as needed."
@@ -259,12 +259,12 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
                 handleSend()
               }
             }}
-            className="flex-1 text-[12px] px-2.5 py-1.5 rounded-md border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex-1 min-w-0 text-[12px] px-2.5 py-1.5 rounded-[7px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_38%,transparent)] text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)] disabled:opacity-40 disabled:cursor-not-allowed"
           />
           <button
             onClick={handleSend}
             disabled={!message.trim() || sending || isFinished}
-            className={`text-[11px] px-3 py-1.5 rounded-md transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed ${
+            className={`text-[11px] px-3 py-1.5 rounded-[7px] transition-all duration-150 active:translate-y-px disabled:opacity-40 disabled:cursor-not-allowed ${
               justSent
                 ? 'bg-[var(--good)] text-[var(--bg)]'
                 : 'bg-[var(--accent)] text-[var(--bg)] hover:opacity-90'
@@ -351,9 +351,9 @@ function Header({
   onClose?: () => void
 }) {
   return (
-    <div className="flex-shrink-0 flex items-center justify-between border-b border-[var(--border)] px-3 py-2.5">
+    <div className="flex-shrink-0 flex items-center justify-between border-b border-[var(--border)] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        <span className="text-[10px] uppercase tracking-wider text-[var(--muted)] font-semibold">
+        <span className="font-mono text-[10px] uppercase text-[var(--muted)] font-semibold">
           Team
         </span>
         <span className="text-[13px] text-[var(--text)] truncate">{title}</span>
@@ -363,7 +363,7 @@ function Header({
         <button
           onClick={onClose}
           aria-label="Close"
-          className="text-[var(--muted)] hover:text-[var(--text)] text-[14px] leading-none px-1.5 py-0.5 rounded hover:bg-[var(--bg)] transition-colors"
+          className="text-[var(--muted)] hover:text-[var(--text)] text-[14px] leading-none px-1.5 py-0.5 rounded-[6px] hover:bg-[var(--surface-2)] transition-colors"
         >
           ×
         </button>
@@ -384,10 +384,10 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`text-[11px] px-2.5 py-1.5 border-b-2 transition-colors ${
+      className={`shrink-0 rounded-[7px] border px-2.5 py-1.5 font-mono text-[11px] transition-colors active:translate-y-px ${
         active
-          ? 'border-[var(--accent)] text-[var(--text)]'
-          : 'border-transparent text-[var(--muted)] hover:text-[var(--text)]'
+          ? 'border-[color-mix(in_srgb,var(--accent)_32%,var(--border))] bg-[var(--accent-soft)] text-[var(--accent)]'
+          : 'border-transparent text-[var(--muted)] hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
       }`}
     >
       {children}
@@ -406,16 +406,16 @@ function StatsRow({ team }: { team: any }) {
   ].filter((s) => s.value > 0)
 
   return (
-    <div className="flex flex-wrap gap-3">
+    <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(70px,1fr))]">
       {stats.map((s) => (
-        <div key={s.label} className="text-center">
+        <div key={s.label} className="rounded-[7px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_38%,transparent)] px-2 py-2 text-center">
           <div
-            className="text-[16px] font-semibold"
+            className="font-mono text-[16px] font-semibold"
             style={{ color: s.color ?? 'var(--text)' }}
           >
             {s.value}
           </div>
-          <div className="text-[10px] text-[var(--muted)] uppercase tracking-wide">
+          <div className="font-mono text-[10px] text-[var(--muted)] uppercase">
             {s.label}
           </div>
         </div>
@@ -427,7 +427,7 @@ function StatsRow({ team }: { team: any }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-wider text-[var(--muted)] font-semibold mb-2">
+      <div className="font-mono text-[11px] uppercase text-[var(--muted)] font-semibold mb-2">
         {title}
       </div>
       {children}
@@ -444,7 +444,7 @@ function MemberRow({
 }) {
   return (
     <li
-      className="rounded-md border border-[var(--border)] bg-[var(--bg)] overflow-hidden cursor-pointer hover:border-[var(--accent)]/40 transition-colors"
+      className="rounded-[7px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)] overflow-hidden cursor-pointer hover:border-[color-mix(in_srgb,var(--accent)_34%,var(--border))] hover:bg-[color-mix(in_srgb,var(--accent)_7%,var(--surface-2))] transition-colors"
       onClick={onClick}
     >
       <div className="flex items-center gap-2 px-3 py-2">
