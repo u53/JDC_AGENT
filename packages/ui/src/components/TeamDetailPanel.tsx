@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useTeamStore, type TeamConversationEntry } from '../stores/team-store'
 import { useToastStore } from '../stores/toast-store'
+import { MarkdownRenderer } from './MarkdownRenderer'
 
 export interface TeamDetailPanelProps {
   sessionId: string
@@ -327,7 +328,7 @@ function ConversationBubble({ entry }: { entry: TeamConversationEntry }) {
             : 'bg-[var(--surface-2)] border-[var(--border)] text-[var(--text)]'
         }`}
       >
-        {entry.content}
+        <TeamMarkdown content={entry.content} />
         {isSent && entry.status && (
           <span
             className="inline-block ml-1.5 text-[10px]"
@@ -338,6 +339,18 @@ function ConversationBubble({ entry }: { entry: TeamConversationEntry }) {
         )}
       </div>
     </li>
+  )
+}
+
+function TeamMarkdown({ content, muted = false }: { content: string; muted?: boolean }) {
+  return (
+    <div
+      className={`context-markdown min-w-0 text-[11px] leading-relaxed ${
+        muted ? 'text-[var(--muted)]' : 'text-[var(--text)]'
+      } [overflow-wrap:anywhere]`}
+    >
+      <MarkdownRenderer content={content} compact />
+    </div>
   )
 }
 
@@ -549,10 +562,13 @@ function MemberDetailModal({
                   <span className="font-mono text-[var(--muted)]">{task.id}</span>{' '}
                   <span>{task.title}</span>
                 </div>
-                <div className="mt-1 text-[11px] text-[var(--muted)] whitespace-pre-wrap">
-                  {task.description.length > 400
-                    ? task.description.slice(0, 400) + '…'
-                    : task.description}
+                <div className="mt-1">
+                  <TeamMarkdown
+                    content={task.description.length > 400
+                      ? task.description.slice(0, 400) + '…'
+                      : task.description}
+                    muted
+                  />
                 </div>
                 <div className="mt-1.5">
                   <StatusBadge status={task.status} small />

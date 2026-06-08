@@ -1,0 +1,90 @@
+import { renderToStaticMarkup } from 'react-dom/server'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { useTeamStore, type TeamStatusUI } from '../stores/team-store'
+import { TeamDetailPanel } from './TeamDetailPanel'
+
+const team: TeamStatusUI = {
+  type: 'team',
+  id: 'team-1',
+  objective: 'Ship markdown team panel',
+  status: 'running',
+  manager: { id: 'pm', name: 'Project Manager', status: 'running' },
+  members: [
+    {
+      id: 'worker-1',
+      name: 'Worker',
+      role: 'Frontend Worker',
+      responsibility: 'Inspect UI output.',
+      agentType: 'worker',
+      status: 'running',
+      currentTaskId: 'task-1',
+      toolCount: 2,
+      lastActivityAt: 1_700_000_000_000,
+    },
+  ],
+  tasks: [
+    {
+      id: 'task-1',
+      title: 'Render markdown',
+      description: '## Worker runbook\n- Check `ContextPanel`\n\n```ts\nconst ok = true\n```',
+      status: 'running',
+      assigneeId: 'worker-1',
+      priority: 'high',
+    },
+  ],
+  taskStats: { total: 1, completed: 0, running: 1, blocked: 0, cancelled: 0, todo: 0, failed: 0 },
+}
+
+describe('TeamDetailPanel', () => {
+  beforeEach(() => {
+    useTeamStore.getState().reset()
+    seedTeamStore()
+  })
+
+  it('renders team conversation markdown as rich markdown', () => {
+    seedTeamStore({
+      conversations: {
+        'team-1': [{
+      id: 'msg-1',
+      direction: 'received',
+      from: 'pm',
+      intent: 'finding',
+      content: '### PM update\n- Keep `scope` tight\n\n```md\n# shipped\n```',
+      timestamp: 1_700_000_000_000,
+        }],
+      },
+    })
+
+    const html = renderToStaticMarkup(<TeamDetailPanel sessionId="sess-1" taskId="team-1" />)
+
+    expect(html).toContain('<h3')
+    expect(html).toContain('<ul')
+    expect(html).toContain('markdown-code-block')
+    expect(html).toContain('scope')
+  })
+
+  it('renders expanded member task descriptions as rich markdown', () => {
+    seedTeamStore({ expandedMemberId: 'worker-1' })
+
+    const html = renderToStaticMarkup(<TeamDetailPanel sessionId="sess-1" taskId="team-1" />)
+
+    expect(html).toContain('<h2')
+    expect(html).toContain('<ul')
+    expect(html).toContain('markdown-code-block')
+    expect(html).toContain('ContextPanel')
+  })
+})
+
+function seedTeamStore(partial: Partial<ReturnType<typeof useTeamStore.getState>> = {}) {
+  const next = {
+    teams: { 'team-1': team },
+    events: {},
+    conversations: {},
+    conversationKeys: {},
+    activeTeamId: null,
+    expandedMemberId: null,
+    ...partial,
+  }
+  useTeamStore.setState(next)
+  Object.assign(useTeamStore.getInitialState(), next)
+}
