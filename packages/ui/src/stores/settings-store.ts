@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { ipc } from '../lib/ipc-client'
 
-export type ThemeMode = 'light' | 'dark' | 'system' | 'ocean' | 'purple' | 'cyber' | 'warm'
+export type ThemeMode = 'dark'
 export type SettingsTab = 'models' | 'mcp' | 'tools' | 'shortcuts' | 'advanced'
 
 interface SettingsState {
@@ -18,31 +18,33 @@ interface SettingsState {
   save: (config: any) => Promise<void>
 }
 
-function applyTheme(theme: ThemeMode) {
-  document.documentElement.dataset.theme = theme
+function applyTheme() {
+  document.documentElement.dataset.theme = 'dark'
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   config: null,
   isOpen: false,
   activeTab: 'models',
-  theme: 'system',
+  theme: 'dark',
 
   open: (tab) => set({ isOpen: true, activeTab: tab || get().activeTab }),
   close: () => set({ isOpen: false }),
   setActiveTab: (tab) => set({ activeTab: tab }),
 
   setTheme: (theme) => {
-    applyTheme(theme)
-    set({ theme })
-    ipc.config.set({ theme } as any)
+    applyTheme()
+    set({ theme: 'dark' })
+    ipc.config.set({ theme: 'dark' } as any)
   },
 
   load: async () => {
     const config = await ipc.config.get()
-    const theme = (config as any)?.theme || 'system'
-    applyTheme(theme)
-    set({ config, theme })
+    applyTheme()
+    if ((config as any)?.theme !== 'dark') {
+      await ipc.config.set({ theme: 'dark' } as any)
+    }
+    set({ config, theme: 'dark' })
   },
 
   save: async (config: any) => {

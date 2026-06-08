@@ -63,6 +63,7 @@ export function Composer({
   const [showEffortMenu, setShowEffortMenu] = useState(false)
   const [showModelMenu, setShowModelMenu] = useState(false)
   const [queueExpanded, setQueueExpanded] = useState(false)
+  const composerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isComposingRef = useRef(false)
 
@@ -240,6 +241,20 @@ export function Composer({
     resizeTextarea()
   }, [activeSessionId, text, resizeTextarea])
 
+  useLayoutEffect(() => {
+    if (!showSlashMenu && !showPermMenu && !showEffortMenu && !showModelMenu && !queueExpanded) return
+    const handler = (event: MouseEvent) => {
+      if (composerRef.current?.contains(event.target as Node)) return
+      setShowSlashMenu(false)
+      setShowPermMenu(false)
+      setShowEffortMenu(false)
+      setShowModelMenu(false)
+      setQueueExpanded(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showSlashMenu, showPermMenu, showEffortMenu, showModelMenu, queueExpanded])
+
   const handleClearQueue = () => {
     const len = messageQueue.length
     for (let i = len - 1; i >= 0; i--) removeFromQueue(i)
@@ -257,7 +272,8 @@ export function Composer({
 
   return (
     <div
-      className="border-t border-[var(--border)] bg-[var(--surface)] px-6 py-3"
+      ref={composerRef}
+      className="border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] px-6 py-4 shadow-[0_-18px_42px_-36px_rgba(0,0,0,0.8)] backdrop-blur"
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
@@ -303,8 +319,8 @@ export function Composer({
       <ImagePreview images={images} onRemove={(i) => setImages((prev) => prev.filter((_, idx) => idx !== i))} />
 
       {/* Main input area */}
-      <div className="mx-auto max-w-[760px]">
-        <div className="relative mb-2">
+      <div className="mx-auto max-w-[920px]">
+        <div className="relative rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_88%,transparent)] p-2 shadow-[var(--shadow)]">
           <SlashCommandMenu
             filter={slashFilter}
             visible={showSlashMenu}
@@ -313,7 +329,7 @@ export function Composer({
             skills={skills}
             skillsOnly={slashOnlySkills}
           />
-          <div className="flex items-end gap-3">
+          <div className="flex items-end gap-2">
             <textarea
               ref={textareaRef}
               value={text}
@@ -331,7 +347,7 @@ export function Composer({
               onPaste={handlePaste}
               rows={1}
               placeholder="输入消息... (/ 打开命令)"
-              className="flex-1 resize-none rounded-[10px] bg-[var(--surface-2)] border border-[var(--border)] px-4 py-3 text-[14px] text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--border-strong)] focus:outline-none transition-colors font-[var(--font-sans)]"
+              className="flex-1 resize-none rounded-[6px] border border-transparent bg-transparent px-3 py-2.5 text-[14px] leading-6 text-[var(--text)] placeholder-[var(--muted)] outline-none transition-colors font-[var(--font-sans)] focus:bg-[color-mix(in_srgb,var(--surface)_55%,transparent)]"
             />
             {/* Action buttons */}
             {isStreaming ? (
@@ -342,7 +358,7 @@ export function Composer({
                       enqueueMessage(text.trim())
                       resetDraft()
                     }}
-                    className="flex items-center gap-1.5 rounded-[8px] bg-[var(--accent)] px-3 py-2 text-[12px] text-[var(--accent-ink)] transition-colors hover:opacity-90"
+                    className="flex h-9 items-center gap-1.5 rounded-[8px] bg-[var(--accent)] px-3 text-[12px] font-semibold text-[var(--accent-ink)] transition-colors hover:brightness-110 active:translate-y-px"
                   >
                     <IconSend size={14} />
                     Queue
@@ -351,7 +367,7 @@ export function Composer({
                 <button
                   onClick={() => { if (!aborting) onAbort() }}
                   disabled={aborting}
-                  className="flex items-center gap-1.5 rounded-[8px] border border-[var(--bad)] px-3 py-2 text-[12px] text-[var(--bad)] transition-colors hover:bg-[var(--bad)] hover:text-[var(--accent-ink)] disabled:opacity-60 disabled:cursor-wait disabled:hover:bg-transparent disabled:hover:text-[var(--bad)]"
+                  className="flex h-9 items-center gap-1.5 rounded-[8px] border border-[var(--bad)] px-3 text-[12px] font-semibold text-[var(--bad)] transition-colors hover:bg-[var(--bad)] hover:text-white disabled:opacity-60 disabled:cursor-wait disabled:hover:bg-transparent disabled:hover:text-[var(--bad)]"
                 >
                   <IconStop size={14} />
                   {aborting ? 'Stopping…' : 'Stop'}
@@ -366,7 +382,7 @@ export function Composer({
                   }
                 }}
                 disabled={!text.trim() && images.length === 0}
-                className="flex items-center gap-1.5 rounded-[8px] bg-[var(--accent)] px-3 py-2 text-[12px] text-[var(--accent-ink)] transition-colors hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex h-9 items-center gap-1.5 rounded-[8px] bg-[var(--accent)] px-3 text-[12px] font-semibold text-[var(--accent-ink)] transition-colors hover:brightness-110 active:translate-y-px disabled:opacity-40 disabled:cursor-not-allowed disabled:active:translate-y-0"
               >
                 <IconSend size={14} />
                 Send
@@ -376,19 +392,23 @@ export function Composer({
         </div>
 
         {/* Status bar */}
-        <div className="flex items-center justify-between text-[12px] min-w-0">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="mt-2 flex min-w-0 items-center justify-between gap-3 border-t border-[var(--border)] pt-2 text-[12px]">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             {/* Permission dropdown */}
             <div className="relative shrink-0">
               <button
-                onClick={() => setShowPermMenu(!showPermMenu)}
+                onClick={() => {
+                  setShowPermMenu(!showPermMenu)
+                  setShowEffortMenu(false)
+                  setShowModelMenu(false)
+                }}
                 className="flex items-center gap-1 text-[var(--text)] hover:opacity-80 transition-opacity whitespace-nowrap"
               >
                 <span className={`inline-block h-1.5 w-1.5 rounded-full ${permDotColor}`} />
                 {permLabel} ▾
               </button>
               {showPermMenu && (
-                <div className="absolute bottom-full left-0 mb-1 border border-[var(--border)] bg-[var(--surface)] rounded-[8px] z-50 min-w-[130px] shadow-[var(--shadow-soft)] overflow-hidden">
+                <div className="absolute bottom-full left-0 z-[90] mb-2 min-w-[130px] overflow-hidden rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] shadow-[var(--shadow-soft)] backdrop-blur">
                   <button
                     onClick={() => { onPermissionChange?.('relaxed'); setShowPermMenu(false) }}
                     className={`block w-full text-left px-3 py-1.5 text-[12px] hover:bg-[var(--surface-2)] ${permissionMode === 'relaxed' ? 'text-[var(--warn)]' : 'text-[var(--text)]'}`}
@@ -414,7 +434,11 @@ export function Composer({
             {/* Effort dropdown */}
             <div className="relative shrink-0">
               <button
-                onClick={() => setShowEffortMenu(!showEffortMenu)}
+                onClick={() => {
+                  setShowEffortMenu(!showEffortMenu)
+                  setShowPermMenu(false)
+                  setShowModelMenu(false)
+                }}
                 className={`flex items-center gap-1 transition-colors whitespace-nowrap ${effort === 'off' ? 'text-[var(--muted)] hover:text-[var(--text)]' : 'text-[var(--good)]'}`}
               >
                 <span className={`inline-block h-1.5 w-1.5 rounded-full ${effort === 'off' ? 'bg-[var(--muted)]' : 'bg-[var(--good)]'}`} />
@@ -424,7 +448,7 @@ export function Composer({
                 })()} ▾
               </button>
               {showEffortMenu && (
-                <div className="absolute bottom-full left-0 mb-1 border border-[var(--border)] bg-[var(--surface)] rounded-[8px] z-50 min-w-[150px] shadow-[var(--shadow-soft)] overflow-hidden">
+                <div className="absolute bottom-full left-0 z-[90] mb-2 min-w-[150px] overflow-hidden rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] shadow-[var(--shadow-soft)] backdrop-blur">
                   <div className="px-3 py-1.5 text-[10px] text-[var(--muted)] flex items-center justify-between border-b border-[var(--border)]">
                     <span>速度</span>
                     <span>智能</span>
@@ -473,19 +497,21 @@ export function Composer({
           </div>
 
           {/* Model dropdown */}
-          <div className="relative shrink-0 max-w-[40%]">
+          <div className="relative min-w-[140px] max-w-[42%] shrink">
             <button
               onClick={() => {
+                setShowPermMenu(false)
+                setShowEffortMenu(false)
                 if (models && models.length > 0) setShowModelMenu(!showModelMenu)
                 else onModelClick?.()
               }}
-              className="text-[var(--text)] hover:text-[var(--accent)] transition-colors whitespace-nowrap truncate max-w-full block"
+              className="block max-w-full truncate font-mono text-[11px] text-[var(--text)] transition-colors hover:text-[var(--accent)]"
               title={modelName || 'No Model'}
             >
               {modelName || 'No Model'} ▾
             </button>
             {showModelMenu && models && models.length > 0 && (
-              <div className="absolute bottom-full right-0 mb-1 border border-[var(--border)] bg-[var(--surface)] rounded-[8px] z-50 min-w-[200px] max-h-[240px] overflow-y-auto shadow-[var(--shadow-soft)]">
+              <div className="absolute bottom-full right-0 z-[90] mb-2 max-h-[240px] min-w-[220px] overflow-y-auto rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] shadow-[var(--shadow-soft)] backdrop-blur">
                 {models.map((m) => (
                   <button
                     key={m.id}

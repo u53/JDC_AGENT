@@ -16,11 +16,11 @@ export function Topbar() {
 
   return (
     <header
-      className="h-12 flex items-center justify-between pl-[78px] pr-5 border-b border-[var(--border)] bg-[var(--surface)]"
+      className="relative z-[80] h-12 flex items-center justify-between pl-[78px] pr-5 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] backdrop-blur"
       style={{ WebkitAppRegion: 'drag' } as any}
     >
       <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
-        <h1 className="text-[18px] font-medium tracking-[-0.03em]" style={{ fontFamily: 'var(--font-serif)' }}>
+        <h1 className="text-[15px] font-semibold tracking-[-0.01em]">
           {projectName}
         </h1>
       </div>

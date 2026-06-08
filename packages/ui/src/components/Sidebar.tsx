@@ -55,13 +55,13 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-[240px] border-r border-[var(--border)] bg-[var(--surface)] flex flex-col overflow-hidden" style={{ fontFamily: 'var(--font-sans)' }}>
+    <aside className="w-[240px] border-r border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] flex flex-col overflow-hidden backdrop-blur" style={{ fontFamily: 'var(--font-sans)' }}>
       <div className="h-2 flex-shrink-0" />
 
       <div className="flex-1 px-3 pb-3 space-y-4 overflow-y-auto">
         {projects.map((project) => (
           <div key={project.cwd}>
-            <h3 className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] font-medium mb-1.5 px-2">
+            <h3 className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--muted)] font-semibold mb-1.5 px-2">
               {project.name}
             </h3>
             <div className="space-y-0.5">
@@ -112,7 +112,7 @@ export function Sidebar() {
                       onDoubleClick={() => handleDoubleClick(session.id, displayName)}
                       className={`w-full text-left px-2.5 py-1.5 text-[13px] truncate transition-colors flex items-center gap-1.5 rounded-[6px] ${
                         isActive
-                          ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium'
+                          ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium ring-1 ring-[color-mix(in_srgb,var(--accent)_22%,transparent)]'
                           : 'text-[var(--text)] hover:bg-[var(--surface-3)]'
                       }`}
                     >

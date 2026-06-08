@@ -134,15 +134,15 @@ export function BranchSwitcher({ cwd }: Props) {
       </button>
 
       {open && (
-        <div className="absolute bottom-full left-0 mb-1 w-[240px] bg-[var(--surface)] border border-[var(--border)] rounded-[8px] shadow-lg z-50 overflow-hidden">
+        <div className="absolute bottom-full left-0 z-[90] mb-2 w-[260px] overflow-hidden rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] backdrop-blur" style={{ boxShadow: 'var(--shadow-soft)' }}>
           {/* Search */}
-          <div className="p-2 border-b border-[var(--border)]">
+          <div className="border-b border-[var(--border)] p-2">
             <input
               type="text"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="搜索分支..."
-              className="w-full px-2 py-1 text-[12px] bg-[var(--surface-2)] border border-[var(--border)] rounded-[4px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--accent)]"
+              className="w-full rounded-[6px] border border-[var(--border)] bg-[var(--surface-2)] px-2 py-1.5 font-mono text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--accent)]"
               autoFocus
             />
           </div>
@@ -186,7 +186,7 @@ export function BranchSwitcher({ cwd }: Props) {
             {filtered.map((branch) => (
               <div
                 key={branch}
-                className="flex items-center gap-2 px-3 py-1.5 text-[12px] hover:bg-[var(--surface-2)] group cursor-pointer"
+              className="group flex cursor-pointer items-center gap-2 px-3 py-2 text-[12px] transition-colors hover:bg-[var(--surface-2)]"
                 onClick={() => branch !== current && switchTo(branch)}
               >
                 <span className="w-4 flex-shrink-0">
@@ -220,7 +220,7 @@ export function BranchSwitcher({ cwd }: Props) {
                     if (e.key === 'Enter') createBranch()
                   }}
                   placeholder="新分支名..."
-                  className="flex-1 px-2 py-1 text-[12px] bg-[var(--surface-2)] border border-[var(--border)] rounded-[4px] text-[var(--text)] outline-none"
+                  className="flex-1 rounded-[6px] border border-[var(--border)] bg-[var(--surface-2)] px-2 py-1 text-[12px] text-[var(--text)] outline-none"
                   autoFocus
                 />
                 <button onClick={createBranch} className="p-1 text-[var(--good)] hover:bg-[var(--surface-2)] rounded">
@@ -233,7 +233,7 @@ export function BranchSwitcher({ cwd }: Props) {
             ) : (
               <button
                 onClick={() => setCreating(true)}
-                className="flex items-center gap-1.5 w-full px-2 py-1 text-[12px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] rounded-[4px]"
+                className="flex w-full items-center gap-1.5 rounded-[6px] px-2 py-1.5 text-[12px] text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
               >
                 <IconPlus size={12} />
                 创建新分支

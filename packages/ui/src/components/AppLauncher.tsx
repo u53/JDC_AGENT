@@ -62,14 +62,14 @@ export function AppLauncher({ cwd }: Props) {
       </button>
 
       {open && (
-        <div className="absolute top-full right-0 mt-1 w-[200px] bg-[var(--surface)] border border-[var(--border)] rounded-[8px] shadow-lg z-50 overflow-hidden py-1">
+        <div className="absolute top-full right-0 z-[90] mt-2 w-[210px] overflow-hidden rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] py-1 backdrop-blur" style={{ boxShadow: 'var(--shadow-soft)' }}>
           {apps.map((app) => (
             <button
               key={app.id}
               onClick={() => openApp(app.id)}
-              className="flex items-center gap-2.5 w-full px-3 py-1.5 text-[12px] text-[var(--text)] hover:bg-[var(--surface-2)] text-left"
+              className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[12px] text-[var(--text)] transition-colors hover:bg-[var(--surface-2)]"
             >
-              <span className="w-[18px] h-[18px] flex items-center justify-center rounded-[3px] bg-[var(--surface-3)] text-[var(--text)] text-[9px] font-bold flex-shrink-0">
+              <span className="flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded-[4px] bg-[var(--accent-soft)] text-[9px] font-bold text-[var(--accent)]">
                 {app.shortName}
               </span>
               <span>{app.name}</span>

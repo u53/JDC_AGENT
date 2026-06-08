@@ -86,26 +86,26 @@ export function SlashCommandMenu({ filter, visible, onSelect, onClose, skills = 
   return (
     <div
       ref={menuRef}
-      className="absolute bottom-full left-0 right-0 mb-1 border border-[var(--border)] bg-[var(--surface)] max-h-[360px] overflow-y-auto z-50 rounded-[12px]"
+      className="absolute bottom-full left-0 right-0 z-[90] mb-2 max-h-[360px] overflow-y-auto rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] backdrop-blur"
       style={{ boxShadow: 'var(--shadow-soft)' }}
     >
       {commandItems.length > 0 && (
         <>
-          <div className="px-4 pt-2.5 pb-1 text-[9px] uppercase tracking-[0.15em] text-[var(--muted)]">命令</div>
+          <div className="border-b border-[var(--border)] px-4 py-2 font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--muted)]">Commands</div>
           {commandItems.map((cmd) => {
             const idx = currentIdx++
             return (
               <div
                 key={cmd.name}
                 ref={idx === selectedIndex ? selectedRef : undefined}
-                className={`flex items-center gap-3 px-4 py-2 cursor-pointer transition-colors ${
-                  idx === selectedIndex ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'
+                className={`flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors ${
+                  idx === selectedIndex ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'hover:bg-[var(--surface-2)]'
                 }`}
                 onClick={() => onSelect(cmd)}
                 onMouseEnter={() => setSelectedIndex(idx)}
               >
-                <span className="text-[13px] text-[var(--muted)] w-4 text-center">{cmd.icon}</span>
-                <span className="text-[12px] text-[var(--text)] font-medium">{cmd.name}</span>
+                <span className="w-4 text-center text-[13px] text-[var(--accent)]">{cmd.icon}</span>
+                <span className="font-mono text-[12px] font-semibold text-[var(--text)]">/{cmd.name}</span>
                 <span className="text-[11px] text-[var(--muted)] truncate">{cmd.description}</span>
               </div>
             )
@@ -114,23 +114,23 @@ export function SlashCommandMenu({ filter, visible, onSelect, onClose, skills = 
       )}
       {skillItems.length > 0 && (
         <>
-          <div className="px-4 pt-3 pb-1 text-[9px] uppercase tracking-[0.15em] text-[var(--muted)] border-t border-[var(--border)] mt-1">技能</div>
+          <div className="mt-1 border-y border-[var(--border)] px-4 py-2 font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--muted)]">Skills</div>
           {skillItems.map((cmd) => {
             const idx = currentIdx++
             return (
               <div
                 key={cmd.name}
                 ref={idx === selectedIndex ? selectedRef : undefined}
-                className={`flex items-center gap-3 px-4 py-2 cursor-pointer transition-colors ${
-                  idx === selectedIndex ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'
+                className={`flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors ${
+                  idx === selectedIndex ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'hover:bg-[var(--surface-2)]'
                 }`}
                 onClick={() => onSelect(cmd)}
                 onMouseEnter={() => setSelectedIndex(idx)}
               >
-                <span className="text-[13px] text-[var(--good)] w-4 text-center">{cmd.icon}</span>
-                <span className="text-[12px] text-[var(--text)] font-medium">{cmd.name}</span>
+                <span className="w-4 text-center text-[13px] text-[var(--good)]">{cmd.icon}</span>
+                <span className="font-mono text-[12px] font-semibold text-[var(--text)]">/{cmd.name}</span>
                 <span className="text-[11px] text-[var(--muted)] truncate flex-1">{cmd.description}</span>
-                <span className="text-[9px] text-[var(--muted)] uppercase tracking-[0.1em] shrink-0">个人</span>
+                <span className="shrink-0 rounded-full border border-[var(--border)] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--muted)]">local</span>
               </div>
             )
           })}

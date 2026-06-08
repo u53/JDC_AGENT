@@ -214,12 +214,12 @@ export function Inspector() {
 
   if (!expanded) {
     return (
-      <div className="w-[44px] border-l border-[var(--border)] bg-[var(--surface)] flex flex-col items-center py-3 gap-2">
+      <div className="w-[44px] border-l border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_90%,transparent)] flex flex-col items-center py-3 gap-2 backdrop-blur">
         {railItems.map(({ id, Icon, badge, badgeColor }) => (
           <button
             key={id}
             onClick={() => toggleSection(id)}
-            className="relative p-2 rounded-[6px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]"
+            className="relative p-2 rounded-[8px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]"
             aria-label={id}
           >
             <Icon size={18} />
@@ -251,7 +251,7 @@ export function Inspector() {
 
   return (
     <div
-      className="h-full border-l border-[var(--border)] bg-[var(--surface)] flex flex-col relative overflow-hidden"
+      className="h-full border-l border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] flex flex-col relative overflow-hidden backdrop-blur"
       style={{ width: `${width}px` }}
     >
       {/* Drag handle on the left edge */}
@@ -263,7 +263,7 @@ export function Inspector() {
 
       {/* Header */}
       <div className="flex-shrink-0 flex items-center justify-between px-3 py-2 border-b border-[var(--border)]">
-        <span className="text-[12px] font-medium text-[var(--text)]">Inspector</span>
+        <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text)]">Inspector</span>
         <button
           onClick={() => { setExpanded(false); setActiveSection(null) }}
           className="p-1 rounded-[6px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]"
@@ -279,7 +279,7 @@ export function Inspector() {
           <button
             key={id}
             onClick={() => toggleSection(id)}
-            className={`relative p-2 rounded-[6px] ${
+            className={`relative p-2 rounded-[8px] ${
               activeSection === id
                 ? 'bg-[var(--accent-soft)] text-[var(--accent)]'
                 : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'

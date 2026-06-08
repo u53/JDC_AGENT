@@ -81,16 +81,20 @@ function ConversationTurnView({
   const compactSummaryBlock = userContent.length === 1 && userContent[0]?.type === 'text' && isCompactSummaryText(userContent[0].text)
 
   return (
-    <div className="py-5 border-b border-[var(--border)]">
+    <div className="min-w-0 py-5 border-b border-[var(--border)]">
       {/* User input section */}
       {compactSummaryBlock ? (
         <CompactSummary content={stripCompactSummaryPreamble(userContent[0].text)} />
       ) : (
-        <div className="border-l-2 border-[var(--accent)] pl-4 mb-4">
+        <div className="mb-4 min-w-0 overflow-hidden rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] p-4 shadow-[var(--shadow)]">
+          <div className="mb-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--accent)]">
+            <span className="inline-block h-[7px] w-[7px] rounded-full bg-[var(--accent)]" />
+            User prompt
+          </div>
           {userContent.map((block, i) => {
             if (block.type === 'text') {
               return (
-                <div key={i} className="text-[14px] whitespace-pre-wrap text-[var(--text)]">
+                <div key={i} className="whitespace-pre-wrap break-words text-[14px] leading-6 text-[var(--text)] [overflow-wrap:anywhere]">
                   {block.text}
                 </div>
               )
@@ -111,14 +115,18 @@ function ConversationTurnView({
       )}
 
       {/* Assistant section */}
-      <div className="pl-4">
+      <div className="min-w-0 border-l border-[color-mix(in_srgb,var(--accent)_36%,var(--border))] pl-4">
+        <div className="mb-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--muted)]">
+          <span className="inline-block h-[7px] w-[7px] rounded-full bg-[var(--muted)]" />
+          JDC output
+        </div>
         {/* Completed assistant messages: render all pairs in order */}
         {assistantMessages.map((pair, pairIdx) => {
           const isLastPair = pairIdx === assistantMessages.length - 1
           const skipToolUse = isActive && isLastPair && toolEvents && toolEvents.length > 0
 
           return (
-          <div key={pair.message.id}>
+          <div key={pair.message.id} className="min-w-0">
             {pair.message.content.map((block, i) => {
               if (block.type === 'text' && !block.text.startsWith('__STATS__') && !block.text.startsWith('<ide-context>')) {
                 const compactNotice = parseCompactNoticeText(block.text)
@@ -126,7 +134,7 @@ function ConversationTurnView({
                   return <CompactStatusCard key={i} {...compactNotice} />
                 }
                 return (
-                  <div key={i} className="text-[14px] mb-3">
+                  <div key={i} className="mb-3 min-w-0 overflow-hidden rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_82%,transparent)] px-4 py-3 text-[14px] leading-6 shadow-[var(--shadow)]">
                     <MarkdownRenderer content={block.text} />
                   </div>
                 )
@@ -134,7 +142,7 @@ function ConversationTurnView({
               if (block.type === 'tool_use') {
                 if (skipToolUse && !findToolResult(block.id, pair.toolResultMessage)) return null
                 return (
-                  <div key={block.id} className="mb-2">
+                  <div key={block.id} className="mb-2 min-w-0">
                     <ToolCardRouter
                       name={block.name}
                       input={block.input}
@@ -154,9 +162,9 @@ function ConversationTurnView({
 
         {/* Active turn: streaming tool events (tools execute before final text) */}
         {isActive && toolEvents && toolEvents.length > 0 && (
-          <div className="mb-3">
+          <div className="mb-3 min-w-0">
             {toolEvents.map((event, i) => (
-              <div key={`${event.toolUseId}-${i}`} className="mb-2">
+              <div key={`${event.toolUseId}-${i}`} className="mb-2 min-w-0">
                 <ToolCardRouter event={event} />
               </div>
             ))}
@@ -183,7 +191,7 @@ function ConversationTurnView({
         )}
 
         {isActive && streamingText && expanded && (
-          <div className="text-[14px]">
+          <div className="min-w-0 overflow-hidden rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_82%,transparent)] px-4 py-3 text-[14px] shadow-[var(--shadow)]">
             <button
               onClick={() => setExpanded(false)}
               className="flex items-center gap-2 mb-2 text-[11px] text-[var(--muted)] hover:text-[var(--text)] transition-colors"

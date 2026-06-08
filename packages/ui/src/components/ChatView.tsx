@@ -359,14 +359,21 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   const showRightPanel = activeAgentId
 
   return (
-    <div className="flex flex-1 overflow-hidden relative">
+    <div
+      className="flex flex-1 overflow-hidden relative bg-[var(--bg)]"
+      style={{
+        backgroundImage:
+          'linear-gradient(rgba(148,163,184,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.035) 1px, transparent 1px), linear-gradient(135deg, rgba(34,197,94,0.075), transparent 34%)',
+        backgroundSize: '36px 36px, 36px 36px, 100% 100%',
+      }}
+    >
       {/* Left: main chat */}
-      <div className={`relative flex flex-col overflow-hidden ${showRightPanel ? 'w-[60%]' : 'w-full'} transition-all`}>
+      <div className={`relative flex min-w-0 flex-col overflow-hidden ${showRightPanel ? 'w-[60%]' : 'w-full'} transition-all`}>
         <SessionHeader permissionMode={permissionMode} effort={effort} planMode={planMode} />
 
         {/* Conversation Timeline */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4">
-          <div className="mx-auto max-w-[760px]">
+        <div ref={scrollRef} className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-5">
+          <div className="mx-auto max-w-[920px] min-w-0">
             {turns.map((turn, idx) => {
               const isActive = idx === turns.length - 1 && isStreaming
               return (
@@ -425,20 +432,20 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         {showScrollToBottom && (
           <button
             onClick={scrollToBottom}
-            className="absolute bottom-[140px] left-1/2 -translate-x-1/2 bg-[var(--surface)] border border-[var(--border)] rounded-full px-4 py-1.5 text-[11px] text-[var(--muted)] hover:text-[var(--text)] shadow-[var(--shadow-soft)] z-40 transition-colors"
+            className="absolute bottom-[148px] left-1/2 -translate-x-1/2 bg-[var(--surface)] border border-[var(--border)] rounded-full px-4 py-1.5 text-[11px] text-[var(--muted)] hover:text-[var(--text)] shadow-[var(--shadow-soft)] z-40 transition-colors"
           >
             ↓ 回到底部
           </button>
         )}
         {toast && (
-          <div className="absolute top-14 left-1/2 -translate-x-1/2 bg-[var(--surface)] border border-[var(--border)] rounded-[8px] px-4 py-2 text-[11px] text-[var(--text)] z-50 shadow-[var(--shadow-soft)]">
+          <div className="absolute top-14 left-1/2 -translate-x-1/2 bg-[var(--surface)] border border-[var(--border)] rounded-[8px] px-4 py-2 font-mono text-[11px] text-[var(--text)] z-50 shadow-[var(--shadow-soft)]">
             {toast}
           </div>
         )}
 
         {/* Plan mode bar */}
         {planMode && (
-          <div className="border-t border-[var(--plan)] px-4 py-1.5 flex items-center gap-2">
+          <div className="border-t border-[var(--plan)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] px-4 py-1.5 flex items-center gap-2">
             <span className="inline-block h-2 w-2 rounded-full bg-[var(--plan)]" />
             <span className="text-[10px] uppercase tracking-[0.1em] text-[var(--plan)]">PLAN MODE</span>
             <span className="text-[10px] text-[var(--muted)]">只读 + 规划 | Shift+Tab 退出</span>
