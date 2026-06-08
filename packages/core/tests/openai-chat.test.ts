@@ -70,6 +70,46 @@ describe('OpenAIChatProvider', () => {
     expect(assistant.tool_calls[0].function.arguments).toBe('{"command":"ls","flags":["-la"]}')
   })
 
+  it('keeps dynamic prompt segments out of the stable system cache prefix', async () => {
+    const provider = new OpenAIChatProvider('test-key')
+    let capturedParams: any
+    ;(provider as any).client = {
+      chat: {
+        completions: {
+          create: async (params: any) => {
+            capturedParams = params
+            return { choices: [{ message: { content: 'ok' } }], usage: { prompt_tokens: 1, completion_tokens: 1 } }
+          },
+        },
+      },
+    }
+
+    await provider.chat(
+      [
+        { id: '1', role: 'user', content: [{ type: 'text', text: 'old question' }], timestamp: 0 },
+        { id: '2', role: 'assistant', content: [{ type: 'text', text: 'old answer' }], timestamp: 0 },
+        { id: '3', role: 'user', content: [{ type: 'text', text: 'current question' }], timestamp: 0 },
+      ],
+      [],
+      {
+        model: 'gpt-5',
+        maxTokens: 100,
+        systemPrompt: [
+          { content: '# Identity\nYou are JDCAGNET.', cacheable: true },
+          { content: '<jdc-context-engine>项目上下文</jdc-context-engine>', cacheable: false },
+        ],
+      },
+    )
+
+    expect(capturedParams.messages[0]).toEqual({ role: 'system', content: '# Identity\nYou are JDCAGNET.' })
+    expect(capturedParams.messages[0].content).not.toContain('<jdc-context-engine>')
+    expect(capturedParams.messages[1]).toEqual({ role: 'user', content: 'old question' })
+    expect(capturedParams.messages[2]).toEqual({ role: 'assistant', content: 'old answer' })
+    expect(capturedParams.messages[3]).toEqual({ role: 'user', content: 'current question' })
+    expect(capturedParams.messages[4].role).toBe('system')
+    expect(capturedParams.messages[4].content).toContain('<jdc-context-engine>项目上下文</jdc-context-engine>')
+  })
+
   it('reports stream retries before the first chunk', async () => {
     const provider = new OpenAIChatProvider('test-key')
     const create = vi.fn()

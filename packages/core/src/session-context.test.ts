@@ -451,7 +451,7 @@ describe('Session JDC Context Engine runtime integration', () => {
         { type: 'message_end', usage: { inputTokens: 10, outputTokens: 2 } },
       ], (_messages, config) => {
         const text = textFromSystemPrompt(config.systemPrompt)
-        expect(text).toContain('<jdc-context-engine bundle="ctx_test">')
+        expect(text).toMatch(/<jdc-context-engine bundle="ctx_[0-9a-f]{16}">/)
         expect(text).toContain('<actor>main_session</actor>')
         expect(text).toContain('Runtime context')
       }),
@@ -1030,7 +1030,7 @@ describe('Sub-session JDC Context Engine runtime integration', () => {
         { type: 'text_delta', text: 'sub-session done' },
         { type: 'message_end', usage: { inputTokens: 9, outputTokens: 4 } },
       ], (_messages, config) => {
-        expect(textFromSystemPrompt(config.systemPrompt)).toContain('<jdc-context-engine bundle="ctx_sub">')
+        expect(textFromSystemPrompt(config.systemPrompt)).toMatch(/<jdc-context-engine bundle="ctx_[0-9a-f]{16}">/)
         expect(textFromSystemPrompt(config.systemPrompt)).toContain('<actor>subagent</actor>')
       }),
       toolRegistry: new ToolRegistry(),

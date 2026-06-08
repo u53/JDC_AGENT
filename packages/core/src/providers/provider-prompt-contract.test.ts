@@ -33,23 +33,23 @@ describe('provider prompt contracts', () => {
     expect(chatBlocks.map((block: any) => block.text).join('\n')).toContain('<jdc-context-engine>')
   })
 
-  it('preserves JDC context in OpenAI Chat system prompt', () => {
+  it('keeps only cacheable segments in OpenAI Chat system prompt', () => {
     const prompt = __openAiChatPromptTest.resolveSystemPrompt([
       { content: '# Identity\nYou are JDCAGNET.', cacheable: true },
       { content: '<jdc-context-engine>项目上下文</jdc-context-engine>', cacheable: false },
     ])
 
     expect(prompt).toContain('You are JDCAGNET')
-    expect(prompt).toContain('<jdc-context-engine>')
+    expect(prompt).not.toContain('<jdc-context-engine>')
   })
 
-  it('preserves JDC context in OpenAI Responses instructions', () => {
+  it('keeps only cacheable segments in OpenAI Responses instructions', () => {
     const prompt = __openAiResponsesPromptTest.resolveSystemPrompt([
       { content: '# Identity\nYou are JDCAGNET.', cacheable: true },
       { content: '<jdc-context-engine>项目上下文</jdc-context-engine>', cacheable: false },
     ])
 
     expect(prompt).toContain('You are JDCAGNET')
-    expect(prompt).toContain('<jdc-context-engine>')
+    expect(prompt).not.toContain('<jdc-context-engine>')
   })
 })

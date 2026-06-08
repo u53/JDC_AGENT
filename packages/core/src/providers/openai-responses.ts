@@ -1,19 +1,18 @@
 import OpenAI from 'openai'
 import type { ModelProvider } from '../model-provider.js'
 import type { ContentBlock, Message, ModelConfig, PromptSegment, ReasoningEffort, StreamChunk, ToolDefinition } from '../types.js'
-import { joinSegments } from '../context.js'
 import { ThinkTagStreamParser } from './think-parser.js'
 import { withStreamRetry } from './stream-retry.js'
 import { getModelTraits } from './model-traits.js'
+import { formatOpenAIDynamicPrompt, resolveOpenAIPromptParts } from './openai-prompt.js'
 
 function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): string | undefined {
-  if (!systemPrompt) return undefined
-  if (typeof systemPrompt === 'string') return systemPrompt
-  return joinSegments(systemPrompt)
+  return resolveOpenAIPromptParts(systemPrompt).stablePrompt
 }
 
 export const __openAiResponsesPromptTest = {
   resolveSystemPrompt,
+  resolvePromptParts: resolveOpenAIPromptParts,
 }
 
 function effortToOpenAI(effort: ReasoningEffort): 'low' | 'medium' | 'high' | 'xhigh' {
@@ -21,11 +20,11 @@ function effortToOpenAI(effort: ReasoningEffort): 'low' | 'medium' | 'high' | 'x
   return effort
 }
 
-function buildBaseParams(config: ModelConfig, tools: ToolDefinition[], formatTools: (t: ToolDefinition[]) => any): Record<string, unknown> {
+function buildBaseParams(config: ModelConfig, tools: ToolDefinition[], formatTools: (t: ToolDefinition[]) => any, instructions?: string): Record<string, unknown> {
   const traits = getModelTraits(config.model)
   const params: Record<string, unknown> = {
     model: config.model,
-    instructions: resolveSystemPrompt(config.systemPrompt),
+    instructions,
     ...(tools.length > 0 ? { tools: formatTools(tools) } : {}),
     ...(config.maxTokens ? { max_output_tokens: config.maxTokens } : {}),
   }
@@ -47,7 +46,7 @@ function buildBaseParams(config: ModelConfig, tools: ToolDefinition[], formatToo
 interface ResponsesInput {
   role?: string
   type?: string
-  content?: string
+  content?: string | any[]
   call_id?: string
   output?: string
 }
@@ -121,9 +120,10 @@ export class OpenAIResponsesProvider implements ModelProvider {
     config: ModelConfig,
     signal?: AbortSignal
   ) {
+    const promptParts = resolveOpenAIPromptParts(config.systemPrompt)
     const params = {
-      ...buildBaseParams(config, tools, this.formatTools.bind(this)),
-      input: this.formatInput(messages),
+      ...buildBaseParams(config, tools, this.formatTools.bind(this), promptParts.stablePrompt),
+      input: this.formatInput(messages, promptParts.dynamicPrompt),
     }
 
     const response = (await this.createResponse(params, signal)) as ResponsesResult
@@ -213,9 +213,10 @@ export class OpenAIResponsesProvider implements ModelProvider {
     config: ModelConfig,
     signal?: AbortSignal
   ): AsyncIterable<StreamChunk> {
+    const promptParts = resolveOpenAIPromptParts(config.systemPrompt)
     const params = {
-      ...buildBaseParams(config, tools, this.formatTools.bind(this)),
-      input: this.formatInput(messages),
+      ...buildBaseParams(config, tools, this.formatTools.bind(this), promptParts.stablePrompt),
+      input: this.formatInput(messages, promptParts.dynamicPrompt),
       stream: true,
     }
 
@@ -371,7 +372,7 @@ export class OpenAIResponsesProvider implements ModelProvider {
     return response.json()
   }
 
-  private formatInput(messages: Message[]): ResponsesInput[] {
+  private formatInput(messages: Message[], dynamicPrompt?: string): ResponsesInput[] {
     const input: ResponsesInput[] = []
 
     for (const msg of messages) {
@@ -466,7 +467,7 @@ export class OpenAIResponsesProvider implements ModelProvider {
       merged.filter((item: any) => item.type === 'function_call_output').map((item: any) => item.call_id)
     )
 
-    return merged.filter((item: any) => {
+    const filtered = merged.filter((item: any) => {
       if (item.type === 'function_call_output' && !functionCallIds.has(item.call_id)) {
         return false
       }
@@ -475,6 +476,17 @@ export class OpenAIResponsesProvider implements ModelProvider {
       }
       return true
     })
+
+    return this.withDynamicPrompt(filtered, dynamicPrompt)
+  }
+
+  private withDynamicPrompt(input: ResponsesInput[], dynamicPrompt?: string): ResponsesInput[] {
+    if (!dynamicPrompt) return input
+    const dynamicText = formatOpenAIDynamicPrompt(dynamicPrompt)
+    const dynamicInput: ResponsesInput = { role: 'system', content: dynamicText }
+
+    input.push(dynamicInput)
+    return input
   }
 }
 

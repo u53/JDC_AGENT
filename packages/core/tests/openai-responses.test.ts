@@ -142,6 +142,44 @@ describe('OpenAIResponsesProvider', () => {
     expect(capturedParams).not.toHaveProperty('user')
   })
 
+  it('keeps dynamic prompt segments out of the stable instructions cache prefix', async () => {
+    const provider = new OpenAIResponsesProvider('test-key')
+    let capturedParams: any
+    ;(provider as any).client = {
+      responses: {
+        create: async (params: any) => {
+          capturedParams = params
+          return { output: [], usage: { input_tokens: 0, output_tokens: 0 } }
+        },
+      },
+    }
+
+    await provider.chat(
+      [
+        { id: '1', role: 'user', content: [{ type: 'text', text: 'old question' }], timestamp: 0 },
+        { id: '2', role: 'assistant', content: [{ type: 'text', text: 'old answer' }], timestamp: 0 },
+        { id: '3', role: 'user', content: [{ type: 'text', text: 'current question' }], timestamp: 0 },
+      ],
+      [],
+      {
+        model: 'gpt-5',
+        maxTokens: 100,
+        systemPrompt: [
+          { content: '# Identity\nYou are JDCAGNET.', cacheable: true },
+          { content: '<jdc-context-engine>项目上下文</jdc-context-engine>', cacheable: false },
+        ],
+      },
+    )
+
+    expect(capturedParams.instructions).toBe('# Identity\nYou are JDCAGNET.')
+    expect(capturedParams.instructions).not.toContain('<jdc-context-engine>')
+    expect(capturedParams.input[0]).toEqual({ role: 'user', content: 'old question' })
+    expect(capturedParams.input[1]).toEqual({ role: 'assistant', content: 'old answer' })
+    expect(capturedParams.input[2]).toEqual({ role: 'user', content: 'current question' })
+    expect(capturedParams.input[3].role).toBe('system')
+    expect(capturedParams.input[3].content).toContain('<jdc-context-engine>项目上下文</jdc-context-engine>')
+  })
+
   it('omits store from Responses params for OpenAI-compatible proxy compatibility', async () => {
     const provider = new OpenAIResponsesProvider('test-key')
     let capturedParams: any

@@ -1,19 +1,18 @@
 import OpenAI from 'openai'
 import type { ModelProvider } from '../model-provider.js'
 import type { ContentBlock, Message, ModelConfig, PromptSegment, ReasoningEffort, StreamChunk, ToolDefinition } from '../types.js'
-import { joinSegments } from '../context.js'
 import { ThinkTagStreamParser } from './think-parser.js'
 import { withStreamRetry } from './stream-retry.js'
 import { getModelTraits } from './model-traits.js'
+import { formatOpenAIDynamicPrompt, resolveOpenAIPromptParts } from './openai-prompt.js'
 
 function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): string | undefined {
-  if (!systemPrompt) return undefined
-  if (typeof systemPrompt === 'string') return systemPrompt
-  return joinSegments(systemPrompt)
+  return resolveOpenAIPromptParts(systemPrompt).stablePrompt
 }
 
 export const __openAiChatPromptTest = {
   resolveSystemPrompt,
+  resolvePromptParts: resolveOpenAIPromptParts,
 }
 
 function effortToOpenAI(effort: ReasoningEffort): 'low' | 'medium' | 'high' | 'xhigh' {
@@ -65,9 +64,10 @@ export class OpenAIChatProvider implements ModelProvider {
     config: ModelConfig,
     signal?: AbortSignal
   ) {
+    const promptParts = resolveOpenAIPromptParts(config.systemPrompt)
     const params = {
       ...buildBaseParams(config),
-      messages: this.formatMessages(messages, resolveSystemPrompt(config.systemPrompt)),
+      messages: this.formatMessages(messages, promptParts.stablePrompt, promptParts.dynamicPrompt),
       ...(tools.length > 0 ? { tools: this.formatTools(tools) } : {}),
     } as OpenAI.ChatCompletionCreateParamsNonStreaming
 
@@ -144,9 +144,10 @@ export class OpenAIChatProvider implements ModelProvider {
     config: ModelConfig,
     signal?: AbortSignal
   ): AsyncIterable<StreamChunk> {
+    const promptParts = resolveOpenAIPromptParts(config.systemPrompt)
     const params = {
       ...buildBaseParams(config),
-      messages: this.formatMessages(messages, resolveSystemPrompt(config.systemPrompt)),
+      messages: this.formatMessages(messages, promptParts.stablePrompt, promptParts.dynamicPrompt),
       stream: true,
       stream_options: { include_usage: true },
       ...(tools.length > 0 ? { tools: this.formatTools(tools) } : {}),
@@ -249,7 +250,8 @@ export class OpenAIChatProvider implements ModelProvider {
 
   private formatMessages(
     messages: Message[],
-    systemPrompt?: string
+    systemPrompt?: string,
+    dynamicPrompt?: string,
   ): OpenAI.ChatCompletionMessageParam[] {
     const formatted: OpenAI.ChatCompletionMessageParam[] = []
 
@@ -385,6 +387,18 @@ export class OpenAIChatProvider implements ModelProvider {
       }
     }
 
-    return result
+    return this.withDynamicPrompt(result, dynamicPrompt)
+  }
+
+  private withDynamicPrompt(
+    messages: OpenAI.ChatCompletionMessageParam[],
+    dynamicPrompt?: string,
+  ): OpenAI.ChatCompletionMessageParam[] {
+    if (!dynamicPrompt) return messages
+    const dynamicText = formatOpenAIDynamicPrompt(dynamicPrompt)
+    const dynamicMessage: OpenAI.ChatCompletionSystemMessageParam = { role: 'system', content: dynamicText }
+
+    messages.push(dynamicMessage)
+    return messages
   }
 }

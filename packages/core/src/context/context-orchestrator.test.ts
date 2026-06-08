@@ -87,7 +87,7 @@ describe('JDC Context orchestrator', () => {
     expect(result.bundle.id).toBe('bundle_1')
     expect(result.bundle.sections.map((item) => item.id)).toEqual(['runtime_live', 'fact_memory_fact'])
     expect(result.bundle.budget).toEqual({ maxTokens: undefined, usedTokens: 35, droppedTokens: 0 })
-    expect(result.renderedPrompt).toContain('<jdc-context-engine bundle="bundle_1">')
+    expect(result.renderedPrompt).toMatch(/^<jdc-context-engine bundle="ctx_[0-9a-f]{16}">/)
     expect(store.saveRawEvidence).toHaveBeenCalledWith(evidence)
     expect(store.saveBundleSnapshot).toHaveBeenCalledWith(result.bundle)
   })
@@ -110,7 +110,7 @@ describe('JDC Context orchestrator', () => {
       sessionId: 'session_1',
       objective: 'Fix runtime cancellation bug',
     })
-    expect(result.renderedPrompt).toContain('<jdc-context-engine bundle="bundle_actor_main">')
+    expect(result.renderedPrompt).toMatch(/^<jdc-context-engine bundle="ctx_[0-9a-f]{16}">/)
     expect(result.renderedPrompt).toContain('<actor>main_session</actor>')
     expect(result.renderedPrompt).toContain('<objective>Fix runtime cancellation bug</objective>')
   })

@@ -85,7 +85,7 @@ describe('JDC Context Engine performance metrics', () => {
     const retrieveMetric = operations.find((operation) => operation.name === 'context:retrieve-facts')
     const packMetric = operations.find((operation) => operation.name === 'context:pack-assemble')
 
-    expect(result.renderedPrompt).toContain('<jdc-context-engine bundle="bundle_perf">')
+    expect(result.renderedPrompt).toMatch(/^<jdc-context-engine bundle="ctx_[0-9a-f]{16}">/)
     expect(operationNames).toContain('context:retrieve-facts')
     expect(operationNames).toContain('context:pack-assemble')
     expect(retrieveMetric?.metadata?.candidateCount).toBe(200)

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { containsRawReasoningData, redactText } from './redaction.js'
 import type { ContextBundle, ContextCitation, ContextSection } from './types.js'
 
@@ -8,14 +9,20 @@ export interface PromptRenderOptions {
 export function renderContextBundle(bundle: ContextBundle, options: PromptRenderOptions = {}): string {
   if (options.injectionEnabled === false || bundle.sections.length === 0) return ''
 
-  const lines: string[] = [`<jdc-context-engine bundle="${escapeAttribute(bundle.id)}">`]
-  if (bundle.actorProfile) lines.push(renderActorProfile(bundle.actorProfile))
+  const body: string[] = []
+  if (bundle.actorProfile) body.push(renderActorProfile(bundle.actorProfile))
   for (const section of bundle.sections) {
-    lines.push(renderSection(section))
+    body.push(renderSection(section))
   }
-  if (bundle.citations.length) lines.push(renderCitations(bundle.citations))
+  if (bundle.citations.length) body.push(renderCitations(bundle.citations))
+
+  const lines: string[] = [`<jdc-context-engine bundle="${stablePromptBundleId(body)}">`, ...body]
   lines.push('</jdc-context-engine>')
   return lines.join('\n')
+}
+
+function stablePromptBundleId(body: string[]): string {
+  return `ctx_${createHash('sha1').update(body.join('\n')).digest('hex').slice(0, 16)}`
 }
 
 function renderActorProfile(profile: NonNullable<ContextBundle['actorProfile']>): string {

@@ -30,7 +30,7 @@ describe('JDC Context prompt renderer', () => {
   it('renders a protocol-neutral JDC Context Engine XML block with required section attributes and compact citations', () => {
     const rendered = renderContextBundle(makeBundle())
 
-    expect(rendered).toContain('<jdc-context-engine bundle="bundle_1">')
+    expect(rendered).toMatch(/^<jdc-context-engine bundle="ctx_[0-9a-f]{16}">/)
     expect(rendered).toContain('<section kind="runtime_state" confidence="0.91" freshness="live" source="RuntimeSignalProvider">')
     expect(rendered).toContain('Recent tool error chain')
     expect(rendered).toContain('<citations>')
@@ -40,6 +40,13 @@ describe('JDC Context prompt renderer', () => {
     expect(rendered).not.toContain('messages')
     expect(rendered).not.toContain('anthropic')
     expect(rendered).not.toContain('openai')
+  })
+
+  it('renders identical context content identically despite volatile bundle metadata', () => {
+    const first = renderContextBundle(makeBundle({ id: 'bundle_first', createdAt: 1_000 }))
+    const second = renderContextBundle(makeBundle({ id: 'bundle_second', createdAt: 2_000 }))
+
+    expect(first).toBe(second)
   })
 
   it('omits the prompt block when context injection is disabled', () => {
