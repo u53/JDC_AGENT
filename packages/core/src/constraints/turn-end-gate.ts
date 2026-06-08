@@ -25,32 +25,28 @@ export function evaluateTurnEndGate(input: {
     return {
       action: 'append_disclosure',
       severity: 'warning',
-      disclosure: disclosureBlock(disclosureTitle(unresolved), unresolved.map(formatRequirement)),
+      disclosure: disclosureBlock('Verification not completed', unresolved.map(formatRequirement)),
     }
   }
 
   const unresolvedFiles = input.changedFiles.filter((file) => file.status === 'pending' || file.status === 'failed')
   if (unresolvedFiles.length) {
     const hasFailedFile = unresolvedFiles.some((file) => file.status === 'failed')
-    const hasOnlyNonActionableRequirements = input.requirements.length === 0 ||
-      input.requirements.every((requirement) => requirement.status === 'unavailable' || requirement.status === 'skipped')
-    if (hasOnlyNonActionableRequirements && !hasFailedFile) return { action: 'allow' }
+    const hasActionableRequirements = input.requirements.some((requirement) =>
+      requirement.status === 'pending' || requirement.status === 'passed' || requirement.status === 'failed'
+    )
+    if (!hasActionableRequirements && !hasFailedFile) return { action: 'allow' }
     return {
       action: 'append_disclosure',
       severity: hasFailedFile ? 'error' : 'warning',
       disclosure: disclosureBlock(
-        hasFailedFile ? 'Verification failed' : input.requirements.length === 0 ? 'Verification not derived' : 'Verification not completed',
+        hasFailedFile ? 'Verification failed' : 'Verification not completed',
         unresolvedFiles.map(formatChangedFile)
       ),
     }
   }
 
   return { action: 'allow' }
-}
-
-function disclosureTitle(requirements: VerificationRequirementRecord[]): string {
-  if (requirements.some((requirement) => requirement.status === 'pending')) return 'Verification not completed'
-  return 'Verification unavailable or skipped'
 }
 
 function disclosureBlock(title: string, lines: string[]): string {
@@ -67,11 +63,7 @@ function formatChangedFile(file: ChangedFileRecord): string {
 }
 
 function formatRequirement(requirement: VerificationRequirementRecord): string {
-  const details = requirement.status === 'failed'
-    ? requirement.failure
-    : requirement.status === 'unavailable' || requirement.status === 'skipped'
-      ? requirement.reason
-      : undefined
+  const details = requirement.status === 'failed' ? requirement.failure : undefined
   const suffix = details ? ` (${details})` : ''
   return `- ${requirement.kind}: ${requirement.command} -> ${requirement.status}${suffix}`
 }

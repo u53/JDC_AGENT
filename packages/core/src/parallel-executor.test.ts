@@ -41,4 +41,44 @@ describe('ParallelExecutor delegation fail-soft behavior', () => {
       is_error: true,
     })
   })
+
+  it.each(['Edit', 'MultiEdit'])('does not apply the default startup timeout to %s', async (toolName) => {
+    const timeoutController = new AbortController()
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(timeoutController.signal)
+    let resolveTool!: () => void
+    const execute = vi.fn(async (name: string, id: string) => {
+      await new Promise<void>(resolve => {
+        resolveTool = resolve
+      })
+      return { content: `${name} ${id} completed`, isError: false }
+    })
+    const executor = new ParallelExecutor({ execute } as any)
+
+    try {
+      const promise = executor.executeBatch(
+        [{ type: 'tool_use', id: 'mutation_1', name: toolName, input: { file_path: 'a.ts' } }],
+        vi.fn(),
+      )
+
+      expect(execute).toHaveBeenCalledTimes(1)
+      expect(timeoutSpy).not.toHaveBeenCalled()
+
+      let settled = false
+      promise.then(() => { settled = true })
+      timeoutController.abort(new DOMException('timed out', 'TimeoutError'))
+      await Promise.resolve()
+
+      expect(settled).toBe(false)
+
+      resolveTool()
+      const results = await promise
+      expect(results[0]).toEqual({
+        tool_use_id: 'mutation_1',
+        content: `${toolName} mutation_1 completed`,
+        is_error: false,
+      })
+    } finally {
+      timeoutSpy.mockRestore()
+    }
+  })
 })

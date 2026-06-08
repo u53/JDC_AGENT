@@ -466,4 +466,46 @@ describe('ParallelExecutor', () => {
       timeoutSpy.mockRestore()
     }
   })
+
+  it.each(['Write', 'Edit', 'MultiEdit'])('does not apply the default short tool timeout to %s', async (toolName) => {
+    const timeoutController = new AbortController()
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(timeoutController.signal)
+    try {
+      const registry = new ToolRegistry()
+      let resolveTool!: () => void
+
+      registry.register({
+        definition: { name: toolName, description: toolName, inputSchema: { type: 'object', properties: {} } },
+        execute: async () => {
+          await new Promise<void>(resolve => {
+            resolveTool = resolve
+          })
+          return { content: `${toolName} completed` }
+        },
+      })
+
+      const executor = new ParallelExecutor(createRunner(registry))
+      const promise = executor.executeBatch(
+        [{ type: 'tool_use', id: `${toolName.toLowerCase()}1`, name: toolName, input: {} }],
+        () => {}
+      )
+
+      timeoutController.abort()
+      let settled = false
+      promise.then(() => { settled = true })
+      await Promise.resolve()
+
+      expect(settled).toBe(false)
+
+      resolveTool()
+      const results = await promise
+      expect(results[0]).toEqual({
+        tool_use_id: `${toolName.toLowerCase()}1`,
+        content: `${toolName} completed`,
+        is_error: false,
+      })
+    } finally {
+      timeoutSpy.mockRestore()
+    }
+  })
 })

@@ -58,7 +58,9 @@ describe('model profile adaptation in system prompt', () => {
     expect(text).toContain('Default plan depth: detailed')
     expect(text).toContain('Use short, explicit, stepwise action contracts')
     expect(text).toContain('Treat missing file or symbol evidence as blocking')
-    expect(text).toContain('run verification or clearly disclose why verification is pending')
+    expect(text).toContain('Runtime gates still control mutation and final verification disclosure')
+    expect(text).not.toContain('run verification or clearly disclose why verification is pending')
+    expect(text).toContain('Do not hand-write "Verification status" blocks')
     expect(text).toContain('Prefer no more than 2 parallel read tool calls')
   })
 

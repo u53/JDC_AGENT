@@ -26,7 +26,6 @@ function buildBaseParams(config: ModelConfig, tools: ToolDefinition[], formatToo
   const params: Record<string, unknown> = {
     model: config.model,
     instructions: resolveSystemPrompt(config.systemPrompt),
-    store: true,
     ...(tools.length > 0 ? { tools: formatTools(tools) } : {}),
     ...(config.maxTokens ? { max_output_tokens: config.maxTokens } : {}),
   }
@@ -101,13 +100,19 @@ interface ResponsesResult {
 export class OpenAIResponsesProvider implements ModelProvider {
   name = 'openai-responses'
   private client: OpenAI
+  private defaultClient: OpenAI
+  private baseURL: string
+  private apiKey: string
 
   constructor(apiKey: string, baseURL?: string) {
     const url = baseURL && !baseURL.endsWith('/v1') && !baseURL.endsWith('/v1/') ? `${baseURL}/v1` : baseURL
+    this.apiKey = apiKey
+    this.baseURL = (url || 'https://api.openai.com/v1').replace(/\/+$/, '')
     this.client = new OpenAI({
       apiKey,
       ...(url ? { baseURL: url } : {}),
     })
+    this.defaultClient = this.client
   }
 
   async chat(
@@ -121,7 +126,7 @@ export class OpenAIResponsesProvider implements ModelProvider {
       input: this.formatInput(messages),
     }
 
-    const response = (await (this.client as any).responses.create(params, { signal })) as ResponsesResult
+    const response = (await this.createResponse(params, signal)) as ResponsesResult
 
     if (!response.output || response.output.length === 0) {
       return {
@@ -177,15 +182,29 @@ export class OpenAIResponsesProvider implements ModelProvider {
     config: ModelConfig,
     signal?: AbortSignal
   ): AsyncIterable<StreamChunk> {
+    return this.streamWithCompatibilityFallback(messages, tools, config, signal)
+  }
+
+  private async *streamWithCompatibilityFallback(
+    messages: Message[],
+    tools: ToolDefinition[],
+    config: ModelConfig,
+    signal?: AbortSignal
+  ): AsyncIterable<StreamChunk> {
     // Retry only before the first chunk — the OpenAI SDK's maxRetries covers
     // the initial create() call but NOT a socket dropped mid-iteration of the
     // stream. withStreamRetry closes that gap for transient drops.
-    return withStreamRetry(
-      () => this.streamOnce(messages, tools, config, signal),
-      signal,
-      undefined,
-      config.onStreamRetry,
-    )
+    try {
+      yield* withStreamRetry(
+        () => this.streamOnce(messages, tools, config, signal),
+        signal,
+        undefined,
+        config.onStreamRetry,
+      )
+    } catch (err) {
+      if (signal?.aborted || !isStreamingBlockedByProxy(err)) throw err
+      yield* this.streamNonStreamingResponse(messages, tools, config, signal)
+    }
   }
 
   private async *streamOnce(
@@ -200,7 +219,7 @@ export class OpenAIResponsesProvider implements ModelProvider {
       stream: true,
     }
 
-    const stream = await (this.client as any).responses.create(params, { signal })
+    const stream = await this.createResponse(params, signal) as AsyncIterable<any>
 
     const thinkParser = new ThinkTagStreamParser()
     let flushed = false
@@ -292,6 +311,28 @@ export class OpenAIResponsesProvider implements ModelProvider {
     }
   }
 
+  private async *streamNonStreamingResponse(
+    messages: Message[],
+    tools: ToolDefinition[],
+    config: ModelConfig,
+    signal?: AbortSignal
+  ): AsyncIterable<StreamChunk> {
+    const result = await this.chat(messages, tools, config, signal)
+    for (const block of result.content) {
+      if (block.type === 'text' && block.text) {
+        yield { type: 'text_delta', text: block.text }
+      } else if (block.type === 'thinking' && block.thinking) {
+        yield { type: 'thinking_delta', text: block.thinking }
+        yield { type: 'thinking_end', signature: block.signature }
+      } else if (block.type === 'tool_use') {
+        yield { type: 'tool_use_start', toolUse: { id: block.id, name: block.name, input: '' } }
+        yield { type: 'tool_use_delta', toolUse: { id: '', name: '', input: JSON.stringify(block.input) } }
+        yield { type: 'tool_use_end' }
+      }
+    }
+    yield { type: 'message_end', usage: result.usage }
+  }
+
   private formatTools(tools: ToolDefinition[]): ResponsesTool[] {
     return tools.map(t => ({
       type: 'function' as const,
@@ -299,6 +340,35 @@ export class OpenAIResponsesProvider implements ModelProvider {
       description: t.description,
       parameters: t.inputSchema,
     }))
+  }
+
+  private async createResponse(params: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
+    // Unit tests often replace `client` with a small mock. Runtime uses raw fetch
+    // to avoid OpenAI SDK Stainless headers that some compatible proxies block.
+    if (this.client !== this.defaultClient) {
+      return (this.client as any).responses.create(params, { signal })
+    }
+
+    const response = await fetch(`${this.baseURL}/responses`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+        Accept: params.stream ? 'text/event-stream' : 'application/json',
+      },
+      body: JSON.stringify(params),
+      signal,
+    })
+
+    if (!response.ok) {
+      throw await buildResponsesFetchError(response)
+    }
+
+    if (params.stream) {
+      return parseResponsesSse(response)
+    }
+
+    return response.json()
   }
 
   private formatInput(messages: Message[]): ResponsesInput[] {
@@ -406,4 +476,103 @@ export class OpenAIResponsesProvider implements ModelProvider {
       return true
     })
   }
+}
+
+function isStreamingBlockedByProxy(err: unknown): boolean {
+  const e = err as any
+  const message = String(e?.message ?? e)
+  const statusFromMessage = /^\s*(\d{3})\b/.exec(message)?.[1]
+  const status = typeof e?.status === 'number'
+    ? e.status
+    : typeof e?.statusCode === 'number'
+      ? e.statusCode
+      : typeof e?.response?.status === 'number'
+        ? e.response.status
+        : statusFromMessage
+          ? Number(statusFromMessage)
+          : undefined
+  const haystack = [
+    message,
+    e?.code,
+    e?.error?.message,
+    e?.response?.statusText,
+    e?.response?.data,
+  ].filter(Boolean).join(' ').toLowerCase()
+  return status === 403 && /blocked|forbidden/.test(haystack)
+}
+
+async function buildResponsesFetchError(response: Response): Promise<Error> {
+  const text = await response.text().catch(() => '')
+  let detail = text
+  try {
+    const parsed = JSON.parse(text)
+    detail = parsed?.error?.message || parsed?.message || text
+  } catch {
+    // keep raw text
+  }
+  const message = [String(response.status), response.statusText, detail].filter(Boolean).join(' ')
+  const error = new Error(message)
+  ;(error as any).status = response.status
+  ;(error as any).response = { status: response.status, statusText: response.statusText, data: text }
+  return error
+}
+
+async function* parseResponsesSse(response: Response): AsyncIterable<unknown> {
+  const body = response.body
+  if (!body) throw new Error('Responses stream did not include a response body')
+
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      yield* drainSseBuffer(buffer, (remaining) => { buffer = remaining })
+    }
+    buffer += decoder.decode()
+    yield* drainSseBuffer(buffer, (remaining) => { buffer = remaining }, true)
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+function* drainSseBuffer(buffer: string, setRemaining: (remaining: string) => void, flush = false): Iterable<unknown> {
+  while (true) {
+    const boundary = findSseBoundary(buffer)
+    if (boundary.index < 0) break
+    const rawEvent = buffer.slice(0, boundary.index)
+    buffer = buffer.slice(boundary.index + boundary.length)
+    const parsed = parseSseEvent(rawEvent)
+    if (parsed !== undefined) yield parsed
+  }
+
+  if (flush && buffer.trim()) {
+    const parsed = parseSseEvent(buffer)
+    if (parsed !== undefined) yield parsed
+    buffer = ''
+  }
+
+  setRemaining(buffer)
+}
+
+function findSseBoundary(buffer: string): { index: number; length: number } {
+  const candidates = ['\r\n\r\n', '\n\n', '\r\r']
+    .map(separator => ({ index: buffer.indexOf(separator), length: separator.length }))
+    .filter(candidate => candidate.index >= 0)
+    .sort((a, b) => a.index - b.index)
+  return candidates[0] ?? { index: -1, length: 0 }
+}
+
+function parseSseEvent(rawEvent: string): unknown | undefined {
+  const data = rawEvent
+    .split(/\r?\n/)
+    .filter(line => line.startsWith('data:'))
+    .map(line => line.slice(5).trimStart())
+    .join('\n')
+    .trim()
+  if (!data || data === '[DONE]') return undefined
+  return JSON.parse(data)
 }

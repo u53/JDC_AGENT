@@ -91,7 +91,7 @@ Use the normal JDC CODE operating contract. Existing runtime gates still enforce
       '- Use short, explicit, stepwise action contracts before edits.',
       '- Treat missing file or symbol evidence as blocking until a tool supplies it.',
       `- Prefer no more than ${profile.maxParallelToolCalls} parallel read tool calls unless the task is pure discovery.`,
-      '- After mutation, run verification or clearly disclose why verification is pending.'
+      '- Runtime gates still control mutation and final verification disclosure; after mutation, run relevant verification and let the gate handle final disclosure.'
     )
   } else if (profile.evidenceStrictness === 'relaxed') {
     lines.push(
@@ -260,7 +260,7 @@ function getDoingTasksSection(): string {
 - Avoid backwards-compatibility hacks. When changing interfaces, update all callers rather than adding shims or deprecated code paths. If a breaking change is unavoidable, flag it to the user.
 - Safety guardrails always take precedence over default-to-action. When in doubt about whether an action is safe, ask rather than act.
 - If an approach fails twice, diagnose the root cause rather than making incremental patches. Try a fundamentally different approach.
-- Before reporting a task complete, verify it works: run the test, execute the script, check the output. For UI changes, start the dev server and visually confirm. If you can't verify, say so explicitly.
+- Before reporting a task complete, verify it works: run the test, execute the script, check the output. For UI changes, start the dev server and visually confirm. If you can't verify, say so in normal prose with the concrete blocker. Do not hand-write "Verification status" blocks or invent unavailable commands.
 - When delegating work (creating teams, sub-agents, or assigning tasks), write COMPLETE and DETAILED requirements. Include all context the recipient needs: what to do, what files are involved, what output format is expected, and any constraints. If the content is too long for a single field, split it into logical segments. Never assume the recipient has context from your conversation — they start fresh.
 
 <examples title="failure loop recognition">

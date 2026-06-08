@@ -34,6 +34,7 @@ const JDC_READ_TOOLS = new Set([
 
 const LONG_RUNNING_TOOLS = new Set(['Agent', 'Bash', 'Monitor', 'Team'])
 const DELEGATION_TOOLS = new Set(['Agent', 'Team'])
+const FILE_MUTATION_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
 
 const DEFAULT_MAX_READ_CONCURRENCY = 5
 
@@ -56,6 +57,10 @@ function isJdcReadTool(name: string): boolean {
 
 function isDelegationTool(name: string): boolean {
   return DELEGATION_TOOLS.has(name)
+}
+
+function shouldUseDefaultToolTimeout(name: string): boolean {
+  return !LONG_RUNNING_TOOLS.has(name) && !FILE_MUTATION_TOOLS.has(name)
 }
 
 export function isEagerExecutableTool(name: string): boolean {
@@ -182,9 +187,9 @@ export class ParallelExecutor {
             results[idx] = { tool_use_id: blocks[idx].id, content: 'Cancelled: sibling tool failed', is_error: true }
             return
           }
-          const toolSignal = LONG_RUNNING_TOOLS.has(blocks[idx].name)
-            ? combinedSignal
-            : AbortSignal.any([combinedSignal, AbortSignal.timeout(120_000)])
+          const toolSignal = shouldUseDefaultToolTimeout(blocks[idx].name)
+            ? AbortSignal.any([combinedSignal, AbortSignal.timeout(120_000)])
+            : combinedSignal
           const raced = await this.raceWithAbort(
             blocks[idx].name, blocks[idx].id, blocks[idx].input, onEvent, toolSignal
           )
@@ -209,9 +214,9 @@ export class ParallelExecutor {
         results[idx] = { tool_use_id: blocks[idx].id, content: 'Cancelled: sibling tool failed', is_error: true }
         continue
       }
-      const toolSignal = LONG_RUNNING_TOOLS.has(blocks[idx].name)
-        ? combinedSignal
-        : AbortSignal.any([combinedSignal, AbortSignal.timeout(120_000)])
+      const toolSignal = shouldUseDefaultToolTimeout(blocks[idx].name)
+        ? AbortSignal.any([combinedSignal, AbortSignal.timeout(120_000)])
+        : combinedSignal
       const raced = await this.raceWithAbort(
         blocks[idx].name, blocks[idx].id, blocks[idx].input, onEvent, toolSignal
       )

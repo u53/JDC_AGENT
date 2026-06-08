@@ -70,6 +70,7 @@ describe('evaluateTurnEndGate', () => {
     })
 
     expect(decision).toEqual({ action: 'allow' })
+    expect(JSON.stringify(decision)).not.toContain('Verification unavailable or skipped')
   })
 
   it('allows final response for unresolved changed files when no verification requirements were derived', () => {

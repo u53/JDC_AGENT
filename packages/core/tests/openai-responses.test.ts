@@ -142,6 +142,222 @@ describe('OpenAIResponsesProvider', () => {
     expect(capturedParams).not.toHaveProperty('user')
   })
 
+  it('omits store from Responses params for OpenAI-compatible proxy compatibility', async () => {
+    const provider = new OpenAIResponsesProvider('test-key')
+    let capturedParams: any
+    ;(provider as any).client = {
+      responses: {
+        create: async (params: any) => {
+          capturedParams = params
+          return { output: [], usage: { input_tokens: 0, output_tokens: 0 } }
+        },
+      },
+    }
+
+    await provider.chat(
+      [{ id: '1', role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: 0 }],
+      [],
+      { model: 'gpt-5.5', maxTokens: 100 },
+    )
+
+    expect(capturedParams).not.toHaveProperty('store')
+  })
+
+  it('uses a minimal fetch transport for runtime Responses requests', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      output: [{ type: 'message', content: [{ type: 'output_text', text: 'ok' }] }],
+      usage: { input_tokens: 3, output_tokens: 1 },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    try {
+      const provider = new OpenAIResponsesProvider('test-key', 'https://proxy.example/v1')
+      const result = await provider.chat(
+        [{ id: '1', role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: 0 }],
+        [],
+        { model: 'gpt-5.5', maxTokens: 100 },
+      )
+
+      expect(result.content).toEqual([{ type: 'text', text: 'ok' }])
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+      expect(url).toBe('https://proxy.example/v1/responses')
+      expect(init.method).toBe('POST')
+      expect(init.headers).toEqual({
+        Authorization: 'Bearer test-key',
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      })
+      expect(JSON.parse(String(init.body))).toMatchObject({
+        model: 'gpt-5.5',
+        input: [{ role: 'user', content: 'hello' }],
+        max_output_tokens: 100,
+      })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('parses Responses SSE events from the minimal fetch transport', async () => {
+    const encoder = new TextEncoder()
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"type":"response.output_text.delta","delta":"ok"}\n\n'))
+        controller.enqueue(encoder.encode('data: {"type":"response.completed","response":{"usage":{"input_tokens":3,"output_tokens":1}}}\n\n'))
+        controller.close()
+      },
+    })
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(body, {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream' },
+    })))
+
+    try {
+      const provider = new OpenAIResponsesProvider('test-key', 'https://proxy.example/v1')
+      const chunks = []
+      for await (const chunk of provider.stream(
+        [{ id: '1', role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: 0 }],
+        [],
+        { model: 'gpt-5.5', maxTokens: 100 },
+      )) {
+        chunks.push(chunk)
+      }
+
+      expect(chunks).toEqual([
+        { type: 'text_delta', text: 'ok' },
+        { type: 'message_end', usage: { inputTokens: 3, outputTokens: 1, cacheReadInputTokens: 0 } },
+      ])
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('falls back to non-streaming Responses when streaming is blocked before chunks', async () => {
+    const provider = new OpenAIResponsesProvider('test-key')
+    const blocked = new Error('403 Your request was blocked.') as Error & { status?: number }
+    blocked.status = 403
+    const create = vi.fn(async (params: any) => {
+      if (params.stream) throw blocked
+      return {
+        output: [{ type: 'message', content: [{ type: 'output_text', text: 'ok' }] }],
+        usage: { input_tokens: 3, output_tokens: 1 },
+      }
+    })
+    ;(provider as any).client = { responses: { create } }
+
+    const chunks = []
+    for await (const chunk of provider.stream(
+      [{ id: '1', role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: 0 }],
+      [],
+      { model: 'gpt-5.5', maxTokens: 100 },
+    )) {
+      chunks.push(chunk)
+    }
+
+    expect(create).toHaveBeenCalledTimes(2)
+    expect(chunks).toEqual([
+      { type: 'text_delta', text: 'ok' },
+      { type: 'message_end', usage: { inputTokens: 3, outputTokens: 1, cacheReadInputTokens: 0 } },
+    ])
+  })
+
+  it('falls back when a proxy reports streaming 403 only in the error message', async () => {
+    const provider = new OpenAIResponsesProvider('test-key')
+    const create = vi.fn(async (params: any) => {
+      if (params.stream) throw new Error('403 Your request was blocked.')
+      return {
+        output: [{ type: 'message', content: [{ type: 'output_text', text: 'ok' }] }],
+        usage: { input_tokens: 3, output_tokens: 1 },
+      }
+    })
+    ;(provider as any).client = { responses: { create } }
+
+    const chunks = []
+    for await (const chunk of provider.stream(
+      [{ id: '1', role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: 0 }],
+      [],
+      { model: 'gpt-5.5', maxTokens: 100 },
+    )) {
+      chunks.push(chunk)
+    }
+
+    expect(create).toHaveBeenCalledTimes(2)
+    expect(chunks).toEqual([
+      { type: 'text_delta', text: 'ok' },
+      { type: 'message_end', usage: { inputTokens: 3, outputTokens: 1, cacheReadInputTokens: 0 } },
+    ])
+  })
+
+  it('uses raw fetch without SDK compatibility headers for runtime Responses requests', async () => {
+    const originalFetch = globalThis.fetch
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      output: [{ type: 'message', content: [{ type: 'output_text', text: 'ok' }] }],
+      usage: { input_tokens: 3, output_tokens: 1 },
+    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    try {
+      const provider = new OpenAIResponsesProvider('test-key', 'https://proxy.example/v1')
+      const result = await provider.chat(
+        [{ id: '1', role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: 0 }],
+        [],
+        { model: 'gpt-5.5', maxTokens: 100 },
+      )
+
+      expect(result.content).toEqual([{ type: 'text', text: 'ok' }])
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+      expect(url).toBe('https://proxy.example/v1/responses')
+      expect(init.headers).toEqual({
+        Authorization: 'Bearer test-key',
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      })
+      expect(JSON.stringify(init.headers).toLowerCase()).not.toContain('stainless')
+    } finally {
+      vi.stubGlobal('fetch', originalFetch)
+    }
+  })
+
+  it('parses raw fetch Responses SSE streams', async () => {
+    const originalFetch = globalThis.fetch
+    const sse = [
+      'data: {"type":"response.output_text.delta","delta":"ok"}\n\n',
+      'data: {"type":"response.completed","response":{"usage":{"input_tokens":3,"output_tokens":1}}}\n\n',
+    ].join('')
+    const fetchMock = vi.fn(async () => new Response(sse, {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    try {
+      const provider = new OpenAIResponsesProvider('test-key', 'https://proxy.example/v1')
+      const chunks = []
+      for await (const chunk of provider.stream(
+        [{ id: '1', role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: 0 }],
+        [],
+        { model: 'gpt-5.5', maxTokens: 100 },
+      )) {
+        chunks.push(chunk)
+      }
+
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+      expect(init.headers).toEqual({
+        Authorization: 'Bearer test-key',
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+      })
+      expect(chunks).toEqual([
+        { type: 'text_delta', text: 'ok' },
+        { type: 'message_end', usage: { inputTokens: 3, outputTokens: 1, cacheReadInputTokens: 0 } },
+      ])
+    } finally {
+      vi.stubGlobal('fetch', originalFetch)
+    }
+  })
+
   it('streams function calls from completed Responses output items instead of partial added items', async () => {
     const provider = new OpenAIResponsesProvider('test-key')
     const events = [
