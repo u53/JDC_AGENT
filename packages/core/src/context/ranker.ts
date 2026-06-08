@@ -26,8 +26,8 @@ const KIND_AUTHORITY_TIER: Record<ContextSection['kind'], number> = {
   project_profile: 7,
   diagnostics: 7,
   memory: 6,
-  repo_wiki: 5,
-  relevant_code: 4,
+  relevant_code: 5,
+  repo_wiki: 4,
   code_map: 3,
 }
 

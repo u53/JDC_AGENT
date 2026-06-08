@@ -159,9 +159,7 @@ export function createContextRefreshTool(options: RefreshContextOptions = {}): T
       },
     },
     async execute(input: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-      const config = resolveContextEngineConfig(options.config)
-      const providers = options.providers ?? createDefaultRefreshProviders(config)
-      const payload = await refreshContextProviders({ ...input, cwd: typeof input.cwd === 'string' ? input.cwd : context.cwd } as ContextRefreshInput, { ...options, providers })
+      const payload = await refreshContextProviders({ ...input, cwd: typeof input.cwd === 'string' ? input.cwd : context.cwd } as ContextRefreshInput, options)
       return { content: JSON.stringify(payload, null, 2), isError: payload.status === 'unavailable' }
     },
   }

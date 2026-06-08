@@ -54,7 +54,7 @@ describe('repo wiki generation', () => {
     expect(packet.evidenceHash).toMatch(/[a-f0-9]{64}/)
   })
 
-  it('does not truncate or cap repo wiki evidence unless caller opts in', () => {
+  it('applies default repo map and packet size limits for large repositories', () => {
     const cwd = tmpRepo()
     mkdirSync(path.join(cwd, 'src'), { recursive: true })
     const docRefs = ['README.md', 'JDCAGNET.md', 'AGENTS.md', 'CLAUDE.md', 'GEMINI.md', 'CONTRIBUTING.md', 'package.json', 'pnpm-workspace.yaml', 'turbo.json']
@@ -76,9 +76,27 @@ describe('repo wiki generation', () => {
 
     const packet = buildRepoWikiEvidencePacket({ cwd, indexStore: store, now: () => 1 })
 
-    expect(packet.packets.filter((item) => item.ref.startsWith('src/file-'))).toHaveLength(125)
+    expect(packet.packets.filter((item) => item.ref.startsWith('src/file-'))).toHaveLength(120)
     expect(packet.packets.map((item) => item.ref)).toContain('turbo.json')
+    expect(packet.packets.find((item) => item.ref === 'README.md')?.content).not.toContain('TAIL_MARKER')
+    expect(packet.packets.find((item) => item.ref === 'README.md')?.content.length).toBeLessThanOrEqual(6_000)
+  })
+
+  it('respects caller-provided maxPacketChars and maxDocs overrides', () => {
+    const cwd = tmpRepo()
+    mkdirSync(path.join(cwd, 'src'), { recursive: true })
+    writeFileSync(path.join(cwd, 'README.md'), `${'a'.repeat(6_500)}TAIL_MARKER`)
+    writeFileSync(path.join(cwd, 'package.json'), '{"name":"test"}')
+
+    const store = new IndexStore()
+    const content = 'export const x = 1\n'
+    writeFileSync(path.join(cwd, 'src/main.ts'), content)
+    store.upsertFile(indexedFile('src/main.ts', hashIndexedContent(content)))
+
+    const packet = buildRepoWikiEvidencePacket({ cwd, indexStore: store, maxPacketChars: 10_000, maxDocs: 1, now: () => 1 })
+
     expect(packet.packets.find((item) => item.ref === 'README.md')?.content).toContain('TAIL_MARKER')
+    expect(packet.packets.map((item) => item.ref)).not.toContain('package.json')
   })
 
   it('skips indexed code packets when the current file hash disagrees with the index snapshot', () => {

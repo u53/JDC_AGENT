@@ -8,6 +8,8 @@ import type { ContextDiagnostic } from '../types.js'
 import type { IndexStore } from '../../context-engine/graph/store.js'
 import type { RepoWikiEvidencePacket } from './types.js'
 
+const DEFAULT_MAX_PACKET_CHARS = 6_000
+
 export interface RepoWikiEvidenceInput {
   cwd: string
   indexStore: Pick<IndexStore, 'allFiles'>
@@ -40,7 +42,7 @@ export function buildRepoWikiEvidencePacket(input: RepoWikiEvidenceInput): RepoW
   const createdAt = now()
   const packets: RepoWikiEvidencePacket[] = []
   const diagnostics: ContextDiagnostic[] = []
-  const repoMap = buildRepoMap(input.indexStore)
+  const repoMap = buildRepoMap(input.indexStore, { maxFiles: 120, maxSymbols: 240, maxImportEdges: 160, maxTopSymbolsPerFile: 8 })
   const repoMapContent = renderRepoMap(repoMap)
   const indexedHashes = new Map(input.indexStore.allFiles().map((file) => [file.filePath, file.hash]))
 
@@ -140,7 +142,8 @@ function repoWikiEvidenceDiagnostic(level: ContextDiagnostic['level'], message: 
 }
 
 function trimPacket(content: string, maxChars?: number): string {
-  return typeof maxChars === 'number' && content.length > maxChars ? content.slice(0, maxChars) : content
+  const limit = maxChars ?? DEFAULT_MAX_PACKET_CHARS
+  return content.length > limit ? content.slice(0, limit) : content
 }
 
 function packetId(kind: string, ref: string): string {
