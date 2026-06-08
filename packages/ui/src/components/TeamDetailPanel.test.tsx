@@ -137,6 +137,28 @@ describe('TeamDetailPanel', () => {
     expect(html).toContain('handoff')
     expect(html).toContain('Project Manager')
   })
+
+  it('renders member detail modal responsibility as markdown in a polished shell', () => {
+    seedTeamStore({
+      expandedMemberId: 'worker-1',
+      teams: {
+        'team-1': {
+          ...team,
+          members: [{
+            ...team.members[0],
+            responsibility: '### Frontend scope\n- Keep `handoff` visible',
+          }],
+        },
+      },
+    })
+
+    const html = renderToStaticMarkup(<TeamDetailPanel sessionId="sess-1" taskId="team-1" />)
+
+    expect(html).toContain('team-member-modal')
+    expect(html).toContain('team-member-modal-shell')
+    expect(html).toContain('<h3')
+    expect(html).toContain('handoff')
+  })
 })
 
 function seedTeamStore(partial: Partial<ReturnType<typeof useTeamStore.getState>> = {}) {

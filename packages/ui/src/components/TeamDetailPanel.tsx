@@ -751,18 +751,18 @@ function MemberDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      className="team-member-modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-3 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="w-[min(640px,90vw)] max-h-[85vh] flex flex-col rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-2xl"
+        className="team-member-modal-shell w-[min(660px,94vw)] max-h-[85vh] flex flex-col overflow-hidden rounded-[10px] border border-[color-mix(in_srgb,var(--accent)_16%,var(--border))] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_96%,transparent),color-mix(in_srgb,var(--bg)_92%,transparent))] shadow-2xl shadow-black/45"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between px-4 py-3 border-b border-[var(--border)]">
+        <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_42%,transparent)] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-[14px]">{statusIcon(member.status)}</span>
-              <span className="text-[14px] font-medium text-[var(--text)] truncate">{member.role}</span>
+              <span className="min-w-0 whitespace-normal break-words text-[14px] font-medium text-[var(--text)] [overflow-wrap:anywhere]">{member.role}</span>
               <StatusBadge status={member.status} small />
             </div>
             <div className="mt-1 text-[11px] text-[var(--muted)] font-mono">{member.id}</div>
@@ -770,19 +770,17 @@ function MemberDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-[var(--muted)] hover:text-[var(--text)] text-[16px] leading-none px-1"
+            className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-[7px] border border-[var(--border)] text-[var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)] active:translate-y-px"
             aria-label="Close"
           >
             ×
           </button>
         </div>
 
-        <div className="overflow-y-auto px-4 py-3 space-y-4">
+        <div className="context-panel-scroll overflow-y-auto px-4 py-3 space-y-3">
           {member.responsibility ? (
             <ModalSection title="Responsibility">
-              <div className="text-[12px] text-[var(--text)] whitespace-pre-wrap">
-                {member.responsibility}
-              </div>
+              <TeamMarkdown content={member.responsibility} />
             </ModalSection>
           ) : (
             <ModalSection title="Responsibility">
@@ -855,12 +853,12 @@ function MemberDetailModal({
 
 function ModalSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div>
-      <div className="text-[10px] uppercase tracking-wider text-[var(--muted)] mb-1.5">
+    <section className="min-w-0 rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_34%,transparent)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
+      <div className="mb-2 font-mono text-[10px] uppercase text-[var(--muted)]">
         {title}
       </div>
       {children}
-    </div>
+    </section>
   )
 }
 
