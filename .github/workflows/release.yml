@@ -14,6 +14,7 @@ jobs:
     runs-on: macos-latest
     env:
       ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.electron-builder-cache
     steps:
       - uses: actions/checkout@v4
 
@@ -30,13 +31,15 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Cache Electron downloads
+      - name: Cache Electron builder downloads
         uses: actions/cache@v4
         with:
-          path: .electron-cache
-          key: ${{ runner.os }}-electron-${{ hashFiles('pnpm-lock.yaml') }}
+          path: |
+            .electron-cache
+            .electron-builder-cache
+          key: ${{ runner.os }}-electron-builder-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-electron-
+            ${{ runner.os }}-electron-builder-
 
       - run: pip install setuptools
 
@@ -73,12 +76,24 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
 
       - name: Package
-        run: pnpm package
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm package; then
+              exit 0
+            fi
+            status=$?
+            if [ "$attempt" -eq 3 ]; then
+              exit "$status"
+            fi
+            echo "pnpm package failed on attempt $attempt/3; retrying..."
+            sleep $((attempt * 20))
+          done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-        timeout-minutes: 5
+        timeout-minutes: 15
 
       - name: Upload Mac artifacts
         uses: softprops/action-gh-release@v2
@@ -93,6 +108,7 @@ jobs:
     runs-on: windows-latest
     env:
       ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.electron-builder-cache
     steps:
       - uses: actions/checkout@v4
 
@@ -109,13 +125,15 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Cache Electron downloads
+      - name: Cache Electron builder downloads
         uses: actions/cache@v4
         with:
-          path: .electron-cache
-          key: ${{ runner.os }}-electron-${{ hashFiles('pnpm-lock.yaml') }}
+          path: |
+            .electron-cache
+            .electron-builder-cache
+          key: ${{ runner.os }}-electron-builder-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-electron-
+            ${{ runner.os }}-electron-builder-
 
       - run: pip install setuptools
 
@@ -137,7 +155,19 @@ jobs:
       - run: pnpm build
 
       - name: Package
-        run: pnpm package
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm package; then
+              exit 0
+            fi
+            status=$?
+            if [ "$attempt" -eq 3 ]; then
+              exit "$status"
+            fi
+            echo "pnpm package failed on attempt $attempt/3; retrying..."
+            sleep $((attempt * 20))
+          done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
