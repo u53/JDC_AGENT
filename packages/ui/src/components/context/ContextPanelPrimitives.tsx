@@ -1,5 +1,6 @@
 import type { ContextInspectPayload } from '@jdcagnet/core'
 import type { ReactNode } from 'react'
+import { MarkdownRenderer } from '../MarkdownRenderer'
 
 type ContextDiagnostic = ContextInspectPayload['diagnostics'][number]
 
@@ -28,6 +29,14 @@ export function PanelState({ title, message }: { title: string; message: string 
     <div className="rounded-[8px] border border-dashed border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_54%,transparent)] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
       <div className="break-words text-[12px] font-medium text-[var(--text)] [overflow-wrap:anywhere]">{title}</div>
       <div className="mt-1 whitespace-normal break-words text-[11px] leading-5 text-[var(--muted)] [overflow-wrap:anywhere]">{message}</div>
+    </div>
+  )
+}
+
+export function ContextMarkdown({ content }: { content: string }) {
+  return (
+    <div className="context-markdown min-w-0 text-[11px] leading-relaxed text-[var(--text)] [overflow-wrap:anywhere]">
+      <MarkdownRenderer content={content} compact />
     </div>
   )
 }

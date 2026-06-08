@@ -30,6 +30,8 @@ function extractText(node: ReactNode): string {
 interface Props {
   content: string
   defaultCodeExpanded?: boolean
+  compact?: boolean
+  className?: string
 }
 
 function codeLineCount(text: string): number {
@@ -109,12 +111,13 @@ function CodeBlock({
   )
 }
 
-function MarkdownRendererView({ content, defaultCodeExpanded = false }: Props) {
+function MarkdownRendererView({ content, defaultCodeExpanded = false, compact = false, className }: Props) {
+  const headingFont = compact ? 'var(--font-sans)' : 'var(--font-serif)'
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[rehypeHighlight]}
-      className="prose"
+      className={['prose', compact && 'prose-compact', className].filter(Boolean).join(' ')}
       components={{
         code(props: ComponentPropsWithoutRef<'code'> & { node?: { position?: { start?: { line?: number; column?: number; offset?: number } } } }) {
           const { className, children, node, ...rest } = props
@@ -208,13 +211,13 @@ function MarkdownRendererView({ content, defaultCodeExpanded = false }: Props) {
           )
         },
         h1({ children }) {
-          return <h1 className="text-xl font-bold mt-4 mb-2 text-[var(--text)]" style={{ fontFamily: 'var(--font-serif)' }}>{children}</h1>
+          return <h1 className="text-xl font-bold mt-4 mb-2 text-[var(--text)]" style={{ fontFamily: headingFont }}>{children}</h1>
         },
         h2({ children }) {
-          return <h2 className="text-lg font-bold mt-3 mb-2 text-[var(--text)]" style={{ fontFamily: 'var(--font-serif)' }}>{children}</h2>
+          return <h2 className="text-lg font-bold mt-3 mb-2 text-[var(--text)]" style={{ fontFamily: headingFont }}>{children}</h2>
         },
         h3({ children }) {
-          return <h3 className="text-base font-bold mt-2 mb-1 text-[var(--text)]" style={{ fontFamily: 'var(--font-serif)' }}>{children}</h3>
+          return <h3 className="text-base font-bold mt-2 mb-1 text-[var(--text)]" style={{ fontFamily: headingFont }}>{children}</h3>
         },
         ul({ children }) {
           return <ul className="list-disc list-inside my-2 space-y-1">{children}</ul>

@@ -4,7 +4,7 @@ import { ContextAdvancedDiagnosticsPanel } from './ContextAdvancedDiagnosticsPan
 import { ContextCurrentPanel } from './ContextCurrentPanel'
 import { ContextFactsPanel } from './ContextFactsPanel'
 import { ContextInspectPanel } from './ContextInspectPanel'
-import { Badge, formatPercent, freshnessLabel, kindLabel, PanelFrame, PanelState } from './ContextPanelPrimitives'
+import { Badge, ContextMarkdown, formatPercent, freshnessLabel, kindLabel, PanelFrame, PanelState } from './ContextPanelPrimitives'
 import { ContextTeamPanel } from './ContextTeamPanel'
 import { ConstraintStatusPanel } from './ConstraintStatusPanel'
 
@@ -44,7 +44,7 @@ export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect,
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2">
               <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--accent)] shadow-[0_0_0_4px_var(--accent-soft)]" />
-              <div className="truncate font-mono text-[11px] font-semibold uppercase text-[var(--text)]">JDC Context Engine</div>
+              <div className="truncate font-mono text-[11px] font-semibold uppercase text-[var(--text)]">JDC 上下文引擎</div>
             </div>
             <div className="mt-1 truncate text-[10px] text-[var(--muted)]">Project context</div>
           </div>
@@ -145,7 +145,7 @@ function ContextProjectUnderstandingPanel({ payload, loading, error }: {
                 <Badge>可信度 {formatPercent(fact.confidence)}</Badge>
                 <Badge>新鲜度 {freshnessLabel(fact.freshness)}</Badge>
               </div>
-              <div className="mt-2 whitespace-pre-wrap break-words text-[12px] leading-relaxed text-[var(--text)] [overflow-wrap:anywhere]">{fact.content}</div>
+              <ContextMarkdown content={fact.content} />
             </article>
           ))}
         </div>

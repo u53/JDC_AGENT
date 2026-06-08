@@ -1,5 +1,5 @@
 import type { ContextInspectPayload, MemorySearchPayload } from '@jdcagnet/core'
-import { Badge, DiagnosticsList, formatDate, formatPercent, freshnessLabel, kindLabel, Metric, PanelFrame, PanelState, scopeLabel } from './ContextPanelPrimitives'
+import { Badge, ContextMarkdown, DiagnosticsList, formatDate, formatPercent, freshnessLabel, kindLabel, Metric, PanelFrame, PanelState, scopeLabel } from './ContextPanelPrimitives'
 
 type ProjectFact = ContextInspectPayload['acceptedProjectFacts'][number]
 type MemoryFact = MemorySearchPayload['results'][number]
@@ -55,7 +55,7 @@ export function ContextFactsPanel({ acceptedMemory, projectFacts, loading, error
                 <Badge tone="good">已接受</Badge>
               </div>
 
-              <p className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-[var(--text)] [overflow-wrap:anywhere]">{fact.content}</p>
+              <ContextMarkdown content={fact.content} />
 
               <div className="grid gap-1.5 [grid-template-columns:repeat(auto-fit,minmax(110px,1fr))]">
                 <Metric label="置信度" value={formatPercent(fact.confidence)} />

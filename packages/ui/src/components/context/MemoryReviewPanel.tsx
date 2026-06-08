@@ -1,6 +1,6 @@
 import type { ContextMemoryReview } from '../../stores/context-store'
 import { useContextStore } from '../../stores/context-store'
-import { Badge, DiagnosticsList, formatDate, formatPercent, freshnessLabel, kindLabel, Metric, PanelFrame, PanelState, scopeLabel, statusLabel, unknownPreview } from './ContextPanelPrimitives'
+import { Badge, ContextMarkdown, DiagnosticsList, formatDate, formatPercent, freshnessLabel, kindLabel, Metric, PanelFrame, PanelState, scopeLabel, statusLabel, unknownPreview } from './ContextPanelPrimitives'
 
 export function MemoryReviewPanel({ review, loading, error }: {
   review: ContextMemoryReview | null
@@ -37,7 +37,7 @@ export function MemoryReviewPanel({ review, loading, error }: {
                   <Badge tone="good">已接受</Badge>
                 </div>
 
-                <p className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-[var(--text)] [overflow-wrap:anywhere]">{memory.content}</p>
+                <ContextMarkdown content={memory.content} />
 
                 <div className="grid gap-1.5 [grid-template-columns:repeat(auto-fit,minmax(90px,1fr))]">
                   <Metric label="置信度" value={formatPercent(memory.confidence)} />

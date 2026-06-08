@@ -1,5 +1,5 @@
 import type { ContextInspectPayload } from '@jdcagnet/core'
-import { Badge, formatDate, formatPercent, formatTokens, freshnessLabel, kindLabel, Metric, PanelFrame, PanelState, statusTone } from './ContextPanelPrimitives'
+import { Badge, ContextMarkdown, formatDate, formatPercent, formatTokens, freshnessLabel, kindLabel, Metric, PanelFrame, PanelState, statusTone } from './ContextPanelPrimitives'
 
 type InspectableSection = NonNullable<ContextInspectPayload['bundle']>['sections'][number]
 
@@ -36,20 +36,18 @@ export function ContextCurrentPanel({ payload, loading, error }: {
       ) : (
         <div className="space-y-2">
           {bundle.sections.map((section) => (
-            <article key={section.id} className="min-w-0 space-y-2 rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5">
+            <article key={section.id} className="min-w-0 space-y-2 rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_42%,transparent)] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="whitespace-normal break-words text-[12px] font-medium text-[var(--text)] [overflow-wrap:anywhere]">{section.title}</div>
-                  <div className="mt-0.5 whitespace-normal break-words text-[10px] uppercase tracking-[0.08em] text-[var(--muted)] [overflow-wrap:anywhere]">
+                  <div className="mt-0.5 whitespace-normal break-words font-mono text-[10px] uppercase text-[var(--muted)] [overflow-wrap:anywhere]">
                     {kindLabel(section.kind)}
                   </div>
                 </div>
                 <Badge tone={statusTone(section.freshness)}>{freshnessLabel(section.freshness)}</Badge>
               </div>
 
-              {section.content && (
-                <p className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-[var(--text)] [overflow-wrap:anywhere]">{section.content}</p>
-              )}
+              {section.content && <ContextMarkdown content={section.content} />}
 
               <div className="grid gap-1.5 [grid-template-columns:repeat(auto-fit,minmax(110px,1fr))]">
                 <Metric label="来源" value={section.sourceProvider} />
@@ -74,7 +72,7 @@ export function ContextCurrentPanel({ payload, loading, error }: {
       )}
 
       {suppressedCount > 0 && (
-        <div className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5">
+        <div className="min-w-0 rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_46%,transparent)] px-3 py-2.5">
           <div className="whitespace-normal break-words text-[11px] font-medium text-[var(--text)] [overflow-wrap:anywhere]">未注入</div>
           <div className="mt-1 whitespace-normal break-words text-[10px] text-[var(--muted)] [overflow-wrap:anywhere]">
             {payload.droppedSections.length} 条上下文被预算或规划器抑制。
@@ -97,10 +95,10 @@ function CitationList({ citations }: { citations: InspectableSection['citations'
 
   return (
     <div className="space-y-1">
-      <div className="text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]">引用</div>
+      <div className="font-mono text-[10px] uppercase text-[var(--muted)]">引用</div>
       <div className="flex flex-wrap gap-1.5">
         {citations.map((citation) => (
-          <span key={citation.id} className="max-w-full whitespace-normal break-words rounded border border-[var(--border)] bg-[var(--surface-2)] px-1.5 py-1 font-mono text-[10px] text-[var(--muted)] [overflow-wrap:anywhere]">
+          <span key={citation.id} className="max-w-full whitespace-normal break-words rounded-[5px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-3)_45%,transparent)] px-1.5 py-1 font-mono text-[10px] text-[var(--muted)] [overflow-wrap:anywhere]">
             {citation.ref}{citation.line ? `:${citation.line}` : ''}
           </span>
         ))}

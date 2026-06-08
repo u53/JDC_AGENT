@@ -13,7 +13,7 @@ export function ConstraintStatusPanel({ snapshot, loading, error, advancedVisibl
 
   return (
     <PanelFrame title="约束状态" subtitle={`最近读取 ${formatDate(snapshot.inspectedAt)}`}>
-      <section className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-3">
+      <section className="rounded-[8px] border border-[color-mix(in_srgb,var(--accent)_12%,var(--border))] bg-[color-mix(in_srgb,var(--surface-2)_46%,transparent)] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Badge tone={statusTone(snapshot.status)}>{constraintStatusLabel(snapshot.status)}</Badge>
           {snapshot.modelProfile && <Badge tone="accent">{snapshot.modelProfile.id}</Badge>}
@@ -30,17 +30,17 @@ export function ConstraintStatusPanel({ snapshot, loading, error, advancedVisibl
       </div>
 
       {snapshot.objective && (
-        <section className="rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5">
-          <div className="text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]">当前目标</div>
+        <section className="rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_46%,transparent)] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
+          <div className="font-mono text-[10px] uppercase text-[var(--muted)]">当前目标</div>
           <div className="mt-1 whitespace-normal break-words text-[12px] text-[var(--text)] [overflow-wrap:anywhere]">{snapshot.objective}</div>
         </section>
       )}
 
       {snapshot.evidence.missing.length > 0 && (
         <section className="space-y-2">
-          <div className="text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]">缺少的证据</div>
+          <div className="font-mono text-[10px] uppercase text-[var(--muted)]">缺少的证据</div>
           {snapshot.evidence.missing.map((item, index) => (
-            <div key={`${item.kind}_${index}`} className="rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2">
+            <div key={`${item.kind}_${index}`} className="rounded-[7px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_46%,transparent)] px-3 py-2">
               <div className="font-mono text-[11px] text-[var(--text)]">{item.kind}</div>
               <div className="mt-1 whitespace-normal break-words text-[11px] text-[var(--muted)] [overflow-wrap:anywhere]">{item.reason}</div>
             </div>
@@ -50,9 +50,9 @@ export function ConstraintStatusPanel({ snapshot, loading, error, advancedVisibl
 
       {snapshot.blockedActions.length > 0 && (
         <section className="space-y-2">
-          <div className="text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]">被拦截的操作</div>
+          <div className="font-mono text-[10px] uppercase text-[var(--muted)]">被拦截的操作</div>
           {snapshot.blockedActions.map((event) => (
-            <div key={event.id} className="rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2">
+            <div key={event.id} className="rounded-[7px] border border-[color-mix(in_srgb,var(--bad)_24%,var(--border))] bg-[color-mix(in_srgb,var(--bad)_6%,var(--surface-2))] px-3 py-2">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <Badge tone="bad">{event.toolName}</Badge>
                 <span className="font-mono text-[10px] text-[var(--muted)]">{event.toolUseId || 'unknown'}</span>
@@ -65,9 +65,9 @@ export function ConstraintStatusPanel({ snapshot, loading, error, advancedVisibl
 
       {snapshot.verification.requirements.filter(isActionableRequirement).length > 0 && (
         <section className="space-y-2">
-          <div className="text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]">需要验证</div>
+          <div className="font-mono text-[10px] uppercase text-[var(--muted)]">需要验证</div>
           {snapshot.verification.requirements.filter(isActionableRequirement).map((requirement) => (
-            <div key={requirement.id} className="rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2">
+            <div key={requirement.id} className="rounded-[7px] border border-[color-mix(in_srgb,var(--warn)_22%,var(--border))] bg-[color-mix(in_srgb,var(--warn)_6%,var(--surface-2))] px-3 py-2">
               <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <Badge tone={requirement.status === 'failed' ? 'bad' : 'warn'}>{verificationRequirementKindLabel(requirement.kind)}</Badge>
@@ -88,9 +88,9 @@ export function ConstraintStatusPanel({ snapshot, loading, error, advancedVisibl
 
       {snapshot.verification.changedFiles.length > 0 && (
         <section className="space-y-2">
-          <div className="text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]">已修改文件</div>
+          <div className="font-mono text-[10px] uppercase text-[var(--muted)]">已修改文件</div>
           {snapshot.verification.changedFiles.map((file) => (
-            <div key={file.filePath} className="rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2">
+            <div key={file.filePath} className="rounded-[7px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_46%,transparent)] px-3 py-2">
               <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
                 <span className="min-w-0 whitespace-normal break-words font-mono text-[11px] text-[var(--text)] [overflow-wrap:anywhere]">{file.filePath}</span>
                 <Badge tone={file.status === 'verified' ? 'good' : file.status === 'failed' ? 'bad' : 'warn'}>{changedFileStatusLabel(file.status)}</Badge>
@@ -103,9 +103,9 @@ export function ConstraintStatusPanel({ snapshot, loading, error, advancedVisibl
 
       {advancedVisible && snapshot.policyEvents.length > 0 && (
         <section className="space-y-2">
-          <div className="text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]">原始策略事件</div>
+          <div className="font-mono text-[10px] uppercase text-[var(--muted)]">原始策略事件</div>
           {snapshot.policyEvents.map((event) => (
-            <div key={event.id} className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-[10px] text-[var(--muted)]">
+            <div key={event.id} className="rounded-[7px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_38%,transparent)] px-3 py-2 font-mono text-[10px] text-[var(--muted)]">
               {event.phase} · {event.source} · {event.decision} · {event.toolName}
             </div>
           ))}

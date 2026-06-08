@@ -8,5 +8,5 @@ export function shouldShowContextInspector(env: ContextInspectorEnv = import.met
   const flag = env.VITE_JDC_CONTEXT_INSPECTOR?.toLowerCase()
   if (flag === 'true' || flag === '1') return true
   if (flag === 'false' || flag === '0') return false
-  return env.DEV === true
+  return true
 }

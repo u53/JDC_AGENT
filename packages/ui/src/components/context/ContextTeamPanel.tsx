@@ -1,5 +1,5 @@
 import type { ContextInspectPayload } from '@jdcagnet/core'
-import { Badge, formatDate, formatPercent, freshnessLabel, kindLabel, PanelFrame, PanelState } from './ContextPanelPrimitives'
+import { Badge, ContextMarkdown, formatDate, formatPercent, freshnessLabel, kindLabel, PanelFrame, PanelState } from './ContextPanelPrimitives'
 
 type ProjectFact = ContextInspectPayload['acceptedProjectFacts'][number]
 
@@ -27,7 +27,7 @@ export function ContextTeamPanel({ payload, loading, error }: {
                 <Badge>{freshnessLabel(fact.freshness)}</Badge>
                 <Badge>{formatPercent(fact.confidence)}</Badge>
               </div>
-              <div className="mt-2 text-[12px] leading-relaxed text-[var(--text)]">{fact.content}</div>
+              <ContextMarkdown content={fact.content} />
               <div className="mt-2 text-[10px] text-[var(--muted)]">更新于 {formatDate(fact.updatedAt)}</div>
             </article>
           ))}

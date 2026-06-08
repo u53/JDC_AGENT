@@ -451,6 +451,24 @@ describe('context inspectability panels', () => {
     expect(html).not.toContain('candidate-1')
   })
 
+  it('renders current injected context markdown as rich markdown', () => {
+    const html = renderToStaticMarkup(<ContextCurrentPanel payload={{
+      ...payload,
+      bundle: {
+        ...payload.bundle!,
+        sections: [{
+          ...payload.bundle!.sections[0],
+          content: '### Runbook\n- Run `pnpm build`\n\n```ts\nconst ok = true\n```',
+        }],
+      },
+    }} loading={false} error={null} />)
+
+    expect(html).toContain('<h3')
+    expect(html).toContain('<ul')
+    expect(html).toContain('markdown-code-block')
+    expect(html).toContain('pnpm build')
+  })
+
   it('keeps raw provider and planner diagnostics out of the primary status panel', () => {
     const noisyPayload: ContextInspectPayload = {
       ...payload,
@@ -485,6 +503,21 @@ describe('context inspectability panels', () => {
     expect(html).toContain('87%')
     expect(html).toContain('sess-1/run-1')
     expect(html).toContain('过期')
+  })
+
+  it('renders accepted project memory markdown as rich markdown', () => {
+    const html = renderToStaticMarkup(<ContextFactsPanel acceptedMemory={{
+      ...acceptedMemory,
+      results: [{
+        ...acceptedMemory.results[0],
+        content: '## Durable fact\n- Keep `citations`\n\n```json\n{\"ok\":true}\n```',
+      }],
+    }} projectFacts={[]} loading={false} error={null} />)
+
+    expect(html).toContain('<h2')
+    expect(html).toContain('<ul')
+    expect(html).toContain('markdown-code-block')
+    expect(html).toContain('citations')
   })
 
   it('keeps accepted project facts visible when accepted memory loading has a partial error', () => {

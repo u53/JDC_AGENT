@@ -153,6 +153,47 @@ body {
 .prose blockquote { border-left: 2px solid var(--border-strong); color: var(--muted); }
 .prose ul, .prose ol { color: var(--text); }
 
+.context-markdown .prose {
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.context-markdown .prose h1,
+.context-markdown .prose h2,
+.context-markdown .prose h3 {
+  font-family: var(--font-sans) !important;
+  letter-spacing: 0;
+}
+
+.context-markdown .prose h1 {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.context-markdown .prose h2,
+.context-markdown .prose h3 {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.context-markdown .prose ul,
+.context-markdown .prose ol {
+  margin: 6px 0;
+  padding-left: 14px;
+}
+
+.context-markdown .prose li {
+  margin: 2px 0;
+}
+
+.context-markdown .markdown-code-block {
+  margin: 7px 0;
+}
+
+.context-markdown .markdown-code-pre {
+  max-height: 220px;
+}
+
 .markdown-code-block {
   max-width: 100%;
   min-width: 0;
