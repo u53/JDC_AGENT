@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useTeamStore, type TeamConversationEntry } from '../stores/team-store'
 import { useToastStore } from '../stores/toast-store'
 import { MarkdownRenderer } from './MarkdownRenderer'
@@ -179,13 +180,13 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
         )}
       </div>
 
-      <div className="flex-shrink-0 border-t border-[var(--border)] p-3 space-y-2">
+      <div className="team-command-bar flex-shrink-0 space-y-2 border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_84%,transparent)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
         {isFinished && (
           <div className="text-[10px] text-[var(--muted)] italic px-1">
             Team has {team.status}. Messages are disabled.
           </div>
         )}
-        <div className="flex flex-wrap gap-1.5">
+        <div className="team-quick-actions flex flex-wrap gap-1.5">
           {QUICK_ACTIONS.map((a) => {
             const isActive = activeQuickAction === a.intent
             return (
@@ -204,9 +205,9 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
             )
           })}
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex min-w-0 items-center gap-1.5 rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_38%,transparent)] p-1.5">
           <div
-            className={`text-[11px] px-2 py-1.5 rounded-[7px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_54%,transparent)] text-[var(--muted)] flex items-center gap-1 ${
+            className={`flex items-center gap-1 rounded-[7px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_30%,transparent)] px-2 py-1.5 font-mono text-[11px] text-[var(--muted)] ${
               isFinished ? 'opacity-40' : ''
             }`}
             title="Messages are routed through the Project Manager. Tell the PM what you want and it will broadcast or assign as needed."
@@ -233,7 +234,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
                 handleSend()
               }
             }}
-            className="flex-1 min-w-0 text-[12px] px-2.5 py-1.5 rounded-[7px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_38%,transparent)] text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="team-message-input min-w-0 flex-1 rounded-[7px] border border-transparent bg-transparent px-2.5 py-1.5 text-[12px] text-[var(--text)] placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:bg-[color-mix(in_srgb,var(--surface)_62%,transparent)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
           />
           <button
             onClick={handleSend}
@@ -250,7 +251,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
       </div>
 
       {expandedMember && (
-        <MemberDetailModal
+        <TeamMemberModalPortal
           member={expandedMember}
           task={expandedMemberTask}
           events={events}
@@ -724,17 +725,25 @@ function taskDescriptionPreview(description?: string): string {
   return (firstLine ?? '').slice(0, 140)
 }
 
+type MemberDetailModalProps = {
+  member: any
+  task: { id: string; title: string; description: string; status: string } | null
+  events: string[]
+  onClose: () => void
+}
+
+function TeamMemberModalPortal(props: MemberDetailModalProps) {
+  const modal = <MemberDetailModal {...props} />
+  if (typeof document === 'undefined' || !document.body) return modal
+  return createPortal(modal, document.body)
+}
+
 function MemberDetailModal({
   member,
   task,
   events,
   onClose,
-}: {
-  member: any
-  task: { id: string; title: string; description: string; status: string } | null
-  events: string[]
-  onClose: () => void
-}) {
+}: MemberDetailModalProps) {
   const memberEvents = useMemo(() => {
     const tag = `[${member.id}]`
     return events.filter((line) => line.includes(tag)).slice(-30)

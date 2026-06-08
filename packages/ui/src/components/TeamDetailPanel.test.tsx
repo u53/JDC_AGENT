@@ -159,6 +159,16 @@ describe('TeamDetailPanel', () => {
     expect(html).toContain('<h3')
     expect(html).toContain('handoff')
   })
+
+  it('renders the PM command area as a compact command bar', () => {
+    const html = renderToStaticMarkup(<TeamDetailPanel sessionId="sess-1" taskId="team-1" />)
+
+    expect(html).toContain('team-command-bar')
+    expect(html).toContain('team-quick-actions')
+    expect(html).toContain('team-message-input')
+    expect(html).toContain('PM')
+    expect(html).toContain('Send')
+  })
 })
 
 function seedTeamStore(partial: Partial<ReturnType<typeof useTeamStore.getState>> = {}) {
