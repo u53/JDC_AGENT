@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useSessionStore } from '../stores/session-store'
-import { useBackgroundTaskStore } from '../stores/background-task-store'
-import { useTeamStore } from '../stores/team-store'
+import { useBackgroundTaskStore, type BackgroundTaskItem } from '../stores/background-task-store'
+import { useTeamStore, type TeamStatusUI } from '../stores/team-store'
 
 const formatEvent = (e: any): string => {
   const d = new Date(e.timestamp)
@@ -30,6 +30,17 @@ const formatEvent = (e: any): string => {
   }
 }
 
+export function selectTeamIdsToPoll(
+  backgroundTasks: BackgroundTaskItem[],
+  finalizedTeamIds: Set<string>,
+  teamSnapshots: Record<string, TeamStatusUI>,
+): string[] {
+  return backgroundTasks
+    .filter(t => t.type === 'team')
+    .filter(t => t.status === 'running' || !finalizedTeamIds.has(t.id) || teamSnapshots[t.id] == null)
+    .map(t => t.id)
+}
+
 /**
  * Mounted globally at App level — polls ALL active teams regardless of whether
  * the Team panel is open. Ensures PM messages are accumulated into the store
@@ -41,6 +52,7 @@ export function GlobalTeamPoller() {
   const setTeamStatus = useTeamStore((s) => s.setTeamStatus)
   const setTeamEvents = useTeamStore((s) => s.setTeamEvents)
   const appendConversationIfNew = useTeamStore((s) => s.appendConversationIfNew)
+  const teamSnapshots = useTeamStore((s) => s.teams)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   /**
    * Teams we've fetched a final snapshot for after they transitioned to a
@@ -50,6 +62,10 @@ export function GlobalTeamPoller() {
   const finalizedRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
+    finalizedRef.current.clear()
+  }, [activeSessionId])
+
+  useEffect(() => {
     if (!activeSessionId) return
     // Poll all running teams + any terminal teams we haven't yet snapshotted.
     // The "haven't snapshotted" pass is what fixes:
@@ -57,10 +73,7 @@ export function GlobalTeamPoller() {
     //     skipped the team the moment it flipped to completed
     //   - "Loading…" forever after a window reload, because the store had no
     //     entry for the completed team and the old poller never touched it
-    const teamIds = backgroundTasks
-      .filter(t => t.type === 'team')
-      .filter(t => t.status === 'running' || !finalizedRef.current.has(t.id))
-      .map(t => t.id)
+    const teamIds = selectTeamIdsToPoll(backgroundTasks, finalizedRef.current, teamSnapshots)
     if (teamIds.length === 0) {
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
@@ -266,7 +279,7 @@ export function GlobalTeamPoller() {
         intervalRef.current = null
       }
     }
-  }, [activeSessionId, backgroundTasks, setTeamStatus, setTeamEvents, appendConversationIfNew])
+  }, [activeSessionId, backgroundTasks, teamSnapshots, setTeamStatus, setTeamEvents, appendConversationIfNew])
 
   return null
 }
