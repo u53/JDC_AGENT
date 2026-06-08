@@ -2,6 +2,7 @@ import { useAgentStore } from '../stores/agent-store'
 import { useSessionStore } from '../stores/session-store'
 import { ipc } from '../lib/ipc-client'
 import { ToolCardRouter } from './tool-cards'
+import { MarkdownRenderer } from './MarkdownRenderer'
 
 export function AgentDetailPanel() {
   const activeAgentId = useAgentStore((s) => s.activeAgentId)
@@ -30,82 +31,123 @@ export function AgentDetailPanel() {
   }
 
   return (
-    <div className="agent-detail-panel">
-      {/* Header */}
-      <div className="agent-detail-header">
-        <div className="agent-detail-title">
-          <span className="agent-detail-mark" />
-          <span>AGENT</span>
-          <strong>
-            {agent.prompt.slice(0, 40)}
-          </strong>
-        </div>
-        <div className="agent-detail-actions">
-          {agent.status === 'running' && (
-            <>
-              <button
-                onClick={handleBackground}
-                className="agent-detail-action"
-              >
-                [BG]
-              </button>
-              <button
-                onClick={handleAbort}
-                className="agent-detail-action is-danger"
-              >
-                [ABORT]
-              </button>
-            </>
-          )}
-          <button
-            onClick={handleClose}
-            className="agent-detail-action"
-          >
-            [X]
-          </button>
-        </div>
-      </div>
-
-      {/* Status bar */}
-      <div className="agent-detail-status">
-        {agent.status === 'running' && (
-          <span className="agent-detail-live" />
-        )}
-        <span>{agent.status === 'running' ? `Running ${elapsed}s` : agent.status.toUpperCase()}</span>
-        <span>|</span>
-        <span>{agent.toolCount} tools</span>
-        {agent.modelId && (
-          <>
-            <span>|</span>
-            <span>{agent.modelId}</span>
-          </>
-        )}
-      </div>
-
-      {/* Tool events list */}
-      <div className="agent-detail-tools">
-        {agent.toolEvents.map((te, i) => (
-          <ToolCardRouter
-            key={i}
-            name={te.toolName}
-            input={te.input}
-            result={te.result ? { content: te.result.content, is_error: te.result.isError } : undefined}
-          />
-        ))}
-        {agent.status === 'running' && agent.toolEvents.length === 0 && (
-          <div className="tool-empty-state">
-            Initializing...
+    <aside className="agent-detail-shell flex h-full min-h-0 flex-col border-l border-[var(--border)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_95%,transparent),color-mix(in_srgb,var(--bg)_88%,transparent))]">
+      <div className="flex-shrink-0 border-b border-[var(--border)] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <span
+                className="h-2 w-2 flex-shrink-0 rounded-full"
+                style={{ backgroundColor: agentStatusColor(agent.status) }}
+              />
+              <span className="font-mono text-[11px] font-semibold uppercase text-[var(--text)]">Subagent</span>
+            </div>
+            <div className="mt-1 min-w-0 whitespace-normal break-words text-[12px] leading-5 text-[var(--muted)] [overflow-wrap:anywhere]">
+              {agent.prompt}
+            </div>
           </div>
-        )}
+          <div className="flex flex-shrink-0 items-center gap-1.5">
+            {agent.status === 'running' && (
+              <>
+                <AgentActionButton onClick={handleBackground}>Background</AgentActionButton>
+                <AgentActionButton tone="danger" onClick={handleAbort}>Abort</AgentActionButton>
+              </>
+            )}
+            <AgentActionButton onClick={handleClose}>Close</AgentActionButton>
+          </div>
+        </div>
       </div>
 
-      {/* Text output */}
+      <div className="agent-detail-metrics grid flex-shrink-0 grid-cols-3 gap-2 border-b border-[var(--border)] px-3 py-2">
+        <AgentMetric label="Status" value={agent.status === 'running' ? `Running ${elapsed}s` : agent.status} tone={agentStatusColor(agent.status)} />
+        <AgentMetric label="Tools" value={String(agent.toolCount)} />
+        <AgentMetric label="Model" value={agent.modelId ?? 'default'} />
+      </div>
+
+      <div className="context-panel-scroll flex-1 min-h-0 overflow-y-auto p-3">
+        <section className="agent-tool-timeline min-w-0 space-y-2">
+          <div className="font-mono text-[10px] font-semibold uppercase text-[var(--muted)]">
+            Tool timeline
+          </div>
+          {agent.toolEvents.length > 0 ? (
+            agent.toolEvents.map((te, i) => (
+              <div key={i} className="min-w-0">
+                <div className="mb-1 flex min-w-0 items-center gap-2 px-1">
+                  <span
+                    className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
+                    style={{ backgroundColor: toolEventColor(te.status) }}
+                  />
+                  <span className="min-w-0 whitespace-normal break-words font-mono text-[10px] text-[var(--muted)] [overflow-wrap:anywhere]">
+                    {te.status} · {te.toolName}
+                  </span>
+                </div>
+                <ToolCardRouter
+                  name={te.toolName}
+                  input={te.input}
+                  result={te.result ? { content: te.result.content, is_error: te.result.isError } : undefined}
+                />
+              </div>
+            ))
+          ) : (
+            <div className="rounded-[8px] border border-dashed border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)] px-3 py-3 text-[11px] italic text-[var(--muted)]">
+              {agent.status === 'running' ? 'Initializing...' : 'No tool events recorded.'}
+            </div>
+          )}
+        </section>
+      </div>
+
       {agent.textOutput && (
-        <div className="agent-detail-output">
-          <div>Output</div>
-          <pre>{agent.textOutput}</pre>
-        </div>
+        <section className="agent-output-panel max-h-[240px] flex-shrink-0 overflow-y-auto border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] px-3 py-3">
+          <div className="mb-2 font-mono text-[10px] font-semibold uppercase text-[var(--muted)]">Output</div>
+          <div className="context-markdown min-w-0 text-[11px] leading-relaxed text-[var(--text)] [overflow-wrap:anywhere]">
+            <MarkdownRenderer content={agent.textOutput} compact />
+          </div>
+        </section>
       )}
+    </aside>
+  )
+}
+
+function AgentActionButton({
+  children,
+  tone = 'default',
+  onClick,
+}: {
+  children: string
+  tone?: 'default' | 'danger'
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-[7px] border px-2 py-1 font-mono text-[10px] transition-colors active:translate-y-px ${
+        tone === 'danger'
+          ? 'border-[color-mix(in_srgb,var(--bad)_28%,var(--border))] text-[var(--bad)] hover:bg-[color-mix(in_srgb,var(--bad)_10%,transparent)]'
+          : 'border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function AgentMetric({ label, value, tone = 'var(--text)' }: { label: string; value: string; tone?: string }) {
+  return (
+    <div className="min-w-0 rounded-[7px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_42%,transparent)] px-2 py-1.5">
+      <div className="font-mono text-[10px] uppercase text-[var(--muted)]">{label}</div>
+      <div className="mt-0.5 min-w-0 truncate font-mono text-[11px]" style={{ color: tone }}>{value}</div>
     </div>
   )
+}
+
+function agentStatusColor(status: string): string {
+  if (status === 'done') return 'var(--good)'
+  if (status === 'error') return 'var(--bad)'
+  return 'var(--accent)'
+}
+
+function toolEventColor(status: string): string {
+  if (status === 'complete') return 'var(--good)'
+  if (status === 'error') return 'var(--bad)'
+  return 'var(--accent)'
 }
