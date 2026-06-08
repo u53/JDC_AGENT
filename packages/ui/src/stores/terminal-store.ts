@@ -15,9 +15,9 @@ export const useTerminalStore = create<TerminalState>((set) => ({
   visible: false,
   height: 200,
   terminalId: null,
-  toggle: () => set((s) => ({ visible: !s.visible })),
+  toggle: () => set((s) => s.visible ? { visible: false, terminalId: null } : { visible: true }),
   show: () => set({ visible: true }),
-  hide: () => set({ visible: false }),
+  hide: () => set({ visible: false, terminalId: null }),
   setHeight: (height) => set({ height: Math.max(100, Math.min(height, window.innerHeight * 0.6)) }),
   setTerminalId: (terminalId) => set({ terminalId }),
 }))

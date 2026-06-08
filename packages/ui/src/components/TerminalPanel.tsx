@@ -24,7 +24,6 @@ export function TerminalPanel({ cwd }: Props) {
 
   useEffect(() => {
     if (!visible || !containerRef.current) return
-    if (termRef.current) return
 
     const term = new Terminal({
       fontSize: 13,
@@ -44,35 +43,60 @@ export function TerminalPanel({ cwd }: Props) {
     termRef.current = term
     fitRef.current = fit
 
-    // Create pty
+    let disposed = false
+    let activeTerminalId: string | null = null
+    let inputSubscription: { dispose: () => void } | null = null
+
+    const destroyActiveTerminal = () => {
+      if (!activeTerminalId) return
+      window.electronAPI?.terminalDestroy(activeTerminalId)
+      activeTerminalId = null
+    }
+
     window.electronAPI?.terminalCreate(cwd).then((result: { id: string; error?: string }) => {
+      if (disposed) {
+        if (result.id) window.electronAPI?.terminalDestroy(result.id)
+        return
+      }
       if (result.error) {
         term.write(`\r\n[终端启动失败] ${result.error}\r\n`)
         return
       }
 
+      activeTerminalId = result.id
       setTerminalId(result.id)
 
-      term.onData((data) => {
+      inputSubscription = term.onData((data) => {
         window.electronAPI?.terminalWrite(result.id, data)
       })
+    }).catch((err: Error) => {
+      if (!disposed) term.write(`\r\n[终端启动失败] ${err.message}\r\n`)
     })
 
-    // Listen for pty output
     const unsub = window.electronAPI?.onTerminalData((payload: { id: string; data: string }) => {
+      if (payload.id !== activeTerminalId) return
       term.write(payload.data)
     })
 
-    const unsubExit = window.electronAPI?.onTerminalExit(() => {
+    const unsubExit = window.electronAPI?.onTerminalExit((payload: { id: string; code: number }) => {
+      if (payload.id !== activeTerminalId) return
       term.write('\r\n[进程已退出]\r\n')
+      activeTerminalId = null
       setTerminalId(null)
     })
 
     return () => {
+      disposed = true
+      inputSubscription?.dispose()
       unsub?.()
       unsubExit?.()
+      destroyActiveTerminal()
+      setTerminalId(null)
+      term.dispose()
+      if (termRef.current === term) termRef.current = null
+      if (fitRef.current === fit) fitRef.current = null
     }
-  }, [visible, cwd])
+  }, [visible, cwd, setTerminalId])
 
   // Fit on resize or height change
   useEffect(() => {
@@ -84,16 +108,6 @@ export function TerminalPanel({ cwd }: Props) {
       window.electronAPI?.terminalResize(id, cols, rows)
     }
   }, [visible, height, terminalId])
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (terminalId) window.electronAPI?.terminalDestroy(terminalId)
-      termRef.current?.dispose()
-      termRef.current = null
-      fitRef.current = null
-    }
-  }, [])
 
   const onDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
