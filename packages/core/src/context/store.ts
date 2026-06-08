@@ -10,6 +10,7 @@ import {
   HarvestJobSchema,
   RawEvidenceSchema,
 } from './schemas.js'
+import { RepoWikiEntrySchema } from './repo-wiki/schemas.js'
 import type {
   ContextBundle,
   ContextCitation,
@@ -23,6 +24,12 @@ import type {
   HarvestJob,
   RawEvidence,
 } from './types.js'
+import type {
+  RepoWikiEntry,
+  RepoWikiEntryQuery,
+  RepoWikiInvalidationResult,
+  RepoWikiSummary,
+} from './repo-wiki/types.js'
 import {
   CONTEXT_SCHEMA_VERSION_KEY,
   CONTEXT_STORE_SCHEMA_VERSION,
@@ -127,6 +134,13 @@ export interface ContextAdvancedDiagnostics {
   harvestJobs: HarvestJob[]
 }
 
+export interface RepoWikiContextStoreMethods {
+  saveRepoWikiEntries(entries: RepoWikiEntry[]): Promise<ContextStoreResult<{ savedEntries: number }>>
+  listRepoWikiEntries(query?: RepoWikiEntryQuery): Promise<ContextStoreResult<RepoWikiEntry[]>>
+  getRepoWikiSummary(): Promise<ContextStoreResult<RepoWikiSummary>>
+  invalidateRepoWikiByFileHash(filePath: string, hash: string): Promise<ContextStoreResult<RepoWikiInvalidationResult>>
+}
+
 export interface ContextStore {
   saveRawEvidence(evidence: RawEvidence): Promise<ContextStoreResult>
   saveFact(fact: ContextFact): Promise<ContextStoreResult>
@@ -139,6 +153,10 @@ export interface ContextStore {
   queryFacts(query?: ContextFactQuery): Promise<ContextStoreResult<ContextFact[]>>
   listAcceptedProjectFacts(query?: Omit<ContextFactQuery, 'scope'>): Promise<ContextStoreResult<ContextFact[]>>
   listAdvancedDiagnostics(options?: ListAdvancedDiagnosticsOptions): Promise<ContextStoreResult<ContextAdvancedDiagnostics>>
+  saveRepoWikiEntries?(entries: RepoWikiEntry[]): Promise<ContextStoreResult<{ savedEntries: number }>>
+  listRepoWikiEntries?(query?: RepoWikiEntryQuery): Promise<ContextStoreResult<RepoWikiEntry[]>>
+  getRepoWikiSummary?(): Promise<ContextStoreResult<RepoWikiSummary>>
+  invalidateRepoWikiByFileHash?(filePath: string, hash: string): Promise<ContextStoreResult<RepoWikiInvalidationResult>>
   invalidateByFileHash(filePath: string, hash: string): Promise<ContextStoreResult<{ invalidatedFacts: number }>>
   enforceQuotas(): Promise<ContextStoreResult<QuotaEnforcementResult>>
   getSchemaInfo(): Promise<ContextStoreResult<ContextStoreSchemaInfo>>
@@ -168,7 +186,7 @@ interface SharedContextDatabase {
 
 const sharedContextDatabases = new Map<string, Promise<SharedContextDatabase>>()
 
-export async function openContextStore(options: ContextStoreOpenOptions = {}): Promise<ContextStore> {
+export async function openContextStore(options: ContextStoreOpenOptions = {}): Promise<ContextStore & RepoWikiContextStoreMethods> {
   const projectRoot = resolveProjectRoot(options)
   const dbPath = options.dbPath ?? projectContextDbPath(projectRoot)
   const projectKey = normalizeProjectRoot(projectRoot)
@@ -178,7 +196,7 @@ export async function openContextStore(options: ContextStoreOpenOptions = {}): P
   try {
     const shared = await openSharedContextDatabase(dbPath, now, projectKey)
     const existing = shared.stores.get(projectKey)
-    if (existing) return existing
+    if (existing) return existing as ContextStore & RepoWikiContextStoreMethods
 
     const store = new SqlJsContextStore(shared.db, shared.dbPath, projectKey, now, quotas, shared.backupPath)
     store.persist()
@@ -258,6 +276,7 @@ const PROJECT_SCOPED_TABLES = [
   'memory_records',
   'context_diagnostics',
   'rejected_candidates',
+  'repo_wiki_entries',
 ] as const
 
 const PROJECT_SCOPED_INDEXES = [
@@ -269,6 +288,7 @@ const PROJECT_SCOPED_INDEXES = [
   `CREATE INDEX IF NOT EXISTS idx_memory_records_project_scope ON memory_records(project_key, scope)`,
   `CREATE INDEX IF NOT EXISTS idx_context_diagnostics_project_created ON context_diagnostics(project_key, created_at)`,
   `CREATE INDEX IF NOT EXISTS idx_rejected_candidates_project_session ON rejected_candidates(project_key, session_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_repo_wiki_project_status ON repo_wiki_entries(project_key, status, freshness)`,
 ] as const
 
 function resolveProjectRoot(options: ContextStoreOpenOptions): string {
@@ -354,6 +374,7 @@ function ensureProjectIsolationSchema(db: Database, projectKey: string, fallback
   ensureColumn(db, 'context_diagnostics', 'diagnostic_id', 'TEXT')
   ensureColumn(db, 'context_diagnostics', 'visible_in_primary_ui', 'INTEGER DEFAULT 1')
   ensureColumn(db, 'rejected_candidates', 'candidate_id', 'TEXT')
+  ensureColumn(db, 'repo_wiki_entries', 'wiki_id', 'TEXT')
   ensureColumn(db, 'rejected_candidates', 'visible_in_primary_ui', 'INTEGER DEFAULT 1')
   ensureColumn(db, 'harvest_jobs', 'visible_in_primary_ui', 'INTEGER DEFAULT 1')
   backfillProjectIsolationRows(db, fallbackUnknownProjectRows ? projectKey : undefined)
@@ -370,6 +391,7 @@ const LOGICAL_ID_BACKFILLS = [
   ['memory_records', 'memory_id'],
   ['context_diagnostics', 'diagnostic_id'],
   ['rejected_candidates', 'candidate_id'],
+  ['repo_wiki_entries', 'wiki_id'],
 ] as const
 
 type LifecycleFact = ContextFact & {
@@ -435,7 +457,7 @@ function backfillSessionOwnedRows(db: Database, sessionProjectKeys: Map<string, 
 
 function backfillUnownedRows(db: Database, fallbackProjectKey?: string): void {
   if (!fallbackProjectKey) return
-  const unownedTables = ['memory_records', 'context_diagnostics'] as const
+  const unownedTables = ['memory_records', 'context_diagnostics', 'repo_wiki_entries'] as const
   for (const table of unownedTables) {
     db.run(`UPDATE ${table} SET project_key = ? WHERE project_key IS NULL OR project_key = ''`, [fallbackProjectKey])
   }
@@ -501,7 +523,7 @@ function readSchemaVersion(db: Database): number | null {
   }
 }
 
-class SqlJsContextStore implements ContextStore {
+class SqlJsContextStore implements ContextStore, RepoWikiContextStoreMethods {
   private dirty = false
   private batchDepth = 0
 
@@ -684,6 +706,64 @@ class SqlJsContextStore implements ContextStore {
         diagnostics: limitLatest(diagnostics, options.limit),
         harvestJobs: limitLatest(harvestJobs, options.limit),
       }
+    })
+  }
+
+  async saveRepoWikiEntries(entries: RepoWikiEntry[]): Promise<ContextStoreResult<{ savedEntries: number }>> {
+    const parsed: RepoWikiEntry[] = []
+    for (const entry of entries) {
+      const result = RepoWikiEntrySchema.safeParse(entry)
+      if (!result.success) return failure({ savedEntries: 0 }, this.invalidDiagnostic('saveRepoWikiEntries', result.error.message))
+      parsed.push({ ...result.data, projectKey: this.projectKey })
+    }
+
+    return this.write('saveRepoWikiEntries', { savedEntries: 0 }, () => {
+      for (const entry of parsed) this.writeRepoWikiEntryRow(entry)
+      return { savedEntries: parsed.length }
+    })
+  }
+
+  async listRepoWikiEntries(query: RepoWikiEntryQuery = {}): Promise<ContextStoreResult<RepoWikiEntry[]>> {
+    return this.read('listRepoWikiEntries', [], () => this.selectRepoWikiEntries(query))
+  }
+
+  async getRepoWikiSummary(): Promise<ContextStoreResult<RepoWikiSummary>> {
+    return this.read('getRepoWikiSummary', { activeEntries: 0, staleEntries: 0 }, () => {
+      const activeEntries = Number(this.selectRows("SELECT COUNT(*) AS count FROM repo_wiki_entries WHERE project_key = ? AND status = 'active' AND freshness != 'stale'", [this.projectKey])[0]?.count ?? 0)
+      const staleEntries = Number(this.selectRows("SELECT COUNT(*) AS count FROM repo_wiki_entries WHERE project_key = ? AND (status = 'stale' OR freshness = 'stale')", [this.projectKey])[0]?.count ?? 0)
+      const latest = this.selectRows('SELECT generated_by_json, updated_at, lifecycle_reason FROM repo_wiki_entries WHERE project_key = ? ORDER BY updated_at DESC LIMIT 1', [this.projectKey])[0]
+      const generatedBy = latest?.generated_by_json ? JSON.parse(String(latest.generated_by_json)) as { modelId?: string } : undefined
+      return {
+        activeEntries,
+        staleEntries,
+        ...(latest?.updated_at ? { lastGeneratedAt: Number(latest.updated_at) } : {}),
+        ...(generatedBy?.modelId ? { lastModelId: generatedBy.modelId } : {}),
+        ...(latest?.lifecycle_reason ? { lastDiagnostic: String(latest.lifecycle_reason) } : {}),
+      }
+    })
+  }
+
+  async invalidateRepoWikiByFileHash(filePath: string, currentHash: string): Promise<ContextStoreResult<RepoWikiInvalidationResult>> {
+    return this.write('invalidateRepoWikiByFileHash', { invalidatedEntries: 0 }, () => {
+      const normalizedFilePath = normalizeFileCitationRef(filePath, this.projectKey)
+      const entries = this.selectRepoWikiEntries({ includeStale: true, includeArchived: false })
+      const invalidated = entries.filter((entry) =>
+        entry.status === 'active' &&
+        entry.citations.some((citation) =>
+          citation.type === 'file' &&
+          normalizeFileCitationRef(citation.ref, this.projectKey) === normalizedFilePath &&
+          citation.hash !== currentHash,
+        ),
+      )
+      for (const entry of invalidated) {
+        this.db.run(
+          `UPDATE repo_wiki_entries
+           SET freshness = ?, status = ?, updated_at = ?, lifecycle_reason = ?
+           WHERE project_key = ? AND wiki_id = ?`,
+          ['stale', 'stale', this.now(), `cited file changed: ${normalizedFilePath}`, this.projectKey, entry.id],
+        )
+      }
+      return { invalidatedEntries: invalidated.length }
     })
   }
 
@@ -1079,6 +1159,58 @@ class SqlJsContextStore implements ContextStore {
     )
   }
 
+  private writeRepoWikiEntryRow(entry: RepoWikiEntry): void {
+    this.db.run(
+      `INSERT OR REPLACE INTO repo_wiki_entries(id, project_key, wiki_id, kind, title, content, citations_json, related_files_json, related_symbols_json, confidence, freshness, generated_by_json, evidence_hash, status, created_at, updated_at, archived_at, lifecycle_reason)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        scopedId(this.projectKey, entry.id),
+        this.projectKey,
+        entry.id,
+        entry.kind,
+        sanitizeStoreText(entry.title),
+        sanitizeStoreText(entry.content),
+        JSON.stringify(entry.citations),
+        JSON.stringify(entry.relatedFiles),
+        JSON.stringify(entry.relatedSymbols),
+        entry.confidence,
+        entry.freshness,
+        JSON.stringify(entry.generatedBy),
+        entry.evidenceHash,
+        entry.status,
+        entry.createdAt,
+        entry.updatedAt,
+        entry.archivedAt ?? null,
+        entry.lifecycleReason ? sanitizeStoreText(entry.lifecycleReason) : null,
+      ]
+    )
+  }
+
+  private selectRepoWikiEntries(query: RepoWikiEntryQuery): RepoWikiEntry[] {
+    const conditions = ['project_key = ?']
+    const params: SqlValue[] = [this.projectKey]
+    if (!query.includeStale) conditions.push("freshness != 'stale'", "status != 'stale'")
+    if (!query.includeArchived) conditions.push("status != 'archived'")
+    conditions.push("status != 'rejected'")
+    if (query.kinds?.length) {
+      conditions.push(`kind IN (${query.kinds.map(() => '?').join(', ')})`)
+      params.push(...query.kinds)
+    }
+
+    const limit = normalizedLimit(query.limit)
+    const deferLimitUntilAfterRelatedFilter = limit !== undefined && Boolean(query.relatedFile || query.relatedSymbol)
+    const limitClause = limit === undefined || deferLimitUntilAfterRelatedFilter ? '' : ' LIMIT ?'
+    const rows = this.selectRows(
+      `SELECT * FROM repo_wiki_entries WHERE ${conditions.join(' AND ')} ORDER BY updated_at DESC${limitClause}`,
+      limit !== undefined && !deferLimitUntilAfterRelatedFilter ? [...params, limit] : params,
+    )
+    const relatedFile = query.relatedFile ? normalizeFileCitationRef(query.relatedFile, this.projectKey) : undefined
+    const entries = rows.map(parseRepoWikiEntryRow)
+      .filter((entry) => !relatedFile || entry.relatedFiles.some((file) => normalizeFileCitationRef(file, this.projectKey) === relatedFile) || entry.citations.some((citation) => normalizeFileCitationRef(citation.ref, this.projectKey) === relatedFile))
+      .filter((entry) => !query.relatedSymbol || entry.relatedSymbols.includes(query.relatedSymbol))
+    return limit !== undefined && deferLimitUntilAfterRelatedFilter ? entries.slice(0, limit) : entries
+  }
+
   private selectRejectedCandidatesForDiagnostics(options: ListAdvancedDiagnosticsOptions): RejectedCandidateRecord[] {
     const conditions: string[] = ['project_key = ?', "status != 'accepted'", 'expires_at > ?']
     const params: SqlValue[] = [this.projectKey, this.now()]
@@ -1245,7 +1377,7 @@ class SqlJsContextStore implements ContextStore {
   }
 }
 
-class UnavailableContextStore implements ContextStore {
+class UnavailableContextStore implements ContextStore, RepoWikiContextStoreMethods {
   constructor(private readonly dbPath: string, private readonly diagnostic: ContextDiagnostic) {}
 
   async saveRawEvidence(): Promise<ContextStoreResult> { return this.unavailable(undefined) }
@@ -1259,6 +1391,10 @@ class UnavailableContextStore implements ContextStore {
   async queryFacts(): Promise<ContextStoreResult<ContextFact[]>> { return this.unavailable([]) }
   async listAcceptedProjectFacts(): Promise<ContextStoreResult<ContextFact[]>> { return this.unavailable([]) }
   async listAdvancedDiagnostics(): Promise<ContextStoreResult<ContextAdvancedDiagnostics>> { return this.unavailable(emptyAdvancedDiagnostics()) }
+  async saveRepoWikiEntries(): Promise<ContextStoreResult<{ savedEntries: number }>> { return this.unavailable({ savedEntries: 0 }) }
+  async listRepoWikiEntries(): Promise<ContextStoreResult<RepoWikiEntry[]>> { return this.unavailable([]) }
+  async getRepoWikiSummary(): Promise<ContextStoreResult<RepoWikiSummary>> { return this.unavailable({ activeEntries: 0, staleEntries: 0 }) }
+  async invalidateRepoWikiByFileHash(): Promise<ContextStoreResult<RepoWikiInvalidationResult>> { return this.unavailable({ invalidatedEntries: 0 }) }
   async invalidateByFileHash(): Promise<ContextStoreResult<{ invalidatedFacts: number }>> { return this.unavailable({ invalidatedFacts: 0 }) }
   async enforceQuotas(): Promise<ContextStoreResult<QuotaEnforcementResult>> { return this.unavailable(emptyQuotaResult()) }
   async getSchemaInfo(): Promise<ContextStoreResult<ContextStoreSchemaInfo>> { return this.unavailable({ version: CONTEXT_STORE_SCHEMA_VERSION, dbPath: this.dbPath }) }
@@ -1299,6 +1435,28 @@ function parseFactRow(row: Record<string, unknown>): ContextFact {
     canonicalKey: stringOrUndefined(row.canonical_key),
     supersedes: parseStringArrayColumn(row.supersedes_json),
     conflictsWith: parseStringArrayColumn(row.conflicts_with_json),
+    archivedAt: row.archived_at === null || row.archived_at === undefined ? undefined : Number(row.archived_at),
+    lifecycleReason: stringOrUndefined(row.lifecycle_reason),
+  })
+}
+
+function parseRepoWikiEntryRow(row: Record<string, unknown>): RepoWikiEntry {
+  return RepoWikiEntrySchema.parse({
+    id: row.wiki_id ? String(row.wiki_id) : String(row.id),
+    projectKey: String(row.project_key),
+    kind: String(row.kind),
+    title: String(row.title),
+    content: String(row.content),
+    citations: JSON.parse(String(row.citations_json)),
+    relatedFiles: JSON.parse(String(row.related_files_json)),
+    relatedSymbols: JSON.parse(String(row.related_symbols_json)),
+    confidence: Number(row.confidence),
+    freshness: String(row.freshness),
+    generatedBy: JSON.parse(String(row.generated_by_json)),
+    evidenceHash: String(row.evidence_hash),
+    status: String(row.status),
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
     archivedAt: row.archived_at === null || row.archived_at === undefined ? undefined : Number(row.archived_at),
     lifecycleReason: stringOrUndefined(row.lifecycle_reason),
   })

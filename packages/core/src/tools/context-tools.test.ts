@@ -4,7 +4,7 @@ import {
   createContextInspectTool,
   inspectContext,
 } from './context-inspect.js'
-import { ContextRefreshPayloadSchema, getContextProviderHealth, refreshContextProviders } from './context-refresh.js'
+import { ContextRefreshPayloadSchema, createDefaultRefreshProviders, getContextProviderHealth, refreshContextProviders } from './context-refresh.js'
 import { collectCodeContext, getCodeIndexJobStatus } from '../context/providers/code-provider.js'
 import type { ContextBundle, ContextDiagnostic, ContextFact, ContextSection, HarvestJob, RawEvidence } from '../context/types.js'
 
@@ -53,6 +53,77 @@ describe('JDC Context Engine inspect and refresh tools', () => {
     expect(payload.memoryReview.rejected).toEqual([])
     expect(payload.providerHealth).toEqual([])
     expect(payload.diagnostics.map((item) => item.id)).toContain('diag_1')
+  })
+
+  it('includes repo wiki summary in context inspect payload without listing wiki entries by default', async () => {
+    const store = makeStore({
+      repoWikiSummary: { activeEntries: 2, staleEntries: 1, lastGeneratedAt: 1_700_000_000_000, lastModelId: 'claude-sonnet-4', lastDiagnostic: 'last repo wiki diagnostic' },
+      repoWikiEntries: [{ id: 'wiki_session', content: 'Session injects context before calls.' }],
+    })
+
+    const payload = await inspectContext({ sessionId: 'session_1', includeAdvancedDiagnostics: true }, { store, cwd: '/repo', now: () => 1_700_000_000_100 })
+
+    expect(ContextInspectPayloadSchema.parse(payload).repoWiki).toEqual({
+      activeEntries: 2,
+      staleEntries: 1,
+      lastGeneratedAt: 1_700_000_000_000,
+      lastModelId: 'claude-sonnet-4',
+      lastDiagnostic: 'last repo wiki diagnostic',
+    })
+    expect(store.getRepoWikiSummary).toHaveBeenCalledTimes(1)
+    expect(store.listRepoWikiEntries).not.toHaveBeenCalled()
+  })
+
+  it('includes sampled repo wiki entries only when explicitly requested', async () => {
+    const store = makeStore({
+      repoWikiSummary: { activeEntries: 1, staleEntries: 1, lastGeneratedAt: 1_700_000_000_000, lastModelId: 'claude-sonnet-4' },
+      repoWikiEntries: [
+        repoWikiEntry({ id: 'wiki_active', title: 'Session architecture', content: 'Session injects context before model calls.' }),
+        repoWikiEntry({ id: 'wiki_stale', title: 'Old workflow', content: 'Old release notes.', status: 'stale', freshness: 'stale' }),
+      ],
+    })
+
+    const payload = await inspectContext({ sessionId: 'session_1', includeRepoWikiSamples: true }, { store, cwd: '/repo', now: () => 1_700_000_000_100 })
+
+    const samples = payload.repoWiki?.samples
+    expect(samples).toBeDefined()
+    expect(samples?.map((entry) => entry.id)).toEqual(['wiki_active', 'wiki_stale'])
+    expect(samples?.[0]).toMatchObject({ title: 'Session architecture', citationRefs: ['packages/core/src/session.ts'] })
+    expect(store.listRepoWikiEntries).toHaveBeenCalledWith({ includeStale: true, includeArchived: false })
+  })
+
+  it('surfaces repo wiki summary diagnostics without making inspect unavailable', async () => {
+    const repoWikiDiagnostic = { id: 'diag_repo_wiki', level: 'warning' as const, source: 'RepoWikiProvider', message: 'repo wiki unavailable', createdAt: 1_700_000_000_000 }
+    const store = makeStore({
+      repoWikiSummaryResult: { ok: false, value: { activeEntries: 0, staleEntries: 0 }, diagnostics: [repoWikiDiagnostic] },
+    })
+
+    const payload = await inspectContext({ sessionId: 'session_1', includeAdvancedDiagnostics: true }, { store, cwd: '/repo', now: () => 1_700_000_000_100 })
+
+    expect(payload.status).not.toBe('unavailable')
+    expect(payload.repoWiki).toBeUndefined()
+    expect(payload.diagnostics).toContainEqual(repoWikiDiagnostic)
+  })
+
+  it('includes repo wiki summary and sampled entries only when explicitly requested', async () => {
+    const store = makeStore({
+      repoWikiSummary: { activeEntries: 2, staleEntries: 1, lastGeneratedAt: 1_900, lastModelId: 'claude-sonnet-4', lastDiagnostic: 'stale citation' },
+      repoWikiEntries: [repoWikiEntry({ id: 'wiki_architecture' }), repoWikiEntry({ id: 'wiki_testing', title: 'Testing workflow', kind: 'testing' })],
+    })
+
+    const withoutSamples = await inspectContext({ sessionId: 'session_1' }, { store, now: () => 2_100 })
+
+    expect(ContextInspectPayloadSchema.parse(withoutSamples).repoWiki).toEqual({ activeEntries: 2, staleEntries: 1, lastGeneratedAt: 1_900, lastModelId: 'claude-sonnet-4', lastDiagnostic: 'stale citation' })
+    expect(store.listRepoWikiEntries).not.toHaveBeenCalled()
+
+    const withSamples = await inspectContext({ sessionId: 'session_1', includeRepoWikiSamples: true }, { store, now: () => 2_100 })
+
+    expect(ContextInspectPayloadSchema.parse(withSamples).repoWiki).toMatchObject({
+      activeEntries: 2,
+      staleEntries: 1,
+      samples: [expect.objectContaining({ id: 'wiki_architecture' }), expect.objectContaining({ id: 'wiki_testing' })],
+    })
+    expect(store.listRepoWikiEntries).toHaveBeenCalledWith({ includeStale: true, includeArchived: false })
   })
 
   it('filters legacy aborted harvest artifacts and rejected candidates out of primary inspect diagnostics', async () => {
@@ -297,6 +368,27 @@ describe('JDC Context Engine inspect and refresh tools', () => {
     releaseIndex.resolve()
   })
 
+  it('loads default repo wiki provider health from cached store summary without queuing generation', async () => {
+    const store = makeStore({ repoWikiSummary: { activeEntries: 2, staleEntries: 1, lastGeneratedAt: 1_700_000_000_000, lastModelId: 'claude-sonnet-4' } })
+
+    const providerHealth = await getContextProviderHealth({ sessionId: 'session_1', cwd: '/repo-health-only', providers: ['repo_wiki'] }, {
+      store,
+      providers: createDefaultRefreshProviders({ providerToggles: { repo_wiki: true } }, { store }),
+      now: () => 3_000,
+    })
+
+    expect(providerHealth).toEqual([
+      expect.objectContaining({
+        id: 'repo_wiki',
+        status: 'stale',
+        diagnostic: expect.objectContaining({ source: 'RepoWikiProvider', message: expect.stringContaining('active=2 stale=1') }),
+      }),
+    ])
+    expect(store.getRepoWikiSummary).toHaveBeenCalledTimes(1)
+    expect(store.listRepoWikiEntries).not.toHaveBeenCalled()
+    expect(store.saveRepoWikiEntries).not.toHaveBeenCalled()
+  })
+
   it('explicit code reindex enqueues a background job without awaiting or starting the full index before returning', async () => {
     const releaseIndex = deferred<void>()
     const engine = {
@@ -391,6 +483,10 @@ function makeStore(options: Record<string, any> = {}) {
     listRawEvidence: vi.fn(async () => result([])),
     listRejectedCandidates: vi.fn(async () => options.rejectedCandidatesResult ?? result(options.rejectedCandidates ?? [])),
     listDiagnostics: vi.fn(async () => options.diagnosticsResult ?? result(options.diagnostics ?? [])),
+    getRepoWikiSummary: vi.fn(async () => options.repoWikiSummaryResult ?? result(options.repoWikiSummary ?? { activeEntries: 0, staleEntries: 0 })),
+    listRepoWikiEntries: vi.fn(async (query?: Record<string, unknown>) => options.repoWikiEntriesResult ?? result((options.repoWikiEntries ?? []).slice(0, typeof query?.limit === 'number' ? query.limit : undefined))),
+    saveRepoWikiEntries: vi.fn(async () => result({ savedEntries: 0 })),
+    invalidateRepoWikiByFileHash: vi.fn(async () => result({ invalidatedEntries: 0 })),
     approvePendingCandidate: vi.fn(async () => ({ ok: true, value: null, diagnostics: [] })),
     rejectPendingCandidate: vi.fn(async () => ({ ok: true, value: null, diagnostics: [] })),
   }
@@ -422,6 +518,27 @@ function section(overrides: Partial<ContextSection> = {}): ContextSection {
     freshness: 'live',
     sourceProvider: 'RuntimeSignalProvider',
     tokenEstimate: 12,
+    ...overrides,
+  }
+}
+
+function repoWikiEntry(overrides: Record<string, any> = {}) {
+  return {
+    id: 'wiki_1',
+    projectKey: '/repo',
+    kind: 'architecture',
+    title: 'Architecture overview',
+    content: 'Session and context modules coordinate runtime context.',
+    citations: [{ id: 'cit_wiki', type: 'file', ref: 'packages/core/src/session.ts', hash: 'hash_session' }],
+    relatedFiles: ['packages/core/src/session.ts'],
+    relatedSymbols: ['Session'],
+    confidence: 0.91,
+    freshness: 'cached',
+    generatedBy: { providerProtocol: 'anthropic', modelId: 'claude-sonnet-4' },
+    evidenceHash: 'evidence_hash',
+    status: 'active',
+    createdAt: 1_000,
+    updatedAt: 1_000,
     ...overrides,
   }
 }

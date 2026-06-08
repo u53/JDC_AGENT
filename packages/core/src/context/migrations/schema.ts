@@ -1,4 +1,4 @@
-export const CONTEXT_STORE_SCHEMA_VERSION = 2
+export const CONTEXT_STORE_SCHEMA_VERSION = 3
 export const CONTEXT_SCHEMA_VERSION_KEY = 'context_schema_version'
 
 export const CREATE_CONTEXT_STORE_TABLES = [
@@ -89,6 +89,26 @@ export const CREATE_CONTEXT_STORE_TABLES = [
     created_at INTEGER NOT NULL,
     expires_at INTEGER NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS repo_wiki_entries(
+    id TEXT PRIMARY KEY,
+    project_key TEXT NOT NULL,
+    wiki_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    citations_json TEXT NOT NULL,
+    related_files_json TEXT NOT NULL,
+    related_symbols_json TEXT NOT NULL,
+    confidence REAL NOT NULL,
+    freshness TEXT NOT NULL,
+    generated_by_json TEXT NOT NULL,
+    evidence_hash TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    archived_at INTEGER,
+    lifecycle_reason TEXT
+  )`,
 ]
 
 export const CREATE_CONTEXT_STORE_INDEXES = [
@@ -104,6 +124,9 @@ export const CREATE_CONTEXT_STORE_INDEXES = [
   `CREATE INDEX IF NOT EXISTS idx_memory_records_scope ON memory_records(scope)`,
   `CREATE INDEX IF NOT EXISTS idx_rejected_candidates_session ON rejected_candidates(session_id)`,
   `CREATE INDEX IF NOT EXISTS idx_rejected_candidates_expires ON rejected_candidates(expires_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_repo_wiki_project_status ON repo_wiki_entries(project_key, status, freshness)`,
+  `CREATE INDEX IF NOT EXISTS idx_repo_wiki_project_kind ON repo_wiki_entries(project_key, kind)`,
+  `CREATE INDEX IF NOT EXISTS idx_repo_wiki_updated ON repo_wiki_entries(updated_at)`,
 ]
 
 const MIGRATE_CONTEXT_STORE_V1_TO_V2 = [
@@ -117,10 +140,37 @@ const MIGRATE_CONTEXT_STORE_V1_TO_V2 = [
   `CREATE INDEX IF NOT EXISTS idx_context_facts_lifecycle ON context_facts(status, canonical_key)`,
 ]
 
+const MIGRATE_CONTEXT_STORE_V2_TO_V3 = [
+  `CREATE TABLE IF NOT EXISTS repo_wiki_entries(
+    id TEXT PRIMARY KEY,
+    project_key TEXT NOT NULL,
+    wiki_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    citations_json TEXT NOT NULL,
+    related_files_json TEXT NOT NULL,
+    related_symbols_json TEXT NOT NULL,
+    confidence REAL NOT NULL,
+    freshness TEXT NOT NULL,
+    generated_by_json TEXT NOT NULL,
+    evidence_hash TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    archived_at INTEGER,
+    lifecycle_reason TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_repo_wiki_project_status ON repo_wiki_entries(project_key, status, freshness)`,
+  `CREATE INDEX IF NOT EXISTS idx_repo_wiki_project_kind ON repo_wiki_entries(project_key, kind)`,
+  `CREATE INDEX IF NOT EXISTS idx_repo_wiki_updated ON repo_wiki_entries(updated_at)`,
+]
+
 export function getContextStoreMigrationStatements(fromVersion: number, toVersion = CONTEXT_STORE_SCHEMA_VERSION): string[] | null {
   if (fromVersion === toVersion) return []
-  if (fromVersion === 0 && toVersion === 2) return [...CREATE_CONTEXT_STORE_TABLES, ...CREATE_CONTEXT_STORE_INDEXES, setSchemaVersionStatement(toVersion)]
-  if (fromVersion === 1 && toVersion === 2) return [...MIGRATE_CONTEXT_STORE_V1_TO_V2, setSchemaVersionStatement(toVersion)]
+  if (fromVersion === 0 && toVersion === 3) return [...CREATE_CONTEXT_STORE_TABLES, ...CREATE_CONTEXT_STORE_INDEXES, setSchemaVersionStatement(toVersion)]
+  if (fromVersion === 1 && toVersion === 3) return [...MIGRATE_CONTEXT_STORE_V1_TO_V2, ...MIGRATE_CONTEXT_STORE_V2_TO_V3, setSchemaVersionStatement(toVersion)]
+  if (fromVersion === 2 && toVersion === 3) return [...MIGRATE_CONTEXT_STORE_V2_TO_V3, setSchemaVersionStatement(toVersion)]
   return null
 }
 

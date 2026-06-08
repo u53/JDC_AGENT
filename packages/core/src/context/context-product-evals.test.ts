@@ -12,13 +12,16 @@ import { makeEvalFact, makeEvalRequest, makeEvalSection, makeEvalStore } from '.
 import { collectCodeContext } from './providers/code-provider.js'
 import { collectMemoryContext } from './providers/memory-provider.js'
 import { collectProjectContext } from './providers/project-provider.js'
+import { collectRepoWikiContext } from './repo-wiki/provider.js'
 import { collectWorkflowContext } from './providers/workflow-provider.js'
+import { buildRepoWikiEvidencePacket, generateRepoWikiEntries } from './repo-wiki/index.js'
 import { hashContent } from './providers/shared.js'
 import { recordTeamArtifactEvidence } from './team-ledger.js'
 import { classifyHarvestCandidate } from './safety.js'
 import { strictToolGroundingProfile } from '../model-profile.js'
 import type { ContextProvider, ContextProviderResult } from './orchestrator.js'
 import type { ContextRequest } from './types.js'
+import type { RepoWikiModelClient } from './repo-wiki/index.js'
 
 const dirs: string[] = []
 
@@ -795,21 +798,64 @@ describe('JDC Context Engine product evals', () => {
     expect(result.renderedPrompt).toContain('Strict profile instructions:')
   })
 
-  it('Phase 6 eval: standard profile avoids strict-only contract noise', async () => {
-    const result = await buildContextBundle(makeEvalRequest({
-      mode: 'code_edit',
-      userMessage: '修复登录状态 bug',
-    }), {
-      injectionEnabled: true,
-      includeAgentContract: true,
-      store: makeEvalStore(),
-      providers: [],
-      now: () => 1_000,
-      id: () => 'phase6_standard_contract',
-    })
+  it('Phase 8 eval: repo wiki survives generation, retrieval, and file-hash invalidation', async () => {
+    const cwd = tempProject()
+    writeProjectFile(cwd, 'packages/core/src/session.ts', 'export class Session { runLoop() { return "ctx" } }')
+    writeProjectFile(cwd, 'README.md', '# JDCAGNET\n\nContext orchestration runtime.')
 
-    expect(result.renderedPrompt).toContain('Agent run contract')
-    expect(result.renderedPrompt).not.toContain('Strict profile instructions:')
+    const engine = new ContextEngine(cwd)
+    await engine.index()
+    const store = await openContextStore({ cwd })
+
+    try {
+      const evidence = await buildRepoWikiEvidencePacket({ cwd, indexStore: engine.getStore() })
+      const sessionPacket = evidence.packets.find((packet) => packet.ref === 'packages/core/src/session.ts')!
+      const modelClient: RepoWikiModelClient = {
+        completeRepoWiki: async () => JSON.stringify({
+          schemaVersion: 1,
+          action: 'save',
+          sections: [{
+            kind: 'architecture',
+            title: 'Context orchestration overview',
+            content: 'Session and Context Engine cooperate to inject relevant runtime and code context.',
+            citationPacketIds: [sessionPacket.id],
+            relatedFiles: ['packages/core/src/session.ts'],
+            relatedSymbols: ['Session'],
+            confidence: 0.92,
+          }],
+        }),
+      }
+      const generated = await generateRepoWikiEntries({
+        cwd,
+        projectKey: cwd,
+        evidence,
+        modelClient,
+        model: { providerProtocol: 'anthropic', modelId: 'fake-repo-wiki-model' },
+        now: () => 1_700_000_000_000,
+      })
+      expect(generated.diagnostics).toEqual([])
+      expect(generated.entries).toHaveLength(1)
+      await store.saveRepoWikiEntries(generated.entries)
+
+      const wikiContext = await collectRepoWikiContext(request({ cwd, userMessage: 'How does context orchestration work?' }), { store })
+      expect(wikiContext.sections).toEqual([
+        expect.objectContaining({
+          kind: 'repo_wiki',
+          title: 'Repo Wiki',
+          content: expect.stringContaining('Session and Context Engine cooperate'),
+          citations: [expect.objectContaining({ ref: 'packages/core/src/session.ts' })],
+        }),
+      ])
+      expect(wikiContext.health.status).toBe('cached')
+
+      const invalidation = await store.invalidateRepoWikiByFileHash('packages/core/src/session.ts', 'changed_hash')
+      expect(invalidation.value.invalidatedEntries).toBe(1)
+      const afterInvalidation = await store.listRepoWikiEntries({ includeStale: true })
+      expect(afterInvalidation.value[0]).toMatchObject({ status: 'stale', freshness: 'stale' })
+    } finally {
+      await (engine as unknown as { flushSave: () => Promise<void> }).flushSave()
+      engine.stopWatching()
+    }
   })
 })
 

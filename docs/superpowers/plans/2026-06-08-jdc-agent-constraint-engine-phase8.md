@@ -157,7 +157,7 @@ function repoWikiEntry(overrides: Partial<RepoWikiEntry> = {}): RepoWikiEntry {
 }
 
 it('saves, lists, and project-isolates repo wiki entries', async () => {
-  const dbPath = tempDbPath()
+  const dbPath = makeDbPath()
   const repoA = await openContextStore({ dbPath, cwd: '/repo-a', now: () => 1_700_000_000_000 })
   const repoB = await openContextStore({ dbPath, cwd: '/repo-b', now: () => 1_700_000_000_100 })
 
@@ -178,7 +178,7 @@ it('saves, lists, and project-isolates repo wiki entries', async () => {
 })
 
 it('invalidates repo wiki entries when a cited file hash changes', async () => {
-  const store = await openContextStore({ dbPath: tempDbPath(), cwd: '/repo', now: () => 1_700_000_000_000 })
+  const store = await openContextStore({ dbPath: makeDbPath(), cwd: '/repo', now: () => 1_700_000_000_000 })
   await store.saveRepoWikiEntries([repoWikiEntry({ projectKey: '/repo' })])
 
   const result = await store.invalidateRepoWikiByFileHash('packages/core/src/session.ts', 'hash_session_v2')
@@ -189,7 +189,7 @@ it('invalidates repo wiki entries when a cited file hash changes', async () => {
 })
 
 it('excludes stale repo wiki entries unless includeStale is true', async () => {
-  const store = await openContextStore({ dbPath: tempDbPath(), cwd: '/repo', now: () => 1_700_000_000_000 })
+  const store = await openContextStore({ dbPath: makeDbPath(), cwd: '/repo', now: () => 1_700_000_000_000 })
   await store.saveRepoWikiEntries([repoWikiEntry({ projectKey: '/repo', freshness: 'stale', status: 'stale' })])
 
   await expect(store.listRepoWikiEntries()).resolves.toMatchObject({ ok: true, value: [] })
@@ -907,8 +907,11 @@ Create `packages/core/src/context/repo-wiki/evidence.ts`:
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
+import { hashContent as hashCurrentFileContent } from '../providers/shared.js'
 import { buildRepoMap, renderRepoMap } from '../../context-engine/repo-map.js'
+import { hashContent as hashIndexedFileContent } from '../../context-engine/parser/parser.js'
 import type { IndexStore } from '../../context-engine/graph/store.js'
+import type { ContextDiagnostic } from '../types.js'
 import type { RepoWikiEvidencePacket } from './types.js'
 
 export interface RepoWikiEvidenceInput {
@@ -923,16 +926,18 @@ export interface RepoWikiEvidenceBundle {
   packets: RepoWikiEvidencePacket[]
   evidenceHash: string
   createdAt: number
+  diagnostics: ContextDiagnostic[]
 }
 
-const DEFAULT_MAX_DOCS = 8
-const DEFAULT_MAX_PACKET_CHARS = 6_000
+// No hidden default caps: docs/packet size are only bounded when the caller opts in via maxDocs/maxPacketChars.
 const DOC_CANDIDATES = ['README.md', 'AGENTS.md', 'CLAUDE.md', 'GEMINI.md', 'CONTRIBUTING.md', 'package.json', 'pnpm-workspace.yaml', 'turbo.json']
 
 export function buildRepoWikiEvidencePacket(input: RepoWikiEvidenceInput): RepoWikiEvidenceBundle {
   const now = input.now ?? Date.now
+  const createdAt = now()
   const packets: RepoWikiEvidencePacket[] = []
-  const repoMap = buildRepoMap(input.indexStore, { maxFiles: 120, maxSymbols: 240, maxImportEdges: 160, maxTopSymbolsPerFile: 8 })
+  const diagnostics: ContextDiagnostic[] = []
+  const repoMap = buildRepoMap(input.indexStore)
   const repoMapContent = renderRepoMap(repoMap)
   if (repoMap.files.length > 0) {
     packets.push({
@@ -946,6 +951,21 @@ export function buildRepoWikiEvidencePacket(input: RepoWikiEvidenceInput): RepoW
   }
 
   for (const file of repoMap.files) {
+    const absolute = path.join(input.cwd, file.path)
+    let currentContent: string
+    try {
+      currentContent = readFileSync(absolute, 'utf-8')
+    } catch (error) {
+      diagnostics.push(repoWikiEvidenceDiagnostic('warning', `Repo Wiki evidence skipped unreadable indexed file ${file.path}`, createdAt))
+      continue
+    }
+    const currentIndexHash = hashIndexedFileContent(currentContent)
+    const currentCitationHash = hashCurrentFileContent(currentContent)
+    const storedIndexHash = input.indexStore.allFiles().find((item) => item.filePath === file.path)?.hash
+    if (storedIndexHash && storedIndexHash !== currentIndexHash) {
+      diagnostics.push(repoWikiEvidenceDiagnostic('warning', `Repo Wiki evidence skipped stale index packet for ${file.path}: indexed hash does not match current file hash`, createdAt))
+      continue
+    }
     packets.push({
       id: packetId('file', file.path),
       ref: file.path,
@@ -954,13 +974,13 @@ export function buildRepoWikiEvidencePacket(input: RepoWikiEvidenceInput): RepoW
         `${file.path} (${file.role}, ${file.language})`,
         ...file.topSymbols.map((symbol) => `${symbol.kind} ${symbol.name}:${symbol.line}${symbol.signature ? ` ${symbol.signature}` : ''}`),
       ].join('\n'), input.maxPacketChars),
-      hash: indexedHash(input.indexStore, file.path),
+      hash: currentCitationHash,
       relatedSymbols: file.topSymbols.map((symbol) => symbol.name),
     })
   }
 
-  const docLimit = input.maxDocs ?? DEFAULT_MAX_DOCS
-  for (const ref of DOC_CANDIDATES.slice(0, docLimit)) {
+  const docCandidates = typeof input.maxDocs === 'number' ? DOC_CANDIDATES.slice(0, Math.max(0, input.maxDocs)) : DOC_CANDIDATES
+  for (const ref of docCandidates) {
     const absolute = path.join(input.cwd, ref)
     if (!existsSync(absolute)) continue
     const content = readFileSync(absolute, 'utf-8')
@@ -975,25 +995,34 @@ export function buildRepoWikiEvidencePacket(input: RepoWikiEvidenceInput): RepoW
   }
 
   const evidenceHash = hashContent(JSON.stringify(packets.map(({ id, ref, hash, content }) => ({ id, ref, hash, content }))))
-  return { packets, evidenceHash, createdAt: now() }
+  return { packets, evidenceHash, createdAt, diagnostics }
 }
 
-function indexedHash(store: Pick<IndexStore, 'allFiles'>, filePath: string): string {
-  return store.allFiles().find((file) => file.filePath === filePath)?.hash ?? ''
-}
-
-function trimPacket(content: string, maxChars = DEFAULT_MAX_PACKET_CHARS): string {
-  return content.length <= maxChars ? content : content.slice(0, maxChars)
+function trimPacket(content: string, maxChars?: number): string {
+  return typeof maxChars === 'number' && content.length > maxChars ? content.slice(0, maxChars) : content
 }
 
 function packetId(kind: string, ref: string): string {
   return `wiki_packet_${createHash('sha1').update(`${kind}:${ref}`).digest('hex').slice(0, 16)}`
 }
 
+function repoWikiEvidenceDiagnostic(level: ContextDiagnostic['level'], message: string, createdAt: number): ContextDiagnostic {
+  return {
+    id: `diag_repo_wiki_evidence_${createHash('sha1').update(`${message}:${createdAt}`).digest('hex').slice(0, 16)}`,
+    level,
+    source: 'RepoWikiEvidence',
+    message,
+    createdAt,
+    visibleInPrimaryUi: true,
+  }
+}
+
 export function hashContent(content: string): string {
   return createHash('sha256').update(content).digest('hex')
 }
 ```
+
+The code index file hash uses the parser's sha1 hashing, while citation hashes use the current file's sha256 content hash (the same hash the session uses for file-change invalidation). Indexed-file packets are skipped with a diagnostic when the current file is unreadable or its index hash no longer matches the current file, so a stale index snapshot cannot produce a Repo Wiki citation that looks fresh.
 
 - [ ] **Step 3: Add model client**
 
@@ -1523,7 +1552,9 @@ export async function collectRepoWikiContext(request: ContextRequest, options: R
       )]
       : []
 
-    const queued = maybeQueueRepoWikiGeneration(request, options, entries.length, createdAt)
+    const activeEntryCount = summaryResult.ok ? summaryResult.value.activeEntries : 0
+    const staleEntryCount = summaryResult.ok ? summaryResult.value.staleEntries : 0
+    const queued = maybeQueueRepoWikiGeneration(request, options, activeEntryCount, staleEntryCount, createdAt)
     const status = sections.length ? 'cached' : queued ? 'indexing' : 'enabled'
     return {
       evidence: [],
@@ -1536,8 +1567,8 @@ export async function collectRepoWikiContext(request: ContextRequest, options: R
   }
 }
 
-function maybeQueueRepoWikiGeneration(request: ContextRequest, options: RepoWikiProviderOptions, activeEntryCount: number, startedAt: number): boolean {
-  if (activeEntryCount > 0) return false
+function maybeQueueRepoWikiGeneration(request: ContextRequest, options: RepoWikiProviderOptions, activeEntryCount: number, staleEntryCount: number, startedAt: number): boolean {
+  if (activeEntryCount > 0 && staleEntryCount === 0) return false
   if (!options.modelClient || !options.modelConfig) return false
   const scheduler = options.scheduler ?? repoWikiScheduler
   const scheduled = scheduler.enqueueBackground(request.cwd, 'repo_wiki_generate', async (signal) => {
@@ -1626,7 +1657,7 @@ Append to `packages/core/src/session-context.test.ts`:
 
 ```ts
 it('includes repo_wiki in the default context provider list before code', async () => {
-  const session = createTestSession()
+  const session = makeSession()
   const providerIds = (session as any).getContextProviders().map((provider: { id: string }) => provider.id)
 
   expect(providerIds.indexOf('repo_wiki')).toBeGreaterThanOrEqual(0)
@@ -1900,7 +1931,7 @@ it('invalidates repo wiki entries after a cited file changes', async () => {
     invalidateRepoWikiByFileHash: vi.fn(async () => ({ ok: true, value: { invalidatedEntries: 1 }, diagnostics: [] })),
     saveDiagnostic: vi.fn(async () => ({ ok: true, value: undefined, diagnostics: [] })),
   }
-  const session = createTestSession({ contextStore: store as any })
+  const session = makeSession({ contextStore: store as any })
   session.fileTracker.recordChange({ filePath: 'packages/core/src/session.ts', kind: 'modified' })
   await writeFile(path.join(session.config.cwd, 'packages/core/src/session.ts'), 'export class Session {}\n')
 
@@ -2011,7 +2042,7 @@ Append to `packages/core/src/tools/context-tools.test.ts`:
 
 ```ts
 it('includes repo wiki summary in context inspect payload', async () => {
-  const store = makeToolContextStore({
+  const store = makeStore({
     repoWikiSummary: { activeEntries: 2, staleEntries: 1, lastGeneratedAt: 1_700_000_000_000, lastModelId: 'claude-sonnet-4' },
   })
 
@@ -2214,13 +2245,12 @@ Append to `packages/core/src/context/context-product-evals.test.ts`:
 
 ```ts
 it('generates, stores, retrieves, and invalidates model-generated repo wiki with citations', async () => {
-  const cwd = makeEvalRepo({
-    'README.md': '# Repo\n\nUse pnpm test for verification.\n',
-    'packages/core/src/session.ts': 'export class Session {}\n',
-  })
-  const engine = getContextEngine(cwd)
+  const cwd = tempProject()
+  writeProjectFile(cwd, 'README.md', '# Repo\n\nUse pnpm test for verification.\n')
+  writeProjectFile(cwd, 'packages/core/src/session.ts', 'export class Session {}\n')
+  const engine = new ContextEngine(cwd)
   await engine.index()
-  const store = await openContextStore({ dbPath: tempDbPath(), cwd, now: () => 1 })
+  const store = await openContextStore({ dbPath: makeDbPath(), cwd, now: () => 1 })
   const evidence = buildRepoWikiEvidencePacket({ cwd, indexStore: engine.getStore(), now: () => 1 })
   const firstPacket = evidence.packets.find((packet) => packet.ref === 'packages/core/src/session.ts')!
 

@@ -23,6 +23,18 @@ describe('JDC Context ranker', () => {
     ])
   })
 
+  it('orders repo wiki after durable authority and before raw code context', () => {
+    const ranked = rankContextSections([
+      makeSection({ kind: 'code_map', id: 'code_map', title: 'Code Map', content: 'files', priority: 900, sourceProvider: 'CodeProvider', freshness: 'live' }),
+      makeSection({ kind: 'relevant_code', id: 'code', title: 'Code', content: 'snippet', priority: 900, sourceProvider: 'CodeProvider', freshness: 'live' }),
+      makeSection({ kind: 'repo_wiki', id: 'repo_wiki', title: 'Repo Wiki', content: 'architecture', priority: 100, sourceProvider: 'RepoWikiProvider', freshness: 'cached' }),
+      makeSection({ kind: 'memory', id: 'memory', title: 'Accepted Memory', content: 'durable fact', priority: 10, sourceProvider: 'MemorySignalProvider', freshness: 'cached' }),
+      makeSection({ kind: 'agent_contract', id: 'instructions', title: 'Instructions', content: 'follow rules', priority: 1, sourceProvider: 'ProjectSignalProvider', freshness: 'cached' }),
+    ])
+
+    expect(ranked.map((section) => section.id)).toEqual(['instructions', 'memory', 'repo_wiki', 'code', 'code_map'])
+  })
+
   it('deduplicates sections by citation set and normalized content while keeping the best-ranked copy', () => {
     const ranked = rankContextSections([
       makeSection({ id: 'low', content: 'Same fact', priority: 10, confidence: 0.5, citations: [citation] }),

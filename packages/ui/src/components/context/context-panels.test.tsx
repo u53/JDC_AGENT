@@ -2,6 +2,7 @@ import type { ConstraintObservabilitySnapshot, ContextInspectPayload, MemorySear
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useContextStore, type ContextProviderHealth } from '../../stores/context-store'
+import { ContextAdvancedDiagnosticsPanel } from './ContextAdvancedDiagnosticsPanel'
 import { ContextCurrentPanel } from './ContextCurrentPanel'
 import { ContextFactsPanel } from './ContextFactsPanel'
 import { ContextInspectPanel } from './ContextInspectPanel'
@@ -386,6 +387,45 @@ describe('context inspectability panels', () => {
     expect(html).toContain('94%')
     expect(html).not.toContain('发布前运行 pnpm build。')
     expect(html).not.toContain('candidate-1')
+  })
+
+  it('labels repo wiki sections in Chinese', () => {
+    const html = renderToStaticMarkup(<ContextCurrentPanel payload={{
+      ...payload,
+      bundle: {
+        ...payload.bundle!,
+        sections: [{
+          ...payload.bundle!.sections[0],
+          id: 'repo-wiki-section-1',
+          kind: 'repo_wiki',
+          title: 'Repo Wiki',
+          content: 'Session injects context.',
+          sourceProvider: 'RepoWikiProvider',
+        }],
+      },
+    }} loading={false} error={null} />)
+
+    expect(html).toContain('仓库 Wiki')
+    expect(html).toContain('RepoWikiProvider')
+    expect(html).toContain('仓库 Wiki 命中')
+  })
+
+  it('shows repo wiki summary in advanced diagnostics', () => {
+    const html = renderToStaticMarkup(<ContextAdvancedDiagnosticsPanel
+      inspect={{ data: { ...payload, repoWiki: { activeEntries: 2, staleEntries: 1, lastGeneratedAt: 1_700_000_000_000, lastModelId: 'claude-sonnet-4', lastDiagnostic: 'citation stale' }, advancedDiagnostics: payload.advancedDiagnostics }, loading: false, error: null, loadedAt: 1 }}
+      harvest={{ data: null, loading: false, error: null, loadedAt: 1 }}
+      memoryReview={{ data: null, loading: false, error: null, loadedAt: 1 }}
+      providerHealth={{ data: null, loading: false, error: null, loadedAt: 1 }}
+      refresh={{ data: null, loading: false, error: null, loadedAt: 1 }}
+      onReloadDiagnostics={() => {}}
+      onReindexCode={() => {}}
+      onReadProviderStatus={() => {}}
+    />)
+
+    expect(html).toContain('仓库 Wiki')
+    expect(html).toContain('claude-sonnet-4')
+    expect(html).toContain('可用条目')
+    expect(html).toContain('citation stale')
   })
 
   it('renders current injected context sections in Chinese with citations and suppressed count', () => {

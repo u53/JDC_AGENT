@@ -63,6 +63,7 @@ import { classifyHarvestCandidate } from './context/safety.js'
 import { assistantMessagesContainProjectSummary, isHarvestConfirmationSaveTurn } from './context/harvest-router.js'
 import { captureHarvestModelBinding } from './context/model-binding.js'
 import { createProviderDistillerModelClient } from './context/distillers/index.js'
+import { createProviderRepoWikiModelClient } from './context/repo-wiki/index.js'
 import { deriveVerificationRequirements } from './constraints/verification-requirements.js'
 import { evaluateTurnEndGate } from './constraints/turn-end-gate.js'
 import { hashContent } from './context/providers/shared.js'
@@ -76,6 +77,7 @@ import {
   collectIdeContext,
   collectMemoryContext,
   collectProjectContext,
+  collectRepoWikiContext,
   collectRuntimeContext,
   collectWorkflowContext,
 } from './context/providers/index.js'
@@ -551,6 +553,15 @@ export class Session {
       { id: 'git', collect: (request) => collectGitContext(request, { enabled: toggles.git }) },
       { id: 'project', collect: (request) => collectProjectContext(request, { enabled: toggles.project }) },
       { id: 'workflow', collect: (request) => collectWorkflowContext(request, { enabled: toggles.workflow }) },
+      { id: 'repo_wiki', collect: async (request) => collectRepoWikiContext(request, {
+        enabled: toggles.repo_wiki,
+        store: await this.getContextStore(),
+        scheduler: this.contextScheduler,
+        modelClient: createProviderRepoWikiModelClient(this.provider),
+        modelConfig: this.config.modelConfig,
+        providerProtocol: this.resolveCurrentProviderProtocol(this.resolveCurrentSessionModelMetadata().protocol) ?? undefined,
+        modelProfileId: this.modelProfile?.id,
+      }) },
       { id: 'code', collect: (request) => collectCodeContext(request, { enabled: toggles.code, scheduler: this.contextScheduler }) },
     ]
   }
@@ -1198,7 +1209,17 @@ export class Session {
         try {
           const absolute = path.isAbsolute(filePath) ? filePath : path.join(this.config.cwd, filePath)
           const content = await readFile(absolute, 'utf-8')
-          await store.invalidateByFileHash(filePath, hashContent(content))
+          const hash = hashContent(content)
+          await store.invalidateByFileHash(filePath, hash)
+          try {
+            await store.invalidateRepoWikiByFileHash?.(filePath, hash)
+          } catch (error) {
+            try {
+              await store.saveDiagnostic(makeRuntimeContextDiagnostic('Repo Wiki file-hash invalidation failed without blocking foreground chat', error))
+            } catch {
+              // Context failures must not escape into foreground chat.
+            }
+          }
         } catch {
           // Missing/unreadable file (e.g. deleted) — skip; invalidation is best-effort.
         }

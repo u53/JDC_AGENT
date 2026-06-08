@@ -86,4 +86,31 @@ describe('JdcToolCard', () => {
     expect(html).not.toContain('PARTIAL RAW RESULT')
     expect(html).not.toContain('aria-expanded')
   })
+
+  it('summarizes repo wiki sections without dumping raw inspect blobs', () => {
+    const html = renderToStaticMarkup(
+      <JdcToolCard
+        event={{
+          type: 'complete',
+          toolName: 'JdcContextInspect',
+          toolUseId: 'tool-jdc-inspect',
+          input: { includeRepoWikiSamples: true },
+          result: {
+            content: JSON.stringify({
+              repoWiki: { activeEntries: 2, staleEntries: 1, lastModelId: 'claude-sonnet-4', lastDiagnostic: 'citation stale' },
+              bundle: { sections: [{ kind: 'repo_wiki', title: 'Repo Wiki', content: 'RAW HIDDEN REASONING SHOULD NOT RENDER', sourceProvider: 'RepoWikiProvider' }] },
+            }),
+            isError: false,
+          },
+        } as any}
+      />,
+    )
+
+    expect(html).toContain('仓库 Wiki')
+    expect(html).toContain('2 可用')
+    expect(html).toContain('1 过期')
+    expect(html).toContain('claude-sonnet-4')
+    expect(html).not.toContain('RAW HIDDEN REASONING SHOULD NOT RENDER')
+    expect(html).not.toContain('citation stale')
+  })
 })

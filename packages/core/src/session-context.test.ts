@@ -1,6 +1,6 @@
 import { ParallelExecutor } from './parallel-executor.js'
 import { strictToolGroundingProfile } from './model-profile.js'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -112,6 +112,58 @@ describe('Session JDC Context Engine runtime integration', () => {
     expect(defs).not.toContain('JdcContextRefresh')
     expect(defs).toContain('JdcMemorySearch')
     expect(defs).toContain('JdcMemoryWrite')
+  })
+
+  it('includes repo_wiki in the default context provider list before code', async () => {
+    const dir = makeTempDir()
+    const history = new ConversationHistory(path.join(dir, 'history.db'))
+    await history.ensureReady()
+    history.createSession('session_provider_order', 'Project', dir)
+    const session = new Session(
+      { id: 'session_provider_order', projectName: 'Project', cwd: dir, modelConfig: { model: 'test-model', maxTokens: 1024, contextWindow: 128_000 } },
+      providerFromChunks([{ type: 'text_delta', text: 'ok' }]),
+      history,
+    )
+
+    const providerIds = (session as any).getContextProviders().map((provider: { id: string }) => provider.id)
+
+    expect(providerIds.indexOf('repo_wiki')).toBeGreaterThanOrEqual(0)
+    expect(providerIds.indexOf('repo_wiki')).toBeLessThan(providerIds.indexOf('code'))
+  })
+
+  it('invalidates repo wiki entries after a cited file changes', async () => {
+    const store = makeContextStore()
+    const session = await makeSession({ contextStore: store })
+    const filePath = 'packages/core/src/session.ts'
+    const absolutePath = path.join((session as any).config.cwd, filePath)
+    mkdirSync(path.dirname(absolutePath), { recursive: true })
+    writeFileSync(absolutePath, 'export class Session {}\n')
+    await (session as any).fileTracker.recordChange(filePath, 'export class OldSession {}\n', 'export class Session {}\n', 'toolu_write', 1)
+
+    await (session as any).invalidateStaleFileFactsAfterRunLoop()
+
+    expect(store.invalidateByFileHash).toHaveBeenCalledWith(filePath, expect.any(String))
+    expect(store.invalidateRepoWikiByFileHash).toHaveBeenCalledWith(filePath, expect.any(String))
+  })
+
+  it('records repo wiki invalidation diagnostics without blocking file fact invalidation', async () => {
+    const store = makeContextStore()
+    store.invalidateRepoWikiByFileHash.mockRejectedValueOnce(new Error('repo wiki store locked'))
+    const session = await makeSession({ contextStore: store })
+    const filePath = 'packages/core/src/session.ts'
+    const absolutePath = path.join((session as any).config.cwd, filePath)
+    mkdirSync(path.dirname(absolutePath), { recursive: true })
+    writeFileSync(absolutePath, 'export class Session {}\n')
+    await (session as any).fileTracker.recordChange(filePath, 'export class OldSession {}\n', 'export class Session {}\n', 'toolu_write', 1)
+
+    await expect((session as any).invalidateStaleFileFactsAfterRunLoop()).resolves.toBeUndefined()
+
+    expect(store.invalidateByFileHash).toHaveBeenCalledWith(filePath, expect.any(String))
+    expect(store.saveDiagnostic).toHaveBeenCalledWith(expect.objectContaining({
+      level: 'error',
+      source: 'SessionContextRuntime',
+      message: expect.stringContaining('Repo Wiki file-hash invalidation failed without blocking foreground chat'),
+    }))
   })
 
   it('shares live accepted context facts across same-cwd session stores', async () => {
@@ -1424,6 +1476,7 @@ function makeContextStore(options: { queryError?: Error; saveHarvestJobDelayMs?:
     }),
     listAdvancedDiagnostics: vi.fn(async () => ({ ok: true, value: { rejected: [], diagnostics: [], harvestJobs: [] }, diagnostics: [] })),
     invalidateByFileHash: vi.fn(async () => ({ ok: true, value: { invalidatedFacts: 0 }, diagnostics: [] })),
+    invalidateRepoWikiByFileHash: vi.fn(async () => ({ ok: true, value: { invalidatedEntries: 0 }, diagnostics: [] })),
     enforceQuotas: vi.fn(async () => ({ ok: true, value: { deletedFacts: 0, deletedBundles: 0, deletedRawEvidence: 0, deletedRejectedCandidates: 0 }, diagnostics: [] })),
     getSchemaInfo: vi.fn(async () => ({ ok: true, value: { version: 1, dbPath: '/tmp/context.db' }, diagnostics: [] })),
     listBundleSnapshots: vi.fn(async () => ({ ok: true, value: [], diagnostics: [] })),

@@ -9,10 +9,26 @@ const KIND_WEIGHT: Record<ContextSection['kind'], number> = {
   conversation_state: 700,
   relevant_code: 650,
   git_state: 600,
+  repo_wiki: 550,
   project_profile: 500,
   code_map: 450,
   memory: 350,
   diagnostics: 100,
+}
+
+const KIND_AUTHORITY_TIER: Record<ContextSection['kind'], number> = {
+  agent_contract: 12,
+  user_intent: 11,
+  runtime_state: 9,
+  ide_state: 9,
+  conversation_state: 8,
+  git_state: 7,
+  project_profile: 7,
+  diagnostics: 7,
+  memory: 6,
+  repo_wiki: 5,
+  relevant_code: 4,
+  code_map: 3,
 }
 
 const FRESHNESS_WEIGHT: Record<ContextSection['freshness'], number> = {
@@ -28,8 +44,8 @@ export interface RankedContextSection extends ContextSection {
 
 export function rankContextSections(sections: ContextSection[]): ContextSection[] {
   const ranked = sections
-    .map((section, index) => ({ ...section, rankScore: scoreSection(section), index }))
-    .sort((a, b) => b.rankScore - a.rankScore || a.index - b.index)
+    .map((section, index) => ({ ...section, authorityTier: KIND_AUTHORITY_TIER[section.kind], rankScore: scoreSection(section), index }))
+    .sort((a, b) => b.authorityTier - a.authorityTier || b.rankScore - a.rankScore || a.index - b.index)
 
   const seen = new Set<string>()
   const result: ContextSection[] = []
@@ -37,7 +53,7 @@ export function rankContextSections(sections: ContextSection[]): ContextSection[
     const key = dedupeKey(section)
     if (seen.has(key)) continue
     seen.add(key)
-    const { rankScore: _rankScore, index: _index, ...clean } = section
+    const { authorityTier: _authorityTier, rankScore: _rankScore, index: _index, ...clean } = section
     result.push(clean)
   }
   return result

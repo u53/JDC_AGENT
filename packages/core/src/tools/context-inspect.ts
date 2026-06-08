@@ -10,6 +10,7 @@ import {
   HarvestStatusSchema,
 } from '../context/schemas.js'
 import { openContextStore, type ContextAdvancedDiagnostics, type ContextStore, type ContextStoreResult, type RejectedCandidateRecord } from '../context/store.js'
+import type { RepoWikiEntry, RepoWikiSummary } from '../context/repo-wiki/index.js'
 import type { ContextBundle, ContextDiagnostic, ContextSection, HarvestJob, HarvestStatus, ProviderHealth } from '../context/types.js'
 
 const TokenCostSchema = z.object({ tokenEstimate: z.number().int().nonnegative(), source: z.string().optional(), droppedTokens: z.number().int().nonnegative().optional() })
@@ -46,6 +47,22 @@ const AdvancedDiagnosticsSchema = z.object({
   harvestJobs: z.array(HarvestJobSchema),
   noop: NoopDiagnosticsSummarySchema,
 })
+const RepoWikiInspectSummarySchema = z.object({
+  activeEntries: z.number().int().nonnegative(),
+  staleEntries: z.number().int().nonnegative(),
+  lastGeneratedAt: z.number().int().nonnegative().optional(),
+  lastModelId: z.string().optional(),
+  lastDiagnostic: z.string().optional(),
+})
+const RepoWikiInspectSampleSchema = z.object({
+  id: z.string(),
+  kind: z.string(),
+  title: z.string(),
+  citationRefs: z.array(z.string()),
+  confidence: z.number(),
+  freshness: z.string(),
+  status: z.string(),
+})
 export const ContextInspectPayloadSchema = z.object({
   status: z.enum(['available', 'empty', 'disabled', 'unavailable']),
   inspectedAt: z.number(),
@@ -59,6 +76,7 @@ export const ContextInspectPayloadSchema = z.object({
   diagnostics: z.array(ContextDiagnosticSchema),
   advancedDiagnostics: AdvancedDiagnosticsSchema.optional(),
   schemaInfo: z.object({ version: z.number(), dbPath: z.string(), backupPath: z.string().optional() }).optional(),
+  repoWiki: RepoWikiInspectSummarySchema.extend({ samples: z.array(RepoWikiInspectSampleSchema).optional() }).optional(),
 })
 
 export type ContextInspectPayload = z.infer<typeof ContextInspectPayloadSchema>
@@ -68,6 +86,7 @@ export interface InspectContextInput {
   bundleId?: string
   includeExpiredRejected?: boolean
   includeAdvancedDiagnostics?: boolean
+  includeRepoWikiSamples?: boolean
 }
 
 export interface InspectContextOptions {
@@ -86,7 +105,9 @@ export async function inspectContext(input: InspectContextInput = {}, options: I
 
   try {
     const store = options.store ?? await openContextStore({ cwd: options.cwd })
-    const [bundles, acceptedProjectFacts, storedDiagnostics, schemaInfo, advancedDiagnostics, rejectedMemoryReview] = await Promise.all([
+    const repoWikiSummaryPromise = store.getRepoWikiSummary ? store.getRepoWikiSummary() : Promise.resolve(successResult<RepoWikiSummary | undefined>(undefined))
+    const repoWikiEntriesPromise = input.includeRepoWikiSamples && store.listRepoWikiEntries ? store.listRepoWikiEntries({ includeStale: true, includeArchived: false }) : Promise.resolve(successResult<RepoWikiEntry[]>([]))
+    const [bundles, acceptedProjectFacts, storedDiagnostics, schemaInfo, advancedDiagnostics, rejectedMemoryReview, repoWikiSummary, repoWikiEntries] = await Promise.all([
       store.listBundleSnapshots(input.sessionId),
       // Accepted durable facts are project-scoped; sessionId only narrows session diagnostics and bundle inspection.
       store.listAcceptedProjectFacts(),
@@ -98,8 +119,10 @@ export async function inspectContext(input: InspectContextInput = {}, options: I
       input.includeExpiredRejected
         ? store.listRejectedCandidates({ sessionId: input.sessionId, includeExpired: true })
         : Promise.resolve(successResult([])),
+      repoWikiSummaryPromise,
+      repoWikiEntriesPromise,
     ])
-    const rawDiagnostics = [...collectDiagnostics(bundles, acceptedProjectFacts, storedDiagnostics, schemaInfo, advancedDiagnostics, rejectedMemoryReview), ...(storedDiagnostics.ok ? storedDiagnostics.value : [])]
+    const rawDiagnostics = [...collectDiagnostics(bundles, acceptedProjectFacts, storedDiagnostics, schemaInfo, advancedDiagnostics, rejectedMemoryReview, repoWikiSummary, repoWikiEntries), ...(storedDiagnostics.ok ? storedDiagnostics.value : [])]
     const allDiagnostics = filterPrimaryDiagnostics(rawDiagnostics)
     if (!bundles.ok || !acceptedProjectFacts.ok || !storedDiagnostics.ok || !schemaInfo.ok || !advancedDiagnostics.ok || !rejectedMemoryReview.ok) return ContextInspectPayloadSchema.parse(emptyPayload('unavailable', now(), allDiagnostics))
 
@@ -121,6 +144,7 @@ export async function inspectContext(input: InspectContextInput = {}, options: I
       diagnostics: allDiagnostics,
       advancedDiagnostics: input.includeAdvancedDiagnostics ? advanced : undefined,
       schemaInfo: schemaInfo.ok ? schemaInfo.value : undefined,
+      repoWiki: repoWikiSummary.ok && repoWikiSummary.value ? { ...repoWikiSummary.value, samples: input.includeRepoWikiSamples && repoWikiEntries.ok ? repoWikiEntries.value.map(repoWikiSample) : undefined } : undefined,
     }
     return ContextInspectPayloadSchema.parse(payload)
   } catch (error) {
@@ -132,11 +156,11 @@ export function createContextInspectTool(options: InspectContextOptions = {}): T
   return {
     definition: {
       name: 'JdcContextInspect',
-      description: 'Inspect the latest JDC Context Engine injected bundle, citations, confidence, freshness, token cost, harvest queue, memory review, and provider health.',
-      inputSchema: { type: 'object', properties: { sessionId: { type: 'string' }, bundleId: { type: 'string' }, includeExpiredRejected: { type: 'boolean' }, includeAdvancedDiagnostics: { type: 'boolean' } } },
+      description: 'Inspect the latest JDC Context Engine injected bundle, citations, confidence, freshness, token cost, harvest queue, memory review, provider health, and Repo Wiki summary.',
+      inputSchema: { type: 'object', properties: { sessionId: { type: 'string' }, bundleId: { type: 'string' }, includeExpiredRejected: { type: 'boolean' }, includeAdvancedDiagnostics: { type: 'boolean' }, includeRepoWikiSamples: { type: 'boolean' } } },
     },
     async execute(input: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-      const payload = await inspectContext({ sessionId: stringOrUndefined(input.sessionId), bundleId: stringOrUndefined(input.bundleId), includeExpiredRejected: input.includeExpiredRejected === true, includeAdvancedDiagnostics: input.includeAdvancedDiagnostics === true }, { ...options, cwd: context.cwd })
+      const payload = await inspectContext({ sessionId: stringOrUndefined(input.sessionId), bundleId: stringOrUndefined(input.bundleId), includeExpiredRejected: input.includeExpiredRejected === true, includeAdvancedDiagnostics: input.includeAdvancedDiagnostics === true, includeRepoWikiSamples: input.includeRepoWikiSamples === true }, { ...options, cwd: context.cwd })
       return { content: JSON.stringify(payload, null, 2) }
     },
   }
@@ -235,8 +259,20 @@ function isAbortLikeText(text: string): boolean {
   return /request was aborted|aborted|abort|cancelled|canceled|timeout|timed out/i.test(text)
 }
 
+function repoWikiSample(entry: RepoWikiEntry): z.infer<typeof RepoWikiInspectSampleSchema> {
+  return {
+    id: entry.id,
+    kind: entry.kind,
+    title: entry.title,
+    citationRefs: entry.citations.map((citation) => citation.ref),
+    confidence: entry.confidence,
+    freshness: entry.freshness,
+    status: entry.status,
+  }
+}
+
 function emptyPayload(status: ContextInspectPayload['status'], inspectedAt: number, diagnostics: ContextDiagnostic[]): ContextInspectPayload {
-  return { status, inspectedAt, bundle: null, acceptedProjectFacts: [], droppedSections: [], providerHealth: [], providerTimings: [], harvestQueue: { jobs: [], summary: summarizeHarvest([]) }, memoryReview: { rejected: [] }, diagnostics }
+  return { status, inspectedAt, bundle: null, acceptedProjectFacts: [], droppedSections: [], providerHealth: [], providerTimings: [], harvestQueue: { jobs: [], summary: summarizeHarvest([]) }, memoryReview: { rejected: [] }, diagnostics, repoWiki: undefined }
 }
 
 function emptyAdvancedDiagnostics(): ContextAdvancedDiagnostics {

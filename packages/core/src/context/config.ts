@@ -7,6 +7,7 @@ export const DEFAULT_CONTEXT_ENGINE_CONFIG: ContextEngineConfig = {
   inspectEnabled: true,
   providerToggles: {
     code: true,
+    repo_wiki: true,
     project: true,
     workflow: true,
     git: true,

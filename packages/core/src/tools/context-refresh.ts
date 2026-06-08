@@ -9,6 +9,7 @@ import {
   collectIdeContext,
   collectMemoryContext,
   collectProjectContext,
+  collectRepoWikiContext,
   collectRuntimeContext,
   collectWorkflowContext,
   getCodeProviderHealth,
@@ -17,7 +18,7 @@ import { openContextStore, type ContextStore } from '../context/store.js'
 import { ContextDiagnosticSchema, ContextModeSchema, ContextProviderIdSchema } from '../context/schemas.js'
 import type { ContextDiagnostic, ContextProviderId, ContextRequest, ProviderHealth } from '../context/types.js'
 import { inspectableBundle, InspectableContextBundleSchema, ProviderHealthSchema, ProviderTimingSchema } from './context-inspect.js'
-import { nowFromRequest, providerHealth } from '../context/providers/shared.js'
+import { diagnostic as providerDiagnostic, nowFromRequest, providerHealth } from '../context/providers/shared.js'
 
 const RefreshInputSchema = z.object({
   sessionId: z.string().min(1),
@@ -195,8 +196,31 @@ export function createDefaultRefreshProviders(configInput: ContextEngineConfigIn
     { id: 'git', collect: (request) => collectGitContext(request, { enabled: toggles.git }), health: (request) => providerHealth('git', toggles.git ? 'enabled' : 'disabled', nowFromRequest(request)) },
     { id: 'project', collect: (request) => collectProjectContext(request, { enabled: toggles.project }), health: (request) => providerHealth('project', toggles.project ? 'enabled' : 'disabled', nowFromRequest(request)) },
     { id: 'workflow', collect: (request) => collectWorkflowContext(request, { enabled: toggles.workflow }), health: (request) => providerHealth('workflow', toggles.workflow ? 'enabled' : 'disabled', nowFromRequest(request)) },
+    { id: 'repo_wiki', collect: (request) => collectRepoWikiContext(request, { enabled: toggles.repo_wiki, store: options.store as any }), health: (request) => getRepoWikiProviderHealth(request, { enabled: toggles.repo_wiki, store: options.store }) },
     { id: 'code', collect: (request) => collectCodeContext(request, { enabled: toggles.code }), health: (request) => getCodeProviderHealth(request, { enabled: toggles.code }) },
   ]
+}
+
+async function getRepoWikiProviderHealth(request: ContextRequest, options: { enabled?: boolean; store?: ContextStore }): Promise<ProviderHealth> {
+  const createdAt = nowFromRequest(request)
+  if (options.enabled === false) return providerHealth('repo_wiki', 'disabled', createdAt)
+  if (!options.store?.getRepoWikiSummary) {
+    const diag = providerDiagnostic('RepoWikiProvider', 'warning', 'Repo Wiki store summary is unavailable; provider health is degraded.', createdAt)
+    return providerHealth('repo_wiki', 'failed', createdAt, diag)
+  }
+
+  const summary = await options.store.getRepoWikiSummary()
+  if (!summary.ok) {
+    const diag = summary.diagnostics[0] ?? providerDiagnostic('RepoWikiProvider', 'warning', 'Repo Wiki summary is unavailable; provider health is degraded.', createdAt)
+    return providerHealth('repo_wiki', 'failed', createdAt, diag)
+  }
+
+  const status = summary.value.staleEntries > 0 ? 'stale' : summary.value.activeEntries > 0 ? 'cached' : 'enabled'
+  const diagnosticParts = [`active=${summary.value.activeEntries}`, `stale=${summary.value.staleEntries}`]
+  if (summary.value.lastModelId) diagnosticParts.push(`model=${summary.value.lastModelId}`)
+  if (summary.value.lastDiagnostic) diagnosticParts.push(`last=${summary.value.lastDiagnostic}`)
+  const diag = providerDiagnostic('RepoWikiProvider', status === 'stale' ? 'warning' : 'info', `Repo Wiki cached summary: ${diagnosticParts.join(' ')}.`, createdAt)
+  return providerHealth('repo_wiki', status, createdAt, diag)
 }
 
 function providerIds(providers: RefreshProvider[]): ContextProviderId[] {

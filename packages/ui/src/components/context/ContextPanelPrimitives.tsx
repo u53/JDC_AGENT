@@ -136,6 +136,7 @@ export function kindLabel(kind: string): string {
     project_profile: '项目画像',
     code_map: '代码地图',
     relevant_code: '相关代码',
+    repo_wiki: '仓库 Wiki',
     git_state: 'Git 状态',
     memory: '记忆',
     conversation_state: '会话状态',

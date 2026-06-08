@@ -66,6 +66,23 @@ function countResultRows(content: string): number {
   return n
 }
 
+function repoWikiSummary(content: string): string {
+  if (!content.trim()) return ''
+  try {
+    const parsed = JSON.parse(content) as { repoWiki?: { activeEntries?: unknown; staleEntries?: unknown; lastModelId?: unknown }; bundle?: { sections?: Array<{ kind?: unknown }> } }
+    const repoWiki = parsed.repoWiki
+    const hasRepoWikiSection = Array.isArray(parsed.bundle?.sections) && parsed.bundle.sections.some((section) => section.kind === 'repo_wiki')
+    if (!repoWiki && !hasRepoWikiSection) return ''
+    const parts = ['仓库 Wiki']
+    if (typeof repoWiki?.activeEntries === 'number') parts.push(`${repoWiki.activeEntries} 可用`)
+    if (typeof repoWiki?.staleEntries === 'number') parts.push(`${repoWiki.staleEntries} 过期`)
+    if (typeof repoWiki?.lastModelId === 'string' && repoWiki.lastModelId) parts.push(repoWiki.lastModelId)
+    return parts.join(' · ')
+  } catch {
+    return /repo_wiki/.test(content) ? '仓库 Wiki' : ''
+  }
+}
+
 function truncate(value: string, max = 52): string {
   const normalized = value.replace(/\s+/g, ' ').trim()
   return normalized.length > max ? `${normalized.slice(0, max - 1)}…` : normalized
@@ -95,10 +112,11 @@ export function JdcToolCard({ event, input, result, name }: ToolCardRouterProps)
   const content = event?.result?.content || result?.content || ''
   const summary = meta.summary(toolInput)
   const rowCount = status === 'done' && content ? countResultRows(content) : 0
+  const wikiSummary = status === 'done' ? repoWikiSummary(content) : ''
   const detailParts = [
     phaseLabel(status),
     meta.label,
-    summary ? truncate(summary) : '',
+    wikiSummary || (summary ? truncate(summary) : ''),
     rowCount > 0 ? `${rowCount} 项` : '',
   ].filter(Boolean)
   const showRail = status !== 'done'

@@ -23,13 +23,13 @@ export const ContextScopeSchema = z.enum(['global', 'project', 'repo', 'session'
 export const MemoryScopeSchema = z.enum(['global', 'project', 'repo', 'session'])
 export const EvidenceKindSchema = z.enum(['file', 'git', 'tool_event', 'message', 'memory', 'ide', 'config', 'task', 'diagnostic'])
 export const ContextFactKindSchema = z.enum(['project_profile', 'architecture_decision', 'module_boundary', 'user_preference', 'current_goal', 'runtime_error_chain', 'code_entrypoint', 'known_issue', 'project_convention', 'workflow_rule', 'team_decision', 'task_result', 'artifact_summary', 'qa_issue'])
-export const ContextSectionKindSchema = z.enum(['agent_contract', 'user_intent', 'project_profile', 'code_map', 'relevant_code', 'git_state', 'memory', 'conversation_state', 'runtime_state', 'ide_state', 'diagnostics'])
+export const ContextSectionKindSchema = z.enum(['agent_contract', 'user_intent', 'project_profile', 'code_map', 'relevant_code', 'repo_wiki', 'git_state', 'memory', 'conversation_state', 'runtime_state', 'ide_state', 'diagnostics'])
 export const SkipReasonSchema = z.enum(['greeting_or_smalltalk', 'no_new_fact', 'too_short', 'duplicate_of_existing_context', 'low_confidence', 'sensitive_content', 'rate_limited', 'model_noop', 'cancelled', 'timeout'])
 export const HarvestStatusSchema = z.enum(['queued', 'classified', 'distilling', 'validating', 'accepted', 'pending_review', 'rejected', 'skipped', 'failed'])
 export const ProviderProtocolSchema = z.enum(['anthropic', 'openai-chat', 'openai-responses'])
 export const ContextActorSchema = z.enum(['main_session', 'subagent', 'team_pm', 'team_worker', 'system', 'user'])
 export const MemoryRecordKindSchema = z.enum(['user_preference', 'project_convention', 'architecture_decision', 'known_issue', 'workflow_hint'])
-export const ContextProviderIdSchema = z.enum(['code', 'project', 'workflow', 'git', 'conversation', 'memory', 'runtime', 'ide'])
+export const ContextProviderIdSchema = z.enum(['code', 'repo_wiki', 'project', 'workflow', 'git', 'conversation', 'memory', 'runtime', 'ide'])
 
 const ContextOwnershipSchema = z.object({
   authority: z.enum([

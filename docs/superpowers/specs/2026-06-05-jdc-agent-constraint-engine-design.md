@@ -1459,6 +1459,45 @@ Why seventh:
 
 - Users should see the system working, but UI should not be required for correctness.
 
+### Phase 8: Repository Wiki Durable Context
+
+Deliver:
+
+- durable Repo Wiki entries stored in the existing project context store;
+- model-generated architecture/workflow/convention summaries accepted only from cited evidence packets;
+- foreground `repo_wiki` context provider that reads cached entries and never performs heavy generation inline;
+- background generation/refresh scheduling when no active entries exist or stale entries are detected;
+- retrieval ordering that places Repo Wiki after high-authority instructions and durable memory, but before raw code context;
+- file-hash invalidation for Wiki entries that cite changed files;
+- Context Inspect and context panel visibility for active/stale counts, generation metadata, diagnostics, and optional samples.
+
+Why eighth:
+
+- Earlier phases make retrieval, verification, profiles, and UI observability reliable enough to add a derived repository knowledge layer.
+- Repo Wiki summarizes stable project knowledge so repeated sessions do not need to rediscover the same architecture from raw files.
+- It remains lower authority than explicit instructions and accepted memory, preserving the evidence-first hierarchy.
+
+Implementation decision:
+
+- Repo Wiki generation is evidence-limited, not token-cap-limited: callers may explicitly cap evidence packets, but the engine does not add hidden default caps.
+- Generated entries store citations, related files/symbols, confidence, freshness, lifecycle status, model metadata, and diagnostics, but not hidden reasoning.
+- Foreground chat and Context Inspect only read cached store state. Heavy generation, indexing, and refresh work stay in background paths.
+- Stale cited file hashes mark entries stale and schedule refresh rather than silently serving obsolete summaries as fresh context.
+
+### Eval 11: Repo Wiki Generation, Retrieval, And Invalidation
+
+Scenario:
+
+- A project is indexed.
+- A fake Repo Wiki model generates an architecture entry from a cited file evidence packet.
+- The entry is stored, retrieved by a matching user question, and then the cited file hash changes.
+
+Expected:
+
+- The stored entry is rendered as `repo_wiki` context with file citations.
+- It ranks as cached derived context, not as a high-authority instruction.
+- File-hash invalidation marks the entry stale so future foreground turns can refresh it in the background.
+
 ### Phase 8: Repo Wiki And Long-Term Knowledge
 
 Deliver:

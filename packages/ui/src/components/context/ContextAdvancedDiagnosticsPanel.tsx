@@ -55,6 +55,21 @@ export function ContextAdvancedDiagnosticsPanel({ inspect, harvest, memoryReview
           </div>
         )}
 
+        {payload?.repoWiki && (
+          <div className="rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-2 text-[11px]">
+            <div className="text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]">仓库 Wiki</div>
+            <div className="mt-2 grid gap-1.5 [grid-template-columns:repeat(auto-fit,minmax(90px,1fr))]">
+              <Metric label="可用条目" value={payload.repoWiki.activeEntries} />
+              <Metric label="过期条目" value={payload.repoWiki.staleEntries} />
+              <Metric label="模型" value={payload.repoWiki.lastModelId ?? '未报告'} />
+              <Metric label="生成时间" value={payload.repoWiki.lastGeneratedAt ? formatDate(payload.repoWiki.lastGeneratedAt) : '未报告'} />
+            </div>
+            {payload.repoWiki.lastDiagnostic && (
+              <div className="mt-2 whitespace-normal break-words text-[10px] text-[var(--muted)] [overflow-wrap:anywhere]">{payload.repoWiki.lastDiagnostic}</div>
+            )}
+          </div>
+        )}
+
         {refresh.error && <PanelState title="后台重建失败" message={refresh.error} />}
         {refresh.data && (
           <div className="grid grid-cols-2 gap-2">

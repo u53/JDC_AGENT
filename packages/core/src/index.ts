@@ -39,6 +39,12 @@ export { IdeManager } from './ide/index.js'
 export type { IdeConnection, IdeConnectionStatus, SelectionData, AtMentionData, OpenDiffParams, OpenDiffResult, DiagnosticFile, IdeCallbacks } from './ide/index.js'
 export { ContextEngine, getContextEngine, disposeContextEngine, getContextEnginePromptSegment } from './context-engine/index.js'
 export { openContextStore } from './context/store.js'
+export type {
+  RepoWikiEntry,
+  RepoWikiEntryKind,
+  RepoWikiEntryQuery,
+  RepoWikiSummary,
+} from './context/repo-wiki/index.js'
 export { ensureCodeIndexJob } from './context/providers/code-provider.js'
 export type { SymbolNode, EngineStats, SymbolLocation, NodeDetail, ContextResult } from './context-engine/index.js'
 export {

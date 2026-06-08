@@ -113,6 +113,7 @@ function injectionReason(section: InspectableSection): string {
   if (section.kind === 'memory') return '项目事实命中'
   if (section.kind === 'project_profile') return '项目画像匹配'
   if (section.kind === 'relevant_code') return '相关代码匹配'
+  if (section.kind === 'repo_wiki') return '仓库 Wiki 命中'
   if (section.kind === 'runtime_state') return '运行状态相关'
   if (section.kind === 'ide_state') return '编辑器状态相关'
   if (section.kind === 'git_state') return 'Git 状态相关'

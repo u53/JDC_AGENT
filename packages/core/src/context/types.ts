@@ -10,7 +10,7 @@ export type EvidenceKind = 'file' | 'git' | 'tool_event' | 'message' | 'memory' 
 export type ContextFactKind = 'project_profile' | 'architecture_decision' | 'module_boundary' | 'user_preference' | 'current_goal' | 'runtime_error_chain' | 'code_entrypoint' | 'known_issue' | 'project_convention' | 'workflow_rule' | 'team_decision' | 'task_result' | 'artifact_summary' | 'qa_issue'
 export const AUTO_ACCEPT_CONTEXT_FACT_KINDS = ['project_profile', 'architecture_decision', 'module_boundary', 'project_convention', 'workflow_rule', 'code_entrypoint', 'runtime_error_chain', 'team_decision', 'task_result', 'artifact_summary', 'qa_issue'] as const satisfies readonly ContextFactKind[]
 export type AutoAcceptContextFactKind = typeof AUTO_ACCEPT_CONTEXT_FACT_KINDS[number]
-export type ContextSectionKind = 'agent_contract' | 'user_intent' | 'project_profile' | 'code_map' | 'relevant_code' | 'git_state' | 'memory' | 'conversation_state' | 'runtime_state' | 'ide_state' | 'diagnostics'
+export type ContextSectionKind = 'agent_contract' | 'user_intent' | 'project_profile' | 'code_map' | 'relevant_code' | 'repo_wiki' | 'git_state' | 'memory' | 'conversation_state' | 'runtime_state' | 'ide_state' | 'diagnostics'
 export type ContextEvidenceRequirementKind = 'relevant_code' | 'runtime_or_code' | 'diff_or_relevant_code' | 'project_doc' | 'repo_map'
 export type ContextEvidenceRequirementPriority = 'must' | 'should'
 export type ContextEvidenceRequirementStatus = 'missing' | 'satisfied'
@@ -20,7 +20,7 @@ export type ProviderProtocol = 'anthropic' | 'openai-chat' | 'openai-responses'
 export type ContextActor = 'main_session' | 'subagent' | 'team_pm' | 'team_worker' | 'system' | 'user'
 export type MemoryTrustMode = 'manual_review' | 'auto_accept_high_confidence'
 export type MemoryRecordKind = 'user_preference' | 'project_convention' | 'architecture_decision' | 'known_issue' | 'workflow_hint'
-export type ContextProviderId = 'code' | 'project' | 'workflow' | 'git' | 'conversation' | 'memory' | 'runtime' | 'ide'
+export type ContextProviderId = 'code' | 'repo_wiki' | 'project' | 'workflow' | 'git' | 'conversation' | 'memory' | 'runtime' | 'ide'
 export type ContextProviderStatus = 'enabled' | 'disabled' | 'fresh' | 'cached' | 'stale' | 'not_indexed' | 'indexing' | 'timeout' | 'failed' | 'rate_limited'
 export type ContextAuthority =
   | 'system_instruction'

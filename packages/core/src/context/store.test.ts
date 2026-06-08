@@ -5,6 +5,7 @@ import initSqlJs from 'sql.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CONTEXT_STORE_SCHEMA_VERSION, closeAllContextStores, closeContextStore, openContextStore } from './store.js'
 import type { ContextBundle, ContextCitation, ContextDiagnostic, ContextFact, HarvestJob, RawEvidence } from './types.js'
+import type { RepoWikiEntry } from './repo-wiki/types.js'
 
 const citation: ContextCitation = { id: 'cit_file_1', type: 'file', ref: 'src/file.ts', hash: 'hash_1' }
 
@@ -881,6 +882,103 @@ describe('JDC Context Store persistence', () => {
     expect((await store.queryFacts()).value[0]?.freshness).toBe('recent')
   })
 
+  it('saves, lists, and project-isolates repo wiki entries', async () => {
+    const dbPath = makeDbPath()
+    const repoA = await openContextStore({ dbPath, cwd: '/repo-a', now: () => 1_700_000_000_000 })
+    const repoB = await openContextStore({ dbPath, cwd: '/repo-b', now: () => 1_700_000_000_100 })
+
+    await expect(repoA.saveRepoWikiEntries([repoWikiEntry({ projectKey: '/repo-a' })])).resolves.toMatchObject({ ok: true, value: { savedEntries: 1 } })
+    await expect(repoB.saveRepoWikiEntries([repoWikiEntry({
+      id: 'wiki_other',
+      projectKey: '/repo-b',
+      title: 'Other repo',
+      citations: [{ id: 'cit_other', type: 'file', ref: 'README.md', hash: 'hash_other' }],
+      relatedFiles: ['README.md'],
+    })])).resolves.toMatchObject({ ok: true, value: { savedEntries: 1 } })
+
+    const aEntries = await repoA.listRepoWikiEntries()
+    const bEntries = await repoB.listRepoWikiEntries()
+
+    expect(aEntries.value.map((entry) => entry.id)).toEqual(['wiki_architecture'])
+    expect(bEntries.value.map((entry) => entry.id)).toEqual(['wiki_other'])
+  })
+
+  it('filters repo wiki entries by kind, related file, related symbol, and limit', async () => {
+    const store = await openContextStore({ dbPath: makeDbPath(), cwd: '/repo', now: () => 1_700_000_000_000 })
+    await expectOk(store.saveRepoWikiEntries([
+      repoWikiEntry({ id: 'wiki_architecture', projectKey: '/repo', kind: 'architecture', relatedSymbols: ['Session'], updatedAt: 10 }),
+      repoWikiEntry({
+        id: 'wiki_testing',
+        projectKey: '/repo',
+        kind: 'testing',
+        title: 'Testing overview',
+        citations: [{ id: 'cit_test', type: 'file', ref: 'packages/core/src/context/store.test.ts', hash: 'hash_test_v1' }],
+        relatedFiles: ['packages/core/src/context/store.test.ts'],
+        relatedSymbols: ['openContextStore'],
+        updatedAt: 20,
+      }),
+    ]))
+
+    await expect(store.listRepoWikiEntries({ kinds: ['testing'], relatedFile: '/repo/packages/core/src/context/store.test.ts', relatedSymbol: 'openContextStore', limit: 1 })).resolves.toMatchObject({
+      ok: true,
+      value: [expect.objectContaining({ id: 'wiki_testing' })],
+    })
+  })
+
+  it('invalidates repo wiki entries when a cited file hash changes', async () => {
+    const store = await openContextStore({ dbPath: makeDbPath(), cwd: '/repo', now: () => 1_700_000_000_000 })
+    await store.saveRepoWikiEntries([repoWikiEntry({ projectKey: '/repo' })])
+
+    const result = await store.invalidateRepoWikiByFileHash('packages/core/src/session.ts', 'hash_session_v2')
+    const entries = await store.listRepoWikiEntries({ includeStale: true })
+
+    expect(result).toMatchObject({ ok: true, value: { invalidatedEntries: 1 } })
+    expect(entries.value[0]).toMatchObject({ freshness: 'stale', status: 'stale' })
+  })
+
+  it('excludes stale repo wiki entries unless includeStale is true', async () => {
+    const store = await openContextStore({ dbPath: makeDbPath(), cwd: '/repo', now: () => 1_700_000_000_000 })
+    await store.saveRepoWikiEntries([repoWikiEntry({ projectKey: '/repo', freshness: 'stale', status: 'stale' })])
+
+    await expect(store.listRepoWikiEntries()).resolves.toMatchObject({ ok: true, value: [] })
+    await expect(store.listRepoWikiEntries({ includeStale: true })).resolves.toMatchObject({
+      ok: true,
+      value: [expect.objectContaining({ id: 'wiki_architecture' })],
+    })
+  })
+
+  it('excludes rejected repo wiki entries from default listings', async () => {
+    const store = await openContextStore({ dbPath: makeDbPath(), cwd: '/repo', now: () => 1_700_000_000_000 })
+    await expectOk(store.saveRepoWikiEntries([
+      repoWikiEntry({ projectKey: '/repo', id: 'wiki_active' }),
+      repoWikiEntry({ projectKey: '/repo', id: 'wiki_rejected', status: 'rejected', lifecycleReason: 'model output failed validation' }),
+    ]))
+
+    await expect(store.listRepoWikiEntries()).resolves.toMatchObject({
+      ok: true,
+      value: [expect.objectContaining({ id: 'wiki_active' })],
+    })
+  })
+
+  it('summarizes repo wiki active, stale, latest model, and diagnostics', async () => {
+    const store = await openContextStore({ dbPath: makeDbPath(), cwd: '/repo', now: () => 1_700_000_000_000 })
+    await expectOk(store.saveRepoWikiEntries([
+      repoWikiEntry({ projectKey: '/repo', id: 'wiki_active', updatedAt: 10, generatedBy: { providerProtocol: 'anthropic', modelId: 'model_old' } }),
+      repoWikiEntry({ projectKey: '/repo', id: 'wiki_stale', freshness: 'stale', status: 'stale', updatedAt: 20, generatedBy: { providerProtocol: 'anthropic', modelId: 'model_new' }, lifecycleReason: 'needs regeneration' }),
+    ]))
+
+    await expect(store.getRepoWikiSummary()).resolves.toMatchObject({
+      ok: true,
+      value: {
+        activeEntries: 1,
+        staleEntries: 1,
+        lastGeneratedAt: 20,
+        lastModelId: 'model_new',
+        lastDiagnostic: 'needs regeneration',
+      },
+    })
+  })
+
   it('falls back to diagnostics instead of throwing when the store cannot open', async () => {
     const dir = makeTempDir()
     const dbPath = path.join(dir, 'jdc-context.db')
@@ -1105,6 +1203,38 @@ function makeFact(overrides: Partial<ContextFact> = {}): ContextFact {
     createdAt: 1,
     updatedAt: 1,
     ...overrides,
+  }
+}
+
+function repoWikiEntry(overrides: Partial<RepoWikiEntry> = {}): RepoWikiEntry {
+  return {
+    id: overrides.id ?? 'wiki_architecture',
+    projectKey: overrides.projectKey ?? '/repo',
+    kind: overrides.kind ?? 'architecture',
+    title: overrides.title ?? 'Architecture overview',
+    content: overrides.content ?? 'Core orchestration lives in session and context modules.',
+    citations: overrides.citations ?? [{
+      id: 'cit_session',
+      type: 'file',
+      ref: 'packages/core/src/session.ts',
+      line: 1,
+      hash: 'hash_session_v1',
+    }],
+    relatedFiles: overrides.relatedFiles ?? ['packages/core/src/session.ts'],
+    relatedSymbols: overrides.relatedSymbols ?? ['Session'],
+    confidence: overrides.confidence ?? 0.91,
+    freshness: overrides.freshness ?? 'cached',
+    generatedBy: overrides.generatedBy ?? {
+      providerProtocol: 'anthropic',
+      modelId: 'claude-sonnet-4',
+      modelProfileId: 'standard',
+    },
+    evidenceHash: overrides.evidenceHash ?? 'evidence_hash_v1',
+    status: overrides.status ?? 'active',
+    createdAt: overrides.createdAt ?? 1_700_000_000_000,
+    updatedAt: overrides.updatedAt ?? 1_700_000_000_000,
+    ...(overrides.archivedAt !== undefined ? { archivedAt: overrides.archivedAt } : {}),
+    ...(overrides.lifecycleReason !== undefined ? { lifecycleReason: overrides.lifecycleReason } : {}),
   }
 }
 
