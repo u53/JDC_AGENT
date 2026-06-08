@@ -79,37 +79,62 @@ export function SettingsOverlay() {
   const activeTab = useSettingsStore((s) => s.activeTab)
   const close = useSettingsStore((s) => s.close)
   const setActiveTab = useSettingsStore((s) => s.setActiveTab)
+  const activeTabMeta = TABS.find((tab) => tab.key === activeTab) ?? TABS[0]
 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+    <div
+      className="settings-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-xl"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) close()
+      }}
+    >
       <div
-        className="w-[680px] max-h-[80vh] flex border border-[var(--border)] rounded-[14px] bg-[var(--surface)] overflow-hidden"
-        style={{ boxShadow: 'var(--shadow-soft)' }}
+        className="settings-shell flex min-h-[560px] max-h-[86vh] w-[min(920px,94vw)] overflow-hidden rounded-[8px] border border-[var(--border)] bg-[var(--surface)]"
+        style={{ boxShadow: '0 24px 80px rgba(0, 0, 0, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.04)' }}
       >
         {/* Left nav */}
-        <div className="w-[160px] bg-[var(--surface-2)] border-r border-[var(--border)] py-4 flex flex-col gap-1 px-2">
-          {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`w-full text-left px-3 py-2 rounded-[6px] text-[13px] transition-colors ${
-                activeTab === tab.key
-                  ? 'bg-[var(--accent-soft)] text-[var(--accent)]'
-                  : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-3)]'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <nav className="settings-nav flex w-[220px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface-2)] px-3 py-4">
+          <div className="mb-5 px-2">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">JDC Code</div>
+            <h2 className="mt-2 text-[20px] font-semibold leading-none text-[var(--text)]">Settings</h2>
+            <p className="mt-2 text-[12px] leading-5 text-[var(--muted)]">模型、工具和运行环境</p>
+          </div>
+
+          <div className="flex flex-1 flex-col gap-1">
+            {TABS.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={`group flex w-full items-center justify-between rounded-[6px] px-3 py-2 text-left text-[13px] transition-colors ${
+                  activeTab === tab.key
+                    ? 'bg-[var(--accent-soft)] text-[var(--accent)]'
+                    : 'text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--text)]'
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span className={`h-1.5 w-1.5 rounded-full transition-opacity ${activeTab === tab.key ? 'bg-[var(--accent)] opacity-100' : 'bg-[var(--muted)] opacity-0 group-hover:opacity-40'}`} />
+              </button>
+            ))}
+          </div>
+        </nav>
 
         {/* Right content */}
-        <div className="flex-1 overflow-y-auto p-6 relative min-h-[400px]">
+        <main className="settings-content context-panel-scroll relative min-w-0 flex-1 overflow-y-auto px-6 py-5">
+          <div className="mb-5 flex items-start justify-between gap-4 border-b border-[var(--border)] pb-4 pr-8">
+            <div>
+              <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted)]">JDC Dark</div>
+              <h3 className="mt-1 text-[18px] font-semibold leading-7 text-[var(--text)]">{activeTabMeta.label}</h3>
+            </div>
+          </div>
+
           <button
+            type="button"
             onClick={close}
-            className="absolute top-4 right-4 text-[var(--muted)] hover:text-[var(--text)] transition-colors"
+            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-[6px] text-[var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+            aria-label="关闭设置"
           >
             <IconX size={18} />
           </button>
@@ -119,7 +144,7 @@ export function SettingsOverlay() {
           {activeTab === 'tools' && <ToolsTab />}
           {activeTab === 'shortcuts' && <ShortcutsTab />}
           {activeTab === 'advanced' && <AdvancedTab />}
-        </div>
+        </main>
       </div>
     </div>
   )
