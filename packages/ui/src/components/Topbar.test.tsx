@@ -1,0 +1,30 @@
+import { renderToStaticMarkup } from 'react-dom/server'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { useSessionStore } from '../stores/session-store'
+import { Topbar } from './Topbar'
+
+const cwd = '/Users/chenmingxu/Documents/jdcagnet'
+
+describe('Topbar', () => {
+  beforeEach(() => {
+    const state = {
+      projects: [{
+        name: 'jdcagnet',
+        cwd,
+        sessions: [{ id: 'session-1', projectName: 'jdcagnet', cwd }],
+      }],
+      activeSessionId: 'session-1',
+    }
+    useSessionStore.setState(state)
+    Object.assign(useSessionStore.getInitialState(), state)
+  })
+
+  it('shows the project name with its full path in the topbar', () => {
+    const html = renderToStaticMarkup(<Topbar />)
+    const heading = html.match(/<h1[^>]*>.*?<\/h1>/)?.[0] ?? ''
+
+    expect(heading).toContain(`jdcagnet · ${cwd}`)
+    expect(heading).not.toContain('title=')
+    expect(heading).not.toContain('jdcagnet-&gt;')
+  })
+})

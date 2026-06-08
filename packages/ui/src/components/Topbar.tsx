@@ -12,20 +12,22 @@ export function Topbar() {
   const activeProject = projects.find((p) =>
     p.sessions.some((s) => s.id === activeSessionId)
   )
-  const projectName = activeProject?.name || projects[0]?.name || 'JDC Code'
+  const project = activeProject || projects[0]
+  const projectName = project?.name || 'JDC Code'
+  const projectLabel = project?.cwd ? `${projectName} · ${project.cwd}` : projectName
 
   return (
     <header
       className="relative z-[80] h-12 flex items-center justify-between pl-[78px] pr-5 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] backdrop-blur"
       style={{ WebkitAppRegion: 'drag' } as any}
     >
-      <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
-        <h1 className="text-[15px] font-semibold tracking-[-0.01em]">
-          {projectName}
+      <div className="min-w-0 flex flex-1 items-center gap-3 pr-4" style={{ WebkitAppRegion: 'no-drag' } as any}>
+        <h1 className="min-w-0 truncate text-[15px] font-semibold tracking-[-0.01em]">
+          {projectLabel}
         </h1>
       </div>
 
-      <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
+      <div className="flex shrink-0 items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
         <ThemeSegmented />
         <button
           onClick={addProject}
