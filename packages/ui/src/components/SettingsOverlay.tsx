@@ -484,6 +484,7 @@ function ModelGroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddMo
   const inputCls = 'w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-[6px] px-3 py-2 text-[13px] text-[var(--text)] outline-none focus:border-[var(--border-strong)]'
   const btnPrimary = 'bg-[var(--accent)] text-[var(--accent-ink)] rounded-[6px] px-3 py-1.5 text-[12px]'
   const btnGhost = 'border border-[var(--border)] rounded-[6px] px-3 py-1.5 text-[12px] text-[var(--muted)] hover:text-[var(--text)]'
+  const modelCountLabel = `${group.models.length} model${group.models.length === 1 ? '' : 's'}`
 
   const handleTestModel = async (modelId: string, modelEntryId: string) => {
     setTesting(modelEntryId)
@@ -515,10 +516,10 @@ function ModelGroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddMo
   }
 
   return (
-    <div className="mb-3 border border-[var(--border)] rounded-[6px] overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-[var(--surface-2)] transition-colors" onClick={onToggle}>
-        <div className="flex items-center gap-2">
-          <span className="text-[12px] text-[var(--muted)]">{expanded ? '▼' : '▶'}</span>
+    <div className="settings-model-group-card overflow-hidden rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)]">
+      <div className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-[var(--surface-3)]" onClick={onToggle}>
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] border border-[var(--border)] bg-[var(--surface)] text-[11px] text-[var(--muted)]">{expanded ? '▼' : '▶'}</span>
           {editingName ? (
             <input
               value={editName}
@@ -530,20 +531,23 @@ function ModelGroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddMo
               className="text-[13px] text-[var(--text)] font-medium bg-[var(--surface-2)] border border-[var(--border)] rounded px-1.5 py-0.5 outline-none w-32"
             />
           ) : (
-            <span className="text-[13px] text-[var(--text)] font-medium" onDoubleClick={(e) => { e.stopPropagation(); setEditingName(true) }}>{group.name}</span>
+            <div className="min-w-0">
+              <span className="block truncate text-[13px] font-medium text-[var(--text)]" onDoubleClick={(e) => { e.stopPropagation(); setEditingName(true) }}>{group.name}</span>
+              <span className="settings-model-count mt-0.5 block text-[11px] text-[var(--muted)]">{modelCountLabel}</span>
+            </div>
           )}
           <select
             value={group.protocol}
             onChange={(e) => { e.stopPropagation(); onUpdate({ protocol: e.target.value as ApiProtocol }) }}
             onClick={(e) => e.stopPropagation()}
-            className="text-[11px] text-[var(--muted)] border border-[var(--border)] rounded px-1.5 py-0.5 bg-transparent outline-none cursor-pointer"
+            className="shrink-0 cursor-pointer rounded-[5px] border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[11px] text-[var(--muted)] outline-none"
           >
             <option value="anthropic">anthropic</option>
             <option value="openai">openai</option>
             <option value="openai-responses">openai-responses</option>
           </select>
         </div>
-        <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="text-[12px] text-[var(--muted)] hover:text-red-500 transition-colors">
+        <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="shrink-0 rounded-[6px] px-2 py-1 text-[12px] text-[var(--muted)] transition-colors hover:bg-[var(--surface)] hover:text-red-400">
           删除
         </button>
       </div>

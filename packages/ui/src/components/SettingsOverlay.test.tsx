@@ -32,4 +32,34 @@ describe('SettingsOverlay', () => {
     expect(html).toContain('settings-empty-state')
     expect(html).toContain('暂无模型分组')
   })
+
+  it('renders configured model groups as compact settings cards', () => {
+    const modelState = {
+      groups: [{
+        id: 'group-1',
+        name: 'Production',
+        protocol: 'openai-responses' as const,
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'sk-test',
+        models: [{
+          id: 'model-1',
+          name: 'GPT 5.5',
+          modelId: 'gpt-5.5',
+          contextWindow: 200000,
+          maxTokens: 32000,
+          compressAt: 0.9,
+        }],
+      }],
+      activeModelId: 'model-1',
+    }
+    useModelStore.setState(modelState)
+    Object.assign(useModelStore.getInitialState(), modelState)
+
+    const html = renderToStaticMarkup(<SettingsOverlay />)
+
+    expect(html).toContain('settings-model-group-card')
+    expect(html).toContain('settings-model-count')
+    expect(html).toContain('Production')
+    expect(html).toContain('1 model')
+  })
 })
