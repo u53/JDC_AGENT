@@ -28,38 +28,45 @@ export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect,
   if (!sessionId) {
     return (
       <div className="p-3">
-        <div className="text-[12px] text-[var(--muted)]">没有活动会话。</div>
+        <PanelState title="没有活动会话" message="上下文状态会在会话创建后显示。" />
       </div>
     )
   }
 
   const tabs = contextTabs(inspect.data, memoryReview.data, providerHealth.data, constraint.data)
   const effectiveTab = activeTab === 'advanced' && !advancedVisible ? 'constraints' : activeTab
+  const status = contextEngineStatus(inspect, constraint)
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[var(--panel)]">
-      <div className="flex-shrink-0 border-b border-[var(--border)] px-3 py-2">
-        <div className="min-w-0">
-          <div className="text-[12px] font-medium text-[var(--text)]">JDC 上下文引擎</div>
-          <div className="mt-0.5 text-[10px] text-[var(--muted)]">项目级上下文</div>
+    <div className="flex h-full min-h-0 min-w-0 flex-col bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_94%,transparent),color-mix(in_srgb,var(--bg)_86%,transparent))]">
+      <div className="flex-shrink-0 border-b border-[var(--border)] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--accent)] shadow-[0_0_0_4px_var(--accent-soft)]" />
+              <div className="truncate font-mono text-[11px] font-semibold uppercase text-[var(--text)]">JDC Context Engine</div>
+            </div>
+            <div className="mt-1 truncate text-[10px] text-[var(--muted)]">Project context</div>
+          </div>
+          <Badge tone={status.tone}>{status.label}</Badge>
         </div>
       </div>
 
-      <div className="context-panel-scroll flex min-w-0 flex-shrink-0 gap-1 overflow-x-auto border-b border-[var(--border)] px-3">
+      <div className="context-panel-scroll flex min-w-0 flex-shrink-0 gap-1 overflow-x-auto border-b border-[var(--border)] px-3 py-2">
         {tabs.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => onTabChange(item.id)}
-            className={`min-w-0 shrink-0 whitespace-nowrap border-b-2 px-2 py-2 text-[11px] transition-colors ${effectiveTab === item.id ? 'border-[var(--accent)] text-[var(--text)]' : 'border-transparent text-[var(--muted)] hover:text-[var(--text)]'}`}
+            className={`min-w-0 shrink-0 whitespace-nowrap rounded-[7px] border px-2 py-1.5 font-mono text-[11px] transition-colors active:translate-y-px ${effectiveTab === item.id ? 'border-[color-mix(in_srgb,var(--accent)_32%,var(--border))] bg-[var(--accent-soft)] text-[var(--accent)]' : 'border-transparent text-[var(--muted)] hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'}`}
           >
             {item.label}
-            {item.badge != null && <span className="ml-1 opacity-60">{item.badge}</span>}
+            {item.badge != null && <span className="ml-1 text-[10px] opacity-70">{item.badge}</span>}
           </button>
         ))}
       </div>
 
-      <div className="context-panel-scroll min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="context-panel-scroll min-h-0 min-w-0 flex-1 overflow-y-auto p-3">
         {effectiveTab === 'constraints' && <ConstraintStatusPanel snapshot={constraint.data} loading={constraint.loading} error={constraint.error} advancedVisible={advancedVisible} />}
         {effectiveTab === 'understanding' && <ContextProjectUnderstandingPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
         {effectiveTab === 'facts' && <ContextFactsPanel acceptedMemory={memoryReview.data?.accepted ?? null} projectFacts={inspect.data?.acceptedProjectFacts ?? []} loading={memoryReview.loading || inspect.loading} error={memoryReview.error ?? inspect.error} />}
@@ -96,6 +103,19 @@ function contextTabs(inspect: ContextInspectPayload | null, memoryReview: Contex
   ]
 }
 
+function contextEngineStatus(
+  inspect: ContextRequestState<ContextInspectPayload>,
+  constraint: ContextRequestState<ConstraintObservabilitySnapshot>,
+): { label: string; tone: 'muted' | 'good' | 'warn' | 'bad' | 'accent' } {
+  if (inspect.loading || constraint.loading) return { label: '读取中', tone: 'accent' }
+  if (inspect.error || constraint.error) return { label: '异常', tone: 'bad' }
+  if (constraint.data?.blockedActions.length) return { label: '已拦截', tone: 'bad' }
+  if (constraint.data?.status === 'needs_evidence' || constraint.data?.status === 'needs_verification') return { label: '待处理', tone: 'warn' }
+  if (inspect.data?.status === 'available' || constraint.data?.status === 'verified') return { label: '可用', tone: 'good' }
+  if (inspect.data?.status === 'disabled') return { label: '关闭', tone: 'muted' }
+  return { label: '待机', tone: 'muted' }
+}
+
 function constraintBadge(snapshot: ConstraintObservabilitySnapshot | null): string | number | null {
   if (!snapshot) return null
   if (snapshot.blockedActions.length > 0) return snapshot.blockedActions.length
@@ -119,13 +139,13 @@ function ContextProjectUnderstandingPanel({ payload, loading, error }: {
       ) : (
         <div className="space-y-2">
           {facts.map((fact) => (
-            <article key={fact.id} className="rounded-[8px] border border-[var(--border)] bg-[var(--bg)] p-2">
+            <article key={fact.id} className="rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_42%,transparent)] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
               <div className="flex flex-wrap items-center gap-1">
                 <Badge tone="accent">{kindLabel(fact.kind)}</Badge>
                 <Badge>可信度 {formatPercent(fact.confidence)}</Badge>
                 <Badge>新鲜度 {freshnessLabel(fact.freshness)}</Badge>
               </div>
-              <div className="mt-1 text-[12px] leading-relaxed text-[var(--text)]">{fact.content}</div>
+              <div className="mt-2 whitespace-pre-wrap break-words text-[12px] leading-relaxed text-[var(--text)] [overflow-wrap:anywhere]">{fact.content}</div>
             </article>
           ))}
         </div>

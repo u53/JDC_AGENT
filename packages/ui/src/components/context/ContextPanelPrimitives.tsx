@@ -10,13 +10,13 @@ export function PanelFrame({ title, subtitle, actions, children }: {
   children: ReactNode
 }) {
   return (
-    <section className="space-y-3">
-      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+    <section className="min-w-0 space-y-3">
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3 border-b border-[var(--border)] pb-2">
         <div className="min-w-0">
-          <h3 className="break-words text-[11px] uppercase tracking-[0.1em] text-[var(--muted)] font-medium [overflow-wrap:anywhere]">{title}</h3>
-          {subtitle && <p className="mt-1 whitespace-normal break-words text-[11px] text-[var(--muted)] [overflow-wrap:anywhere]">{subtitle}</p>}
+          <h3 className="break-words font-mono text-[11px] font-semibold uppercase text-[var(--text)] [overflow-wrap:anywhere]">{title}</h3>
+          {subtitle && <p className="mt-1 whitespace-normal break-words text-[11px] leading-5 text-[var(--muted)] [overflow-wrap:anywhere]">{subtitle}</p>}
         </div>
-        {actions && <div className="min-w-0 max-w-full">{actions}</div>}
+        {actions && <div className="min-w-0 max-w-full rounded-[7px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_44%,transparent)] p-1">{actions}</div>}
       </div>
       {children}
     </section>
@@ -25,9 +25,9 @@ export function PanelFrame({ title, subtitle, actions, children }: {
 
 export function PanelState({ title, message }: { title: string; message: string }) {
   return (
-    <div className="rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3">
-      <div className="break-words text-[12px] text-[var(--text)] [overflow-wrap:anywhere]">{title}</div>
-      <div className="mt-1 whitespace-normal break-words text-[11px] text-[var(--muted)] [overflow-wrap:anywhere]">{message}</div>
+    <div className="rounded-[8px] border border-dashed border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_54%,transparent)] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+      <div className="break-words text-[12px] font-medium text-[var(--text)] [overflow-wrap:anywhere]">{title}</div>
+      <div className="mt-1 whitespace-normal break-words text-[11px] leading-5 text-[var(--muted)] [overflow-wrap:anywhere]">{message}</div>
     </div>
   )
 }
@@ -35,7 +35,7 @@ export function PanelState({ title, message }: { title: string; message: string 
 export function Badge({ children, tone = 'muted' }: { children: ReactNode; tone?: 'muted' | 'good' | 'warn' | 'bad' | 'accent' }) {
   const color = tone === 'good' ? 'var(--good)' : tone === 'warn' ? 'var(--warn)' : tone === 'bad' ? 'var(--bad)' : tone === 'accent' ? 'var(--accent)' : 'var(--muted)'
   return (
-    <span className="inline-flex max-w-full items-center whitespace-normal break-words rounded-full border px-2 py-0.5 text-[10px] leading-none [overflow-wrap:anywhere]" style={{ color, borderColor: color }}>
+    <span className="inline-flex max-w-full items-center whitespace-normal break-words rounded-[5px] border bg-[color-mix(in_srgb,currentColor_8%,transparent)] px-1.5 py-1 font-mono text-[10px] leading-none [overflow-wrap:anywhere]" style={{ color, borderColor: `color-mix(in srgb, ${color} 42%, var(--border))` }}>
       {children}
     </span>
   )
@@ -43,8 +43,8 @@ export function Badge({ children, tone = 'muted' }: { children: ReactNode; tone?
 
 export function Metric({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--bg)] px-2.5 py-2">
-      <div className="break-words text-[10px] uppercase tracking-[0.08em] text-[var(--muted)] [overflow-wrap:anywhere]">{label}</div>
+    <div className="min-w-0 rounded-[7px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_44%,transparent)] px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
+      <div className="break-words font-mono text-[10px] uppercase text-[var(--muted)] [overflow-wrap:anywhere]">{label}</div>
       <div className="mt-1 min-w-0 whitespace-normal break-words font-mono text-[12px] text-[var(--text)] [overflow-wrap:anywhere]">{value}</div>
     </div>
   )
@@ -54,9 +54,9 @@ export function DiagnosticsList({ diagnostics }: { diagnostics: ContextDiagnosti
   if (diagnostics.length === 0) return null
   return (
     <div className="space-y-1.5">
-      <div className="text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]">诊断</div>
+      <div className="font-mono text-[10px] uppercase text-[var(--muted)]">诊断</div>
       {diagnostics.map((diagnostic) => (
-        <div key={diagnostic.id} className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-2 text-[11px]">
+        <div key={diagnostic.id} className="min-w-0 rounded-[7px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_54%,transparent)] px-2.5 py-2 text-[11px]">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
             <span className="min-w-0 whitespace-normal break-words font-mono text-[var(--muted)] [overflow-wrap:anywhere]">{diagnostic.source}</span>
             <Badge tone={diagnostic.level === 'error' ? 'bad' : diagnostic.level === 'warning' ? 'warn' : 'muted'}>{diagnosticLevelLabel(diagnostic.level)}</Badge>
