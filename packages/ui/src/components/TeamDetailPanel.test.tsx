@@ -94,6 +94,17 @@ describe('TeamDetailPanel', () => {
     expect(html).toContain('tool_complete')
     expect(html).not.toContain('<pre')
   })
+
+  it('renders overview tasks as compact task cards with assignment metadata', () => {
+    const html = renderToStaticMarkup(<TeamDetailPanel sessionId="sess-1" taskId="team-1" />)
+
+    expect(html).toContain('team-task-board')
+    expect(html).toContain('team-task-card')
+    expect(html).toContain('Render markdown')
+    expect(html).toContain('Frontend Worker')
+    expect(html).toContain('high')
+    expect(html).toContain('Worker runbook')
+  })
 })
 
 function seedTeamStore(partial: Partial<ReturnType<typeof useTeamStore.getState>> = {}) {

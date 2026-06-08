@@ -169,18 +169,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
             </Section>
 
             <Section title={`Tasks (${team.taskStats?.completed ?? 0}/${team.taskStats?.total ?? 0})`}>
-              <ul className="space-y-1">
-                {(team.tasks ?? []).map((t: any) => (
-                  <li
-                    key={t.id}
-                    className="flex items-center gap-2 text-[12px] px-2.5 py-2 rounded-[7px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)]"
-                  >
-                    <span className="text-[11px] w-3 flex-shrink-0">{taskIcon(t.status)}</span>
-                    <span className="flex-1 truncate text-[var(--text)]">{t.title}</span>
-                    <StatusBadge status={t.status} small />
-                  </li>
-                ))}
-              </ul>
+              <TaskBoard tasks={team.tasks ?? []} members={team.members ?? []} />
             </Section>
 
             {conversation.length > 0 && (
@@ -592,6 +581,94 @@ function MemberRow({
       </div>
     </li>
   )
+}
+
+function TaskBoard({ tasks, members }: { tasks: any[]; members: any[] }) {
+  const memberById = useMemo(() => {
+    const map = new Map<string, any>()
+    for (const member of members) map.set(member.id, member)
+    return map
+  }, [members])
+
+  if (tasks.length === 0) {
+    return (
+      <div className="rounded-[8px] border border-dashed border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)] px-3 py-3 text-[11px] italic text-[var(--muted)]">
+        No tasks yet.
+      </div>
+    )
+  }
+
+  return (
+    <ul className="team-task-board grid gap-2">
+      {tasks.map((task) => (
+        <TaskCard
+          key={task.id}
+          task={task}
+          assignee={task.assigneeId ? memberById.get(task.assigneeId) : null}
+        />
+      ))}
+    </ul>
+  )
+}
+
+function TaskCard({ task, assignee }: { task: any; assignee: any | null }) {
+  const preview = taskDescriptionPreview(task.description)
+  return (
+    <li className="team-task-card min-w-0 rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
+      <div className="flex min-w-0 items-start gap-2">
+        <span className="mt-0.5 w-3 flex-shrink-0 text-[11px]">{taskIcon(task.status)}</span>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0 whitespace-normal break-words text-[12px] font-medium text-[var(--text)] [overflow-wrap:anywhere]">
+              {task.title}
+            </div>
+            <StatusBadge status={task.status} small />
+          </div>
+          {preview && (
+            <div className="min-w-0 whitespace-normal break-words text-[11px] leading-5 text-[var(--muted)] [overflow-wrap:anywhere]">
+              {preview}
+            </div>
+          )}
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <TaskMetaPill label={assignee?.role ?? task.assigneeId ?? 'Unassigned'} />
+            <TaskMetaPill label={task.priority ?? 'normal'} tone={priorityTone(task.priority)} />
+          </div>
+        </div>
+      </div>
+    </li>
+  )
+}
+
+function TaskMetaPill({ label, tone = 'var(--muted)' }: { label: string; tone?: string }) {
+  return (
+    <span
+      className="max-w-full break-words rounded-[5px] border px-1.5 py-0.5 font-mono text-[10px] leading-none [overflow-wrap:anywhere]"
+      style={{
+        color: tone,
+        borderColor: `color-mix(in srgb, ${tone} 38%, var(--border))`,
+        backgroundColor: `color-mix(in srgb, ${tone} 7%, transparent)`,
+      }}
+    >
+      {label}
+    </span>
+  )
+}
+
+function priorityTone(priority?: string): string {
+  const normalized = (priority ?? 'normal').toLowerCase()
+  if (normalized === 'urgent' || normalized === 'high') return 'var(--warn)'
+  if (normalized === 'low') return 'var(--muted)'
+  return 'var(--accent)'
+}
+
+function taskDescriptionPreview(description?: string): string {
+  if (!description) return ''
+  const withoutCode = description.replace(/```[\s\S]*?```/g, '')
+  const firstLine = withoutCode
+    .split('\n')
+    .map((line) => line.trim().replace(/^#{1,6}\s+/, '').replace(/^[-*]\s+/, ''))
+    .find(Boolean)
+  return (firstLine ?? '').slice(0, 140)
 }
 
 function MemberDetailModal({
