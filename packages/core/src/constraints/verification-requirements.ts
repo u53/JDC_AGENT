@@ -46,47 +46,43 @@ export async function deriveVerificationRequirements(input: {
   }
 
   if (hasCodeChange(changedFiles)) {
-    requirements.push(scriptRequirement({
+    pushIfDefined(requirements, scriptRequirement({
       id: 'verify_test',
       kind: 'test',
       scriptName: 'test',
       packageManager,
       scripts: packageInfo.scripts,
       files: changedFiles,
-      missingReason: 'No test script found in package.json.',
     }))
-    requirements.push(scriptRequirement({
+    pushIfDefined(requirements, scriptRequirement({
       id: 'verify_build',
       kind: 'build',
       scriptName: 'build',
       packageManager,
       scripts: packageInfo.scripts,
       files: changedFiles,
-      missingReason: 'No build script found in package.json.',
     }))
   }
 
   if (hasTypeScriptChange(changedFiles) && packageInfo.scripts.typecheck) {
-    requirements.push(scriptRequirement({
+    pushIfDefined(requirements, scriptRequirement({
       id: 'verify_typecheck',
       kind: 'typecheck',
       scriptName: 'typecheck',
       packageManager,
       scripts: packageInfo.scripts,
       files: changedFiles,
-      missingReason: 'No typecheck script found in package.json.',
     }))
   }
 
   if (changesPackageOrConfig(changedFiles) && packageInfo.scripts.build && !requirements.some((requirement) => requirement.kind === 'build')) {
-    requirements.push(scriptRequirement({
+    pushIfDefined(requirements, scriptRequirement({
       id: 'verify_build',
       kind: 'build',
       scriptName: 'build',
       packageManager,
       scripts: packageInfo.scripts,
       files: changedFiles,
-      missingReason: 'No build script found in package.json.',
     }))
   }
 
@@ -100,17 +96,21 @@ function scriptRequirement(input: {
   packageManager: string
   scripts: Record<string, string>
   files: string[]
-  missingReason: string
-}): VerificationRequirement {
+}): VerificationRequirement | undefined {
   const hasScript = typeof input.scripts[input.scriptName] === 'string' && input.scripts[input.scriptName].trim().length > 0
+  if (!hasScript) return undefined
   return {
     id: input.id,
     kind: input.kind,
     command: scriptCommand(input.packageManager, input.scriptName),
-    status: hasScript ? 'pending' : 'unavailable',
+    status: 'pending',
     files: input.files,
-    reason: hasScript ? `${input.scriptName} script covers changed files.` : input.missingReason,
+    reason: `${input.scriptName} script covers changed files.`,
   }
+}
+
+function pushIfDefined<T>(items: T[], item: T | undefined): void {
+  if (item) items.push(item)
 }
 
 function scriptCommand(packageManager: string, scriptName: string): string {

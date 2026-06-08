@@ -52,7 +52,7 @@ export const AGENT_TYPES: AgentTypeDefinition[] = [
 - Do NOT run state-changing commands.`,
     allowedTools: ['Read', 'Glob', 'Grep', 'LS', 'Tree', 'WebSearch', 'WebFetch', 'LSP', ...JDC_CONTEXT_TOOLS],
     allowedMcpServers: [],
-    maxTurns: 25,
+    maxTurns: 300,
   },
   {
     name: 'plan',
@@ -79,7 +79,7 @@ export const AGENT_TYPES: AgentTypeDefinition[] = [
 - A plan that says "refactor X" without naming files is rejected — be specific.`,
     allowedTools: ['Read', 'Glob', 'Grep', 'LS', 'Tree', 'Write', ...JDC_CONTEXT_TOOLS],
     allowedMcpServers: [],
-    maxTurns: 20,
+    maxTurns: 300,
   },
   {
     name: 'refactor',
@@ -107,7 +107,7 @@ export const AGENT_TYPES: AgentTypeDefinition[] = [
 - Do NOT change formatting that's already consistent — only change what makes the code clearer.`,
     allowedTools: ['Read', 'Edit', 'Write', 'Grep', 'Glob', 'LS', ...JDC_CONTEXT_TOOLS],
     allowedMcpServers: [],
-    maxTurns: 30,
+    maxTurns: 350,
   },
   {
     name: 'security-auditor',
@@ -149,7 +149,7 @@ Order by severity: critical > high > medium > low. End with a one-paragraph summ
 - Do not file findings you cannot pinpoint to a file:line. "The codebase might have XSS" is not a finding.`,
     allowedTools: ['Read', 'Grep', 'Glob', 'LS', 'Tree', 'Bash', ...JDC_CONTEXT_TOOLS],
     allowedMcpServers: [],
-    maxTurns: 20,
+    maxTurns: 300,
   },
   {
     name: 'frontend-designer',
@@ -181,7 +181,7 @@ Order by severity: critical > high > medium > low. End with a one-paragraph summ
 - Match the project's component file naming convention exactly.`,
     allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'LS', 'WebFetch', ...JDC_CONTEXT_TOOLS],
     allowedMcpServers: [],
-    maxTurns: 30,
+    maxTurns: 400,
   },
   {
     name: 'general',
@@ -206,7 +206,7 @@ Order by severity: critical > high > medium > low. End with a one-paragraph summ
 - If the task is ambiguous, work with the most likely interpretation and call out the assumption — do NOT ask clarifying questions, you don't have a user to answer them.`,
     allowedTools: ['*'],
     allowedMcpServers: ['*'],
-    maxTurns: 150,
+    maxTurns: 500,
   },
 ]
 

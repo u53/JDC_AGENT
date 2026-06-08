@@ -97,6 +97,32 @@ describe('TeamMember', () => {
     expect(onFail).toHaveBeenCalledWith(member.id, expect.stringContaining('max turns'))
   })
 
+  it('completes with a partial summary when max turns are exhausted after useful text', async () => {
+    vi.mocked(runSubSession).mockResolvedValueOnce({
+      content: 'Partial worker findings with concrete file evidence.',
+      turns: 300,
+      toolsUsed: ['Grep', 'Read'],
+      status: 'max_turns_exhausted',
+    } as any)
+    const onComplete = vi.fn()
+    const onFail = vi.fn()
+    const member = new TeamMember({
+      spec: { role: 'explorer', agentType: 'explore' },
+      taskPrompt: 'task',
+      subSessionDeps: mockDeps,
+      onComplete,
+      onFail,
+    })
+
+    await member.start()
+
+    expect(member.getStatus()).toBe('completed')
+    expect(onFail).not.toHaveBeenCalled()
+    expect(onComplete).toHaveBeenCalledWith(member.id, expect.objectContaining({
+      summary: expect.stringContaining('Partial sub-agent result'),
+    }))
+  })
+
   it('passes team worker actor metadata to the sub-session context engine', async () => {
     vi.mocked(runSubSession).mockClear()
     const member = new TeamMember({

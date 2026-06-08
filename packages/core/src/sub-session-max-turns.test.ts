@@ -16,7 +16,7 @@ describe('runSubSession maxTurns', () => {
       chat: async () => ({ content: [], usage: { inputTokens: 0, outputTokens: 0 } }),
       stream: async function* (_messages: any[], _tools: any[], _config: ModelConfig) {
         calls++
-        if (calls > 30) throw new Error('agentType maxTurns was not applied')
+        if (calls > 310) throw new Error('agentType maxTurns was not applied')
         yield { type: 'tool_use_start', toolUse: { id: `tool_${calls}`, name: 'Read', input: '' } }
         yield { type: 'tool_use_delta', toolUse: { id: `tool_${calls}`, name: 'Read', input: '{"file_path":"missing.ts"}' } }
         yield { type: 'tool_use_end' }
@@ -37,8 +37,7 @@ describe('runSubSession maxTurns', () => {
       agentType: 'explore',
     })
 
-    expect(result.turns).toBeLessThan(1000)
-    expect(result.turns).toBeLessThanOrEqual(25)
+    expect(result.turns).toBe(300)
     expect(result.status).toBe('max_turns_exhausted')
   })
 

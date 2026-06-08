@@ -62,7 +62,7 @@ describe('deriveVerificationRequirements', () => {
     ])
   })
 
-  it('marks unavailable script-backed requirements when no matching script exists', async () => {
+  it('does not invent script-backed requirements when no matching scripts exist', async () => {
     const cwd = tempProject()
     writeFileSync(path.join(cwd, 'package.json'), JSON.stringify({ scripts: {} }))
 
@@ -72,18 +72,20 @@ describe('deriveVerificationRequirements', () => {
       userMessage: '修复 app',
     })
 
-    expect(plan.requirements).toContainEqual(expect.objectContaining({
-      id: 'verify_test',
-      kind: 'test',
-      status: 'unavailable',
-      reason: 'No test script found in package.json.',
-    }))
-    expect(plan.requirements).toContainEqual(expect.objectContaining({
-      id: 'verify_build',
-      kind: 'build',
-      status: 'unavailable',
-      reason: 'No build script found in package.json.',
-    }))
+    expect(plan.requirements).toEqual([])
+  })
+
+  it('does not fall back to npm requirements for Java projects without package scripts', async () => {
+    const cwd = tempProject()
+    writeFileSync(path.join(cwd, 'pom.xml'), '<project />\n')
+
+    const plan = await deriveVerificationRequirements({
+      cwd,
+      changedFiles: ['src/main/java/com/example/App.java'],
+      userMessage: '修复 SpringBoot 服务',
+    })
+
+    expect(plan.requirements).toEqual([])
   })
 
   it('uses npm run for non-special npm scripts', async () => {

@@ -75,4 +75,65 @@ describe('Agent model resolution warnings', () => {
     ))
     expect(backgroundTasks.completeAgent).not.toHaveBeenCalled()
   })
+
+  it('returns partial max-turn output without marking foreground Agent as an error', async () => {
+    vi.mocked(runSubSession).mockResolvedValueOnce({
+      content: 'Found VatReport in src/VatReport.java with fields id and amount.',
+      turns: 300,
+      toolsUsed: ['Grep', 'Read'],
+      status: 'max_turns_exhausted',
+    } as any)
+    const tool = createAgentTool({
+      provider: { name: 'main-provider' } as any,
+      toolRegistry: new ToolRegistry(),
+      modelConfig: { model: 'main-model', maxTokens: 32000, contextWindow: 200000 },
+      cwd: '/repo',
+    })
+
+    const result = await tool.execute({
+      prompt: 'Find DTO shape',
+    }, { toolUseId: 'agent_tool_3' } as any)
+
+    expect(result.isError).not.toBe(true)
+    expect(result.content).toContain('Partial sub-agent result')
+    expect(result.content).toContain('VatReport')
+    expect(result.content).toContain('300 turns')
+  })
+
+  it('completes background agents with partial max-turn output when useful text exists', async () => {
+    vi.mocked(runSubSession).mockResolvedValueOnce({
+      content: 'Located DTO candidates but did not finish every tax type.',
+      turns: 300,
+      toolsUsed: ['Grep', 'Read'],
+      status: 'max_turns_exhausted',
+    } as any)
+    const backgroundTasks = {
+      registerAgent: vi.fn(() => ({ id: 'agent_task_3' })),
+      acquireAgentSlot: vi.fn(async () => undefined),
+      completeAgent: vi.fn(),
+      failAgent: vi.fn(),
+    }
+    const tool = createAgentTool({
+      provider: { name: 'main-provider' } as any,
+      toolRegistry: new ToolRegistry(),
+      modelConfig: { model: 'main-model', maxTokens: 32000, contextWindow: 200000 },
+      cwd: '/repo',
+      backgroundTasks: backgroundTasks as any,
+    })
+
+    await tool.execute({
+      prompt: 'Long DTO analysis',
+      run_in_background: true,
+    }, { toolUseId: 'agent_tool_4' } as any)
+
+    await vi.waitFor(() => expect(backgroundTasks.completeAgent).toHaveBeenCalledWith(
+      'agent_task_3',
+      expect.objectContaining({
+        result: expect.stringContaining('Partial sub-agent result'),
+        turns: 300,
+        toolsUsed: ['Grep', 'Read'],
+      })
+    ))
+    expect(backgroundTasks.failAgent).not.toHaveBeenCalled()
+  })
 })

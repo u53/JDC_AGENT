@@ -1,5 +1,12 @@
 import { v4 as uuid } from 'uuid'
-import { runSubSession, type SubSessionOptions, type SubSessionResult } from '../sub-session.js'
+import {
+  describeSubSessionFailure,
+  formatSubSessionPartialResult,
+  hasUsefulSubSessionContent,
+  runSubSession,
+  type SubSessionOptions,
+  type SubSessionResult,
+} from '../sub-session.js'
 import { Mailbox, type MailboxMessage } from './team-mailbox.js'
 import { createTeamReportTool } from '../tools/team-report.js'
 import { createTeamArtifactTool } from '../tools/team-artifact.js'
@@ -332,10 +339,20 @@ export class TeamMember {
         return
       }
 
+      if (result.status === 'max_turns_exhausted' && hasUsefulSubSessionContent(result)) {
+        const taskResult: TeamTaskResult = {
+          summary: formatSubSessionPartialResult(result),
+          findings: [],
+        }
+        this.result = taskResult
+        this.status = 'completed'
+        this.lastActivityAt = Date.now()
+        this.opts.onComplete?.(this.id, taskResult)
+        return
+      }
+
       if (result.status !== 'completed') {
-        const error = result.status === 'max_turns_exhausted'
-          ? `Sub-agent reached max turns without completing the task after ${result.turns} turns.`
-          : 'Sub-agent was aborted before completing the task.'
+        const error = describeSubSessionFailure(result)
         this.status = 'failed'
         this.lastActivityAt = Date.now()
         this.opts.onFail?.(this.id, error)

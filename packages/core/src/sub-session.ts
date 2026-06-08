@@ -24,6 +24,7 @@ import { UsageTracker } from './usage-tracker.js'
 import { FileReadStateCache } from './file-read-state.js'
 
 const subSessionHarvestCounts = new Map<string, { total: number; pending: number }>()
+export const SUB_SESSION_NO_FINAL_RESPONSE = '[Sub-agent reached max turns without final response]'
 
 const SUB_AGENT_SYSTEM = `You are a sub-agent executing a specific task. Focus on completing the task efficiently.
 You have access to the same tools as the main session.
@@ -85,6 +86,28 @@ export interface SubSessionResult {
   turns: number
   toolsUsed: string[]
   status: 'completed' | 'max_turns_exhausted' | 'aborted'
+}
+
+export function hasUsefulSubSessionContent(result: Pick<SubSessionResult, 'content'>): boolean {
+  const content = result.content.trim()
+  return content.length > 0 && content !== SUB_SESSION_NO_FINAL_RESPONSE
+}
+
+export function formatSubSessionPartialResult(result: Pick<SubSessionResult, 'content' | 'turns' | 'toolsUsed'>): string {
+  const toolsLine = result.toolsUsed.length > 0
+    ? `\n\nTools used before stopping: ${[...new Set(result.toolsUsed)].join(', ')}`
+    : ''
+  return `Partial sub-agent result (max turns reached after ${result.turns} turns).\n\n${result.content}${toolsLine}`
+}
+
+export function describeSubSessionFailure(result: Pick<SubSessionResult, 'status' | 'turns' | 'content'>): string {
+  if (result.status === 'max_turns_exhausted') {
+    return `Sub-agent reached max turns without completing after ${result.turns} turns.`
+  }
+  if (result.status === 'aborted') {
+    return 'Sub-agent was aborted before completing.'
+  }
+  return result.content || 'Sub-agent failed before completing.'
 }
 
 export function formatExternalMessages(msgs: Array<{ from: string; content: string; intent?: string; priority: string }>): string {
@@ -370,7 +393,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
   const lastText = lastAssistant?.content.find(b => b.type === 'text') as { text: string } | undefined
   enqueueSubSessionHarvest(opts, contextConfig, contextScheduler, contextSessionId, runLoopId, prompt, harvestAssistantMessages, harvestToolEvents, runLoopStartedAt, modelConfig)
   return {
-    content: lastText?.text || '[Sub-agent reached max turns without final response]',
+    content: lastText?.text || SUB_SESSION_NO_FINAL_RESPONSE,
     turns,
     toolsUsed: [...new Set(toolsUsed)],
     status: signal?.aborted ? 'aborted' : 'max_turns_exhausted',

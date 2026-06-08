@@ -3,8 +3,13 @@ import type { ToolRegistry } from '../tool-registry.js'
 import type { ModelProvider } from '../model-provider.js'
 import type { ModelConfig } from '../types.js'
 import type { ToolExecutionEvent, PermissionCallback } from '../tool-runner.js'
-import { runSubSession } from '../sub-session.js'
-import type { SubSessionOptions } from '../sub-session.js'
+import {
+  describeSubSessionFailure,
+  formatSubSessionPartialResult,
+  hasUsefulSubSessionContent,
+  runSubSession,
+} from '../sub-session.js'
+import type { SubSessionOptions, SubSessionResult } from '../sub-session.js'
 import { createContextScheduler } from '../context/scheduler.js'
 import type { RuntimeModelResolution } from '../model-resolution.js'
 
@@ -125,6 +130,12 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
             contextEngine,
           })
         }).then(result => {
+          if (isPartialMaxTurnsResult(result)) {
+            const partial = formatSubSessionPartialResult(result)
+            deps.onAgentComplete?.(toolUseId, { ...result, content: partial })
+            deps.backgroundTasks!.completeAgent(task.id, { result: partial, turns: result.turns, toolsUsed: result.toolsUsed })
+            return
+          }
           if (result.status !== 'completed') {
             deps.backgroundTasks!.failAgent(task.id, describeSubSessionFailure(result))
             return
@@ -185,6 +196,12 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
         if (raceResult.type === 'backgrounded') {
           const task = deps.backgroundTasks!.registerAgent(prompt, agentType)
           sessionPromise.then(result => {
+            if (isPartialMaxTurnsResult(result)) {
+              const partial = formatSubSessionPartialResult(result)
+              deps.onAgentComplete?.(toolUseId, { ...result, content: partial })
+              deps.backgroundTasks!.completeAgent(task.id, { result: partial, turns: result.turns, toolsUsed: result.toolsUsed })
+              return
+            }
             if (result.status !== 'completed') {
               deps.backgroundTasks!.failAgent(task.id, describeSubSessionFailure(result))
               return
@@ -201,6 +218,14 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
               modelWarning ? `Model warning: ${modelWarning}` : '',
               `You will receive a <task-notification> when it completes.`,
             ].filter(Boolean).join('\n'),
+          }
+        }
+
+        if (isPartialMaxTurnsResult(raceResult.result!)) {
+          const partial = formatSubSessionPartialResult(raceResult.result!)
+          deps.onAgentComplete?.(toolUseId, { ...raceResult.result!, content: partial })
+          return {
+            content: modelWarning ? `Model warning: ${modelWarning}\n\n${partial}` : partial,
           }
         }
 
@@ -229,14 +254,8 @@ export function createAgentTool(deps: AgentToolDeps): ToolHandler {
   }
 }
 
-function describeSubSessionFailure(result: { status?: string; turns: number; content: string }): string {
-  if (result.status === 'max_turns_exhausted') {
-    return `Sub-agent reached max turns without completing after ${result.turns} turns.`
-  }
-  if (result.status === 'aborted') {
-    return 'Sub-agent was aborted before completing.'
-  }
-  return result.content || 'Sub-agent failed before completing.'
+function isPartialMaxTurnsResult(result: SubSessionResult): boolean {
+  return result.status === 'max_turns_exhausted' && hasUsefulSubSessionContent(result)
 }
 
 async function resolveContextEngineFailOpen(getter: AgentToolDeps['contextEngine']): Promise<SubSessionOptions['contextEngine'] | undefined> {

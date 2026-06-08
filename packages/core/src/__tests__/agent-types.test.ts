@@ -85,7 +85,8 @@ describe('agent-types', () => {
   it('each type has systemPrompt and maxTurns', () => {
     for (const t of AGENT_TYPES) {
       expect(t.systemPrompt.length).toBeGreaterThan(20)
-      expect(t.maxTurns).toBeGreaterThan(0)
+      expect(t.maxTurns).toBeGreaterThanOrEqual(300)
+      expect(t.maxTurns).toBeLessThanOrEqual(500)
     }
   })
 })

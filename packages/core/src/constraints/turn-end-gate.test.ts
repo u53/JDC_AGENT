@@ -79,21 +79,14 @@ describe('evaluateTurnEndGate', () => {
     }
   })
 
-  it('appends fallback warning for unresolved changed files without requirements', () => {
+  it('allows final response for unresolved changed files when no verification requirements were derived', () => {
     const decision = evaluateTurnEndGate({
       changedFiles: [changedFile],
       requirements: [],
       assistantText: '完成。',
     })
 
-    expect(decision).toEqual(expect.objectContaining({
-      action: 'append_disclosure',
-      severity: 'warning',
-    }))
-    if (decision.action === 'append_disclosure') {
-      expect(decision.disclosure).toContain('Verification not derived')
-      expect(decision.disclosure).toContain('src/app.ts')
-    }
+    expect(decision).toEqual({ action: 'allow' })
   })
 
   it('appends warning when changed files remain unresolved even if requirements passed', () => {

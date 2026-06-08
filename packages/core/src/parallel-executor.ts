@@ -33,6 +33,7 @@ const JDC_READ_TOOLS = new Set([
 ])
 
 const LONG_RUNNING_TOOLS = new Set(['Agent', 'Bash', 'Monitor', 'Team'])
+const DELEGATION_TOOLS = new Set(['Agent', 'Team'])
 
 const DEFAULT_MAX_READ_CONCURRENCY = 5
 
@@ -51,6 +52,10 @@ function isReadTool(name: string): boolean {
 
 function isJdcReadTool(name: string): boolean {
   return JDC_READ_TOOLS.has(name) || name.startsWith('Jdc')
+}
+
+function isDelegationTool(name: string): boolean {
+  return DELEGATION_TOOLS.has(name)
 }
 
 export function isEagerExecutableTool(name: string): boolean {
@@ -211,7 +216,7 @@ export class ParallelExecutor {
         blocks[idx].name, blocks[idx].id, blocks[idx].input, onEvent, toolSignal
       )
       results[idx] = { tool_use_id: raced.tool_use_id, content: raced.content, is_error: raced.is_error }
-      if (raced.is_error && !raced.aborted) {
+      if (raced.is_error && !raced.aborted && !isDelegationTool(blocks[idx].name)) {
         batchAbort.abort()
       }
     }

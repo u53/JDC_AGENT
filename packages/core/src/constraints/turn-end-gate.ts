@@ -32,6 +32,7 @@ export function evaluateTurnEndGate(input: {
   const unresolvedFiles = input.changedFiles.filter((file) => file.status === 'pending' || file.status === 'failed')
   if (unresolvedFiles.length) {
     const hasFailedFile = unresolvedFiles.some((file) => file.status === 'failed')
+    if (input.requirements.length === 0 && !hasFailedFile) return { action: 'allow' }
     return {
       action: 'append_disclosure',
       severity: hasFailedFile ? 'error' : 'warning',
