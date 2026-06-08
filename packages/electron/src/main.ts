@@ -90,8 +90,12 @@ function setupAutoUpdater(win: BrowserWindow) {
     }
   })
   ipcMain.handle('updater:download', async () => {
-    autoUpdater.downloadUpdate()
-    return { success: true }
+    try {
+      await autoUpdater.downloadUpdate()
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err?.message || String(err) }
+    }
   })
   ipcMain.handle('updater:install', () => {
     autoUpdater.quitAndInstall()
@@ -121,8 +125,6 @@ app.whenReady().then(async () => {
     sessionManager.initMcp(process.env.HOME || '/').catch((err) => {
       console.error('[JDC Code] MCP init error:', err.message)
     })
-    // Check for updates on launch (non-blocking)
-    autoUpdater.checkForUpdates().catch(() => {})
   })
 
   app.on('activate', () => {

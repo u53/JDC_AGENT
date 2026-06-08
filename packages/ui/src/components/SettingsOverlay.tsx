@@ -172,10 +172,19 @@ function AdvancedTab() {
     }
   }
 
-  const downloadUpdate = () => {
+  const downloadUpdate = async () => {
     setUpdateStatus('downloading')
     setDownloadPercent(0)
-    window.electronAPI?.updaterDownload()
+    try {
+      const result = await window.electronAPI?.updaterDownload()
+      if (result?.success === false) {
+        setUpdateStatus('error')
+        setErrorMsg(result.error || '下载更新失败')
+      }
+    } catch {
+      setUpdateStatus('error')
+      setErrorMsg('下载更新失败')
+    }
   }
 
   const installUpdate = () => {

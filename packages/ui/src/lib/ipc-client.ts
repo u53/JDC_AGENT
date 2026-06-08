@@ -74,8 +74,8 @@ declare global {
       teamSend: (sessionId: string, taskId: string, payload: { message: string; target?: string; intent?: string; priority?: string }) => Promise<unknown>
       onTeamStateChanged: (callback: (data: { sessionId: string; taskId: string }) => void) => () => void
       // Updater
-      updaterCheck: () => Promise<{ error?: string }>
-      updaterDownload: () => Promise<unknown>
+      updaterCheck: () => Promise<{ version?: string | null; error?: string }>
+      updaterDownload: () => Promise<{ success: boolean; error?: string }>
       updaterInstall: () => Promise<unknown>
       onUpdaterAvailable: (callback: (data: { version: string }) => void) => () => void
       onUpdaterProgress: (callback: (data: { percent: number }) => void) => () => void
