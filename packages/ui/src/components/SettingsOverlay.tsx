@@ -26,7 +26,7 @@ const PROTOCOL_OPTIONS: { value: ApiProtocol; label: string }[] = [
   { value: 'openai-responses', label: 'OpenAI Responses (/v1/responses)' },
 ]
 
-function ProtocolSelect({ value, onChange }: { value: ApiProtocol; onChange: (v: ApiProtocol) => void }) {
+function ProtocolSelect({ value, onChange, compact = false }: { value: ApiProtocol; onChange: (v: ApiProtocol) => void; compact?: boolean }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const current = PROTOCOL_OPTIONS.find(o => o.value === value)
@@ -40,13 +40,13 @@ function ProtocolSelect({ value, onChange }: { value: ApiProtocol; onChange: (v:
   }, [])
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className={`settings-protocol-select relative ${compact ? 'w-[230px]' : 'w-full'}`}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-[6px] px-3 py-2 text-[13px] text-[var(--text)] text-left flex items-center justify-between hover:border-[var(--border-strong)] transition-colors"
+        className={`flex w-full items-center justify-between gap-2 rounded-[6px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-left text-[var(--text)] transition-colors hover:border-[var(--border-strong)] ${compact ? 'py-1.5 text-[12px]' : 'py-2 text-[13px]'}`}
       >
-        <span>{current?.label}</span>
+        <span className="truncate">{current?.label}</span>
         <span className="text-[var(--muted)]">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
@@ -293,15 +293,31 @@ function AdvancedTab() {
       {/* About */}
       <div>
         <h3 className="text-[13px] font-medium text-[var(--text)] mb-3">关于</h3>
-        <div className="space-y-3 rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-4 text-[13px] leading-6 text-[var(--muted)]">
-          <p className="text-[var(--text)]">
-            JDC Code 是一款面向真实开发工作的 AI 编程助手。
-          </p>
-          <p>
-            它把上下文、权限、模型与多代理协作放在同一条工作流里，让每一次读取、修改、审查和提交都有更清楚的依据。
-          </p>
-          <p>
-            目标不是替你堆更多按钮，而是把项目里的关键信息留住，把危险操作挡住，把复杂任务拆成可以跟踪的步骤，让你在一个安静、可信的工作台里推进开发。
+        <div className="settings-about-hero space-y-4 rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-4">
+          <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface)] p-4">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">JDC Code</div>
+            <h4 className="mt-2 text-[18px] font-semibold leading-7 text-[var(--text)]">把 AI 编程变成可追踪的工作流</h4>
+            <p className="mt-3 text-[13px] leading-6 text-[var(--muted)]">
+              JDC Code 是一款面向真实开发工作的 AI 编程助手。它把上下文、权限、模型与多代理协作放在同一条工作流里，让读取、修改、审查和提交都能留下清楚依据。
+            </p>
+          </div>
+
+          <div className="settings-about-grid grid grid-cols-2 gap-3">
+            {[
+              ['上下文引擎', '自动沉淀项目事实、当前任务和关键证据，减少每次会话重新解释项目的成本。'],
+              ['Fresh-read 约束', '修改文件前要求新鲜读取证据，降低误改旧内容、覆盖并行改动的风险。'],
+              ['Evidence-first', '把工具结果、验证状态和缺失证据显式带入决策，让回答不只依赖模型印象。'],
+              ['Team / Sub-agent', '把大任务拆给 PM 与 worker，并保留任务、事件、输出和接管路径。'],
+            ].map(([title, body]) => (
+              <div key={title} className="rounded-[7px] border border-[var(--border)] bg-[var(--surface)] p-3">
+                <div className="text-[12px] font-semibold text-[var(--text)]">{title}</div>
+                <p className="mt-2 text-[12px] leading-5 text-[var(--muted)]">{body}</p>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-[12px] leading-5 text-[var(--muted)]">
+            它的目标不是堆更多按钮，而是把危险操作挡住，把复杂任务拆清楚，把验证结果摆出来，让你在一个安静、可信的开发驾驶舱里推进项目。
           </p>
         </div>
       </div>
@@ -350,6 +366,7 @@ function formatContextWindow(n: number): string {
 
 function ModelsTab() {
   const groups = useModelStore((s) => s.groups)
+  const activeModelId = useModelStore((s) => s.activeModelId)
   const addGroup = useModelStore((s) => s.addGroup)
   const removeGroup = useModelStore((s) => s.removeGroup)
   const updateGroup = useModelStore((s) => s.updateGroup)
@@ -357,7 +374,11 @@ function ModelsTab() {
   const updateModel = useModelStore((s) => s.updateModel)
   const removeModel = useModelStore((s) => s.removeModel)
   const loadFromConfig = useModelStore((s) => s.loadFromConfig)
-  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null)
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(() => {
+    if (!activeModelId) return null
+    return groups.find((group) => group.models.some((model) => model.id === activeModelId))?.id ?? null
+  })
+  const autoExpandedModelRef = useRef<string | null>(null)
   const [showNewGroup, setShowNewGroup] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
   const [newGroupProtocol, setNewGroupProtocol] = useState<ApiProtocol>('anthropic')
@@ -365,6 +386,13 @@ function ModelsTab() {
   const [newGroupKey, setNewGroupKey] = useState('')
 
   useEffect(() => { loadFromConfig() }, [loadFromConfig])
+  useEffect(() => {
+    if (!activeModelId || autoExpandedModelRef.current === activeModelId) return
+    const activeGroup = groups.find((group) => group.models.some((model) => model.id === activeModelId))
+    if (!activeGroup) return
+    setExpandedGroupId((current) => current ?? activeGroup.id)
+    autoExpandedModelRef.current = activeModelId
+  }, [activeModelId, groups])
 
   const handleAddGroup = () => {
     if (!newGroupName.trim()) return
@@ -544,29 +572,34 @@ function ModelGroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddMo
               <span className="settings-model-count mt-0.5 block text-[11px] text-[var(--muted)]">{modelCountLabel}</span>
             </div>
           )}
-          <select
-            value={group.protocol}
-            onChange={(e) => { e.stopPropagation(); onUpdate({ protocol: e.target.value as ApiProtocol }) }}
-            onClick={(e) => e.stopPropagation()}
-            className="shrink-0 cursor-pointer rounded-[5px] border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[11px] text-[var(--muted)] outline-none"
-          >
-            <option value="anthropic">anthropic</option>
-            <option value="openai">openai</option>
-            <option value="openai-responses">openai-responses</option>
-          </select>
+          <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+            <ProtocolSelect value={group.protocol} onChange={(protocol) => onUpdate({ protocol })} compact />
+          </div>
         </div>
         <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="shrink-0 rounded-[6px] px-2 py-1 text-[12px] text-[var(--muted)] transition-colors hover:bg-[var(--surface)] hover:text-red-400">
           删除
         </button>
       </div>
       {expanded && (
-        <div className="border-t border-[var(--border)] px-4 py-4 space-y-3">
-          <input value={editUrl} onChange={(e) => setEditUrl(e.target.value)} onBlur={() => onUpdate({ baseUrl: editUrl })} placeholder="Base URL" className={inputCls} />
-          <input type="password" value={editKey} onChange={(e) => setEditKey(e.target.value)} onBlur={() => onUpdate({ apiKey: editKey })} placeholder="API Key" className={inputCls} />
+        <div className="settings-model-group-body space-y-4 border-t border-[var(--border)] bg-[var(--surface)] px-4 py-4">
+          <div className="settings-field-grid grid grid-cols-2 gap-3">
+            <label className="space-y-1.5">
+              <span className="text-[11px] font-medium text-[var(--muted)]">Base URL</span>
+              <input value={editUrl} onChange={(e) => setEditUrl(e.target.value)} onBlur={() => onUpdate({ baseUrl: editUrl })} placeholder="https://api.example.com/v1" className={inputCls} />
+            </label>
+            <label className="space-y-1.5">
+              <span className="text-[11px] font-medium text-[var(--muted)]">API Key</span>
+              <input type="password" value={editKey} onChange={(e) => setEditKey(e.target.value)} onBlur={() => onUpdate({ apiKey: editKey })} placeholder="sk-..." className={inputCls} />
+            </label>
+          </div>
 
           <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-medium text-[var(--text)]">模型列表</span>
+              <span className="text-[11px] text-[var(--muted)]">{modelCountLabel}</span>
+            </div>
             {group.models.map((model) => (
-              <div key={model.id} className="border border-[var(--border)] rounded-[6px] px-3 py-2 space-y-1">
+              <div key={model.id} className="settings-model-row space-y-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2">
                 {editingModelId === model.id ? (
                   <ModelEditForm
                     model={model}
@@ -576,23 +609,23 @@ function ModelGroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddMo
                   />
                 ) : (
                   <>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-[13px] text-[var(--text)]">{model.name}</div>
-                        <div className="text-[11px] text-[var(--muted)]">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-[13px] font-medium text-[var(--text)]">{model.name}</div>
+                        <div className="truncate text-[11px] text-[var(--muted)]">
                           {model.modelId} &middot; {formatContextWindow(model.contextWindow)} &middot; 输出 {formatContextWindow(model.maxTokens || 32000)} &middot; {Math.round(model.compressAt * 100)}%
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex shrink-0 items-center gap-1.5">
                         <button
                           onClick={() => handleTestModel(model.modelId, model.id)}
                           disabled={testing === model.id}
-                          className="text-[12px] text-[var(--accent)] hover:opacity-80 transition-colors disabled:opacity-50"
+                          className="rounded-[5px] px-2 py-1 text-[12px] text-[var(--accent)] transition-colors hover:bg-[var(--accent-soft)] disabled:opacity-50"
                         >
                           {testing === model.id ? '测试中...' : '测试'}
                         </button>
-                        <button onClick={() => setEditingModelId(model.id)} className="text-[12px] text-[var(--accent)] hover:opacity-80 transition-colors">编辑</button>
-                        <button onClick={() => onRemoveModel(model.id)} className="text-[12px] text-[var(--muted)] hover:text-red-500 transition-colors">删除</button>
+                        <button onClick={() => setEditingModelId(model.id)} className="rounded-[5px] px-2 py-1 text-[12px] text-[var(--accent)] transition-colors hover:bg-[var(--accent-soft)]">编辑</button>
+                        <button onClick={() => onRemoveModel(model.id)} className="rounded-[5px] px-2 py-1 text-[12px] text-[var(--muted)] transition-colors hover:bg-[var(--surface-3)] hover:text-red-400">删除</button>
                       </div>
                     </div>
                     {testResult?.id === model.id && (
@@ -607,7 +640,7 @@ function ModelGroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddMo
           </div>
 
           {showAddModel ? (
-            <div className="border border-[var(--border)] rounded-[6px] p-3 space-y-2">
+            <div className="settings-form-card space-y-3 rounded-[7px] border border-[var(--border)] bg-[var(--surface-2)] p-3">
               <div className="grid grid-cols-2 gap-2">
                 <input value={mName} onChange={(e) => setMName(e.target.value)} placeholder="显示名称" className={inputCls} />
                 <input value={mId} onChange={(e) => setMId(e.target.value)} placeholder="Model ID" className={inputCls} />
@@ -630,7 +663,7 @@ function ModelGroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddMo
               </div>
             </div>
           ) : (
-            <button onClick={() => setShowAddModel(true)} className={btnGhost}>+ 添加模型</button>
+            <button onClick={() => setShowAddModel(true)} className={`settings-secondary-action ${btnGhost}`}>+ 添加模型</button>
           )}
         </div>
       )}
