@@ -295,17 +295,18 @@ body {
 .jdc-event-card {
   --event-color: var(--accent);
   position: relative;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--event-color) 9%, var(--border));
-  border-radius: 11px;
+  border: 1px solid color-mix(in srgb, var(--event-color) 13%, var(--border));
+  border-radius: 8px;
   background:
-    radial-gradient(circle at 92% -20%, color-mix(in srgb, var(--event-color) 3%, transparent), transparent 36%),
-    linear-gradient(145deg, color-mix(in srgb, var(--surface-2) 98%, var(--event-color) 2%), var(--surface-2) 62%),
+    linear-gradient(90deg, color-mix(in srgb, var(--event-color) 5%, transparent), transparent 42%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 62%, var(--surface-2) 38%), var(--surface-2)),
     var(--surface-2);
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--surface) 52%, transparent),
-    inset 0 -1px 0 color-mix(in srgb, var(--accent) 4%, transparent),
-    0 18px 42px -36px color-mix(in srgb, var(--event-color) 24%, transparent);
+    inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent),
+    0 14px 34px -32px color-mix(in srgb, var(--event-color) 32%, transparent);
   transition:
     border-color 180ms cubic-bezier(0.16, 1, 0.3, 1),
     background-color 180ms cubic-bezier(0.16, 1, 0.3, 1),
@@ -319,11 +320,11 @@ body {
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(90deg, color-mix(in srgb, var(--event-color) 2.5%, transparent), transparent 34%),
-    linear-gradient(color-mix(in srgb, var(--text) 3%, transparent) 1px, transparent 1px);
-  background-size: auto, 100% 18px;
-  opacity: 0.54;
-  mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.82), transparent 72%);
+    linear-gradient(color-mix(in srgb, var(--text) 2.4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--text) 2%, transparent) 1px, transparent 1px);
+  background-size: 100% 20px, 28px 100%;
+  opacity: 0.42;
+  mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.72), transparent 78%);
 }
 
 .jdc-event-card[data-status="running"] {
@@ -370,8 +371,7 @@ body {
 .jdc-event-card:hover {
   border-color: color-mix(in srgb, var(--event-color) 24%, var(--border));
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--surface) 58%, transparent),
-    inset 0 -1px 0 color-mix(in srgb, var(--accent) 6%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent),
     0 22px 48px -36px color-mix(in srgb, var(--event-color) 42%, transparent);
   transform: translateY(-1px);
 }
@@ -396,7 +396,7 @@ body {
 .jdc-event-rail {
   position: absolute;
   inset: 0 auto 0 0;
-  width: 3px;
+  width: 2px;
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--event-color) 22%, transparent),
@@ -414,11 +414,12 @@ body {
   position: relative;
   z-index: 1;
   display: flex;
-  min-height: 44px;
+  min-width: 0;
+  min-height: 42px;
   align-items: center;
-  gap: 7px;
-  padding: 7px 10px 7px 13px;
-  border-radius: 10px 10px 0 0;
+  gap: 8px;
+  padding: 7px 10px 7px 12px;
+  border-radius: 8px 8px 0 0;
   transition:
     background-color 160ms cubic-bezier(0.16, 1, 0.3, 1),
     transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -436,14 +437,14 @@ body {
 .jdc-event-status {
   position: relative;
   display: inline-flex;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   border: 1px solid color-mix(in srgb, var(--event-color) 12%, var(--border));
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--surface) 18%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--event-color) 7%, var(--surface-2) 93%);
 }
 
 .jdc-event-status::after {
@@ -522,9 +523,9 @@ body {
 .jdc-event-label {
   flex: 0 0 auto;
   border: 1px solid color-mix(in srgb, var(--event-color) 12%, transparent);
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--surface) 14%, transparent);
-  color: color-mix(in srgb, var(--text) 90%, var(--event-color) 10%);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--event-color) 5%, transparent);
+  color: color-mix(in srgb, var(--text) 84%, var(--event-color) 16%);
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 760;
@@ -547,15 +548,15 @@ body {
 .jdc-event-chip {
   flex: 0 0 auto;
   border: 1px solid color-mix(in srgb, var(--event-color) 18%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--event-color) 6%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--event-color) 7%, transparent);
   color: color-mix(in srgb, var(--event-color) 72%, var(--text) 28%);
   font-family: var(--font-mono);
   font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0;
   line-height: 1;
-  padding: 5px 7px;
+  padding: 5px 7px 4px;
 }
 
 .jdc-event-actions {
@@ -763,16 +764,16 @@ body {
 .tool-kv-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 5px;
-  margin-bottom: 7px;
+  gap: 6px;
+  margin-bottom: 8px;
 }
 
 .tool-kv-grid > div {
   min-width: 0;
-  border: 1px solid color-mix(in srgb, var(--event-color) 10%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--event-color) 13%, var(--border));
   border-radius: 6px;
-  padding: 6px 7px;
-  background: color-mix(in srgb, var(--surface) 34%, transparent);
+  padding: 7px 8px;
+  background: color-mix(in srgb, var(--surface) 42%, transparent);
 }
 
 .tool-kv-grid span {
@@ -802,13 +803,13 @@ body {
 .tool-chip-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  margin-bottom: 7px;
+  gap: 6px;
+  margin-bottom: 8px;
 }
 
 .tool-chip-row span {
   border: 1px solid color-mix(in srgb, var(--event-color) 18%, transparent);
-  border-radius: 999px;
+  border-radius: 6px;
   background: color-mix(in srgb, var(--event-color) 8%, transparent);
   color: color-mix(in srgb, var(--event-color) 76%, var(--text) 24%);
   font-family: var(--font-mono);
@@ -823,10 +824,13 @@ body {
   margin: 0;
   max-height: 260px;
   overflow: auto;
-  border: 1px solid color-mix(in srgb, var(--event-color) 10%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--event-color) 13%, var(--border));
   border-radius: 6px;
-  background: color-mix(in srgb, var(--surface) 42%, var(--surface-3) 58%);
-  padding: 7px 8px;
+  background:
+    linear-gradient(color-mix(in srgb, var(--text) 2.4%, transparent) 1px, transparent 1px),
+    color-mix(in srgb, var(--surface) 46%, var(--surface-3) 54%);
+  background-size: 100% 19px;
+  padding: 8px 9px;
   font-size: 11px;
   line-height: 1.45;
   white-space: pre-wrap;
@@ -838,8 +842,8 @@ body {
   border-radius: 6px;
   color: var(--muted);
   font-size: 11px;
-  padding: 7px 8px;
-  background: color-mix(in srgb, var(--surface) 24%, transparent);
+  padding: 8px 9px;
+  background: color-mix(in srgb, var(--surface) 34%, transparent);
 }
 
 .tool-show-more {
@@ -886,8 +890,8 @@ body {
 
 .tool-list {
   display: grid;
-  gap: 6px;
-  margin-bottom: 9px;
+  gap: 7px;
+  margin-bottom: 10px;
 }
 
 .tool-list > div {
@@ -895,10 +899,10 @@ body {
   grid-template-columns: 22px minmax(0, 1fr);
   gap: 8px;
   align-items: start;
-  border: 1px solid color-mix(in srgb, var(--event-color) 10%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--event-color) 13%, var(--border));
   border-radius: 6px;
   padding: 8px;
-  background: color-mix(in srgb, var(--surface) 28%, transparent);
+  background: color-mix(in srgb, var(--surface) 38%, transparent);
 }
 
 .tool-list span {
@@ -1493,12 +1497,14 @@ body {
 }
 
 .jdc-tc-copy.tool-copy-btn {
-  border: 1px solid color-mix(in srgb, var(--event-color, var(--accent)) 10%, transparent);
-  background: color-mix(in srgb, var(--surface) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--event-color, var(--accent)) 13%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 26%, transparent);
 }
 
 .jdc-tc-copy.tool-copy-btn:hover {
-  border-color: color-mix(in srgb, var(--event-color, var(--accent)) 22%, transparent);
+  border-color: color-mix(in srgb, var(--event-color, var(--accent)) 26%, var(--border));
+  background: color-mix(in srgb, var(--event-color, var(--accent)) 8%, transparent);
 }
 
 .tool-copy-btn[data-copied="true"] {
@@ -1514,7 +1520,7 @@ body {
   justify-content: center;
   border: 1px solid color-mix(in srgb, var(--event-color, var(--accent)) 12%, var(--border));
   border-radius: 6px;
-  background: color-mix(in srgb, var(--surface) 20%, transparent);
+  background: color-mix(in srgb, var(--surface) 28%, transparent);
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 10.5px;
@@ -1545,10 +1551,11 @@ body {
   position: relative;
   z-index: 1;
   border-top: 1px solid color-mix(in srgb, var(--event-color) 12%, var(--border));
-  padding: 8px 10px 9px 11px;
+  min-width: 0;
+  padding: 10px 11px 11px;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--surface) 20%, transparent), transparent),
-    color-mix(in srgb, var(--surface-2) 82%, var(--surface-3) 18%);
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 26%, transparent), transparent),
+    color-mix(in srgb, var(--surface-2) 76%, var(--surface-3) 24%);
 }
 
 .jdc-event-content pre {
