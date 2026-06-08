@@ -91,7 +91,7 @@ export function SettingsOverlay() {
       }}
     >
       <div
-        className="settings-shell flex min-h-[560px] max-h-[86vh] w-[min(920px,94vw)] overflow-hidden rounded-[8px] border border-[var(--border)] bg-[var(--surface)]"
+        className="settings-shell flex h-[min(720px,86vh)] w-[min(920px,94vw)] overflow-hidden rounded-[8px] border border-[var(--border)] bg-[var(--surface)]"
         style={{ boxShadow: '0 24px 80px rgba(0, 0, 0, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.04)' }}
       >
         {/* Left nav */}
@@ -293,8 +293,16 @@ function AdvancedTab() {
       {/* About */}
       <div>
         <h3 className="text-[13px] font-medium text-[var(--text)] mb-3">关于</h3>
-        <div className="space-y-2 text-[13px] text-[var(--muted)]">
-          <p>JDC Code — AI-powered coding assistant</p>
+        <div className="space-y-3 rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-4 text-[13px] leading-6 text-[var(--muted)]">
+          <p className="text-[var(--text)]">
+            JDC Code 是一款面向真实开发工作的 AI 编程助手。
+          </p>
+          <p>
+            它把上下文、权限、模型与多代理协作放在同一条工作流里，让每一次读取、修改、审查和提交都有更清楚的依据。
+          </p>
+          <p>
+            目标不是替你堆更多按钮，而是把项目里的关键信息留住，把危险操作挡住，把复杂任务拆成可以跟踪的步骤，让你在一个安静、可信的工作台里推进开发。
+          </p>
         </div>
       </div>
     </div>

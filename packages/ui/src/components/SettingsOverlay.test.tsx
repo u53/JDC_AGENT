@@ -17,6 +17,7 @@ describe('SettingsOverlay', () => {
 
     expect(html).toContain('settings-overlay')
     expect(html).toContain('settings-shell')
+    expect(html).toContain('h-[min(720px,86vh)]')
     expect(html).toContain('settings-nav')
     expect(html).toContain('settings-content')
     expect(html).toContain('Settings')
@@ -61,5 +62,17 @@ describe('SettingsOverlay', () => {
     expect(html).toContain('settings-model-count')
     expect(html).toContain('Production')
     expect(html).toContain('1 model')
+  })
+
+  it('renders a Chinese product introduction in the about section', () => {
+    const settingsState = { isOpen: true, activeTab: 'advanced' as const, theme: 'dark' as const, config: null }
+    useSettingsStore.setState(settingsState)
+    Object.assign(useSettingsStore.getInitialState(), settingsState)
+
+    const html = renderToStaticMarkup(<SettingsOverlay />)
+
+    expect(html).toContain('JDC Code 是一款面向真实开发工作的 AI 编程助手')
+    expect(html).toContain('上下文、权限、模型与多代理协作')
+    expect(html).not.toContain('AI-powered coding assistant')
   })
 })
