@@ -62,21 +62,14 @@ describe('evaluateTurnEndGate', () => {
     }
   })
 
-  it('appends warning disclosure for unavailable or skipped verification', () => {
+  it('allows final response for unavailable or skipped verification requirements', () => {
     const decision = evaluateTurnEndGate({
       changedFiles: [changedFile],
       requirements: [requirement({ status: 'unavailable', reason: 'No test script found in package.json.' })],
       assistantText: '完成。',
     })
 
-    expect(decision).toEqual(expect.objectContaining({
-      action: 'append_disclosure',
-      severity: 'warning',
-    }))
-    if (decision.action === 'append_disclosure') {
-      expect(decision.disclosure).toContain('Verification unavailable or skipped')
-      expect(decision.disclosure).toContain('No test script found in package.json.')
-    }
+    expect(decision).toEqual({ action: 'allow' })
   })
 
   it('allows final response for unresolved changed files when no verification requirements were derived', () => {

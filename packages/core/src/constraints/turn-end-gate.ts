@@ -20,7 +20,7 @@ export function evaluateTurnEndGate(input: {
     }
   }
 
-  const unresolved = input.requirements.filter((requirement) => requirement.status === 'pending' || requirement.status === 'unavailable' || requirement.status === 'skipped')
+  const unresolved = input.requirements.filter((requirement) => requirement.status === 'pending')
   if (unresolved.length) {
     return {
       action: 'append_disclosure',
@@ -32,7 +32,9 @@ export function evaluateTurnEndGate(input: {
   const unresolvedFiles = input.changedFiles.filter((file) => file.status === 'pending' || file.status === 'failed')
   if (unresolvedFiles.length) {
     const hasFailedFile = unresolvedFiles.some((file) => file.status === 'failed')
-    if (input.requirements.length === 0 && !hasFailedFile) return { action: 'allow' }
+    const hasOnlyNonActionableRequirements = input.requirements.length === 0 ||
+      input.requirements.every((requirement) => requirement.status === 'unavailable' || requirement.status === 'skipped')
+    if (hasOnlyNonActionableRequirements && !hasFailedFile) return { action: 'allow' }
     return {
       action: 'append_disclosure',
       severity: hasFailedFile ? 'error' : 'warning',
