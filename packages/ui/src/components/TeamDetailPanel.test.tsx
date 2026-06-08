@@ -73,6 +73,27 @@ describe('TeamDetailPanel', () => {
     expect(html).toContain('markdown-code-block')
     expect(html).toContain('ContextPanel')
   })
+
+  it('renders member events as a compact timeline instead of a raw log block', () => {
+    seedTeamStore({
+      expandedMemberId: 'worker-1',
+      events: {
+        'team-1': [
+          '[09:41:12] [worker-1] tool_complete: Read',
+          '[09:42:03] PM: assigning follow-up task',
+        ],
+      },
+    })
+
+    const html = renderToStaticMarkup(<TeamDetailPanel sessionId="sess-1" taskId="team-1" />)
+
+    expect(html).toContain('team-event-timeline')
+    expect(html).toContain('team-event-row')
+    expect(html).toContain('09:41:12')
+    expect(html).toContain('worker-1')
+    expect(html).toContain('tool_complete')
+    expect(html).not.toContain('<pre')
+  })
 })
 
 function seedTeamStore(partial: Partial<ReturnType<typeof useTeamStore.getState>> = {}) {

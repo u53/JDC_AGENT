@@ -197,9 +197,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
         ) : (
           <div className="h-full flex flex-col">
             <div className="flex-1 min-h-0 overflow-y-auto p-3">
-              <pre className="text-[11px] leading-[1.55] font-mono text-[var(--muted)] whitespace-pre-wrap break-all m-0 rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_38%,transparent)] p-3">
-                {events.length === 0 ? '(no events yet)' : events.slice(-200).join('\n')}
-              </pre>
+              <TeamEventTimeline events={events} limit={200} />
               <div ref={eventsEndRef} />
             </div>
           </div>
@@ -352,6 +350,123 @@ function TeamMarkdown({ content, muted = false }: { content: string; muted?: boo
       <MarkdownRenderer content={content} compact />
     </div>
   )
+}
+
+function TeamEventTimeline({
+  events,
+  limit,
+  emptyMessage = '(no events yet)',
+}: {
+  events: string[]
+  limit?: number
+  emptyMessage?: string
+}) {
+  const visibleEvents = limit ? events.slice(-limit) : events
+  if (visibleEvents.length === 0) {
+    return (
+      <div className="rounded-[8px] border border-dashed border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)] px-3 py-3 text-[11px] italic text-[var(--muted)]">
+        {emptyMessage}
+      </div>
+    )
+  }
+
+  return (
+    <ol className="team-event-timeline space-y-1.5">
+      {visibleEvents.map((line, index) => {
+        const event = parseTeamEventLine(line)
+        const tone = eventTone(event.kind, event.message)
+        return (
+          <li
+            key={`${event.time}-${event.actor}-${event.kind}-${index}`}
+            className="team-event-row grid min-w-0 grid-cols-[52px_1fr] gap-2 rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)] px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]"
+          >
+            <time className="font-mono text-[10px] leading-5 text-[var(--muted)] tabular-nums">
+              {event.time}
+            </time>
+            <div className="min-w-0 space-y-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                {event.actor && (
+                  <span className="max-w-full break-words font-mono text-[10px] text-[var(--muted)] [overflow-wrap:anywhere]">
+                    {event.actor}
+                  </span>
+                )}
+                <span
+                  className="max-w-full break-words rounded-[5px] border px-1.5 py-0.5 font-mono text-[10px] leading-none [overflow-wrap:anywhere]"
+                  style={{
+                    color: tone,
+                    borderColor: `color-mix(in srgb, ${tone} 42%, var(--border))`,
+                    backgroundColor: `color-mix(in srgb, ${tone} 9%, transparent)`,
+                  }}
+                >
+                  {event.kind}
+                </span>
+              </div>
+              {event.message && (
+                <div className="min-w-0 whitespace-normal break-words text-[11px] leading-5 text-[var(--text)] [overflow-wrap:anywhere]">
+                  {event.message}
+                </div>
+              )}
+            </div>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+function parseTeamEventLine(line: string): { time: string; actor: string | null; kind: string; message: string } {
+  const timestampMatch = line.match(/^\[(\d{2}:\d{2}:\d{2})]\s*(.*)$/)
+  const time = timestampMatch?.[1] ?? '--:--:--'
+  let rest = timestampMatch?.[2] ?? line
+  let actor: string | null = null
+
+  const actorMatch = rest.match(/^\[([^\]]+)]\s*(.*)$/)
+  if (actorMatch) {
+    actor = actorMatch[1]
+    rest = actorMatch[2]
+  } else {
+    const pmMatch = rest.match(/^PM(?:\s+\(([^)]+)\))?:\s*(.*)$/)
+    if (pmMatch) {
+      actor = 'PM'
+      return {
+        time,
+        actor,
+        kind: pmMatch[1] ? `PM ${pmMatch[1]}` : 'PM',
+        message: pmMatch[2] ?? '',
+      }
+    }
+  }
+
+  const colonIndex = rest.indexOf(':')
+  if (colonIndex > 0) {
+    return {
+      time,
+      actor,
+      kind: rest.slice(0, colonIndex).trim(),
+      message: rest.slice(colonIndex + 1).trim(),
+    }
+  }
+
+  const spaceIndex = rest.indexOf(' ')
+  if (spaceIndex > 0) {
+    return {
+      time,
+      actor,
+      kind: rest.slice(0, spaceIndex).trim(),
+      message: rest.slice(spaceIndex + 1).trim(),
+    }
+  }
+
+  return { time, actor, kind: rest || 'event', message: '' }
+}
+
+function eventTone(kind: string, message: string): string {
+  const text = `${kind} ${message}`.toLowerCase()
+  if (text.includes('error') || text.includes('failed') || text.includes('cancelled')) return 'var(--bad)'
+  if (text.includes('complete') || text.includes('completed')) return 'var(--good)'
+  if (text.includes('pm') || text.includes('decision') || text.includes('assigned')) return 'var(--accent)'
+  if (text.includes('start') || text.includes('progress') || text.includes('synthesizing')) return 'var(--warn)'
+  return 'var(--muted)'
 }
 
 function Header({
@@ -587,9 +702,7 @@ function MemberDetailModal({
             {memberEvents.length === 0 ? (
               <div className="text-[11px] text-[var(--muted)] italic">(no events for this member yet)</div>
             ) : (
-              <pre className="text-[10.5px] leading-snug text-[var(--text)] whitespace-pre-wrap font-mono max-h-[240px] overflow-y-auto bg-[var(--bg)] rounded p-2 border border-[var(--border)]">
-                {memberEvents.join('\n')}
-              </pre>
+              <TeamEventTimeline events={memberEvents} />
             )}
           </ModalSection>
 
