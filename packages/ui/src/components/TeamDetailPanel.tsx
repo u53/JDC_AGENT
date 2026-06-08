@@ -157,15 +157,11 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
             </Section>
 
             <Section title={`Members (${team.members?.length ?? 0})`}>
-              <ul className="space-y-1.5">
-                {(team.members ?? []).map((m: any) => (
-                  <MemberRow
-                    key={m.id}
-                    member={m}
-                    onClick={() => setExpandedMember(m.id)}
-                  />
-                ))}
-              </ul>
+              <MemberBoard
+                members={team.members ?? []}
+                tasks={team.tasks ?? []}
+                onSelect={(memberId) => setExpandedMember(memberId)}
+              />
             </Section>
 
             <Section title={`Tasks (${team.taskStats?.completed ?? 0}/${team.taskStats?.total ?? 0})`}>
@@ -552,32 +548,76 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-function MemberRow({
+function MemberBoard({
+  members,
+  tasks,
+  onSelect,
+}: {
+  members: any[]
+  tasks: any[]
+  onSelect: (memberId: string) => void
+}) {
+  const taskById = useMemo(() => {
+    const map = new Map<string, any>()
+    for (const task of tasks) map.set(task.id, task)
+    return map
+  }, [tasks])
+
+  if (members.length === 0) {
+    return (
+      <div className="rounded-[8px] border border-dashed border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)] px-3 py-3 text-[11px] italic text-[var(--muted)]">
+        No members yet.
+      </div>
+    )
+  }
+
+  return (
+    <ul className="team-member-board grid gap-2">
+      {members.map((member: any) => (
+        <MemberCard
+          key={member.id}
+          member={member}
+          currentTask={member.currentTaskId ? taskById.get(member.currentTaskId) : null}
+          onClick={() => onSelect(member.id)}
+        />
+      ))}
+    </ul>
+  )
+}
+
+function MemberCard({
   member,
+  currentTask,
   onClick,
 }: {
   member: any
+  currentTask: any | null
   onClick: () => void
 }) {
   return (
     <li
-      className="rounded-[7px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)] overflow-hidden cursor-pointer hover:border-[color-mix(in_srgb,var(--accent)_34%,var(--border))] hover:bg-[color-mix(in_srgb,var(--accent)_7%,var(--surface-2))] transition-colors"
+      className="team-member-card min-w-0 rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)] px-3 py-2.5 cursor-pointer shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] transition-colors hover:border-[color-mix(in_srgb,var(--accent)_34%,var(--border))] hover:bg-[color-mix(in_srgb,var(--accent)_7%,var(--surface-2))]"
       onClick={onClick}
     >
-      <div className="flex items-center gap-2 px-3 py-2">
-        <span className="text-[12px] w-3.5 flex-shrink-0">{statusIcon(member.status)}</span>
-        <div className="flex-1 min-w-0">
-          <div className="text-[12px] text-[var(--text)] truncate">{member.role}</div>
+      <div className="flex min-w-0 items-start gap-2">
+        <span className="mt-0.5 w-3.5 flex-shrink-0 text-[12px]">{statusIcon(member.status)}</span>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0 whitespace-normal break-words text-[12px] font-medium text-[var(--text)] [overflow-wrap:anywhere]">
+              {member.role}
+            </div>
+            <StatusBadge status={member.status} small />
+          </div>
           {member.responsibility && (
-            <div className="text-[10px] text-[var(--muted)] truncate mt-0.5">
+            <div className="min-w-0 whitespace-normal break-words text-[11px] leading-5 text-[var(--muted)] [overflow-wrap:anywhere]">
               {member.responsibility}
             </div>
           )}
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <TaskMetaPill label={currentTask?.title ?? member.currentTaskId ?? 'Idle'} tone={currentTask ? 'var(--accent)' : 'var(--muted)'} />
+            <TaskMetaPill label={member.toolCount > 0 ? `${member.toolCount} tools` : '0 tools'} />
+          </div>
         </div>
-        <span className="text-[10px] text-[var(--muted)] flex-shrink-0">
-          {member.toolCount > 0 ? `${member.toolCount} tools` : ''}
-        </span>
-        <StatusBadge status={member.status} small />
       </div>
     </li>
   )

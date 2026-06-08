@@ -105,6 +105,17 @@ describe('TeamDetailPanel', () => {
     expect(html).toContain('high')
     expect(html).toContain('Worker runbook')
   })
+
+  it('renders members as compact cards with current task context', () => {
+    const html = renderToStaticMarkup(<TeamDetailPanel sessionId="sess-1" taskId="team-1" />)
+
+    expect(html).toContain('team-member-board')
+    expect(html).toContain('team-member-card')
+    expect(html).toContain('Frontend Worker')
+    expect(html).toContain('Inspect UI output.')
+    expect(html).toContain('Render markdown')
+    expect(html).toContain('2 tools')
+  })
 })
 
 function seedTeamStore(partial: Partial<ReturnType<typeof useTeamStore.getState>> = {}) {
