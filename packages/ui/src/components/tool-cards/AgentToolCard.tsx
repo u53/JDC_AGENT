@@ -49,7 +49,7 @@ export function AgentToolCard({ event, input, result, name }: ToolCardRouterProp
   }
 
   return (
-    <div onClick={handleClick} className="cursor-pointer">
+    <div onClick={handleClick} className="agent-launch-control cursor-pointer">
       <ToolCardShell
         label="AGENT"
         detail={modelId ? `${taskDescription} · ${modelId}` : taskDescription}
@@ -62,7 +62,7 @@ export function AgentToolCard({ event, input, result, name }: ToolCardRouterProp
         actions={
           status === 'running' ? (
             <button
-              className="text-[10px] text-[var(--bad)] hover:opacity-80 transition-opacity ml-2"
+              className="agent-launch-action ml-2 rounded-[6px] border border-[color-mix(in_srgb,var(--bad)_24%,var(--border))] px-2 py-1 font-mono text-[10px] text-[var(--bad)] transition-colors hover:bg-[color-mix(in_srgb,var(--bad)_10%,transparent)]"
               onClick={handleAbort}
             >
               Abort
@@ -72,12 +72,18 @@ export function AgentToolCard({ event, input, result, name }: ToolCardRouterProp
           ) : undefined
         }
       >
+        {status === 'running' && (
+          <div className="agent-launch-metrics mb-2 grid grid-cols-2 gap-1.5">
+            <AgentLaunchMetric label="Model" value={modelId || 'default'} />
+            <AgentLaunchMetric label="Tools" value={`${toolCount} tools`} />
+          </div>
+        )}
         {status === 'running' && recentTools.length > 0 && (
-          <div className="jdc-agent-timeline text-[12px] text-[var(--muted)] mb-2" style={{ fontFamily: 'var(--font-mono)' }}>
+          <div className="agent-mini-timeline mb-2 grid gap-1 text-[12px] text-[var(--muted)]" style={{ fontFamily: 'var(--font-mono)' }}>
             {recentTools.map((te, i) => (
-              <div key={i} className="jdc-agent-timeline-row">
+              <div key={i} className="flex min-w-0 items-center gap-2 rounded-[6px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_32%,transparent)] px-2 py-1.5">
                 <span className="jdc-agent-timeline-dot" data-status={te.status} />
-                <span className={te.status === 'error' ? 'text-[var(--bad)]' : te.status === 'complete' ? 'text-[var(--good)]' : 'text-[var(--text)]'}>
+                <span className={`min-w-0 flex-1 truncate ${te.status === 'error' ? 'text-[var(--bad)]' : te.status === 'complete' ? 'text-[var(--good)]' : 'text-[var(--text)]'}`}>
                   {te.toolName}
                 </span>
                 {te.status === 'start' && <span className="text-[var(--muted)] animate-pulse">...</span>}
@@ -111,6 +117,15 @@ export function AgentToolCard({ event, input, result, name }: ToolCardRouterProp
           </div>
         )}
       </ToolCardShell>
+    </div>
+  )
+}
+
+function AgentLaunchMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-[6px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)] px-2 py-1.5">
+      <div className="font-mono text-[9px] uppercase text-[var(--muted)]">{label}</div>
+      <div className="mt-0.5 min-w-0 truncate font-mono text-[10px] text-[var(--text)]">{value}</div>
     </div>
   )
 }
