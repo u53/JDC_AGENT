@@ -22,4 +22,14 @@ describe('SettingsOverlay', () => {
     expect(html).toContain('Settings')
     expect(html).toContain('模型')
   })
+
+  it('renders the models tab with a composed action area and empty state', () => {
+    const html = renderToStaticMarkup(<SettingsOverlay />)
+
+    expect(html).toContain('settings-tab-body')
+    expect(html).toContain('settings-section')
+    expect(html).toContain('settings-primary-action')
+    expect(html).toContain('settings-empty-state')
+    expect(html).toContain('暂无模型分组')
+  })
 })

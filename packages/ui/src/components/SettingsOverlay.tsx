@@ -373,13 +373,19 @@ function ModelsTab() {
   const btnGhost = 'border border-[var(--border)] rounded-[6px] px-3 py-1.5 text-[12px] text-[var(--muted)] hover:text-[var(--text)]'
 
   return (
-    <div>
-      <button onClick={() => setShowNewGroup(true)} className={btnPrimary + ' mb-4'}>
-        + 新建分组
-      </button>
+    <div className="settings-tab-body space-y-4">
+      <section className="settings-section flex items-center justify-between gap-4 rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
+        <div className="min-w-0">
+          <h4 className="text-[13px] font-semibold text-[var(--text)]">模型分组</h4>
+          <p className="mt-1 text-[12px] leading-5 text-[var(--muted)]">按供应商或代理端点维护模型配置。</p>
+        </div>
+        <button onClick={() => setShowNewGroup(true)} className={`settings-primary-action ${btnPrimary} shrink-0`}>
+          + 新建分组
+        </button>
+      </section>
 
       {showNewGroup && (
-        <div className="mb-4 border border-[var(--border)] rounded-[6px] p-4 space-y-3">
+        <div className="settings-form-card border border-[var(--border)] rounded-[8px] bg-[var(--surface-2)] p-4 space-y-3">
           <input value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} placeholder="分组名称" className={inputCls} />
           <ProtocolSelect value={newGroupProtocol} onChange={setNewGroupProtocol} />
           <input value={newGroupUrl} onChange={(e) => setNewGroupUrl(e.target.value)} placeholder="Base URL" className={inputCls} />
@@ -406,7 +412,11 @@ function ModelsTab() {
       ))}
 
       {groups.length === 0 && !showNewGroup && (
-        <p className="text-[13px] text-[var(--muted)] text-center py-8">暂无分组，点击上方按钮创建</p>
+        <div className="settings-empty-state rounded-[8px] border border-dashed border-[var(--border)] bg-[var(--surface-2)] px-6 py-10 text-center">
+          <div className="mx-auto mb-3 h-8 w-8 rounded-[6px] border border-[var(--border)] bg-[var(--surface-3)]" />
+          <h4 className="text-[13px] font-semibold text-[var(--text)]">暂无模型分组</h4>
+          <p className="mx-auto mt-2 max-w-[360px] text-[12px] leading-5 text-[var(--muted)]">创建一个分组后，可以把 Base URL、协议和模型 ID 绑定在一起，切换会更稳。</p>
+        </div>
       )}
     </div>
   )
