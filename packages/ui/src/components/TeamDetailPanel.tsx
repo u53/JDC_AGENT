@@ -140,17 +140,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
 
             <Section title="Project Manager">
               {team.manager ? (
-                <div className="rounded-[8px] border border-[color-mix(in_srgb,var(--accent)_12%,var(--border))] bg-[color-mix(in_srgb,var(--surface-2)_46%,transparent)] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
-                  <div className="flex items-center justify-between">
-                    <div className="text-[13px] text-[var(--text)]">{team.manager.name}</div>
-                    <StatusBadge status={team.manager.status} />
-                  </div>
-                  {team.manager.currentDecision && (
-                    <div className="mt-1.5 text-[11px] text-[var(--muted)] italic">
-                      {team.manager.currentDecision}
-                    </div>
-                  )}
-                </div>
+                <ManagerCard manager={team.manager} />
               ) : (
                 <div className="text-[11px] text-[var(--muted)]">Initializing…</div>
               )}
@@ -533,6 +523,29 @@ function StatsRow({ team }: { team: any }) {
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+function ManagerCard({ manager }: { manager: any }) {
+  return (
+    <div className="team-manager-card min-w-0 rounded-[8px] border border-[color-mix(in_srgb,var(--accent)_18%,var(--border))] bg-[color-mix(in_srgb,var(--surface-2)_46%,transparent)] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="whitespace-normal break-words text-[13px] font-medium text-[var(--text)] [overflow-wrap:anywhere]">
+            {manager.name}
+          </div>
+          <div className="mt-0.5 font-mono text-[10px] uppercase text-[var(--muted)]">
+            Project Manager
+          </div>
+        </div>
+        <StatusBadge status={manager.status} />
+      </div>
+      {manager.currentDecision && (
+        <div className="mt-2 rounded-[7px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_38%,transparent)] px-2.5 py-2">
+          <TeamMarkdown content={manager.currentDecision} muted />
+        </div>
+      )}
     </div>
   )
 }

@@ -116,6 +116,27 @@ describe('TeamDetailPanel', () => {
     expect(html).toContain('Render markdown')
     expect(html).toContain('2 tools')
   })
+
+  it('renders project manager state as a rich overview card', () => {
+    seedTeamStore({
+      teams: {
+        'team-1': {
+          ...team,
+          manager: {
+            ...team.manager,
+            currentDecision: '### PM decision\n- Keep `handoff` scoped',
+          },
+        },
+      },
+    })
+
+    const html = renderToStaticMarkup(<TeamDetailPanel sessionId="sess-1" taskId="team-1" />)
+
+    expect(html).toContain('team-manager-card')
+    expect(html).toContain('<h3')
+    expect(html).toContain('handoff')
+    expect(html).toContain('Project Manager')
+  })
 })
 
 function seedTeamStore(partial: Partial<ReturnType<typeof useTeamStore.getState>> = {}) {
