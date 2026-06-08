@@ -19,6 +19,7 @@ type SectionId = 'session' | 'usage' | 'tasks' | 'team' | 'context' | 'queue' | 
 
 interface RailItem {
   id: SectionId
+  label: string
   Icon: React.ComponentType<{ size?: number; className?: string }>
   badge: string | number | null
   badgeColor?: string
@@ -28,6 +29,20 @@ const INSPECTOR_WIDTH_KEY = 'jdcagnet.inspector.width'
 const MIN_WIDTH = 280
 const MAX_WIDTH = 700
 const DEFAULT_WIDTH = 320
+
+const sectionLabels: Record<SectionId, string> = {
+  session: 'Session',
+  usage: 'Usage',
+  tasks: 'Tasks',
+  team: 'Team',
+  context: 'Context',
+  queue: 'Queue',
+  files: 'Files',
+}
+
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(' ')
+}
 
 function loadInspectorWidth(): number {
   try {
@@ -203,28 +218,32 @@ export function Inspector() {
   const contextBadgeColor = contextInspectError ? 'var(--bad)' : contextInspectLoading ? 'var(--warn)' : contextInspect?.status === 'available' ? 'var(--jdc-engine-accent)' : undefined
 
   const railItems: RailItem[] = [
-    { id: 'session', Icon: IconSession, badge: null },
-    { id: 'usage', Icon: IconUsage, badge: null },
-    { id: 'tasks', Icon: IconTasks, badge: taskBadge, badgeColor: taskBadgeColor },
-    { id: 'team', Icon: IconTeam, badge: teamBadge, badgeColor: teamBadgeColor },
-    ...(showContextInspector ? [{ id: 'context' as const, Icon: IconJdcGraph, badge: contextBadge, badgeColor: contextBadgeColor }] : []),
-    { id: 'queue', Icon: IconQueue, badge: messageQueue.length || null },
-    { id: 'files', Icon: IconFiles, badge: fileChanges.length || null },
+    { id: 'session', label: sectionLabels.session, Icon: IconSession, badge: null },
+    { id: 'usage', label: sectionLabels.usage, Icon: IconUsage, badge: null },
+    { id: 'tasks', label: sectionLabels.tasks, Icon: IconTasks, badge: taskBadge, badgeColor: taskBadgeColor },
+    { id: 'team', label: sectionLabels.team, Icon: IconTeam, badge: teamBadge, badgeColor: teamBadgeColor },
+    ...(showContextInspector ? [{ id: 'context' as const, label: sectionLabels.context, Icon: IconJdcGraph, badge: contextBadge, badgeColor: contextBadgeColor }] : []),
+    { id: 'queue', label: sectionLabels.queue, Icon: IconQueue, badge: messageQueue.length || null },
+    { id: 'files', label: sectionLabels.files, Icon: IconFiles, badge: fileChanges.length || null },
   ]
 
   if (!expanded) {
     return (
-      <div className="w-[44px] border-l border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_90%,transparent)] flex flex-col items-center py-3 gap-2 backdrop-blur">
-        {railItems.map(({ id, Icon, badge, badgeColor }) => (
+      <div className="w-[48px] border-l border-[var(--border)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_94%,transparent),color-mix(in_srgb,var(--surface-2)_88%,transparent))] flex flex-col items-center py-3 gap-2 backdrop-blur">
+        <div className="mb-1 grid h-7 w-7 place-items-center rounded-[8px] border border-[color-mix(in_srgb,var(--accent)_20%,var(--border))] bg-[var(--accent-soft)] font-mono text-[10px] font-semibold text-[var(--accent)] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+          JD
+        </div>
+        {railItems.map(({ id, label, Icon, badge, badgeColor }) => (
           <button
             key={id}
             onClick={() => toggleSection(id)}
-            className="relative p-2 rounded-[8px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]"
-            aria-label={id}
+            className="relative grid h-8 w-8 place-items-center rounded-[8px] border border-transparent text-[var(--muted)] transition-colors duration-150 hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] active:translate-y-px"
+            aria-label={label}
+            title={label}
           >
             <Icon size={18} />
             {badge != null && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] rounded-full text-[var(--accent-ink)] text-[9px] flex items-center justify-center leading-none font-medium" style={{ backgroundColor: badgeColor || 'var(--accent)' }}>
+              <span className="absolute -top-1 -right-1 flex h-[15px] min-w-[15px] items-center justify-center rounded-full px-1 text-[9px] font-semibold leading-none text-[var(--accent-ink)] ring-2 ring-[var(--surface)]" style={{ backgroundColor: badgeColor || 'var(--accent)' }}>
                 {badge}
               </span>
             )}
@@ -251,7 +270,7 @@ export function Inspector() {
 
   return (
     <div
-      className="h-full border-l border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] flex flex-col relative overflow-hidden backdrop-blur"
+      className="h-full border-l border-[var(--border)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_95%,transparent),color-mix(in_srgb,var(--bg)_88%,transparent))] flex flex-col relative overflow-hidden backdrop-blur"
       style={{ width: `${width}px` }}
     >
       {/* Drag handle on the left edge */}
@@ -262,38 +281,52 @@ export function Inspector() {
       />
 
       {/* Header */}
-      <div className="flex-shrink-0 flex items-center justify-between px-3 py-2 border-b border-[var(--border)]">
-        <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text)]">Inspector</span>
-        <button
-          onClick={() => { setExpanded(false); setActiveSection(null) }}
-          className="p-1 rounded-[6px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]"
-          aria-label="Close inspector"
-        >
-          <IconX size={14} />
-        </button>
+      <div className="flex-shrink-0 border-b border-[var(--border)] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] shadow-[0_0_0_4px_var(--accent-soft)]" />
+              <span className="font-mono text-[11px] font-semibold uppercase text-[var(--text)]">Inspector</span>
+            </div>
+            <p className="mt-1 truncate font-mono text-[10px] text-[var(--muted)]">
+              {activeSection ? sectionLabels[activeSection] : 'Control plane'}
+            </p>
+          </div>
+          <button
+            onClick={() => { setExpanded(false); setActiveSection(null) }}
+            className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-[7px] border border-[var(--border)] text-[var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)] active:translate-y-px"
+            aria-label="Close inspector"
+          >
+            <IconX size={14} />
+          </button>
+        </div>
       </div>
 
       {/* Rail row for section switching */}
-      <div className="flex-shrink-0 flex items-center gap-1 px-3 py-2 border-b border-[var(--border)]">
-        {railItems.map(({ id, Icon, badge, badgeColor }) => (
-          <button
-            key={id}
-            onClick={() => toggleSection(id)}
-            className={`relative p-2 rounded-[8px] ${
-              activeSection === id
-                ? 'bg-[var(--accent-soft)] text-[var(--accent)]'
-                : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'
-            }`}
-            aria-label={id}
-          >
-            <Icon size={16} />
-            {badge != null && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] rounded-full text-[var(--accent-ink)] text-[9px] flex items-center justify-center leading-none font-medium" style={{ backgroundColor: badgeColor || 'var(--accent)' }}>
-                {badge}
-              </span>
-            )}
-          </button>
-        ))}
+      <div className="context-panel-scroll flex-shrink-0 overflow-x-auto border-b border-[var(--border)] px-3 py-2">
+        <div className="flex items-center gap-1">
+          {railItems.map(({ id, label, Icon, badge, badgeColor }) => (
+            <button
+              key={id}
+              onClick={() => toggleSection(id)}
+              className={cx(
+                'relative grid h-8 w-8 flex-shrink-0 place-items-center rounded-[8px] border text-[var(--muted)] transition-colors duration-150 active:translate-y-px',
+                activeSection === id
+                  ? 'border-[color-mix(in_srgb,var(--accent)_32%,var(--border))] bg-[var(--accent-soft)] text-[var(--accent)]'
+                  : 'border-transparent hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]',
+              )}
+              aria-label={label}
+              title={label}
+            >
+              <Icon size={16} />
+              {badge != null && (
+                <span className="absolute -top-1 -right-1 flex h-[15px] min-w-[15px] items-center justify-center rounded-full px-1 text-[9px] font-semibold leading-none text-[var(--accent-ink)] ring-2 ring-[var(--surface)]" style={{ backgroundColor: badgeColor || 'var(--accent)' }}>
+                  {badge}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Section content — Team/Context sections use full panel without inner padding */}
@@ -307,7 +340,7 @@ export function Inspector() {
             />
           ) : (
             <div className="p-3">
-              <p className="text-[12px] text-[var(--muted)]">No active team. Create one with the Team tool.</p>
+              <InspectorEmptyState title="No active team" detail="Create one with the Team tool." />
             </div>
           )}
         </div>
@@ -316,7 +349,7 @@ export function Inspector() {
           <ContextPanel sessionId={activeSessionId} />
         </div>
       ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto p-3">
+        <div className="context-panel-scroll flex-1 min-h-0 overflow-y-auto p-3">
           {activeSection === 'session' && <SessionSection sessionId={activeSessionId} />}
           {activeSection === 'usage' && <UsageSection usage={usage} />}
           {activeSection === 'tasks' && (
@@ -334,22 +367,78 @@ export function Inspector() {
   )
 }
 
-function SectionHeader({ children }: { children: React.ReactNode }) {
+function SectionHeader({ children, meta }: { children: React.ReactNode; meta?: React.ReactNode }) {
   return (
-    <h3 className="text-[11px] uppercase tracking-[0.1em] text-[var(--muted)] font-medium mb-2">
+    <div className="flex min-w-0 items-center justify-between gap-3">
+      <h3 className="truncate font-mono text-[11px] font-semibold uppercase text-[var(--muted)]">
+        {children}
+      </h3>
+      {meta ? <div className="flex-shrink-0 font-mono text-[10px] text-[var(--muted)]">{meta}</div> : null}
+    </div>
+  )
+}
+
+function InspectorSectionFrame({ title, meta, action, children }: {
+  title: React.ReactNode
+  meta?: React.ReactNode
+  action?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <section className="rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_70%,transparent)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+      <div className="mb-2 flex min-w-0 items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <SectionHeader meta={meta}>{title}</SectionHeader>
+        </div>
+        {action ? <div className="flex-shrink-0">{action}</div> : null}
+      </div>
       {children}
-    </h3>
+    </section>
+  )
+}
+
+function InspectorEmptyState({ title, detail }: { title: string; detail?: string }) {
+  return (
+    <div className="rounded-[7px] border border-dashed border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_46%,transparent)] px-3 py-3">
+      <p className="text-[12px] font-medium text-[var(--text)]">{title}</p>
+      {detail ? <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">{detail}</p> : null}
+    </div>
+  )
+}
+
+function InspectorMetricRow({ label, value, title, strong }: {
+  label: React.ReactNode
+  value: React.ReactNode
+  title?: string
+  strong?: boolean
+}) {
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-3 rounded-[6px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_42%,transparent)] px-2.5 py-2 text-[12px]">
+      <span className="min-w-0 truncate text-[var(--muted)]" title={title}>{label}</span>
+      <span className={cx('min-w-0 flex-shrink-0 truncate font-mono text-[var(--text)]', strong && 'font-semibold')}>{value}</span>
+    </div>
+  )
+}
+
+function StatusDot({ color, pulse }: { color: string; pulse?: boolean }) {
+  return (
+    <span
+      className={cx('h-2 w-2 flex-shrink-0 rounded-full', pulse && 'animate-pulse')}
+      style={{ backgroundColor: color }}
+    />
   )
 }
 
 function SessionSection({ sessionId }: { sessionId: string | null }) {
   return (
-    <div>
-      <SectionHeader>Session</SectionHeader>
-      <p className="text-[12px] font-[var(--font-mono)] font-mono text-[var(--text)]">
-        {sessionId ? sessionId.slice(0, 8) : 'None'}
-      </p>
-    </div>
+    <InspectorSectionFrame title="Session" meta={sessionId ? 'active' : 'idle'}>
+      <InspectorMetricRow
+        label="Session ID"
+        value={sessionId ? sessionId.slice(0, 8) : 'None'}
+        title={sessionId ?? undefined}
+        strong={Boolean(sessionId)}
+      />
+    </InspectorSectionFrame>
   )
 }
 
@@ -365,10 +454,9 @@ function UsageSection({ usage }: {
 }) {
   if (!usage) {
     return (
-      <div>
-        <SectionHeader>Usage</SectionHeader>
-        <p className="text-[12px] text-[var(--muted)]">No usage data</p>
-      </div>
+      <InspectorSectionFrame title="Usage" meta="waiting">
+        <InspectorEmptyState title="No usage data" detail="Token and cache stats appear after a model response." />
+      </InspectorSectionFrame>
     )
   }
 
@@ -378,46 +466,39 @@ function UsageSection({ usage }: {
   const hasSub = subTotal > 0
 
   return (
-    <div className="space-y-3">
-      <SectionHeader>Usage</SectionHeader>
-      <div className="space-y-2 text-[12px]">
-        <div className="flex justify-between">
-          <span className="text-[var(--muted)]">Main session</span>
-          <span className="text-[var(--text)] font-mono">{formatTokens(usage.totalTokens)}</span>
-        </div>
+    <InspectorSectionFrame title="Usage" meta="tokens">
+      <div className="space-y-2">
+        <InspectorMetricRow label="Main session" value={formatTokens(usage.totalTokens)} />
         {hasSub && (
-          <div className="flex justify-between">
-            <span className="text-[var(--muted)]" title="Sub-agents (Agent tool) and team workers/PM/skill router. Counted toward total billing but isolated from main context window.">Sub-agents / team</span>
-            <span className="text-[var(--text)] font-mono">
-              {formatTokens(subTotal)}
-              {usage.subAgentTurnCount ? <span className="text-[var(--muted)] ml-1">({usage.subAgentTurnCount} turns)</span> : null}
-            </span>
-          </div>
+          <InspectorMetricRow
+            label="Sub-agents / team"
+            title="Sub-agents (Agent tool) and team workers/PM/skill router. Counted toward total billing but isolated from main context window."
+            value={(
+              <>
+                {formatTokens(subTotal)}
+                {usage.subAgentTurnCount ? <span className="ml-1 text-[var(--muted)]">({usage.subAgentTurnCount} turns)</span> : null}
+              </>
+            )}
+          />
         )}
         {hasSub && (
-          <div className="flex justify-between border-t border-[var(--border)] pt-1.5">
-            <span className="text-[var(--text)]">Grand total</span>
-            <span className="text-[var(--text)] font-mono font-semibold">{formatTokens(grandTotal)}</span>
-          </div>
+          <InspectorMetricRow label="Grand total" value={formatTokens(grandTotal)} strong />
         )}
-        <div className="flex justify-between">
-          <span className="text-[var(--muted)]">Cache hit</span>
-          <span className="text-[var(--text)] font-mono">{Math.round(usage.cacheHitRate)}%</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-[var(--muted)]">Context</span>
-          <div className="flex items-center gap-2">
-            <div className="w-16 h-1 rounded-full bg-[var(--surface-3)] overflow-hidden">
-              <div
-                className="h-full rounded-full"
-                style={{ width: `${Math.min(usage.contextUsedPercent, 100)}%`, backgroundColor: contextColor }}
-              />
-            </div>
+        <InspectorMetricRow label="Cache hit" value={`${Math.round(usage.cacheHitRate)}%`} />
+        <div className="rounded-[6px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_42%,transparent)] px-2.5 py-2">
+          <div className="mb-2 flex items-center justify-between text-[12px]">
+            <span className="text-[var(--muted)]">Context</span>
             <span className="text-[var(--text)] font-mono text-[11px]">{Math.round(usage.contextUsedPercent)}%</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)]">
+            <div
+              className="h-full rounded-full transition-[width] duration-300"
+              style={{ width: `${Math.min(usage.contextUsedPercent, 100)}%`, backgroundColor: contextColor }}
+            />
           </div>
         </div>
       </div>
-    </div>
+    </InspectorSectionFrame>
   )
 }
 
@@ -444,63 +525,60 @@ function TasksSection({ tasks, backgroundTasks, onOpenTeam }: {
   return (
     <div className="space-y-4">
       {backgroundTasks.length > 0 && (
-        <div>
-          <SectionHeader>Background ({runningBg.length} running)</SectionHeader>
+        <InspectorSectionFrame title="Background" meta={`${runningBg.length} running`}>
           <div className="space-y-1.5">
             {backgroundTasks.map((task) => (
               <div
                 key={task.id}
-                className={`flex items-center gap-2 text-[12px] group ${task.type === 'team' ? 'cursor-pointer hover:opacity-80' : ''}`}
+                className={cx(
+                  'group flex min-w-0 items-center gap-2 rounded-[6px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)] px-2.5 py-2 text-[12px] transition-colors',
+                  task.type === 'team' && 'cursor-pointer hover:border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] hover:bg-[color-mix(in_srgb,var(--accent)_7%,var(--surface-2))]',
+                )}
                 onClick={() => handleOpen(task)}
               >
-                <span
-                  className={`w-2 h-2 rounded-full flex-shrink-0 ${task.status === 'running' ? 'animate-pulse' : ''}`}
-                  style={{ backgroundColor: task.status === 'running' ? 'var(--accent)' : task.status === 'completed' ? 'var(--good)' : 'var(--bad)' }}
+                <StatusDot
+                  color={task.status === 'running' ? 'var(--accent)' : task.status === 'completed' ? 'var(--good)' : 'var(--bad)'}
+                  pulse={task.status === 'running'}
                 />
-                <span className="text-[10px] text-[var(--muted)] uppercase w-[32px] flex-shrink-0">
+                <span className="w-[32px] flex-shrink-0 font-mono text-[10px] uppercase text-[var(--muted)]">
                   {task.type === 'shell' ? 'SH' : task.type === 'team' ? 'TM' : 'AI'}
                 </span>
-                <span className="truncate text-[var(--text)] flex-1">
+                <span className="min-w-0 flex-1 truncate text-[var(--text)]">
                   {task.type === 'shell' ? (task.command || '').slice(0, 40) : (task.prompt || '').slice(0, 40)}
                 </span>
                 {task.status === 'running' && (
                   <button
                     onClick={(e) => { e.stopPropagation(); handleStop(task.id) }}
-                    className="opacity-0 group-hover:opacity-100 text-[10px] text-[var(--bad)] hover:opacity-80"
+                    className="rounded-[5px] border border-transparent px-1.5 py-0.5 font-mono text-[10px] text-[var(--bad)] opacity-0 transition-opacity hover:border-[color-mix(in_srgb,var(--bad)_30%,var(--border))] hover:bg-[color-mix(in_srgb,var(--bad)_10%,transparent)] group-hover:opacity-100"
                   >
-                    [STOP]
+                    STOP
                   </button>
                 )}
               </div>
             ))}
           </div>
-        </div>
+        </InspectorSectionFrame>
       )}
 
       {tasks.length > 0 && (
-        <div>
-          <SectionHeader>Tasks ({tasks.filter(t => t.status === 'completed').length}/{tasks.length})</SectionHeader>
+        <InspectorSectionFrame title="Tasks" meta={`${tasks.filter(t => t.status === 'completed').length}/${tasks.length}`}>
           <div className="space-y-1.5">
             {tasks.map((task) => (
-              <div key={task.id} className="flex items-center gap-2 text-[12px]">
-                <span
-                  className="w-2 h-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: task.status === 'completed' ? 'var(--good)' : task.status === 'in_progress' ? 'var(--accent)' : 'var(--muted)' }}
-                />
-                <span className={`truncate ${task.status === 'completed' ? 'text-[var(--good)]' : 'text-[var(--text)]'}`}>
+              <div key={task.id} className="flex min-w-0 items-center gap-2 rounded-[6px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)] px-2.5 py-2 text-[12px]">
+                <StatusDot color={task.status === 'completed' ? 'var(--good)' : task.status === 'in_progress' ? 'var(--accent)' : 'var(--muted)'} />
+                <span className={cx('min-w-0 truncate', task.status === 'completed' ? 'text-[var(--good)]' : 'text-[var(--text)]')}>
                   {task.subject}
                 </span>
               </div>
             ))}
           </div>
-        </div>
+        </InspectorSectionFrame>
       )}
 
       {backgroundTasks.length === 0 && tasks.length === 0 && (
-        <div>
-          <SectionHeader>Tasks</SectionHeader>
-          <p className="text-[12px] text-[var(--muted)]">No tasks</p>
-        </div>
+        <InspectorSectionFrame title="Tasks" meta="idle">
+          <InspectorEmptyState title="No tasks" detail="Running work and checklist items will appear here." />
+        </InspectorSectionFrame>
       )}
     </div>
   )
@@ -509,10 +587,9 @@ function TasksSection({ tasks, backgroundTasks, onOpenTeam }: {
 function QueueSection({ queue, removeFromQueue }: { queue: string[]; removeFromQueue: (i: number) => void }) {
   if (queue.length === 0) {
     return (
-      <div>
-        <SectionHeader>Queue</SectionHeader>
-        <p className="text-[12px] text-[var(--muted)]">Queue is empty</p>
-      </div>
+      <InspectorSectionFrame title="Queue" meta="empty">
+        <InspectorEmptyState title="Queue is empty" detail="Queued follow-up messages will stack here." />
+      </InspectorSectionFrame>
     )
   }
 
@@ -523,61 +600,62 @@ function QueueSection({ queue, removeFromQueue }: { queue: string[]; removeFromQ
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <SectionHeader>Queue</SectionHeader>
+    <InspectorSectionFrame
+      title="Queue"
+      meta={`${queue.length} pending`}
+      action={(
         <button
           onClick={clearAll}
-          className="text-[10px] text-[var(--muted)] hover:text-[var(--text)]"
+          className="rounded-[5px] border border-[var(--border)] px-2 py-1 font-mono text-[10px] text-[var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)] active:translate-y-px"
         >
           Clear all
         </button>
-      </div>
+      )}
+    >
       <div className="space-y-1.5">
         {queue.map((msg, i) => (
-          <div key={i} className="flex items-center gap-2 text-[12px] group">
-            <span className="text-[var(--text)] truncate flex-1">{msg.slice(0, 60)}</span>
+          <div key={i} className="group flex min-w-0 items-center gap-2 rounded-[6px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)] px-2.5 py-2 text-[12px]">
+            <span className="min-w-0 flex-1 truncate text-[var(--text)]">{msg.slice(0, 60)}</span>
             <button
               onClick={() => removeFromQueue(i)}
-              className="text-[var(--muted)] hover:text-[var(--bad)] opacity-0 group-hover:opacity-100 flex-shrink-0"
+              className="grid h-5 w-5 flex-shrink-0 place-items-center rounded-[5px] text-[var(--muted)] opacity-0 transition-opacity hover:bg-[color-mix(in_srgb,var(--bad)_10%,transparent)] hover:text-[var(--bad)] group-hover:opacity-100"
+              aria-label="Remove queued message"
             >
               <IconX size={12} />
             </button>
           </div>
         ))}
       </div>
-    </div>
+    </InspectorSectionFrame>
   )
 }
 
 function FilesSection({ files }: { files: FileChange[] }) {
   if (files.length === 0) {
     return (
-      <div>
-        <SectionHeader>Files Changed</SectionHeader>
-        <p className="text-[12px] text-[var(--muted)]">No file changes</p>
-      </div>
+      <InspectorSectionFrame title="Files changed" meta="clean">
+        <InspectorEmptyState title="No file changes" detail="File snapshots appear after tool mutations." />
+      </InspectorSectionFrame>
     )
   }
 
   return (
-    <div>
-      <SectionHeader>Files Changed</SectionHeader>
+    <InspectorSectionFrame title="Files changed" meta={`${files.length} tracked`}>
       <div className="space-y-1">
         {files.map((file) => (
-          <div key={file.filePath} className="flex items-center gap-2 text-[12px]">
+          <div key={file.filePath} className="flex min-w-0 items-center gap-2 rounded-[6px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)] px-2.5 py-2 text-[12px]">
             <span
-              className="flex-shrink-0 w-4 text-center font-mono"
+              className="w-4 flex-shrink-0 text-center font-mono"
               style={{ color: file.changeType === 'created' ? 'var(--good)' : 'var(--warn)' }}
             >
               {file.changeType === 'created' ? '+' : '~'}
             </span>
-            <span className="text-[var(--text)] truncate font-mono">
+            <span className="min-w-0 truncate font-mono text-[var(--text)]" title={file.filePath}>
               {file.filePath.split('/').pop()}
             </span>
           </div>
         ))}
       </div>
-    </div>
+    </InspectorSectionFrame>
   )
 }
