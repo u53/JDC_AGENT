@@ -34,16 +34,13 @@ export function AgentDetailPanel() {
     <aside className="agent-detail-shell flex h-full min-h-0 flex-col border-l border-[var(--border)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_95%,transparent),color-mix(in_srgb,var(--bg)_88%,transparent))]">
       <div className="flex-shrink-0 border-b border-[var(--border)] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
         <div className="flex min-w-0 items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-2">
               <span
                 className="h-2 w-2 flex-shrink-0 rounded-full"
                 style={{ backgroundColor: agentStatusColor(agent.status) }}
               />
               <span className="font-mono text-[11px] font-semibold uppercase text-[var(--text)]">Subagent</span>
-            </div>
-            <div className="mt-1 min-w-0 whitespace-normal break-words text-[12px] leading-5 text-[var(--muted)] [overflow-wrap:anywhere]">
-              {agent.prompt}
             </div>
           </div>
           <div className="flex flex-shrink-0 items-center gap-1.5">
@@ -56,6 +53,9 @@ export function AgentDetailPanel() {
             <AgentActionButton onClick={handleClose}>Close</AgentActionButton>
           </div>
         </div>
+        <pre className="agent-prompt-panel context-panel-scroll mt-3 max-h-[220px] overflow-y-auto overflow-x-auto whitespace-pre-wrap rounded-[8px] border border-[color-mix(in_srgb,var(--border)_88%,transparent)] bg-[color-mix(in_srgb,var(--surface-2)_42%,transparent)] p-3 font-mono text-[11px] leading-5 text-[var(--muted)]">
+          {agent.prompt}
+        </pre>
       </div>
 
       <div className="agent-detail-metrics grid flex-shrink-0 grid-cols-3 gap-2 border-b border-[var(--border)] px-3 py-2">

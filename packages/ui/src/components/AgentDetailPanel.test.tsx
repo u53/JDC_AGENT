@@ -40,4 +40,32 @@ describe('AgentDetailPanel', () => {
     expect(html).toContain('scope')
     expect(html).not.toContain('[BG]')
   })
+
+  it('renders long subagent prompts in a bounded readable prompt panel', () => {
+    const longPrompt = [
+      '你是实现子代理，执行计划 Task 1。',
+      '路径：/Users/chenmingxu/gts/project/olympus/olympus-biz/src/main/java/com/servyou/olympus/biz/service/file/impl/sbb/FdSyncSbbFileServiceImpl.java',
+      '验证：mvn -pl olympus-biz -DskipTests compile',
+    ].join('\n')
+    const state = {
+      agents: {
+        'agent-1': {
+          ...agent,
+          prompt: longPrompt,
+        },
+      },
+      activeAgentId: 'agent-1',
+    }
+    useAgentStore.setState(state)
+    Object.assign(useAgentStore.getInitialState(), state)
+
+    const html = renderToStaticMarkup(<AgentDetailPanel />)
+
+    expect(html).toContain('agent-prompt-panel')
+    expect(html).toContain('max-h-[220px]')
+    expect(html).toContain('overflow-y-auto')
+    expect(html).toContain('overflow-x-auto')
+    expect(html).toContain('whitespace-pre-wrap')
+    expect(html).toContain('/Users/chenmingxu/gts/project/olympus')
+  })
 })
