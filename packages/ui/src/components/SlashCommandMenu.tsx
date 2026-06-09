@@ -24,11 +24,11 @@ interface Props {
   skillsOnly?: boolean
 }
 
-export function SlashCommandMenu({ filter, visible, onSelect, onClose, skills = [], skillsOnly = false }: Props) {
-  const [selectedIndex, setSelectedIndex] = useState(0)
-  const menuRef = useRef<HTMLDivElement>(null)
-  const selectedRef = useRef<HTMLDivElement>(null)
-
+export function getSlashCommandMenuGroups(
+  filter: string,
+  skills: { name: string; description: string }[] = [],
+  skillsOnly = false,
+): { commandItems: SlashCommand[]; skillItems: SlashCommand[]; flatList: SlashCommand[] } {
   const skillCommands: SlashCommand[] = skills.map(s => ({
     name: s.name,
     description: s.description,
@@ -37,15 +37,25 @@ export function SlashCommandMenu({ filter, visible, onSelect, onClose, skills = 
   }))
 
   const allItems = [...COMMANDS, ...skillCommands]
-
+  const normalizedFilter = filter.toLowerCase()
   const filtered = allItems.filter(cmd =>
-    cmd.name.toLowerCase().includes(filter.toLowerCase()) ||
-    cmd.description.toLowerCase().includes(filter.toLowerCase())
+    cmd.name.toLowerCase().includes(normalizedFilter) ||
+    cmd.description.toLowerCase().includes(normalizedFilter)
   )
 
   const commandItems = skillsOnly ? [] : filtered.filter(c => c.section === 'command')
   const skillItems = filtered.filter(c => c.section === 'skill')
   const flatList = [...commandItems, ...skillItems]
+
+  return { commandItems, skillItems, flatList }
+}
+
+export function SlashCommandMenu({ filter, visible, onSelect, onClose, skills = [], skillsOnly = false }: Props) {
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const selectedRef = useRef<HTMLDivElement>(null)
+
+  const { commandItems, skillItems, flatList } = getSlashCommandMenuGroups(filter, skills, skillsOnly)
 
   useEffect(() => {
     setSelectedIndex(0)

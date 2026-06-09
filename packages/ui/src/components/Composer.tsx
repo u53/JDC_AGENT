@@ -1,6 +1,6 @@
 import { useRef, useCallback, useLayoutEffect, useState, type KeyboardEvent, type ClipboardEvent, type DragEvent } from 'react'
 import { ImagePreview } from './ImagePreview'
-import { SlashCommandMenu, type SlashCommand } from './SlashCommandMenu'
+import { getSlashCommandMenuGroups, SlashCommandMenu, type SlashCommand } from './SlashCommandMenu'
 import { BranchSwitcher } from './BranchSwitcher'
 import { IconSend, IconStop } from './icons'
 import { useSessionStore } from '../stores/session-store'
@@ -28,12 +28,44 @@ interface Props {
 }
 
 export const COMPOSER_TEXTAREA_MAX_HEIGHT = 200
+export const COMPOSER_IME_ENTER_SUPPRESSION_MS = 120
 
-export function resizeComposerTextarea(el: Pick<HTMLTextAreaElement, 'scrollHeight' | 'style'>) {
+type ComposerTextareaSizer = Pick<HTMLTextAreaElement, 'scrollHeight'> & {
+  style: Pick<CSSStyleDeclaration, 'height' | 'overflowY'>
+}
+
+export function resizeComposerTextarea(el: ComposerTextareaSizer) {
   el.style.height = 'auto'
   const height = Math.min(el.scrollHeight, COMPOSER_TEXTAREA_MAX_HEIGHT)
   el.style.height = `${height}px`
   el.style.overflowY = el.scrollHeight > COMPOSER_TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden'
+}
+
+export function shouldDelegateKeyToSlashMenu(key: string, showSlashMenu: boolean, slashMenuItemCount: number) {
+  return showSlashMenu && slashMenuItemCount > 0 && ['ArrowDown', 'ArrowUp', 'Tab', 'Enter'].includes(key)
+}
+
+export function shouldIgnoreKeyDownForIme({
+  key,
+  isComposing,
+  nativeIsComposing,
+  nativeKeyCode,
+  lastCompositionEndAt,
+  now,
+}: {
+  key: string
+  isComposing: boolean
+  nativeIsComposing?: boolean
+  nativeKeyCode?: number
+  lastCompositionEndAt: number | null
+  now: number
+}) {
+  if (isComposing || nativeIsComposing || nativeKeyCode === 229) return true
+  return key === 'Enter' && lastCompositionEndAt !== null && now - lastCompositionEndAt < COMPOSER_IME_ENTER_SUPPRESSION_MS
+}
+
+function nowMs() {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now()
 }
 
 export function Composer({
@@ -66,6 +98,7 @@ export function Composer({
   const composerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isComposingRef = useRef(false)
+  const lastCompositionEndAtRef = useRef<number | null>(null)
 
   const messageQueue = useSessionStore((s) => s.messageQueue)
   const enqueueMessage = useSessionStore((s) => s.enqueueMessage)
@@ -104,6 +137,7 @@ export function Composer({
 
   const activeProject = projects.find((p) => p.sessions.some((s) => s.id === activeSessionId))
   const cwd = activeProject?.cwd || ''
+  const slashMenuItemCount = getSlashCommandMenuGroups(slashFilter, skills, slashOnlySkills).flatList.length
 
   const ideConnections = useIdeStore((s) => s.connections)
   const ideSelection = useIdeStore((s) => s.selection)
@@ -207,8 +241,19 @@ export function Composer({
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (isComposingRef.current) return
-    if (showSlashMenu && ['ArrowDown', 'ArrowUp', 'Tab', 'Enter'].includes(e.key)) return
+    const nativeEvent = e.nativeEvent as globalThis.KeyboardEvent & { keyCode?: number; which?: number }
+    if (shouldIgnoreKeyDownForIme({
+      key: e.key,
+      isComposing: isComposingRef.current,
+      nativeIsComposing: nativeEvent.isComposing,
+      nativeKeyCode: nativeEvent.keyCode ?? nativeEvent.which,
+      lastCompositionEndAt: lastCompositionEndAtRef.current,
+      now: nowMs(),
+    })) {
+      if (e.key === 'Enter' && !e.shiftKey && !isComposingRef.current && !nativeEvent.isComposing) e.preventDefault()
+      return
+    }
+    if (shouldDelegateKeyToSlashMenu(e.key, showSlashMenu, slashMenuItemCount)) return
     if (e.key === 'Escape' && showSlashMenu) {
       setShowSlashMenu(false)
       return
@@ -326,7 +371,7 @@ export function Composer({
         <div className="composer-command-surface relative overflow-visible rounded-[8px] border border-[color-mix(in_srgb,var(--border)_90%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface-2)_74%,transparent),color-mix(in_srgb,var(--surface)_58%,transparent))] p-2 shadow-[0_18px_60px_-50px_rgba(0,0,0,0.86),inset_0_1px_0_rgba(255,255,255,0.035)]">
           <SlashCommandMenu
             filter={slashFilter}
-            visible={showSlashMenu}
+            visible={showSlashMenu && slashMenuItemCount > 0}
             onSelect={handleSlashSelect}
             onClose={() => setShowSlashMenu(false)}
             skills={skills}
@@ -343,9 +388,11 @@ export function Composer({
               onKeyDown={handleKeyDown}
               onCompositionStart={() => {
                 isComposingRef.current = true
+                lastCompositionEndAtRef.current = null
               }}
               onCompositionEnd={() => {
                 isComposingRef.current = false
+                lastCompositionEndAtRef.current = nowMs()
               }}
               onPaste={handlePaste}
               rows={1}
