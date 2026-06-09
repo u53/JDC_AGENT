@@ -70,6 +70,7 @@ const EMPTY_STREAM_STATE: SessionStreamState = {
 interface SessionState {
   projects: ProjectGroup[]
   activeSessionId: string | null
+  activeProjectCwd: string | null
   messages: any[]
   isLoading: boolean
   sessionStates: Record<string, SessionStreamState>
@@ -84,6 +85,7 @@ interface SessionState {
   clearDraft: (sessionId: string) => void
   getDraft: (sessionId: string) => ComposerDraft
   loadProjects: () => Promise<void>
+  openProjectConsole: (cwd: string) => void
   createSession: (cwd: string) => Promise<void>
   switchSession: (sessionId: string) => Promise<void>
   deleteSession: (sessionId: string) => Promise<void>
@@ -178,6 +180,7 @@ function queuePendingStreamText(
 export const useSessionStore = create<SessionState>((set, get) => ({
   projects: [],
   activeSessionId: null,
+  activeProjectCwd: null,
   messages: [],
   isLoading: false,
   sessionStates: {},
@@ -229,13 +232,24 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   loadProjects: async () => {
     const projects = await ipc.session.list()
-    set({ projects: projects || [] })
+    set((s) => ({
+      projects: projects || [],
+      activeProjectCwd: s.activeProjectCwd ?? projects?.[0]?.cwd ?? null,
+    }))
     // Auto-switch to first session if none active (triggers IDE discovery)
     const current = get().activeSessionId
     if (!current && projects?.length > 0) {
       const firstSession = projects[0].sessions?.[0]
       if (firstSession) get().switchSession(firstSession.id)
     }
+  },
+
+  openProjectConsole: (cwd: string) => {
+    useIdeStore.getState().setSelection(null)
+    useIdeStore.getState().clearAtMentions()
+    useTeamStore.getState().reset()
+    useBackgroundTaskStore.getState().reset()
+    set({ activeProjectCwd: cwd, activeSessionId: null, messages: [], tasks: [] })
   },
 
   createSession: async (cwd: string) => {
@@ -247,12 +261,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
     useTeamStore.getState().reset()
     useBackgroundTaskStore.getState().reset()
-    set({ activeSessionId: sessionId, messages: [] })
+    set({ activeProjectCwd: cwd, activeSessionId: sessionId, messages: [] })
     await get().loadProjects()
   },
 
   switchSession: async (sessionId: string) => {
     set({ isLoading: true })
+    const session = get().projects.flatMap((project) => project.sessions).find((item) => item.id === sessionId)
     // Clear IDE selection/atMentions from previous session
     useIdeStore.getState().setSelection(null)
     useIdeStore.getState().clearAtMentions()
@@ -265,6 +280,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
     set((s) => ({
       activeSessionId: sessionId,
+      activeProjectCwd: session?.cwd ?? s.activeProjectCwd,
       messages,
       isLoading: false,
       sessionStates: {
@@ -280,7 +296,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (get().activeSessionId === sessionId) {
       useTeamStore.getState().reset()
       useBackgroundTaskStore.getState().reset()
-      set({ activeSessionId: null, messages: [] })
+      const session = get().projects.flatMap((project) => project.sessions).find((item) => item.id === sessionId)
+      set({ activeProjectCwd: session?.cwd ?? get().activeProjectCwd, activeSessionId: null, messages: [] })
     }
     get().clearDraft(sessionId)
     await get().loadProjects()

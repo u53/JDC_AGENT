@@ -102,4 +102,21 @@ describe('session stream store', () => {
       retrying: false,
     })
   })
+
+  it('opens a project console without losing the selected project', () => {
+    useSessionStore.setState({
+      projects: [
+        { name: 'alpha', cwd: '/repo/alpha', sessions: [{ id: 'alpha-1', projectName: 'alpha', cwd: '/repo/alpha' }] },
+        { name: 'olympus', cwd: '/repo/olympus', sessions: [{ id: 'olympus-1', projectName: 'olympus', cwd: '/repo/olympus' }] },
+      ],
+      activeSessionId: 'olympus-1',
+      messages: [{ role: 'user', content: 'hello' }],
+    })
+
+    ;(useSessionStore.getState() as any).openProjectConsole('/repo/olympus')
+
+    expect(useSessionStore.getState().activeSessionId).toBeNull()
+    expect((useSessionStore.getState() as any).activeProjectCwd).toBe('/repo/olympus')
+    expect(useSessionStore.getState().messages).toEqual([])
+  })
 })

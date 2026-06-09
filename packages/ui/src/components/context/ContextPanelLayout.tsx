@@ -38,12 +38,12 @@ export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect,
   const status = contextEngineStatus(inspect, constraint)
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_94%,transparent),color-mix(in_srgb,var(--bg)_86%,transparent))]">
-      <div className="flex-shrink-0 border-b border-[var(--border)] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+    <div className="context-panel-shell flex h-full min-h-0 min-w-0 flex-col bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_96%,transparent),color-mix(in_srgb,var(--bg)_90%,transparent))]">
+      <div className="context-panel-header flex-shrink-0 border-b border-[color-mix(in_srgb,var(--border)_86%,transparent)] bg-[color-mix(in_srgb,var(--surface)_32%,transparent)] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2">
-              <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--accent)] shadow-[0_0_0_4px_var(--accent-soft)]" />
+              <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--accent)] shadow-[0_0_0_4px_color-mix(in_srgb,var(--accent)_13%,transparent)]" />
               <div className="truncate font-mono text-[11px] font-semibold uppercase text-[var(--text)]">JDC 上下文引擎</div>
             </div>
             <div className="mt-1 truncate text-[10px] text-[var(--muted)]">Project context</div>
@@ -52,13 +52,13 @@ export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect,
         </div>
       </div>
 
-      <div className="context-panel-scroll flex min-w-0 flex-shrink-0 gap-1 overflow-x-auto border-b border-[var(--border)] px-3 py-2">
+      <div className="context-panel-tabs context-panel-scroll flex min-w-0 flex-shrink-0 gap-1 overflow-x-auto border-b border-[color-mix(in_srgb,var(--border)_86%,transparent)] bg-[color-mix(in_srgb,var(--surface)_24%,transparent)] px-3 py-2">
         {tabs.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => onTabChange(item.id)}
-            className={`min-w-0 shrink-0 whitespace-nowrap rounded-[7px] border px-2 py-1.5 font-mono text-[11px] transition-colors active:translate-y-px ${effectiveTab === item.id ? 'border-[color-mix(in_srgb,var(--accent)_32%,var(--border))] bg-[var(--accent-soft)] text-[var(--accent)]' : 'border-transparent text-[var(--muted)] hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'}`}
+            className={`min-w-0 shrink-0 whitespace-nowrap rounded-[7px] border px-2 py-1.5 font-mono text-[11px] transition-colors active:translate-y-px ${effectiveTab === item.id ? 'border-[color-mix(in_srgb,var(--accent)_30%,var(--border))] bg-[color-mix(in_srgb,var(--accent)_9%,var(--surface-2))] text-[color-mix(in_srgb,var(--accent)_86%,var(--text)_14%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]' : 'border-transparent text-[var(--muted)] hover:border-[color-mix(in_srgb,var(--accent)_16%,var(--border))] hover:bg-[color-mix(in_srgb,var(--surface-2)_60%,transparent)] hover:text-[var(--text)]'}`}
           >
             {item.label}
             {item.badge != null && <span className="ml-1 text-[10px] opacity-70">{item.badge}</span>}
@@ -66,7 +66,7 @@ export function ContextPanelLayout({ sessionId, activeTab, onTabChange, inspect,
         ))}
       </div>
 
-      <div className="context-panel-scroll min-h-0 min-w-0 flex-1 overflow-y-auto p-3">
+      <div className="context-panel-body context-panel-scroll min-h-0 min-w-0 flex-1 overflow-y-auto p-3">
         {effectiveTab === 'constraints' && <ConstraintStatusPanel snapshot={constraint.data} loading={constraint.loading} error={constraint.error} advancedVisible={advancedVisible} />}
         {effectiveTab === 'understanding' && <ContextProjectUnderstandingPanel payload={inspect.data} loading={inspect.loading} error={inspect.error} />}
         {effectiveTab === 'facts' && <ContextFactsPanel acceptedMemory={memoryReview.data?.accepted ?? null} projectFacts={inspect.data?.acceptedProjectFacts ?? []} loading={memoryReview.loading || inspect.loading} error={memoryReview.error ?? inspect.error} />}

@@ -100,7 +100,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
 
   if (!team) {
     return (
-      <div className="flex flex-col h-full min-h-0 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_94%,transparent),color-mix(in_srgb,var(--bg)_86%,transparent))]">
+      <div className="team-detail-shell flex flex-col h-full min-h-0 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_96%,transparent),color-mix(in_srgb,var(--bg)_90%,transparent))]">
         <Header title={`Team ${taskId.slice(0, 8)}`} onClose={onClose} />
         <div className="flex-1 flex items-center justify-center text-[12px] text-[var(--muted)]">
           Loading…
@@ -117,14 +117,14 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
     : null
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_94%,transparent),color-mix(in_srgb,var(--bg)_86%,transparent))]">
+    <div className="team-detail-shell flex flex-col h-full min-h-0 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_96%,transparent),color-mix(in_srgb,var(--bg)_90%,transparent))]">
       <Header
         title={team.objective}
         status={team.status}
         onClose={onClose}
       />
 
-      <div className="context-panel-scroll flex-shrink-0 flex gap-1 overflow-x-auto border-b border-[var(--border)] px-3 py-2">
+      <div className="team-detail-tabs context-panel-scroll flex-shrink-0 flex gap-1 overflow-x-auto border-b border-[color-mix(in_srgb,var(--border)_86%,transparent)] bg-[color-mix(in_srgb,var(--surface)_24%,transparent)] px-3 py-2">
         <TabButton active={tab === 'overview'} onClick={() => setTab('overview')}>
           Overview
         </TabButton>
@@ -180,7 +180,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
         )}
       </div>
 
-      <div className="team-command-bar flex-shrink-0 space-y-2 border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_84%,transparent)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+      <div className="team-command-bar flex-shrink-0 space-y-2 border-t border-[color-mix(in_srgb,var(--border)_86%,transparent)] bg-[color-mix(in_srgb,var(--surface)_54%,transparent)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
         {isFinished && (
           <div className="text-[10px] text-[var(--muted)] italic px-1">
             Team has {team.status}. Messages are disabled.
@@ -196,8 +196,8 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
                 onClick={() => sendMessage(a.intent, a.message)}
                 className={`text-[11px] px-2.5 py-1 rounded-[7px] border transition-all duration-150 active:translate-y-px ${
                   isActive
-                    ? 'border-[var(--accent)] text-[var(--accent)] bg-[var(--accent-soft)] scale-95'
-                    : 'border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)] text-[var(--text)] hover:border-[var(--accent)] hover:text-[var(--accent)]'
+                    ? 'border-[color-mix(in_srgb,var(--accent)_32%,var(--border))] text-[color-mix(in_srgb,var(--accent)_86%,var(--text)_14%)] bg-[color-mix(in_srgb,var(--accent)_9%,var(--surface-2))] scale-95'
+                    : 'border-[color-mix(in_srgb,var(--border)_88%,transparent)] bg-[color-mix(in_srgb,var(--surface-2)_34%,transparent)] text-[var(--text)] hover:border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] hover:text-[color-mix(in_srgb,var(--accent)_86%,var(--text)_14%)]'
                 } disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-[var(--border)] disabled:hover:text-[var(--text)]`}
               >
                 {a.label}
@@ -205,7 +205,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
             )
           })}
         </div>
-        <div className="flex min-w-0 items-center gap-1.5 rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_38%,transparent)] p-1.5">
+        <div className="flex min-w-0 items-center gap-1.5 rounded-[8px] border border-[color-mix(in_srgb,var(--border)_88%,transparent)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
           <div
             className={`flex items-center gap-1 rounded-[7px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_30%,transparent)] px-2 py-1.5 font-mono text-[11px] text-[var(--muted)] ${
               isFinished ? 'opacity-40' : ''

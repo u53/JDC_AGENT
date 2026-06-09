@@ -269,11 +269,14 @@ export function Composer({
       : permissionMode === 'strict'
         ? 'bg-[var(--bad)]'
         : 'bg-[var(--good)]'
+  const controlButtonCls = 'composer-control-button flex min-h-11 items-center gap-2 rounded-[8px] border border-[color-mix(in_srgb,var(--border)_88%,transparent)] bg-[color-mix(in_srgb,var(--surface-2)_42%,transparent)] px-3 py-2 text-left text-[12px] text-[var(--text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] transition-colors hover:border-[color-mix(in_srgb,var(--accent)_18%,var(--border))] hover:bg-[color-mix(in_srgb,var(--surface-3)_52%,transparent)] active:translate-y-px'
+  const popoverCls = 'composer-control-popover absolute bottom-full z-[90] mb-2 overflow-hidden rounded-[8px] border border-[color-mix(in_srgb,var(--border)_90%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_98%,transparent),color-mix(in_srgb,var(--surface-2)_94%,transparent))] shadow-[0_18px_54px_-34px_rgba(0,0,0,0.78),inset_0_1px_0_rgba(255,255,255,0.045)] backdrop-blur'
+  const popoverItemCls = 'composer-popover-item block w-full text-left px-3 py-2 text-[12px] text-[var(--text)] transition-colors hover:bg-[color-mix(in_srgb,var(--surface-3)_54%,transparent)]'
 
   return (
     <div
       ref={composerRef}
-      className="border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] px-6 py-4 shadow-[0_-18px_42px_-36px_rgba(0,0,0,0.8)] backdrop-blur"
+      className="composer-shell border-t border-[color-mix(in_srgb,var(--border)_86%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_88%,transparent),color-mix(in_srgb,var(--bg)_94%,transparent))] px-6 py-4 shadow-[0_-18px_42px_-38px_rgba(0,0,0,0.86),inset_0_1px_0_rgba(255,255,255,0.025)] backdrop-blur"
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
@@ -319,8 +322,8 @@ export function Composer({
       <ImagePreview images={images} onRemove={(i) => setImages((prev) => prev.filter((_, idx) => idx !== i))} />
 
       {/* Main input area */}
-      <div className="mx-auto max-w-[920px]">
-        <div className="relative rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_88%,transparent)] p-2 shadow-[var(--shadow)]">
+      <div className="mx-auto max-w-[1120px]">
+        <div className="composer-command-surface relative overflow-visible rounded-[8px] border border-[color-mix(in_srgb,var(--border)_90%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface-2)_74%,transparent),color-mix(in_srgb,var(--surface)_58%,transparent))] p-2 shadow-[0_18px_60px_-50px_rgba(0,0,0,0.86),inset_0_1px_0_rgba(255,255,255,0.035)]">
           <SlashCommandMenu
             filter={slashFilter}
             visible={showSlashMenu}
@@ -346,8 +349,8 @@ export function Composer({
               }}
               onPaste={handlePaste}
               rows={1}
-              placeholder="输入消息... (/ 打开命令)"
-              className="flex-1 resize-none rounded-[6px] border border-transparent bg-transparent px-3 py-2.5 text-[14px] leading-6 text-[var(--text)] placeholder-[var(--muted)] outline-none transition-colors font-[var(--font-sans)] focus:bg-[color-mix(in_srgb,var(--surface)_55%,transparent)]"
+              placeholder="向 JDC Code 发送消息，或输入 / 运行命令..."
+              className="flex-1 resize-none rounded-[6px] border border-transparent bg-transparent px-3 py-3 text-[14px] leading-6 text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-colors font-[var(--font-sans)] focus:bg-[color-mix(in_srgb,var(--surface)_46%,transparent)]"
             />
             {/* Action buttons */}
             {isStreaming ? (
@@ -358,7 +361,7 @@ export function Composer({
                       enqueueMessage(text.trim())
                       resetDraft()
                     }}
-                    className="flex h-9 items-center gap-1.5 rounded-[8px] bg-[var(--accent)] px-3 text-[12px] font-semibold text-[var(--accent-ink)] transition-colors hover:brightness-110 active:translate-y-px"
+                    className="composer-send-button flex h-9 items-center gap-1.5 rounded-[8px] border border-[color-mix(in_srgb,var(--accent)_34%,transparent)] bg-[color-mix(in_srgb,var(--accent)_84%,var(--text)_16%)] px-3 text-[12px] font-semibold text-[var(--accent-ink)] shadow-[0_12px_32px_-22px_var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_92%,var(--text)_8%)] active:translate-y-px"
                   >
                     <IconSend size={14} />
                     Queue
@@ -367,7 +370,7 @@ export function Composer({
                 <button
                   onClick={() => { if (!aborting) onAbort() }}
                   disabled={aborting}
-                  className="flex h-9 items-center gap-1.5 rounded-[8px] border border-[var(--bad)] px-3 text-[12px] font-semibold text-[var(--bad)] transition-colors hover:bg-[var(--bad)] hover:text-white disabled:opacity-60 disabled:cursor-wait disabled:hover:bg-transparent disabled:hover:text-[var(--bad)]"
+                  className="flex h-9 items-center gap-1.5 rounded-[8px] border border-[color-mix(in_srgb,var(--bad)_42%,var(--border))] bg-[color-mix(in_srgb,var(--bad)_7%,transparent)] px-3 text-[12px] font-semibold text-[var(--bad)] transition-colors hover:bg-[color-mix(in_srgb,var(--bad)_16%,transparent)] disabled:opacity-60 disabled:cursor-wait"
                 >
                   <IconStop size={14} />
                   {aborting ? 'Stopping…' : 'Stop'}
@@ -382,18 +385,16 @@ export function Composer({
                   }
                 }}
                 disabled={!text.trim() && images.length === 0}
-                className="flex h-9 items-center gap-1.5 rounded-[8px] bg-[var(--accent)] px-3 text-[12px] font-semibold text-[var(--accent-ink)] transition-colors hover:brightness-110 active:translate-y-px disabled:opacity-40 disabled:cursor-not-allowed disabled:active:translate-y-0"
+                className="composer-send-button flex h-9 items-center gap-1.5 rounded-[8px] border border-[color-mix(in_srgb,var(--accent)_34%,transparent)] bg-[color-mix(in_srgb,var(--accent)_84%,var(--text)_16%)] px-3 text-[12px] font-semibold text-[var(--accent-ink)] shadow-[0_12px_32px_-22px_var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_92%,var(--text)_8%)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:active:translate-y-0"
               >
                 <IconSend size={14} />
                 Send
               </button>
             )}
           </div>
-        </div>
-
-        {/* Status bar */}
-        <div className="mt-2 flex min-w-0 items-center justify-between gap-3 border-t border-[var(--border)] pt-2 text-[12px]">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
+          {/* Status bar */}
+          <div className="composer-control-strip mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-[color-mix(in_srgb,var(--border)_86%,transparent)] px-1 pt-2 text-[12px]">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             {/* Permission dropdown */}
             <div className="relative shrink-0">
               <button
@@ -402,28 +403,32 @@ export function Composer({
                   setShowEffortMenu(false)
                   setShowModelMenu(false)
                 }}
-                className="flex items-center gap-1 text-[var(--text)] hover:opacity-80 transition-opacity whitespace-nowrap"
+                className={controlButtonCls}
               >
-                <span className={`inline-block h-1.5 w-1.5 rounded-full ${permDotColor}`} />
-                {permLabel} ▾
+                <span className={`inline-block h-2 w-2 rounded-full ${permDotColor}`} />
+                <span className="min-w-0">
+                  <span className="block font-mono text-[10px] uppercase text-[var(--muted)]">权限</span>
+                  <span className="block truncate">{permLabel}</span>
+                </span>
+                <span className="ml-auto text-[var(--muted)]">⌄</span>
               </button>
               {showPermMenu && (
-                <div className="absolute bottom-full left-0 z-[90] mb-2 min-w-[130px] overflow-hidden rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] shadow-[var(--shadow-soft)] backdrop-blur">
+                <div className={`${popoverCls} left-0 min-w-[190px]`}>
                   <button
                     onClick={() => { onPermissionChange?.('relaxed'); setShowPermMenu(false) }}
-                    className={`block w-full text-left px-3 py-1.5 text-[12px] hover:bg-[var(--surface-2)] ${permissionMode === 'relaxed' ? 'text-[var(--warn)]' : 'text-[var(--text)]'}`}
+                    className={`${popoverItemCls} ${permissionMode === 'relaxed' ? 'bg-[color-mix(in_srgb,var(--warn)_8%,transparent)] text-[var(--warn)]' : ''}`}
                   >
                     完全访问
                   </button>
                   <button
                     onClick={() => { onPermissionChange?.('standard'); setShowPermMenu(false) }}
-                    className={`block w-full text-left px-3 py-1.5 text-[12px] hover:bg-[var(--surface-2)] ${permissionMode === 'standard' ? 'text-[var(--good)]' : 'text-[var(--text)]'}`}
+                    className={`${popoverItemCls} ${permissionMode === 'standard' ? 'bg-[color-mix(in_srgb,var(--good)_8%,transparent)] text-[var(--good)]' : ''}`}
                   >
                     标准模式
                   </button>
                   <button
                     onClick={() => { onPermissionChange?.('strict'); setShowPermMenu(false) }}
-                    className={`block w-full text-left px-3 py-1.5 text-[12px] hover:bg-[var(--surface-2)] ${permissionMode === 'strict' ? 'text-[var(--bad)]' : 'text-[var(--text)]'}`}
+                    className={`${popoverItemCls} ${permissionMode === 'strict' ? 'bg-[color-mix(in_srgb,var(--bad)_8%,transparent)] text-[var(--bad)]' : ''}`}
                   >
                     严格模式
                   </button>
@@ -439,17 +444,23 @@ export function Composer({
                   setShowPermMenu(false)
                   setShowModelMenu(false)
                 }}
-                className={`flex items-center gap-1 transition-colors whitespace-nowrap ${effort === 'off' ? 'text-[var(--muted)] hover:text-[var(--text)]' : 'text-[var(--good)]'}`}
+                className={controlButtonCls}
               >
-                <span className={`inline-block h-1.5 w-1.5 rounded-full ${effort === 'off' ? 'bg-[var(--muted)]' : 'bg-[var(--good)]'}`} />
-                {(() => {
-                  const labels: Record<string, string> = { off: '推理:关', low: '推理:低', medium: '推理:中', high: '推理:高', xhigh: '推理:超', max: '推理:最大' }
-                  return labels[effort]
-                })()} ▾
+                <span className={`inline-block h-2 w-2 rounded-full ${effort === 'off' ? 'bg-[var(--muted)]' : 'bg-[var(--good)]'}`} />
+                <span className="min-w-0">
+                  <span className="block font-mono text-[10px] uppercase text-[var(--muted)]">推理</span>
+                  <span className="block truncate">
+                    {(() => {
+                      const labels: Record<string, string> = { off: '推理:关', low: '推理:低', medium: '推理:中', high: '推理:高', xhigh: '推理:超高', max: '推理:最大' }
+                      return labels[effort]
+                    })()}
+                  </span>
+                </span>
+                <span className="ml-auto text-[var(--muted)]">⌄</span>
               </button>
               {showEffortMenu && (
-                <div className="absolute bottom-full left-0 z-[90] mb-2 min-w-[150px] overflow-hidden rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] shadow-[var(--shadow-soft)] backdrop-blur">
-                  <div className="px-3 py-1.5 text-[10px] text-[var(--muted)] flex items-center justify-between border-b border-[var(--border)]">
+                <div className={`${popoverCls} left-0 min-w-[200px]`}>
+                  <div className="px-3 py-2 text-[10px] text-[var(--muted)] flex items-center justify-between border-b border-[color-mix(in_srgb,var(--border)_86%,transparent)]">
                     <span>速度</span>
                     <span>智能</span>
                   </div>
@@ -459,7 +470,7 @@ export function Composer({
                       <button
                         key={lvl}
                         onClick={() => { onEffortChange?.(lvl); setShowEffortMenu(false) }}
-                        className={`block w-full text-left px-3 py-1.5 text-[12px] hover:bg-[var(--surface-2)] ${effort === lvl ? 'text-[var(--good)]' : 'text-[var(--text)]'}`}
+                        className={`${popoverItemCls} ${effort === lvl ? 'bg-[color-mix(in_srgb,var(--good)_8%,transparent)] text-[var(--good)]' : ''}`}
                       >
                         {labels[lvl]}
                       </button>
@@ -472,10 +483,13 @@ export function Composer({
             {/* Plan toggle */}
             <button
               onClick={onPlanToggle}
-              className={`flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${planMode ? 'text-[var(--plan)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
+              className={`${controlButtonCls} shrink-0 ${planMode ? 'border-[color-mix(in_srgb,var(--plan)_28%,var(--border))]' : ''}`}
             >
-              <span className={`inline-block h-1.5 w-1.5 rounded-full ${planMode ? 'bg-[var(--plan)]' : 'bg-[var(--muted)]'}`} />
-              规划
+              <span className={`inline-block h-2 w-2 rounded-full ${planMode ? 'bg-[var(--plan)]' : 'bg-[var(--muted)]'}`} />
+              <span>
+                <span className="block font-mono text-[10px] uppercase text-[var(--muted)]">模式</span>
+                <span className={planMode ? 'text-[var(--plan)]' : 'text-[var(--text)]'}>规划</span>
+              </span>
             </button>
 
             {/* Branch switcher */}
@@ -497,7 +511,7 @@ export function Composer({
           </div>
 
           {/* Model dropdown */}
-          <div className="relative min-w-[140px] max-w-[42%] shrink">
+          <div className="relative min-w-[180px] max-w-[42%] shrink">
             <button
               onClick={() => {
                 setShowPermMenu(false)
@@ -505,18 +519,23 @@ export function Composer({
                 if (models && models.length > 0) setShowModelMenu(!showModelMenu)
                 else onModelClick?.()
               }}
-              className="block max-w-full truncate font-mono text-[11px] text-[var(--text)] transition-colors hover:text-[var(--accent)]"
+              className={`${controlButtonCls} w-full`}
               title={modelName || 'No Model'}
             >
-              {modelName || 'No Model'} ▾
+              <span className="inline-block h-2 w-2 rounded-full bg-[var(--accent)]" />
+              <span className="min-w-0 flex-1">
+                <span className="block font-mono text-[10px] uppercase text-[var(--muted)]">模型</span>
+                <span className="block truncate font-mono text-[11px]">{modelName || 'No Model'}</span>
+              </span>
+              <span className="text-[var(--muted)]">⌄</span>
             </button>
             {showModelMenu && models && models.length > 0 && (
-              <div className="absolute bottom-full right-0 z-[90] mb-2 max-h-[240px] min-w-[220px] overflow-y-auto rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] shadow-[var(--shadow-soft)] backdrop-blur">
+              <div className={`${popoverCls} right-0 max-h-[260px] min-w-[260px] overflow-y-auto`}>
                 {models.map((m) => (
                   <button
                     key={m.id}
                     onClick={() => { onModelChange?.(m.id); setShowModelMenu(false) }}
-                    className={`block w-full text-left px-3 py-1.5 text-[12px] hover:bg-[var(--surface-2)] ${m.id === modelId ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'text-[var(--text)]'}`}
+                    className={`${popoverItemCls} ${m.id === modelId ? 'bg-[color-mix(in_srgb,var(--accent)_9%,var(--surface-2))] text-[var(--accent)]' : ''}`}
                   >
                     {m.id === modelId && <span className="mr-1">✓</span>}
                     <span>{m.name}</span>
@@ -525,13 +544,14 @@ export function Composer({
                 ))}
                 <button
                   onClick={() => { setShowModelMenu(false); onModelClick?.() }}
-                  className="block w-full text-left px-3 py-1.5 text-[12px] hover:bg-[var(--surface-2)] text-[var(--muted)] border-t border-[var(--border)]"
+                  className="block w-full border-t border-[color-mix(in_srgb,var(--border)_86%,transparent)] px-3 py-2 text-left text-[12px] text-[var(--muted)] transition-colors hover:bg-[color-mix(in_srgb,var(--surface-3)_54%,transparent)] hover:text-[var(--text)]"
                 >
                   Settings...
                 </button>
               </div>
             )}
           </div>
+        </div>
         </div>
       </div>
     </div>

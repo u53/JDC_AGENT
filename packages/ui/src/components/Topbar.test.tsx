@@ -19,12 +19,21 @@ describe('Topbar', () => {
     Object.assign(useSessionStore.getInitialState(), state)
   })
 
-  it('shows the project name with its full path in the topbar', () => {
+  it('shows the JDC CODE brand with the full project path in the topbar', () => {
     const html = renderToStaticMarkup(<Topbar />)
     const heading = html.match(/<h1[^>]*>.*?<\/h1>/)?.[0] ?? ''
 
-    expect(heading).toContain(`jdcagnet · ${cwd}`)
+    expect(heading).toContain(`JDC CODE · ${cwd}`)
+    expect(heading).not.toContain('jdcagnet ·')
     expect(heading).not.toContain('title=')
     expect(heading).not.toContain('jdcagnet-&gt;')
+  })
+
+  it('makes the full project path a project console trigger', () => {
+    const html = renderToStaticMarkup(<Topbar />)
+
+    expect(html).toContain('topbar-project-console-trigger')
+    expect(html).toContain('aria-label="Open project console"')
+    expect(html).toContain(`JDC CODE · ${cwd}`)
   })
 })

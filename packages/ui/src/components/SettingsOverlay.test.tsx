@@ -62,6 +62,8 @@ describe('SettingsOverlay', () => {
     const html = renderToStaticMarkup(<SettingsOverlay />)
 
     expect(html).toContain('settings-model-group-card')
+    expect(html).toContain('settings-model-manager')
+    expect(html).toContain('settings-model-search')
     expect(html).toContain('settings-model-group-body')
     expect(html).toContain('settings-field-grid')
     expect(html).toContain('settings-model-row')
@@ -70,6 +72,27 @@ describe('SettingsOverlay', () => {
     expect(html).toContain('Production')
     expect(html).toContain('1 model')
     expect(html).not.toContain('<select')
+  })
+
+  it('lets compact protocol menus escape collapsed model group cards', () => {
+    const modelState = {
+      groups: [{
+        id: 'group-1',
+        name: 'Production',
+        protocol: 'openai-responses' as const,
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'sk-test',
+        models: [],
+      }],
+      activeModelId: null,
+    }
+    useModelStore.setState(modelState)
+    Object.assign(useModelStore.getInitialState(), modelState)
+
+    const html = renderToStaticMarkup(<SettingsOverlay />)
+
+    expect(html).toContain('settings-model-group-card overflow-visible')
+    expect(html).not.toContain('settings-model-group-card overflow-hidden')
   })
 
   it('renders a Chinese product introduction in the about section', () => {

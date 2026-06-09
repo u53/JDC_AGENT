@@ -24,7 +24,7 @@ const EFFORT_LABELS: Record<string, string> = {
   low: '推理:低',
   medium: '推理:中',
   high: '推理:高',
-  xhigh: '推理:超',
+  xhigh: '推理:超高',
   max: '推理:最大',
 }
 

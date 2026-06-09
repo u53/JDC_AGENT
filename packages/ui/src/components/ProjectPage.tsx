@@ -51,7 +51,7 @@ function Panel({
   return (
     <section
       className={cx(
-        'rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] shadow-[var(--shadow)]',
+        'rounded-[8px] border border-[color-mix(in_srgb,var(--border)_88%,transparent)] bg-[color-mix(in_srgb,var(--surface)_86%,transparent)] shadow-[var(--shadow)]',
         'backdrop-blur-sm',
         className,
       )}
@@ -63,7 +63,7 @@ function Panel({
 
 function IconFrame({ children }: { children: ReactNode }) {
   return (
-    <span className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--accent-soft)] text-[var(--accent)]">
+    <span className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--accent)_18%,var(--border))] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface-2))] text-[color-mix(in_srgb,var(--accent)_84%,var(--text)_16%)]">
       {children}
     </span>
   )
@@ -111,8 +111,8 @@ function CommandButton({
       className={cx(
         'inline-flex h-9 items-center gap-2 rounded-[8px] px-3 text-[12px] font-semibold transition-all active:translate-y-[1px]',
         variant === 'primary'
-          ? 'bg-[var(--accent)] text-[var(--accent-ink)] hover:brightness-110'
-          : 'border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-3)]',
+          ? 'project-primary-action border border-[color-mix(in_srgb,var(--accent)_34%,transparent)] bg-[color-mix(in_srgb,var(--accent)_82%,var(--text)_18%)] text-[var(--accent-ink)] shadow-[0_12px_32px_-22px_var(--accent)] hover:bg-[color-mix(in_srgb,var(--accent)_90%,var(--text)_10%)]'
+          : 'border border-[color-mix(in_srgb,var(--border)_88%,transparent)] bg-[color-mix(in_srgb,var(--surface-2)_52%,transparent)] text-[var(--text)] hover:border-[var(--border-strong)] hover:bg-[color-mix(in_srgb,var(--surface-3)_62%,transparent)]',
       )}
     >
       {children}
@@ -137,6 +137,7 @@ function SectionHeader({
 
 export function ProjectPage() {
   const projects = useSessionStore((s) => s.projects)
+  const activeProjectCwd = useSessionStore((s) => s.activeProjectCwd)
   const sessionStates = useSessionStore((s) => s.sessionStates)
   const tasks = useSessionStore((s) => s.tasks)
   const addProject = useSessionStore((s) => s.addProject)
@@ -164,21 +165,23 @@ export function ProjectPage() {
   if (projects.length === 0) {
     return (
       <div
-        className="flex-1 overflow-hidden bg-[var(--bg)] px-8 py-8"
+        className="project-page-shell flex-1 overflow-hidden bg-[var(--bg)] px-8 py-8"
         style={{
           backgroundImage:
-            'linear-gradient(rgba(148,163,184,0.055) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.055) 1px, transparent 1px), linear-gradient(135deg, rgba(34,197,94,0.08), transparent 42%)',
+            'linear-gradient(rgba(148,163,184,0.052) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.052) 1px, transparent 1px), radial-gradient(circle at 24% 38%, rgba(52,214,122,0.12), transparent 28%), linear-gradient(135deg, rgba(52,214,122,0.07), transparent 42%)',
           backgroundSize: '40px 40px, 40px 40px, 100% 100%',
         }}
       >
         <div className="flex min-h-full items-center">
-          <div className="max-w-[720px]">
-            <div className="mb-5 inline-flex items-center gap-2 rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[12px] text-[var(--muted)]">
+          <div className="project-empty-state max-w-[760px]">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-[8px] border border-[color-mix(in_srgb,var(--border)_88%,transparent)] bg-[color-mix(in_srgb,var(--surface)_46%,transparent)] px-3 py-2 text-[12px] text-[var(--muted)] shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
               <StatusDot color="var(--accent)" pulse />
               JDC CODE
             </div>
-            <h2 className="max-w-[620px] text-[42px] font-semibold leading-[0.98] tracking-[-0.04em] text-[var(--text)]">
-              Local agent workspace, ready for a project.
+            <h2 className="project-empty-headline max-w-[700px] text-[42px] font-semibold leading-[0.98] text-[var(--text)] md:text-[48px]">
+              Local agent workspace,
+              <br />
+              <span className="text-[color-mix(in_srgb,var(--accent)_74%,var(--text)_26%)]">ready for a project.</span>
             </h2>
             <p className="mt-5 max-w-[520px] text-[14px] leading-6 text-[var(--muted)]">
               Connect a working directory and JDC CODE will bring sessions, tools, context, and runs into one command surface.
@@ -195,9 +198,9 @@ export function ProjectPage() {
     )
   }
 
-  const project = projects[0]
-  const allSessions = projects.flatMap((p) => p.sessions)
-  const recentSessions = allSessions.slice(0, 6)
+  const project = projects.find((p) => p.cwd === activeProjectCwd) ?? projects[0]
+  const projectSessions = project.sessions
+  const recentSessions = projectSessions.slice(0, 6)
   const usageEntry = Object.values(sessionStates).find((state) => state.usage)
   const usage = usageEntry?.usage
   const connectedCount = mcpServers.filter((server) => server.status === 'connected').length
@@ -256,7 +259,7 @@ export function ProjectPage() {
             <div className="mt-8 grid gap-3 sm:grid-cols-3">
               <div className="border-t border-[var(--border)] pt-3">
                 <Label>Sessions</Label>
-                <div className="mt-2 font-mono text-[22px] text-[var(--text)]">{allSessions.length}</div>
+                <div className="mt-2 font-mono text-[22px] text-[var(--text)]">{projectSessions.length}</div>
               </div>
               <div className="border-t border-[var(--border)] pt-3">
                 <Label>Context</Label>

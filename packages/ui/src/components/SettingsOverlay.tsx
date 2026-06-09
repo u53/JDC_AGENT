@@ -384,6 +384,7 @@ function ModelsTab() {
   const [newGroupProtocol, setNewGroupProtocol] = useState<ApiProtocol>('anthropic')
   const [newGroupUrl, setNewGroupUrl] = useState('')
   const [newGroupKey, setNewGroupKey] = useState('')
+  const [modelQuery, setModelQuery] = useState('')
 
   useEffect(() => { loadFromConfig() }, [loadFromConfig])
   useEffect(() => {
@@ -404,13 +405,22 @@ function ModelsTab() {
     setShowNewGroup(false)
   }
 
-  const inputCls = 'w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-[6px] px-3 py-2 text-[13px] text-[var(--text)] outline-none focus:border-[var(--border-strong)]'
-  const btnPrimary = 'bg-[var(--accent)] text-[var(--accent-ink)] rounded-[6px] px-3 py-1.5 text-[12px]'
-  const btnGhost = 'border border-[var(--border)] rounded-[6px] px-3 py-1.5 text-[12px] text-[var(--muted)] hover:text-[var(--text)]'
+  const query = modelQuery.trim().toLowerCase()
+  const visibleGroups = query
+    ? groups.filter((group) => {
+      const groupHit = group.name.toLowerCase().includes(query) || group.protocol.toLowerCase().includes(query) || group.baseUrl.toLowerCase().includes(query)
+      const modelHit = group.models.some((model) => model.name.toLowerCase().includes(query) || model.modelId.toLowerCase().includes(query))
+      return groupHit || modelHit
+    })
+    : groups
+
+  const inputCls = 'w-full bg-[color-mix(in_srgb,var(--surface-2)_62%,transparent)] border border-[color-mix(in_srgb,var(--border)_88%,transparent)] rounded-[6px] px-3 py-2 text-[13px] text-[var(--text)] outline-none transition-colors focus:border-[color-mix(in_srgb,var(--accent)_34%,var(--border))] focus:bg-[color-mix(in_srgb,var(--surface)_62%,transparent)]'
+  const btnPrimary = 'border border-[color-mix(in_srgb,var(--accent)_34%,transparent)] bg-[color-mix(in_srgb,var(--accent)_84%,var(--text)_16%)] text-[var(--accent-ink)] rounded-[6px] px-3 py-1.5 text-[12px] shadow-[0_12px_32px_-22px_var(--accent)]'
+  const btnGhost = 'border border-[color-mix(in_srgb,var(--border)_88%,transparent)] bg-[color-mix(in_srgb,var(--surface-2)_42%,transparent)] rounded-[6px] px-3 py-1.5 text-[12px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--surface-3)_52%,transparent)]'
 
   return (
-    <div className="settings-tab-body space-y-4">
-      <section className="settings-section flex items-center justify-between gap-4 rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
+    <div className="settings-tab-body settings-model-manager space-y-4">
+      <section className="settings-section flex items-center justify-between gap-4 rounded-[8px] border border-[color-mix(in_srgb,var(--border)_88%,transparent)] bg-[color-mix(in_srgb,var(--surface-2)_44%,transparent)] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
         <div className="min-w-0">
           <h4 className="text-[13px] font-semibold text-[var(--text)]">模型分组</h4>
           <p className="mt-1 text-[12px] leading-5 text-[var(--muted)]">按供应商或代理端点维护模型配置。</p>
@@ -419,6 +429,17 @@ function ModelsTab() {
           + 新建分组
         </button>
       </section>
+
+      {groups.length > 0 && (
+        <div className="settings-model-search rounded-[8px] border border-[color-mix(in_srgb,var(--border)_88%,transparent)] bg-[color-mix(in_srgb,var(--surface-2)_34%,transparent)] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
+          <input
+            value={modelQuery}
+            onChange={(e) => setModelQuery(e.target.value)}
+            placeholder="搜索分组或模型"
+            className={inputCls}
+          />
+        </div>
+      )}
 
       {showNewGroup && (
         <div className="settings-form-card border border-[var(--border)] rounded-[8px] bg-[var(--surface-2)] p-4 space-y-3">
@@ -433,7 +454,7 @@ function ModelsTab() {
         </div>
       )}
 
-      {groups.map((group) => (
+      {visibleGroups.map((group) => (
         <ModelGroupCard
           key={group.id}
           group={group}
@@ -452,6 +473,12 @@ function ModelsTab() {
           <div className="mx-auto mb-3 h-8 w-8 rounded-[6px] border border-[var(--border)] bg-[var(--surface-3)]" />
           <h4 className="text-[13px] font-semibold text-[var(--text)]">暂无模型分组</h4>
           <p className="mx-auto mt-2 max-w-[360px] text-[12px] leading-5 text-[var(--muted)]">创建一个分组后，可以把 Base URL、协议和模型 ID 绑定在一起，切换会更稳。</p>
+        </div>
+      )}
+      {groups.length > 0 && visibleGroups.length === 0 && (
+        <div className="settings-empty-state rounded-[8px] border border-dashed border-[color-mix(in_srgb,var(--border)_88%,transparent)] bg-[color-mix(in_srgb,var(--surface-2)_38%,transparent)] px-6 py-8 text-center">
+          <h4 className="text-[13px] font-semibold text-[var(--text)]">没有匹配结果</h4>
+          <p className="mx-auto mt-2 max-w-[360px] text-[12px] leading-5 text-[var(--muted)]">换一个关键词，或清空搜索查看所有模型分组。</p>
         </div>
       )}
     </div>
@@ -552,7 +579,7 @@ function ModelGroupCard({ group, expanded, onToggle, onDelete, onUpdate, onAddMo
   }
 
   return (
-    <div className="settings-model-group-card overflow-hidden rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)]">
+    <div className="settings-model-group-card overflow-visible rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)]">
       <div className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-[var(--surface-3)]" onClick={onToggle}>
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] border border-[var(--border)] bg-[var(--surface)] text-[11px] text-[var(--muted)]">{expanded ? '▼' : '▶'}</span>

@@ -6,15 +6,17 @@ import { IconPlus, IconSettings } from './icons'
 export function Topbar() {
   const projects = useSessionStore((s) => s.projects)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const activeProjectCwd = useSessionStore((s) => s.activeProjectCwd)
   const addProject = useSessionStore((s) => s.addProject)
+  const openProjectConsole = useSessionStore((s) => s.openProjectConsole)
   const openSettings = useSettingsStore((s) => s.open)
 
   const activeProject = projects.find((p) =>
     p.sessions.some((s) => s.id === activeSessionId)
   )
-  const project = activeProject || projects[0]
-  const projectName = project?.name || 'JDC Code'
-  const projectLabel = project?.cwd ? `${projectName} · ${project.cwd}` : projectName
+  const selectedProject = projects.find((p) => p.cwd === activeProjectCwd)
+  const project = activeProject || selectedProject || projects[0]
+  const projectLabel = project?.cwd ? `JDC CODE · ${project.cwd}` : 'JDC CODE'
 
   return (
     <header
@@ -23,7 +25,14 @@ export function Topbar() {
     >
       <div className="min-w-0 flex flex-1 items-center gap-3 pr-4" style={{ WebkitAppRegion: 'no-drag' } as any}>
         <h1 className="min-w-0 truncate text-[15px] font-semibold tracking-[-0.01em]">
-          {projectLabel}
+          <button
+            type="button"
+            onClick={() => { if (project?.cwd) openProjectConsole(project.cwd) }}
+            className="topbar-project-console-trigger min-w-0 max-w-full truncate text-left transition-colors hover:text-[var(--accent)]"
+            aria-label="Open project console"
+          >
+            {projectLabel}
+          </button>
         </h1>
       </div>
 

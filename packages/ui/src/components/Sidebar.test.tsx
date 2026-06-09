@@ -36,4 +36,11 @@ describe('Sidebar', () => {
     expect(html).toContain('JDC Dark')
     expect(html).toContain('New project')
   })
+
+  it('renders each project heading as a console trigger', () => {
+    const html = renderToStaticMarkup(<Sidebar />)
+
+    expect(html).toContain('sidebar-project-console-trigger')
+    expect(html).toContain('aria-label="Open jdcagnet project console"')
+  })
 })

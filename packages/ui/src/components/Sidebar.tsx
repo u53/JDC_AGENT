@@ -9,6 +9,7 @@ export function Sidebar() {
   const loadProjects = useSessionStore((s) => s.loadProjects)
   const createSession = useSessionStore((s) => s.createSession)
   const switchSession = useSessionStore((s) => s.switchSession)
+  const openProjectConsole = useSessionStore((s) => s.openProjectConsole)
   const renameSession = useSessionStore((s) => s.renameSession)
   const deleteSession = useSessionStore((s) => s.deleteSession)
   const addProject = useSessionStore((s) => s.addProject)
@@ -61,8 +62,16 @@ export function Sidebar() {
       <div className="flex-1 px-3 pb-3 space-y-4 overflow-y-auto">
         {projects.map((project) => (
           <div key={project.cwd} className="sidebar-project-group rounded-[8px] border border-transparent bg-[color-mix(in_srgb,var(--surface-2)_26%,transparent)] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
-            <h3 className="sidebar-project-heading font-mono text-[10px] uppercase tracking-[0.14em] text-[color-mix(in_srgb,var(--muted)_86%,var(--text)_14%)] font-semibold mb-1.5 px-2">
-              {project.name}
+            <h3 className="mb-1.5 px-2">
+              <button
+                type="button"
+                onClick={() => openProjectConsole(project.cwd)}
+                className="sidebar-project-heading sidebar-project-console-trigger block w-full truncate text-left font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[color-mix(in_srgb,var(--muted)_86%,var(--text)_14%)] transition-colors hover:text-[var(--accent)]"
+                aria-label={`Open ${project.name} project console`}
+                title={project.cwd}
+              >
+                {project.name}
+              </button>
             </h3>
             <div className="space-y-0.5">
               {project.sessions.map((session) => {
