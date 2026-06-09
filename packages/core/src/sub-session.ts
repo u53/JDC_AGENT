@@ -383,7 +383,7 @@ export async function runSubSession(opts: SubSessionOptions): Promise<SubSession
         toolCount: totalToolCount,
       })
 
-      toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: result.content, is_error: result.isError })
+      toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: result.content, is_error: result.isError, metadata: result.metadata })
     }
     messages.push({ id: uuid(), role: 'user', content: toolResults, timestamp: Date.now() })
   }

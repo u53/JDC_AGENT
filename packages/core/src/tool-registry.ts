@@ -1,4 +1,4 @@
-import type { ToolDefinition } from './types.js'
+import type { ToolDefinition, ToolResultMetadata } from './types.js'
 
 export interface ToolHandler {
   definition: ToolDefinition
@@ -16,25 +16,6 @@ export interface ToolContext {
   backgroundTasks?: import('./background-tasks.js').BackgroundTaskManager
   ideManager?: import('./ide/ide-manager.js').IdeManager
   contextEngine?: import('./context-engine/engine.js').ContextEngine
-}
-
-export interface ToolResultMetadata {
-  fileRead?: {
-    filePath: string
-    offset: number
-    limit: number
-    totalLines: number
-    content: string
-  }
-  mutations?: Array<{
-    filePath: string
-    kind: 'edit' | 'multi_edit' | 'write'
-  }>
-  command?: {
-    shell: 'bash' | 'powershell'
-    command: string
-    exitCode: number | null
-  }
 }
 
 export interface ToolResult {

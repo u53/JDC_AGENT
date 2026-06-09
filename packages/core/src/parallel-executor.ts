@@ -1,4 +1,5 @@
 import type { ToolRunner, ToolExecutionEvent } from './tool-runner.js'
+import type { ToolResultMetadata } from './types.js'
 
 export interface ToolUseBlock {
   type: 'tool_use'
@@ -11,6 +12,7 @@ export interface ToolBatchResult {
   tool_use_id: string
   content: string
   is_error: boolean
+  metadata?: ToolResultMetadata
 }
 
 const READ_TOOLS = new Set([
@@ -133,16 +135,17 @@ export class ParallelExecutor {
     input: Record<string, unknown>,
     onEvent: (event: ToolExecutionEvent) => void,
     signal: AbortSignal,
-  ): Promise<{ tool_use_id: string; content: string; is_error: boolean; aborted?: boolean }> {
+  ): Promise<ToolBatchResult & { aborted?: boolean }> {
     const tool = this.toolRunner.execute(name, id, input, onEvent, signal).then(r => ({
       tool_use_id: id,
       content: r.content,
       is_error: r.isError || false,
+      metadata: r.metadata,
     }))
     if (signal.aborted) {
       return { tool_use_id: id, content: abortMessage(signal), is_error: true, aborted: true }
     }
-    const aborted = new Promise<{ tool_use_id: string; content: string; is_error: boolean; aborted: true }>((resolve) => {
+    const aborted = new Promise<ToolBatchResult & { aborted: true }>((resolve) => {
       signal.addEventListener('abort', () => {
         resolve({ tool_use_id: id, content: abortMessage(signal), is_error: true, aborted: true })
       }, { once: true })
@@ -193,7 +196,7 @@ export class ParallelExecutor {
           const raced = await this.raceWithAbort(
             blocks[idx].name, blocks[idx].id, blocks[idx].input, onEvent, toolSignal
           )
-          results[idx] = { tool_use_id: raced.tool_use_id, content: raced.content, is_error: raced.is_error }
+          results[idx] = { tool_use_id: raced.tool_use_id, content: raced.content, is_error: raced.is_error, metadata: raced.metadata }
           if (raced.is_error && !raced.aborted && !isJdcReadTool(blocks[idx].name)) {
             readHadError = true
           }
@@ -220,7 +223,7 @@ export class ParallelExecutor {
       const raced = await this.raceWithAbort(
         blocks[idx].name, blocks[idx].id, blocks[idx].input, onEvent, toolSignal
       )
-      results[idx] = { tool_use_id: raced.tool_use_id, content: raced.content, is_error: raced.is_error }
+      results[idx] = { tool_use_id: raced.tool_use_id, content: raced.content, is_error: raced.is_error, metadata: raced.metadata }
       if (raced.is_error && !raced.aborted && !isDelegationTool(blocks[idx].name)) {
         batchAbort.abort()
       }

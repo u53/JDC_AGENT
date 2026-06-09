@@ -1,4 +1,4 @@
-import type { Message, ContentBlock, ModelConfig, StreamChunk } from './types.js'
+import type { Message, ContentBlock, ModelConfig, StreamChunk, ToolUseContent, ToolResultContent } from './types.js'
 import type { ModelProvider } from './model-provider.js'
 import { v4 as uuid } from 'uuid'
 
@@ -355,6 +355,8 @@ function allocateSummaryToolResultBudgets(messages: Message[], config: ModelConf
 }
 
 function trimKeptToolResults(messages: Message[], config: ModelConfig): Message[] {
+  const toolUses = collectToolUses(messages)
+
   return messages.map(msg => {
     let changed = false
     const newContent: ContentBlock[] = msg.content.map(block => {
@@ -364,6 +366,12 @@ function trimKeptToolResults(messages: Message[], config: ModelConfig): Message[
       if (block.content.length <= budget) return block
 
       changed = true
+      const toolUse = toolUses.get(block.tool_use_id)
+      const condensed = condenseToolResult(block, toolUse, budget)
+      if (condensed) {
+        return { ...block, content: condensed }
+      }
+
       const errMark = block.is_error ? ' error' : ''
       return {
         ...block,
@@ -373,6 +381,197 @@ function trimKeptToolResults(messages: Message[], config: ModelConfig): Message[
 
     return changed ? { ...msg, content: newContent } : msg
   })
+}
+
+function collectToolUses(messages: Message[]): Map<string, ToolUseContent> {
+  const toolUses = new Map<string, ToolUseContent>()
+  for (const msg of messages) {
+    for (const block of msg.content) {
+      if (block.type === 'tool_use') {
+        toolUses.set(block.id, block)
+      }
+    }
+  }
+  return toolUses
+}
+
+const READ_LIKE_TOOLS = new Set([
+  'read',
+  'grep',
+  'glob',
+  'ls',
+  'tree',
+  'webfetch',
+  'websearch',
+  'lsp',
+  'taskget',
+  'tasklist',
+  'listmcpresources',
+  'readmcpresource',
+  'jdccontext',
+  'jdcsearch',
+  'jdcnode',
+  'jdccallers',
+  'jdccallees',
+  'jdcimpact',
+  'jdctrace',
+  'jdcexplore',
+  'jdcfiles',
+])
+
+const SHELL_TOOLS = new Set(['bash', 'powershell'])
+
+function condenseToolResult(block: ToolResultContent, toolUse: ToolUseContent | undefined, budget: number): string | null {
+  if (!toolUse) return null
+  const normalizedName = normalizeToolName(toolUse.name)
+  if (!READ_LIKE_TOOLS.has(normalizedName) && !SHELL_TOOLS.has(normalizedName)) return null
+
+  const raw = block.content
+  const lines = splitLines(raw)
+  const status = block.is_error ? 'error' : 'success'
+  const displayName = displayToolName(toolUse.name)
+  const label = block.is_error ? `${displayName} error` : displayName
+  const metadata = toolMetadataLines(toolUse, block.metadata)
+  const excerpt = buildLineExcerpt(lines, budget, block.is_error || SHELL_TOOLS.has(normalizedName))
+
+  return [
+    `[Tool result condensed: ${label}]`,
+    `tool_use_id: ${block.tool_use_id}`,
+    `status: ${status}`,
+    ...metadata,
+    `original: ${lines.length} lines, ${raw.length} chars`,
+    `omitted: ${excerpt.omittedLines} lines`,
+    excerpt.text,
+  ].filter(Boolean).join('\n')
+}
+
+function toolMetadataLines(toolUse: ToolUseContent, metadata?: ToolResultContent['metadata']): string[] {
+  const input = toolUse.input ?? {}
+  const normalizedName = normalizeToolName(toolUse.name)
+  if (normalizedName === 'read') {
+    const fileRead = metadata?.fileRead
+    return [
+      scalarLine('file_path', fileRead?.filePath ?? input.file_path ?? input.path),
+      rangeLine(input, fileRead),
+      scalarLine('total_lines', fileRead?.totalLines),
+    ].filter((line): line is string => Boolean(line))
+  }
+
+  if (normalizedName === 'grep') {
+    return [
+      scalarLine('pattern', input.pattern ?? input.query),
+      scalarLine('path', input.path ?? input.cwd),
+      scalarLine('glob', input.glob),
+    ].filter((line): line is string => Boolean(line))
+  }
+
+  if (normalizedName === 'glob') {
+    return [
+      scalarLine('pattern', input.pattern),
+      scalarLine('path', input.path ?? input.cwd),
+    ].filter((line): line is string => Boolean(line))
+  }
+
+  if (normalizedName === 'ls' || normalizedName === 'tree') {
+    return [
+      scalarLine('path', input.path ?? input.cwd),
+    ].filter((line): line is string => Boolean(line))
+  }
+
+  if (SHELL_TOOLS.has(normalizedName)) {
+    const command = metadata?.command
+    return [
+      scalarLine('command', command?.command ?? input.command ?? input.cmd),
+      scalarLine('cwd', input.cwd),
+      scalarLine('shell', command?.shell),
+      scalarLine('exit_code', command?.exitCode),
+    ].filter((line): line is string => Boolean(line))
+  }
+
+  return [
+    scalarLine('input', compactJson(input, 240)),
+  ].filter((line): line is string => Boolean(line))
+}
+
+function normalizeToolName(name: string): string {
+  return name.toLowerCase()
+}
+
+function displayToolName(name: string): string {
+  const normalizedName = normalizeToolName(name)
+  if (normalizedName === 'bash') return 'Bash'
+  if (normalizedName === 'powershell') return 'Powershell'
+  if (normalizedName === 'read') return 'Read'
+  if (normalizedName === 'grep') return 'Grep'
+  if (normalizedName === 'glob') return 'Glob'
+  if (normalizedName === 'ls') return 'LS'
+  if (normalizedName === 'tree') return 'Tree'
+  return name
+}
+
+function rangeLine(input: Record<string, unknown>, fileRead?: NonNullable<ToolResultContent['metadata']>['fileRead']): string | null {
+  const parts: string[] = []
+  const offset = fileRead?.offset ?? input.offset
+  const limit = fileRead?.limit ?? input.limit
+  if (offset !== undefined) parts.push(`offset=${String(offset)}`)
+  if (limit !== undefined) parts.push(`limit=${String(limit)}`)
+  return parts.length > 0 ? `range: ${parts.join(', ')}` : null
+}
+
+function scalarLine(label: string, value: unknown): string | null {
+  if (value === undefined || value === null || value === '') return null
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return `${label}: ${String(value)}`
+  }
+  return `${label}: ${compactJson(value, 240)}`
+}
+
+function compactJson(value: unknown, maxChars: number): string {
+  const text = JSON.stringify(value)
+  if (!text) return ''
+  return text.length <= maxChars ? text : `${text.slice(0, maxChars)}...`
+}
+
+function splitLines(text: string): string[] {
+  if (text.length === 0) return []
+  return text.split(/\r?\n/)
+}
+
+function buildLineExcerpt(lines: string[], budget: number, preferTail: boolean): { text: string; omittedLines: number } {
+  if (lines.length === 0) {
+    return { text: '(empty output)', omittedLines: 0 }
+  }
+
+  const totalExcerptLines = Math.max(4, Math.min(18, Math.floor(budget / 120)))
+  const tailCount = Math.min(
+    lines.length,
+    preferTail ? Math.ceil(totalExcerptLines * 0.65) : Math.floor(totalExcerptLines / 2)
+  )
+  const headCount = Math.min(lines.length - tailCount, Math.max(1, totalExcerptLines - tailCount))
+  const omittedLines = Math.max(0, lines.length - headCount - tailCount)
+
+  if (omittedLines === 0) {
+    return {
+      text: lines.map(truncateExcerptLine).join('\n'),
+      omittedLines,
+    }
+  }
+
+  const head = lines.slice(0, headCount).map(truncateExcerptLine)
+  const tail = lines.slice(lines.length - tailCount).map(truncateExcerptLine)
+  return {
+    text: [
+      ...head,
+      `[... ${omittedLines} lines omitted ...]`,
+      ...tail,
+    ].join('\n'),
+    omittedLines,
+  }
+}
+
+function truncateExcerptLine(line: string): string {
+  const maxLineChars = 260
+  return line.length <= maxLineChars ? line : `${line.slice(0, maxLineChars)}...`
 }
 
 function formatCompactSummary(raw: string): string {

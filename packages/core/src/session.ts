@@ -1100,7 +1100,7 @@ export class Session {
             this.abortController!.signal
           )
       const deferredResultsById = new Map(deferredResults.map((result) => [result.tool_use_id, result]))
-      const batchResults = toolUseBlocks.map((block: any) => (
+      const batchResults: ToolBatchResult[] = toolUseBlocks.map((block: any) => (
         eagerResultsById.get(block.id) ??
         deferredResultsById.get(block.id) ??
         { tool_use_id: block.id, content: 'Tool finished without a result', is_error: true }
@@ -1121,6 +1121,7 @@ export class Session {
         tool_use_id: r.tool_use_id,
         content: r.content + (reminder || ''),
         is_error: r.is_error,
+        metadata: r.metadata,
       }))
 
       const toolMessage: Message = {
