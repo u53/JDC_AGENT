@@ -165,13 +165,13 @@ describe('OpenAIResponsesProvider', () => {
         model: 'gpt-5',
         maxTokens: 100,
         systemPrompt: [
-          { content: '# Identity\nYou are JDCAGNET.', cacheable: true },
+          { content: '# Identity\nYou are JDC CODE.', cacheable: true },
           { content: '<jdc-context-engine>项目上下文</jdc-context-engine>', cacheable: false },
         ],
       },
     )
 
-    expect(capturedParams.instructions).toBe('# Identity\nYou are JDCAGNET.')
+    expect(capturedParams.instructions).toBe('# Identity\nYou are JDC CODE.')
     expect(capturedParams.instructions).not.toContain('<jdc-context-engine>')
     expect(capturedParams.input[0]).toEqual({ role: 'user', content: 'old question' })
     expect(capturedParams.input[1]).toEqual({ role: 'assistant', content: 'old answer' })

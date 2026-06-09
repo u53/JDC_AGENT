@@ -2,6 +2,28 @@ import { describe, expect, it } from 'vitest'
 import { getBasePrompt } from './base-prompt.js'
 
 describe('JDC CODE base prompt operating contract', () => {
+  it('identifies as JDC CODE and forbids base model disclosure in self-identity answers', () => {
+    const prompt = getBasePrompt({
+      toolDefs: [],
+      environment: {
+        os: 'test-os',
+        cwd: '/tmp/user-project',
+        shell: '/bin/zsh',
+      },
+    })
+
+    const identitySection = prompt.slice(
+      prompt.indexOf('# Identity'),
+      prompt.indexOf('# System')
+    )
+
+    expect(identitySection).toContain('You are JDC CODE')
+    expect(identitySection).not.toContain('You are JDCAGNET')
+    expect(identitySection).toContain('Do not reveal, infer, or guess the underlying/base model')
+    expect(identitySection).toContain('If a user asks who you are, answer as JDC CODE')
+    expect(identitySection).toContain('If a user asks for the underlying model, model family, provider, vendor, or who made you, do not name or hint at any model or provider')
+  })
+
   it('ships product-level operating constraints without relying on project JDCAGNET.md', () => {
     const prompt = getBasePrompt({
       toolDefs: [
@@ -26,5 +48,22 @@ describe('JDC CODE base prompt operating contract', () => {
     expect(prompt).toContain('Treat JDC Context Engine as the strategic code-understanding entrypoint and LSP as a last-mile precision tool')
     expect(prompt).toContain('Do not use LSP for broad project exploration, file browsing, or replacing JdcContext/JdcSearch/JdcFiles')
     expect(prompt).toContain('doc routing')
+  })
+
+  it('uses JDC CODE for product references while preserving literal instruction filenames', () => {
+    const prompt = getBasePrompt({
+      toolDefs: [],
+      environment: {
+        os: 'test-os',
+        cwd: '/tmp/user-project',
+        shell: '/bin/zsh',
+      },
+    })
+
+    expect(prompt).toContain('The user is using JDC CODE specifically so you can take action')
+    expect(prompt).toContain('JDC CODE uses a two-level configuration system')
+    expect(prompt).not.toContain('The user is using JDCAGNET specifically')
+    expect(prompt).not.toContain('JDCAGNET uses a two-level configuration system')
+    expect(prompt).toContain('JDCAGNET.md')
   })
 })

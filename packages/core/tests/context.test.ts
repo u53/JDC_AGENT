@@ -13,7 +13,7 @@ describe('context', () => {
       toolNames: ['bash', 'file_read'],
     })
     const prompt = joinSegments(segments)
-    expect(prompt).toContain('JDCAGNET')
+    expect(prompt).toContain('JDC CODE')
     expect(prompt).toContain('bash')
     expect(prompt).toContain('file_read')
   })

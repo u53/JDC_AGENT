@@ -95,13 +95,13 @@ describe('OpenAIChatProvider', () => {
         model: 'gpt-5',
         maxTokens: 100,
         systemPrompt: [
-          { content: '# Identity\nYou are JDCAGNET.', cacheable: true },
+          { content: '# Identity\nYou are JDC CODE.', cacheable: true },
           { content: '<jdc-context-engine>项目上下文</jdc-context-engine>', cacheable: false },
         ],
       },
     )
 
-    expect(capturedParams.messages[0]).toEqual({ role: 'system', content: '# Identity\nYou are JDCAGNET.' })
+    expect(capturedParams.messages[0]).toEqual({ role: 'system', content: '# Identity\nYou are JDC CODE.' })
     expect(capturedParams.messages[0].content).not.toContain('<jdc-context-engine>')
     expect(capturedParams.messages[1]).toEqual({ role: 'user', content: 'old question' })
     expect(capturedParams.messages[2]).toEqual({ role: 'assistant', content: 'old answer' })
