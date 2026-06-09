@@ -131,10 +131,15 @@ function getJdcCodeOperatingContractSection(toolNames: string[]): string {
   const hasJdcContext = toolNames.includes('JdcContext')
   const hasJdcMemorySearch = toolNames.includes('JdcMemorySearch')
   const hasJdcMemoryWrite = toolNames.includes('JdcMemoryWrite')
+  const hasLsp = toolNames.includes('LSP')
 
   const toolNotes: string[] = []
   if (hasJdcContext) {
     toolNotes.push('- JdcContext is the first code-understanding tool for architecture, feature, bug-context, and "how does this work" questions. Use it before relying only on raw search when the task needs project-level code understanding.')
+    if (hasLsp) {
+      toolNotes.push('- Treat JDC Context Engine as the strategic code-understanding entrypoint and LSP as a last-mile precision tool. Use JdcContext, JdcSearch, and JdcFiles first to choose relevant modules, files, and symbols; use LSP only when you need live editor semantics such as go-to-definition, references, hover/type information, or document symbols.')
+      toolNotes.push('- Do not use LSP for broad project exploration, file browsing, or replacing JdcContext/JdcSearch/JdcFiles. If JDC Context Engine already provides enough current file:line or source evidence, do not call LSP just to repeat it.')
+    }
   }
   if (hasJdcMemorySearch) {
     toolNotes.push('- JdcMemorySearch is the durable project-memory lookup. Use it before relying on remembered project conventions, architecture decisions, workflow rules, known issues, release process, or user preferences.')
