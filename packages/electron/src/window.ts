@@ -14,6 +14,7 @@ export function createMainWindow(): BrowserWindow {
     height: 800,
     minWidth: 800,
     minHeight: 600,
+    autoHideMenuBar: true,
     icon: existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : undefined,
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 12, y: 12 },
@@ -24,6 +25,8 @@ export function createMainWindow(): BrowserWindow {
       sandbox: false,
     },
   })
+  mainWindow.setMenuBarVisibility(false)
+  mainWindow.setMenu(null)
 
   if (process.env.NODE_ENV === 'development') {
     mainWindow.loadURL('http://localhost:5173')
