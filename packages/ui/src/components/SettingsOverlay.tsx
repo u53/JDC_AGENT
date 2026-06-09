@@ -85,19 +85,19 @@ export function SettingsOverlay() {
 
   return (
     <div
-      className="settings-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-xl"
+      className="settings-overlay settings-overlay-soft fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,9,17,0.58)] p-4 backdrop-blur-xl"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) close()
       }}
     >
       <div
-        className="settings-shell flex h-[min(720px,86vh)] w-[min(920px,94vw)] overflow-hidden rounded-[8px] border border-[var(--border)] bg-[var(--surface)]"
-        style={{ boxShadow: '0 24px 80px rgba(0, 0, 0, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.04)' }}
+        className="settings-shell settings-shell-soft flex h-[min(720px,86vh)] w-[min(920px,94vw)] overflow-hidden rounded-[8px] border border-[color-mix(in_srgb,var(--border)_88%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_98%,transparent),color-mix(in_srgb,var(--bg)_92%,transparent))]"
+        style={{ boxShadow: '0 22px 70px rgba(1, 8, 16, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.045)' }}
       >
         {/* Left nav */}
-        <nav className="settings-nav flex w-[220px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface-2)] px-3 py-4">
+        <nav className="settings-nav flex w-[220px] shrink-0 flex-col border-r border-[color-mix(in_srgb,var(--border)_86%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface-2)_82%,transparent),color-mix(in_srgb,var(--surface)_58%,transparent))] px-3 py-4 shadow-[inset_-1px_0_0_rgba(255,255,255,0.025)]">
           <div className="mb-5 px-2">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">JDC Code</div>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[color-mix(in_srgb,var(--accent)_84%,var(--text)_16%)]">JDC Code</div>
             <h2 className="mt-2 text-[20px] font-semibold leading-none text-[var(--text)]">Settings</h2>
             <p className="mt-2 text-[12px] leading-5 text-[var(--muted)]">模型、工具和运行环境</p>
           </div>
@@ -110,8 +110,8 @@ export function SettingsOverlay() {
                 onClick={() => setActiveTab(tab.key)}
                 className={`group flex w-full items-center justify-between rounded-[6px] px-3 py-2 text-left text-[13px] transition-colors ${
                   activeTab === tab.key
-                    ? 'bg-[var(--accent-soft)] text-[var(--accent)]'
-                    : 'text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--text)]'
+                    ? 'bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface-2))] text-[var(--text)] ring-1 ring-[color-mix(in_srgb,var(--accent)_22%,var(--border))] shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]'
+                    : 'text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--surface-3)_52%,transparent)] hover:text-[var(--text)]'
                 }`}
               >
                 <span>{tab.label}</span>
@@ -122,8 +122,8 @@ export function SettingsOverlay() {
         </nav>
 
         {/* Right content */}
-        <main className="settings-content context-panel-scroll relative min-w-0 flex-1 overflow-y-auto px-6 py-5">
-          <div className="mb-5 flex items-start justify-between gap-4 border-b border-[var(--border)] pb-4 pr-8">
+        <main className="settings-content context-panel-scroll relative min-w-0 flex-1 overflow-y-auto bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_48%,transparent),color-mix(in_srgb,var(--bg)_34%,transparent))] px-6 py-5">
+          <div className="mb-5 flex items-start justify-between gap-4 border-b border-[color-mix(in_srgb,var(--border)_86%,transparent)] pb-4 pr-8">
             <div>
               <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted)]">JDC Dark</div>
               <h3 className="mt-1 text-[18px] font-semibold leading-7 text-[var(--text)]">{activeTabMeta.label}</h3>
@@ -133,7 +133,7 @@ export function SettingsOverlay() {
           <button
             type="button"
             onClick={close}
-            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-[6px] text-[var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-[6px] border border-transparent text-[var(--muted)] transition-colors hover:border-[var(--border)] hover:bg-[color-mix(in_srgb,var(--surface-2)_60%,transparent)] hover:text-[var(--text)]"
             aria-label="关闭设置"
           >
             <IconX size={18} />

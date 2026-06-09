@@ -16,12 +16,15 @@ describe('SettingsOverlay', () => {
     const html = renderToStaticMarkup(<SettingsOverlay />)
 
     expect(html).toContain('settings-overlay')
+    expect(html).toContain('settings-overlay-soft')
     expect(html).toContain('settings-shell')
+    expect(html).toContain('settings-shell-soft')
     expect(html).toContain('h-[min(720px,86vh)]')
     expect(html).toContain('settings-nav')
     expect(html).toContain('settings-content')
     expect(html).toContain('Settings')
     expect(html).toContain('模型')
+    expect(html).not.toContain('bg-black/70')
   })
 
   it('renders the models tab with a composed action area and empty state', () => {

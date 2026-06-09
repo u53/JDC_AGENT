@@ -55,13 +55,13 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-[240px] border-r border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] flex flex-col overflow-hidden backdrop-blur" style={{ fontFamily: 'var(--font-sans)' }}>
+    <aside className="sidebar-shell w-[240px] border-r border-[color-mix(in_srgb,var(--border)_86%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_96%,transparent),color-mix(in_srgb,var(--bg)_90%,transparent))] flex flex-col overflow-hidden shadow-[inset_-1px_0_0_rgba(255,255,255,0.025)] backdrop-blur" style={{ fontFamily: 'var(--font-sans)' }}>
       <div className="h-2 flex-shrink-0" />
 
       <div className="flex-1 px-3 pb-3 space-y-4 overflow-y-auto">
         {projects.map((project) => (
-          <div key={project.cwd}>
-            <h3 className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--muted)] font-semibold mb-1.5 px-2">
+          <div key={project.cwd} className="sidebar-project-group rounded-[8px] border border-transparent bg-[color-mix(in_srgb,var(--surface-2)_26%,transparent)] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
+            <h3 className="sidebar-project-heading font-mono text-[10px] uppercase tracking-[0.14em] text-[color-mix(in_srgb,var(--muted)_86%,var(--text)_14%)] font-semibold mb-1.5 px-2">
               {project.name}
             </h3>
             <div className="space-y-0.5">
@@ -87,14 +87,14 @@ export function Sidebar() {
                         if (e.key === 'Enter') handleRenameSubmit(session.id)
                         if (e.key === 'Escape') setEditingId(null)
                       }}
-                      className="w-full px-2.5 py-1.5 text-[13px] rounded-[6px] bg-[var(--surface-2)] border border-[var(--accent)] text-[var(--text)] outline-none"
+                      className="w-full px-2.5 py-1.5 text-[13px] rounded-[6px] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] border border-[color-mix(in_srgb,var(--accent)_36%,var(--border))] text-[var(--text)] outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]"
                     />
                   )
                 }
 
                 if (confirmDeleteId === session.id) {
                   return (
-                    <div key={session.id} className="flex items-center gap-1 px-2.5 py-1.5 rounded-[6px] bg-[var(--surface-2)] border border-[var(--bad)]">
+                    <div key={session.id} className="flex items-center gap-1 px-2.5 py-1.5 rounded-[6px] bg-[color-mix(in_srgb,var(--bad)_8%,var(--surface-2))] border border-[color-mix(in_srgb,var(--bad)_36%,var(--border))]">
                       <span className="text-[12px] text-[var(--bad)] flex-1 truncate">删除?</span>
                       <button onClick={() => handleDelete(session.id)} className="text-[11px] px-1.5 py-0.5 rounded bg-[var(--bad)] text-white hover:opacity-80">确认</button>
                       <button onClick={() => setConfirmDeleteId(null)} className="text-[11px] px-1.5 py-0.5 rounded text-[var(--muted)] hover:text-[var(--text)]">取消</button>
@@ -103,17 +103,17 @@ export function Sidebar() {
                 }
 
                 return (
-                  <div key={session.id} className="group relative flex items-center">
+                  <div key={session.id} className="sidebar-session-row group relative flex items-center">
                     <button
                       onClick={() => {
                         switchSession(session.id)
                         if (isFinished) useSessionStore.getState().dismissFinished(session.id)
                       }}
                       onDoubleClick={() => handleDoubleClick(session.id, displayName)}
-                      className={`w-full text-left px-2.5 py-1.5 text-[13px] truncate transition-colors flex items-center gap-1.5 rounded-[6px] ${
+                      className={`w-full relative overflow-hidden text-left px-2.5 py-1.5 text-[13px] truncate transition-colors duration-150 flex items-center gap-1.5 rounded-[6px] ${
                         isActive
-                          ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium ring-1 ring-[color-mix(in_srgb,var(--accent)_22%,transparent)]'
-                          : 'text-[var(--text)] hover:bg-[var(--surface-3)]'
+                          ? 'sidebar-session-active bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface-2))] text-[var(--text)] font-medium ring-1 ring-[color-mix(in_srgb,var(--accent)_24%,var(--border))] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[2px] before:rounded-full before:bg-[var(--accent)]'
+                          : 'sidebar-session-idle text-[color-mix(in_srgb,var(--text)_88%,var(--muted)_12%)] hover:bg-[color-mix(in_srgb,var(--surface-3)_56%,transparent)]'
                       }`}
                     >
                       {showLight && isBusy && (
@@ -131,7 +131,7 @@ export function Sidebar() {
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(session.id) }}
-                      className="absolute right-1 opacity-0 group-hover:opacity-100 p-1 rounded text-[var(--muted)] hover:text-[var(--bad)] hover:bg-[var(--surface-3)] transition-all"
+                      className="absolute right-1 opacity-0 group-hover:opacity-100 p-1 rounded text-[var(--muted)] hover:text-[var(--bad)] hover:bg-[color-mix(in_srgb,var(--surface-3)_68%,transparent)] transition-all"
                       aria-label="Delete session"
                     >
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 3h8M4.5 3V2h3v1M3 3v7h6V3M5 5v3M7 5v3"/></svg>
@@ -141,7 +141,7 @@ export function Sidebar() {
               })}
               <button
                 onClick={() => createSession(project.cwd)}
-                className="w-full text-left px-2.5 py-1.5 text-[12px] text-[var(--muted)] hover:text-[var(--text)] transition-colors rounded-[6px]"
+                className="w-full text-left px-2.5 py-1.5 text-[12px] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--surface-3)_44%,transparent)] transition-colors rounded-[6px]"
               >
                 + New session
               </button>
@@ -150,10 +150,10 @@ export function Sidebar() {
         ))}
       </div>
 
-      <div className="px-3 py-3 space-y-2 border-t border-[var(--border)] flex-shrink-0">
+      <div className="sidebar-footer px-3 py-3 space-y-2 border-t border-[color-mix(in_srgb,var(--border)_86%,transparent)] bg-[color-mix(in_srgb,var(--surface)_34%,transparent)] flex-shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
         <button
           onClick={addProject}
-          className="w-full border border-[var(--border)] text-[var(--text)] text-[12px] py-2.5 rounded-[8px] hover:bg-[var(--surface-2)] transition-colors"
+          className="w-full border border-[color-mix(in_srgb,var(--border)_88%,transparent)] bg-[color-mix(in_srgb,var(--surface-2)_48%,transparent)] text-[var(--text)] text-[12px] py-2.5 rounded-[8px] hover:border-[var(--border-strong)] hover:bg-[color-mix(in_srgb,var(--surface-3)_58%,transparent)] transition-colors shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]"
         >
           New project
         </button>

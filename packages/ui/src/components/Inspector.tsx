@@ -229,15 +229,15 @@ export function Inspector() {
 
   if (!expanded) {
     return (
-      <div className="w-[48px] border-l border-[var(--border)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_94%,transparent),color-mix(in_srgb,var(--surface-2)_88%,transparent))] flex flex-col items-center py-3 gap-2 backdrop-blur">
-        <div className="mb-1 grid h-7 w-7 place-items-center rounded-[8px] border border-[color-mix(in_srgb,var(--accent)_20%,var(--border))] bg-[var(--accent-soft)] font-mono text-[10px] font-semibold text-[var(--accent)] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+      <div className="inspector-rail w-[48px] border-l border-[color-mix(in_srgb,var(--border)_86%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_96%,transparent),color-mix(in_srgb,var(--bg)_90%,transparent))] flex flex-col items-center py-3 gap-2 shadow-[inset_1px_0_0_rgba(255,255,255,0.025)] backdrop-blur">
+        <div className="inspector-rail-brand mb-1 grid h-7 w-7 place-items-center rounded-[8px] border border-[color-mix(in_srgb,var(--accent)_18%,var(--border))] bg-[color-mix(in_srgb,var(--accent)_9%,var(--surface-2))] font-mono text-[10px] font-semibold text-[color-mix(in_srgb,var(--accent)_84%,var(--text)_16%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.045)]">
           JD
         </div>
         {railItems.map(({ id, label, Icon, badge, badgeColor }) => (
           <button
             key={id}
             onClick={() => toggleSection(id)}
-            className="relative grid h-8 w-8 place-items-center rounded-[8px] border border-transparent text-[var(--muted)] transition-colors duration-150 hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] active:translate-y-px"
+            className="inspector-rail-item relative grid h-8 w-8 place-items-center rounded-[8px] border border-transparent text-[color-mix(in_srgb,var(--muted)_92%,var(--text)_8%)] transition-colors duration-150 hover:border-[color-mix(in_srgb,var(--accent)_18%,var(--border))] hover:bg-[color-mix(in_srgb,var(--surface-2)_62%,transparent)] hover:text-[var(--text)] active:translate-y-px"
             aria-label={label}
             title={label}
           >
@@ -270,7 +270,7 @@ export function Inspector() {
 
   return (
     <div
-      className="h-full border-l border-[var(--border)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_95%,transparent),color-mix(in_srgb,var(--bg)_88%,transparent))] flex flex-col relative overflow-hidden backdrop-blur"
+      className="inspector-panel-shell h-full border-l border-[color-mix(in_srgb,var(--border)_86%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_96%,transparent),color-mix(in_srgb,var(--bg)_90%,transparent))] flex flex-col relative overflow-hidden shadow-[inset_1px_0_0_rgba(255,255,255,0.025)] backdrop-blur"
       style={{ width: `${width}px` }}
     >
       {/* Drag handle on the left edge */}
@@ -281,7 +281,7 @@ export function Inspector() {
       />
 
       {/* Header */}
-      <div className="flex-shrink-0 border-b border-[var(--border)] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+      <div className="inspector-panel-header flex-shrink-0 border-b border-[color-mix(in_srgb,var(--border)_86%,transparent)] bg-[color-mix(in_srgb,var(--surface)_34%,transparent)] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -294,7 +294,7 @@ export function Inspector() {
           </div>
           <button
             onClick={() => { setExpanded(false); setActiveSection(null) }}
-            className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-[7px] border border-[var(--border)] text-[var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)] active:translate-y-px"
+            className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-[7px] border border-[color-mix(in_srgb,var(--border)_88%,transparent)] text-[var(--muted)] transition-colors hover:bg-[color-mix(in_srgb,var(--surface-2)_62%,transparent)] hover:text-[var(--text)] active:translate-y-px"
             aria-label="Close inspector"
           >
             <IconX size={14} />
@@ -303,7 +303,7 @@ export function Inspector() {
       </div>
 
       {/* Rail row for section switching */}
-      <div className="context-panel-scroll flex-shrink-0 overflow-x-auto border-b border-[var(--border)] px-3 py-2">
+      <div className="inspector-tabs context-panel-scroll flex-shrink-0 overflow-x-auto border-b border-[color-mix(in_srgb,var(--border)_86%,transparent)] bg-[color-mix(in_srgb,var(--surface)_24%,transparent)] px-3 py-2">
         <div className="flex items-center gap-1">
           {railItems.map(({ id, label, Icon, badge, badgeColor }) => (
             <button
@@ -312,8 +312,8 @@ export function Inspector() {
               className={cx(
                 'relative grid h-8 w-8 flex-shrink-0 place-items-center rounded-[8px] border text-[var(--muted)] transition-colors duration-150 active:translate-y-px',
                 activeSection === id
-                  ? 'border-[color-mix(in_srgb,var(--accent)_32%,var(--border))] bg-[var(--accent-soft)] text-[var(--accent)]'
-                  : 'border-transparent hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]',
+                  ? 'inspector-tab-active border-[color-mix(in_srgb,var(--accent)_30%,var(--border))] bg-[color-mix(in_srgb,var(--accent)_9%,var(--surface-2))] text-[color-mix(in_srgb,var(--accent)_86%,var(--text)_14%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'
+                  : 'border-transparent hover:border-[color-mix(in_srgb,var(--accent)_16%,var(--border))] hover:bg-[color-mix(in_srgb,var(--surface-2)_60%,transparent)] hover:text-[var(--text)]',
               )}
               aria-label={label}
               title={label}
