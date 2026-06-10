@@ -41,8 +41,8 @@ export function createBackgroundEventsTool(deps: BackgroundEventsDeps): ToolHand
           case 'team_started': return `[${ts}] team_started ${e.teamId}`
           case 'manager_decision': return `[${ts}] PM: ${e.text}`
           case 'manager_reply': return `[${ts}] PM (reply): ${e.text}`
-          case 'member_created': return `[${ts}] member_created ${e.memberId} (${e.role})`
-          case 'member_added': return `[${ts}] member_added ${e.memberId} (${e.role}, ${e.agentType})${e.reason ? ` — ${e.reason}` : ''}`
+          case 'member_created': return `[${ts}] member_created ${e.memberId} (${e.role}${(e as any).modelId ? `, model=${(e as any).modelId}` : ''})`
+          case 'member_added': return `[${ts}] member_added ${e.memberId} (${e.role}, ${e.agentType}${(e as any).modelId ? `, model=${(e as any).modelId}` : ''})${e.reason ? ` — ${e.reason}` : ''}`
           case 'member_removed': return `[${ts}] member_removed ${e.memberId} (${e.role})${e.reason ? ` — ${e.reason}` : ''}`
           case 'task_created': return `[${ts}] task_created ${e.taskId} "${e.title}"`
           case 'task_assigned': return `[${ts}] task_assigned ${e.taskId} -> ${e.memberId}`
@@ -55,6 +55,8 @@ export function createBackgroundEventsTool(deps: BackgroundEventsDeps): ToolHand
           case 'message_sent': return `[${ts}] msg: ${e.from} -> ${e.to} (${e.intent})`
           case 'intervention_received': return `[${ts}] intervention from ${e.from}: ${e.intent}`
           case 'team_synthesizing': return `[${ts}] team_synthesizing`
+          case 'model_resolution_success': return `[${ts}] model_resolved ${(e as any).memberId ?? '?'} requested=${(e as any).requestedModelId} resolved=${(e as any).resolvedModelId}`
+          case 'model_resolution_warning': return `[${ts}] model_warning ${(e as any).memberId ?? '?'} requested=${(e as any).requestedModelId}: ${(e as any).message}`
           case 'team_completed': return `[${ts}] team_completed`
           case 'team_failed': return `[${ts}] team_failed: ${e.error}`
           default: return `[${ts}] ${(e as any).type}`

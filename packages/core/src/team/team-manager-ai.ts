@@ -1,6 +1,6 @@
 import { v4 as uuid } from 'uuid'
 import { TeamManager, type ManagerAction, type TeamManagerOptions } from './team-manager.js'
-import type { TeamMessage, TeamEvent, TeamMemberState, TeamTask } from './team-types.js'
+import type { AvailableTeamModel, TeamMessage, TeamEvent, TeamMemberState, TeamTask } from './team-types.js'
 import type { TeamWorkspace } from './team-workspace.js'
 import type { ModelProvider } from '../model-provider.js'
 import type { ModelConfig, Message } from '../types.js'
@@ -61,6 +61,7 @@ export interface TeamManagerAIOptions extends TeamManagerOptions {
     modelGroupId?: string
     baseUrl?: string
   }
+  availableModels?: AvailableTeamModel[]
 }
 
 function contextPerformanceConfig(contextConfig: ReturnType<typeof resolveContextEngineConfig>): NonNullable<ReturnType<typeof resolveContextEngineConfig>['performance']> {
@@ -377,6 +378,9 @@ improves output quality. Custom text tailored to the project is better than pres
 
 DO NOT include a "modelId" field in spec unless the user EXPLICITLY asked for a specific model.
 When omitted, the worker inherits the main session's model — which is what the user configured.
+If the objective assigns a worker/lane to a named model and the system prompt contains <available-models>,
+you MUST set spec.modelId to the exact groupId:modelId value shown there. A role name like
+"GPT-5.5 Researcher" alone does NOT switch the runtime model.
 
 ## Action: remove_member
 Release a worker. Default targets only 'queued' (idle) members; running members refuse unless force=true.
@@ -872,6 +876,7 @@ export class TeamManagerAI extends TeamManager {
   private workspace?: () => TeamWorkspace | undefined
   private skillContent?: string
   private contextEngine?: TeamManagerAIOptions['contextEngine']
+  private availableModels: AvailableTeamModel[]
   private conversationHistory: Message[] = []
   private aiEnabled = true
   private aiProcessing = false
@@ -912,6 +917,7 @@ export class TeamManagerAI extends TeamManager {
     this.workspace = opts.workspace
     this.skillContent = opts.skillContent
     this.contextEngine = opts.contextEngine
+    this.availableModels = opts.availableModels ?? []
   }
 
   getState() {
@@ -938,6 +944,23 @@ export class TeamManagerAI extends TeamManager {
       `<methodology>\n${this.skillContent}\n</methodology>\n\n`
   }
 
+  private availableModelsPromptSegment(): string {
+    if (this.availableModels.length === 0) return ''
+    const modelLines = this.availableModels.map(model => {
+      const labels = [
+        model.name ? model.name : null,
+        model.groupName ? `[${model.groupName}]` : null,
+        model.current ? '(current)' : null,
+      ].filter(Boolean).join(' ')
+      return `- ${labels ? `${labels} ` : ''}(modelId: "${model.modelId}")`
+    })
+    return `<available-models>\n` +
+      `When hiring team workers, you can set add_member.spec.modelId to use a different configured model.\n` +
+      `Available models:\n${modelLines.join('\n')}\n` +
+      `IMPORTANT: For teams, set add_member.spec.modelId exactly to the groupId:modelId value when the user asks a worker or lane to use a specific model. Role names alone do not change runtime model.\n` +
+      `</available-models>`
+  }
+
   /**
    * Build PM's system prompt as cacheable segments. Stable segments (skill,
    * identity, toolbox, output protocol) are placed first and marked
@@ -954,6 +977,10 @@ export class TeamManagerAI extends TeamManager {
     segments.push({ content: PM_IDENTITY, cacheable: true })
     segments.push({ content: PM_TOOLBOX, cacheable: true })
     segments.push({ content: PM_OUTPUT_PROTOCOL, cacheable: true })
+    const availableModels = this.availableModelsPromptSegment()
+    if (availableModels) {
+      segments.push({ content: availableModels, cacheable: false })
+    }
     if (extraNote) {
       segments.push({ content: extraNote, cacheable: false })
     }
@@ -1335,6 +1362,20 @@ export class TeamManagerAI extends TeamManager {
     lines.push(this.objective)
     lines.push('')
 
+    if (this.availableModels.length > 0) {
+      lines.push('## Available model overrides')
+      lines.push('If a worker is meant to use one of these models, set add_member.spec.modelId to the exact modelId value below. Role/responsibility text alone does not change runtime model.')
+      for (const model of this.availableModels) {
+        const labels = [
+          model.name ? `name="${model.name}"` : null,
+          model.groupName ? `group="${model.groupName}"` : null,
+          model.current ? 'current=true' : null,
+        ].filter(Boolean).join(' ')
+        lines.push(`- modelId="${model.modelId}"${labels ? ` (${labels})` : ''}`)
+      }
+      lines.push('')
+    }
+
     lines.push(`## Members (${members.length}/10)`)
     if (members.length === 0) {
       lines.push('(no members)')
@@ -1424,7 +1465,7 @@ export class TeamManagerAI extends TeamManager {
       case 'team_started': return `[${t}] team_started`
       case 'manager_decision': return `[${t}] PM decision: ${anyE.text?.slice(0, 80)}`
       case 'manager_reply': return `[${t}] PM replied: ${anyE.text?.slice(0, 80)}`
-      case 'member_added': return `[${t}] +member ${anyE.memberId} (${anyE.role}, ${anyE.agentType})`
+      case 'member_added': return `[${t}] +member ${anyE.memberId} (${anyE.role}, ${anyE.agentType}${anyE.modelId ? `, model=${anyE.modelId}` : ''})`
       case 'member_removed': return `[${t}] -member ${anyE.memberId} (${anyE.role})`
       case 'task_created': return `[${t}] +task "${anyE.title}" (${anyE.taskId})`
       case 'task_assigned': return `[${t}] task ${anyE.taskId} → ${anyE.memberId}`
@@ -1438,6 +1479,8 @@ export class TeamManagerAI extends TeamManager {
       case 'message_sent': return `[${t}] msg ${anyE.from}→${anyE.to} (${anyE.intent})`
       case 'team_completed': return `[${t}] team_completed`
       case 'team_failed': return `[${t}] team_failed: ${anyE.error}`
+      case 'model_resolution_success': return `[${t}] model ${anyE.memberId ?? '?'} requested=${anyE.requestedModelId} resolved=${anyE.resolvedModelId}`
+      case 'model_resolution_warning': return `[${t}] model WARNING ${anyE.memberId ?? '?'} requested=${anyE.requestedModelId}: ${anyE.message}`
       default: return `[${t}] ${e.type}`
     }
   }

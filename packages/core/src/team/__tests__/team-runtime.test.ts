@@ -3,6 +3,7 @@ import { mkdirSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import type { SubSessionOptions, SubSessionResult } from '../../sub-session.js'
+import { runSubSession } from '../../sub-session.js'
 import type { RawEvidence } from '../../context/types.js'
 
 // Mock runSubSession to simulate quick member completion
@@ -81,6 +82,20 @@ describe('TeamRuntime', () => {
     expect(team.getMembers()).toHaveLength(3)
   })
 
+  it('auto-binds a worker model when the role names an available model', () => {
+    const team = new TeamRuntime({
+      objective: 'Compare model perspectives',
+      plan: {
+        members: [{ role: 'GPT-5.5 Survey Writer', responsibility: 'Own the GPT-5.5 research lane', agentType: 'general' }],
+        tasks: [],
+      },
+      subSessionDeps: mockDeps,
+      availableModels: [{ modelId: 'proxy:gpt-5.5', name: 'gpt-5.5', groupName: 'JDC OPEN AI' }],
+    } as any)
+
+    expect(team.getMembers()[0].modelId).toBe('proxy:gpt-5.5')
+  })
+
   it('start sets status to running and emits team_started event', async () => {
     const team = new TeamRuntime({
       objective: 'Test',
@@ -114,6 +129,42 @@ describe('TeamRuntime', () => {
     expect(team.getStatus()).toBe('completed')
   })
 
+  it('rejects completion when a declared output file was not written', async () => {
+    vi.mocked(runSubSession).mockImplementationOnce(async (opts: SubSessionOptions): Promise<SubSessionResult> => {
+      const artifactTool = opts.extraTools?.find(t => t.definition.name === 'team_artifact')
+      await artifactTool?.execute({
+        action: 'update_status',
+        target_id: opts.taskId,
+        new_status: 'completed',
+        summary: 'GPT survey was written.',
+      }, { cwd: opts.cwd })
+      return { content: '', turns: 1, toolsUsed: ['team_artifact'], status: 'aborted' }
+    })
+    const events: any[] = []
+    const onComplete = vi.fn()
+    const team = new TeamRuntime({
+      objective: 'Write the GPT-side survey',
+      plan: {
+        members: [{ role: 'GPT-5.5 Survey Writer', agentType: 'general' }],
+        tasks: [{
+          title: 'P1 survey GPT',
+          description: 'Write the P1 survey to docs/P1_survey_gpt.md. File scope: docs/P1_survey_gpt.md',
+        }],
+      },
+      subSessionDeps: mockDeps,
+      onEvent: e => events.push(e),
+      onComplete,
+    })
+
+    await team.start()
+    await waitFor(() => events.some(e => e.type === 'task_failed'))
+
+    const failed = events.find(e => e.type === 'task_failed')
+    expect(failed?.error).toContain('docs/P1_survey_gpt.md')
+    expect(onComplete).not.toHaveBeenCalled()
+    expect(team.getTasks()[0].status).toBe('failed')
+  })
+
   it('emits structured archive metadata when a team completes', async () => {
     const onComplete = vi.fn()
     const events: any[] = []
@@ -129,7 +180,7 @@ describe('TeamRuntime', () => {
     })
 
     await team.start()
-    await delay(50)
+    await waitFor(() => events.some(event => event.type === 'team_completed'))
 
     const completed = events.find(event => event.type === 'team_completed')
     expect(completed).toBeDefined()
@@ -238,7 +289,7 @@ describe('TeamRuntime', () => {
     })
 
     await failOpenTeam.start()
-    await delay(50)
+    await waitFor(() => onComplete.mock.calls.length > 0)
     expect(onComplete).toHaveBeenCalled()
     expect(failingStore.saveDiagnostic).toHaveBeenCalled()
   })
@@ -259,6 +310,14 @@ describe('TeamRuntime', () => {
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs = 1000): Promise<void> {
+  const start = Date.now()
+  while (!predicate()) {
+    if (Date.now() - start > timeoutMs) throw new Error('Timed out waiting for condition')
+    await delay(10)
+  }
 }
 
 function mockFirstArgs<T>(mock: { mock: { calls: unknown[][] } }): T[] {

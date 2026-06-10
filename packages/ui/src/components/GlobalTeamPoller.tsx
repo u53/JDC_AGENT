@@ -2,6 +2,12 @@ import { useEffect, useRef } from 'react'
 import { useSessionStore } from '../stores/session-store'
 import { useBackgroundTaskStore, type BackgroundTaskItem } from '../stores/background-task-store'
 import { useTeamStore, type TeamStatusUI } from '../stores/team-store'
+import { useModelStore } from '../stores/model-store'
+import { formatModelReference } from '../lib/model-display'
+
+function formatEventModel(value: string | undefined): string {
+  return formatModelReference(value, useModelStore.getState().groups, value ?? '')
+}
 
 const formatEvent = (e: any): string => {
   const d = new Date(e.timestamp)
@@ -10,8 +16,8 @@ const formatEvent = (e: any): string => {
     case 'team_started': return `[${ts}] team_started ${e.teamId}`
     case 'manager_decision': return `[${ts}] PM: ${e.text}`
     case 'manager_reply': return `[${ts}] PM (reply): ${e.text}`
-    case 'member_created': return `[${ts}] member_created ${e.memberId} (${e.role})`
-    case 'member_added': return `[${ts}] member_added ${e.memberId} (${e.role}, ${e.agentType})${e.reason ? ` — ${e.reason}` : ''}`
+    case 'member_created': return `[${ts}] member_created ${e.memberId} (${e.role}${e.modelId ? `, model=${formatEventModel(e.modelId)}` : ''})`
+    case 'member_added': return `[${ts}] member_added ${e.memberId} (${e.role}, ${e.agentType}${e.modelId ? `, model=${formatEventModel(e.modelId)}` : ''})${e.reason ? ` — ${e.reason}` : ''}`
     case 'member_removed': return `[${ts}] member_removed ${e.memberId} (${e.role})${e.reason ? ` — ${e.reason}` : ''}`
     case 'task_created': return `[${ts}] task_created "${e.title}"`
     case 'task_assigned': return `[${ts}] task_assigned ${e.taskId} -> ${e.memberId}`
@@ -24,6 +30,8 @@ const formatEvent = (e: any): string => {
     case 'message_sent': return `[${ts}] msg: ${e.from} -> ${e.to} (${e.intent})`
     case 'intervention_received': return `[${ts}] intervention from ${e.from}: ${e.intent}`
     case 'team_synthesizing': return `[${ts}] team_synthesizing`
+    case 'model_resolution_success': return `[${ts}] model_resolved ${e.memberId ?? '?'} requested=${formatEventModel(e.requestedModelId)} resolved=${e.resolvedModelId}`
+    case 'model_resolution_warning': return `[${ts}] model_warning ${e.memberId ?? '?'} requested=${formatEventModel(e.requestedModelId)}: ${e.message}`
     case 'team_completed': return `[${ts}] team_completed`
     case 'team_failed': return `[${ts}] team_failed: ${e.error}`
     default: return `[${ts}] ${e.type}`

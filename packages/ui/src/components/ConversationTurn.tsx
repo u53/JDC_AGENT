@@ -142,13 +142,21 @@ function ConversationTurnView({
                 )
               }
               if (block.type === 'tool_use') {
-                if (skipToolUse && !findToolResult(block.id, pair.toolResultMessage)) return null
+                const toolResult = findToolResult(block.id, pair.toolResultMessage)
+                if (skipToolUse && !toolResult) return null
+                const pendingEvent = !toolResult && isActive ? {
+                  type: 'progress' as const,
+                  toolName: block.name,
+                  toolUseId: block.id,
+                  input: block.input,
+                } : undefined
                 return (
                   <div key={block.id} className="mb-2 min-w-0">
                     <ToolCardRouter
+                      event={pendingEvent}
                       name={block.name}
                       input={block.input}
-                      result={findToolResult(block.id, pair.toolResultMessage)}
+                      result={toolResult}
                     />
                   </div>
                 )

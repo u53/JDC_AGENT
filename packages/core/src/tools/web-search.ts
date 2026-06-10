@@ -1,6 +1,6 @@
-import { HttpsProxyAgent } from 'https-proxy-agent'
 import { loadAppConfig } from '../config.js'
 import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
+import { makeFetchOptions } from './fetch-options.js'
 
 export type SearchProvider = 'brave' | 'tavily' | 'serper'
 
@@ -11,6 +11,11 @@ interface WebSearchConfig {
   serperApiKey?: string
   proxy?: string
 }
+
+const DEFAULT_RESULT_COUNT = 8
+const MIN_RESULT_COUNT = 5
+const MAX_RESULT_COUNT = 10
+const SNIPPET_NOTICE = 'Note: WebSearch results are snippets, not evidence. Before making detailed factual claims, use WebFetch on the relevant result URLs to read source content.'
 
 function getSearchConfig(): WebSearchConfig {
   const config = loadAppConfig()
@@ -30,21 +35,15 @@ function resolveProvider(cfg: WebSearchConfig): { provider: SearchProvider; apiK
   return null
 }
 
-function makeFetchOptions(cfg: WebSearchConfig, signal?: AbortSignal): RequestInit {
-  const opts: RequestInit = { signal: signal || AbortSignal.timeout(15000) }
-  if (cfg.proxy) {
-    (opts as any).agent = new HttpsProxyAgent(cfg.proxy)
-  }
-  return opts
-}
-
 // --- Brave Search ---
 async function searchBrave(query: string, count: number, apiKey: string, cfg: WebSearchConfig, signal?: AbortSignal): Promise<string> {
   const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${count}`
-  const res = await fetch(url, {
-    ...makeFetchOptions(cfg, signal),
+  const res = await fetch(url, makeFetchOptions({
+    proxy: cfg.proxy,
+    signal,
+    timeoutMs: 15000,
     headers: { 'X-Subscription-Token': apiKey, 'Accept': 'application/json' },
-  })
+  }))
   if (!res.ok) throw new Error(`Brave API ${res.status}: ${await res.text().catch(() => '')}`)
   const data = await res.json() as any
   return (data.web?.results || [])
@@ -54,12 +53,14 @@ async function searchBrave(query: string, count: number, apiKey: string, cfg: We
 
 // --- Tavily Search ---
 async function searchTavily(query: string, count: number, apiKey: string, cfg: WebSearchConfig, signal?: AbortSignal): Promise<string> {
-  const res = await fetch('https://api.tavily.com/search', {
-    ...makeFetchOptions(cfg, signal),
+  const res = await fetch('https://api.tavily.com/search', makeFetchOptions({
+    proxy: cfg.proxy,
+    signal,
+    timeoutMs: 15000,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ api_key: apiKey, query, max_results: count, include_answer: true }),
-  })
+  }))
   if (!res.ok) throw new Error(`Tavily API ${res.status}: ${await res.text().catch(() => '')}`)
   const data = await res.json() as any
   const answer = data.answer ? `**Answer:** ${data.answer}\n\n` : ''
@@ -71,12 +72,14 @@ async function searchTavily(query: string, count: number, apiKey: string, cfg: W
 
 // --- Serper (Google) ---
 async function searchSerper(query: string, count: number, apiKey: string, cfg: WebSearchConfig, signal?: AbortSignal): Promise<string> {
-  const res = await fetch('https://google.serper.dev/search', {
-    ...makeFetchOptions(cfg, signal),
+  const res = await fetch('https://google.serper.dev/search', makeFetchOptions({
+    proxy: cfg.proxy,
+    signal,
+    timeoutMs: 15000,
     method: 'POST',
     headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({ q: query, num: count }),
-  })
+  }))
   if (!res.ok) throw new Error(`Serper API ${res.status}: ${await res.text().catch(() => '')}`)
   const data = await res.json() as any
   const organic = (data.organic || [])
@@ -96,12 +99,16 @@ Usage notes:
 - Use for information beyond your training data: current events, recent documentation, API references.
 - You MUST always include a "Sources:" section at the end of your response with relevant URLs as markdown links.
 - Use specific, descriptive queries rather than single keywords.
-- The current year is important for finding recent docs — include it when searching for latest versions.`,
+- The current year is important for finding recent docs — include it when searching for latest versions.
+- Use count=8 for most searches and count=10 for broad comparison/recommendation queries. Count=5 is only an absolute floor for narrow, exact lookups; do NOT use fewer than 5.
+- WebSearch returns titles, URLs, and snippets only. Snippets are NOT evidence.
+- For factual answers, news, laws, docs, prices, schedules, or any claim where details matter, follow up with WebFetch on the relevant result URLs and use the fetched page content as evidence before finalizing.
+- Do NOT repeatedly call WebSearch with the same or near-identical query. If the first search finds plausible sources, switch to WebFetch instead of searching in circles.`,
     inputSchema: {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Search query' },
-        count: { type: 'number', description: 'Number of results (default 5, max 20)' },
+        count: { type: 'number', description: 'Number of results (default 8, min 5, max 10). Values below 5 are raised to 5 to avoid wasting a search request.' },
       },
       required: ['query'],
     },
@@ -109,7 +116,7 @@ Usage notes:
   async execute(input: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const query = input.query as string | undefined
     if (!query) return { content: 'Error: query is required', isError: true }
-    const count = Math.min((input.count as number) || 5, 20)
+    const count = normalizeCount(input.count as number | undefined)
 
     const cfg = getSearchConfig()
     const resolved = resolveProvider(cfg)
@@ -128,9 +135,14 @@ Usage notes:
         case 'tavily': results = await searchTavily(query, count, apiKey, cfg, context.signal); break
         case 'serper': results = await searchSerper(query, count, apiKey, cfg, context.signal); break
       }
-      return { content: results }
+      return { content: `${results}\n\n${SNIPPET_NOTICE}` }
     } catch (err: any) {
       return { content: `Search error: ${err.message}`, isError: true }
     }
   },
+}
+
+function normalizeCount(raw: number | undefined): number {
+  if (!Number.isFinite(raw)) return DEFAULT_RESULT_COUNT
+  return Math.min(Math.max(Math.floor(raw!), MIN_RESULT_COUNT), MAX_RESULT_COUNT)
 }

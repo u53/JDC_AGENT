@@ -21,6 +21,7 @@ const groups = [
     apiKey: 'sk-proxy',
     models: [
       { id: 'uuid-opus-proxy', modelId: 'claude-opus-4-1', name: 'Opus Proxy', maxTokens: 64000, contextWindow: 300000, compressAt: 0.92 },
+      { id: 'uuid-gpt', modelId: 'gpt-5.5', name: 'gpt-5.5', maxTokens: 32000, contextWindow: 258000, compressAt: 0.9 },
       { id: 'uuid-ds', modelId: 'deepseek-reasoner', name: '公司 DeepSeek', maxTokens: 32000, contextWindow: 128000, compressAt: 0.9 },
     ],
   },
@@ -50,6 +51,14 @@ describe('resolveConfiguredModel', () => {
     if (result.status !== 'resolved') return
     expect(result.model.groupId).toBe('proxy')
     expect(result.model.modelId).toBe('deepseek-reasoner')
+  })
+
+  it('resolves model names case-insensitively', () => {
+    const result = resolveConfiguredModel(groups, 'GPT-5.5')
+    expect(result.status).toBe('resolved')
+    if (result.status !== 'resolved') return
+    expect(result.model.groupId).toBe('proxy')
+    expect(result.model.modelId).toBe('gpt-5.5')
   })
 
   it('rejects ambiguous bare API model ids instead of choosing the first group', () => {

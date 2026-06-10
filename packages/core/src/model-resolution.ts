@@ -52,15 +52,15 @@ export function resolveConfiguredModel(groups: ConfiguredModelGroup[] | undefine
   const composite = resolveComposite(groups, requested)
   if (composite) return composite
 
-  const byUuid = collect(groups, model => model.id === requested)
+  const byUuid = collect(groups, model => sameModelText(model.id, requested))
   if (byUuid.length === 1) return { status: 'resolved', model: byUuid[0] }
   if (byUuid.length > 1) return ambiguous(requested, byUuid)
 
-  const byApiModelId = collect(groups, model => model.modelId === requested)
+  const byApiModelId = collect(groups, model => sameModelText(model.modelId, requested))
   if (byApiModelId.length === 1) return { status: 'resolved', model: byApiModelId[0] }
   if (byApiModelId.length > 1) return ambiguous(requested, byApiModelId)
 
-  const byDisplayName = collect(groups, model => model.name === requested)
+  const byDisplayName = collect(groups, model => sameModelText(model.name, requested))
   if (byDisplayName.length === 1) return { status: 'resolved', model: byDisplayName[0] }
   if (byDisplayName.length > 1) return ambiguous(requested, byDisplayName)
 
@@ -72,11 +72,16 @@ function resolveComposite(groups: ConfiguredModelGroup[], requested: string): Co
   if (colon <= 0) return null
   const groupId = requested.slice(0, colon)
   const modelId = requested.slice(colon + 1)
-  const group = groups.find(g => g.id === groupId)
+  const group = groups.find(g => sameModelText(g.id, groupId))
   if (!group) return { status: 'not_found', message: `Configured model group "${groupId}" was not found for "${requested}".`, matches: [] }
-  const model = group.models?.find(m => m.modelId === modelId || m.id === modelId || m.name === modelId)
+  const model = group.models?.find(m => sameModelText(m.modelId, modelId) || sameModelText(m.id, modelId) || sameModelText(m.name, modelId))
   if (!model) return { status: 'not_found', message: `Configured model "${modelId}" was not found in group "${groupId}".`, matches: [] }
   return { status: 'resolved', model: toResolved(group, model) }
+}
+
+function sameModelText(actual: string | undefined, requested: string): boolean {
+  if (!actual) return false
+  return actual === requested || actual.toLocaleLowerCase() === requested.toLocaleLowerCase()
 }
 
 function collect(groups: ConfiguredModelGroup[], predicate: (model: ConfiguredModelEntry, group: ConfiguredModelGroup) => boolean): ResolvedConfiguredModel[] {

@@ -1,18 +1,22 @@
 import { useAgentStore } from '../stores/agent-store'
 import { useSessionStore } from '../stores/session-store'
+import { useModelStore } from '../stores/model-store'
 import { ipc } from '../lib/ipc-client'
 import { ToolCardRouter } from './tool-cards'
 import { MarkdownRenderer } from './MarkdownRenderer'
+import { formatModelReference } from '../lib/model-display'
 
 export function AgentDetailPanel() {
   const activeAgentId = useAgentStore((s) => s.activeAgentId)
   const agent = useAgentStore((s) => activeAgentId ? s.agents[activeAgentId] : null)
   const setActiveAgent = useAgentStore((s) => s.setActiveAgent)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const modelGroups = useModelStore((s) => s.groups)
 
   if (!agent) return null
 
   const elapsed = Math.round((Date.now() - agent.startTime) / 1000)
+  const modelLabel = formatModelReference(agent.modelId, modelGroups, 'default')
 
   const handleAbort = () => {
     if (activeSessionId && activeAgentId) {
@@ -61,7 +65,7 @@ export function AgentDetailPanel() {
       <div className="agent-detail-metrics grid flex-shrink-0 grid-cols-3 gap-2 border-b border-[var(--border)] px-3 py-2">
         <AgentMetric label="Status" value={agent.status === 'running' ? `Running ${elapsed}s` : agent.status} tone={agentStatusColor(agent.status)} />
         <AgentMetric label="Tools" value={String(agent.toolCount)} />
-        <AgentMetric label="Model" value={agent.modelId ?? 'default'} />
+        <AgentMetric label="Model" value={modelLabel} />
       </div>
 
       <div className="context-panel-scroll flex-1 min-h-0 overflow-y-auto p-3">

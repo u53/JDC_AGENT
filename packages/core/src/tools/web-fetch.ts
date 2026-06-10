@@ -1,9 +1,9 @@
 import TurndownService from 'turndown'
 import { Readability } from '@mozilla/readability'
 import { parseHTML } from 'linkedom'
-import { HttpsProxyAgent } from 'https-proxy-agent'
 import { loadAppConfig } from '../config.js'
 import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
+import { makeFetchOptions } from './fetch-options.js'
 
 const MAX_CONTENT_LENGTH = 50000
 const turndown = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced' })
@@ -12,7 +12,7 @@ export const webFetchTool: ToolHandler = {
   definition: {
     name: 'WebFetch',
     description:
-      'Fetch a URL and extract its content as markdown. Use the prompt to specify what information to extract.\n\n' +
+      'Fetch a URL and extract its content as markdown. Use after WebSearch to read source content; WebSearch snippets are not evidence. Uses the configured WebSearch proxy when present. Use the prompt to specify what information to extract.\n\n' +
       'IMPORTANT: Will FAIL for authenticated/private URLs (Google Docs, Jira, Confluence, private repos). ' +
       'Check if the URL requires login before using.\n' +
       '- For GitHub URLs, prefer gh CLI via bash instead (e.g., gh pr view, gh issue view)\n' +
@@ -44,11 +44,12 @@ export const webFetchTool: ToolHandler = {
     try {
       const config = loadAppConfig()
       const proxy = (config.webSearch as any)?.proxy
-      const fetchOpts: RequestInit = {
+      const fetchOpts = makeFetchOptions({
+        proxy,
         headers: { 'User-Agent': 'JDCAGNET/1.0 (Desktop AI Assistant)' },
-        signal: context.signal || AbortSignal.timeout(30000),
-      }
-      if (proxy) (fetchOpts as any).agent = new HttpsProxyAgent(proxy)
+        signal: context.signal,
+        timeoutMs: 30000,
+      })
 
       const response = await fetch(url, fetchOpts)
 

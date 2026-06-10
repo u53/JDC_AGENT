@@ -8,6 +8,14 @@ export type RiskLevel = 'low' | 'medium' | 'high'
 export type Confidence = 'low' | 'medium' | 'high'
 export type TeamCapability = 'read' | 'write' | 'shell' | 'web' | 'lsp'
 
+export interface AvailableTeamModel {
+  /** Exact value workers/PM should pass to modelId; may be groupId:modelId. */
+  modelId: string
+  name?: string
+  groupName?: string
+  current?: boolean
+}
+
 export type TeamMessageIntent =
   | 'message' | 'hurry' | 'wrap_up' | 'request_status'
   | 'reprioritize' | 'narrow_scope' | 'expand_scope'
@@ -157,8 +165,8 @@ export type TeamEvent =
   | { type: 'team_started'; teamId: string; timestamp: number }
   | { type: 'manager_decision'; text: string; timestamp: number }
   | { type: 'manager_reply'; text: string; timestamp: number }
-  | { type: 'member_created'; memberId: string; role: string; timestamp: number }
-  | { type: 'member_added'; memberId: string; role: string; agentType: string; reason?: string; timestamp: number }
+  | { type: 'member_created'; memberId: string; role: string; modelId?: string; timestamp: number }
+  | { type: 'member_added'; memberId: string; role: string; agentType: string; modelId?: string; reason?: string; timestamp: number }
   | { type: 'member_removed'; memberId: string; role: string; reason?: string; timestamp: number }
   | { type: 'task_created'; taskId: string; title: string; timestamp: number }
   | { type: 'task_assigned'; taskId: string; memberId: string; timestamp: number }
@@ -173,6 +181,7 @@ export type TeamEvent =
   | { type: 'message_sent'; from: string; to: string; intent: string; timestamp: number }
   | { type: 'intervention_received'; from: 'user' | 'main_session' | 'member'; intent: string; fromMemberId?: string; timestamp: number }
   | { type: 'team_synthesizing'; timestamp: number }
+  | { type: 'model_resolution_success'; memberId?: string; requestedModelId: string; resolvedModelId: string; timestamp: number }
   | { type: 'model_resolution_warning'; memberId?: string; requestedModelId: string; message: string; timestamp: number }
   | { type: 'team_completed'; summary: string; archivePath?: string; archiveError?: string; timestamp: number }
   | { type: 'team_failed'; error: string; timestamp: number }

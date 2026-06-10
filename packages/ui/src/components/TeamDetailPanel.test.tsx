@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useTeamStore, type TeamStatusUI } from '../stores/team-store'
+import { useModelStore } from '../stores/model-store'
 import { TeamDetailPanel } from './TeamDetailPanel'
 
 const team: TeamStatusUI = {
@@ -16,6 +17,7 @@ const team: TeamStatusUI = {
       role: 'Frontend Worker',
       responsibility: 'Inspect UI output.',
       agentType: 'worker',
+      modelId: 'group-uuid-1:deepseek-v4-flash',
       status: 'running',
       currentTaskId: 'task-1',
       toolCount: 2,
@@ -38,6 +40,26 @@ const team: TeamStatusUI = {
 describe('TeamDetailPanel', () => {
   beforeEach(() => {
     useTeamStore.getState().reset()
+    const modelState = {
+      activeModelId: 'model-entry-1',
+      groups: [{
+        id: 'group-uuid-1',
+        name: '公司DS',
+        protocol: 'openai-responses' as const,
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: '',
+        models: [{
+          id: 'model-entry-1',
+          name: 'DeepSeek V4 Flash',
+          modelId: 'deepseek-v4-flash',
+          contextWindow: 200000,
+          maxTokens: 32000,
+          compressAt: 0.9,
+        }],
+      }],
+    }
+    useModelStore.setState(modelState)
+    Object.assign(useModelStore.getInitialState(), modelState)
     seedTeamStore()
   })
 
@@ -114,6 +136,8 @@ describe('TeamDetailPanel', () => {
     expect(html).toContain('Frontend Worker')
     expect(html).toContain('Inspect UI output.')
     expect(html).toContain('Render markdown')
+    expect(html).toContain('公司DS:DeepSeek V4 Flash')
+    expect(html).not.toContain('group-uuid-1:deepseek-v4-flash')
     expect(html).toContain('2 tools')
   })
 
@@ -156,6 +180,8 @@ describe('TeamDetailPanel', () => {
 
     expect(html).toContain('team-member-modal')
     expect(html).toContain('team-member-modal-shell')
+    expect(html).toContain('公司DS:DeepSeek V4 Flash')
+    expect(html).not.toContain('group-uuid-1:deepseek-v4-flash')
     expect(html).toContain('<h3')
     expect(html).toContain('handoff')
   })

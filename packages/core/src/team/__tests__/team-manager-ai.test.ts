@@ -148,4 +148,32 @@ describe('TeamManagerAI scheduling', () => {
     provider.respond(0, '[]')
     await flush()
   })
+
+  it('shows available worker model ids to the PM', async () => {
+    const provider = new DeferredProvider()
+    const manager = new TeamManagerAI({
+      initialTasks: [],
+      provider,
+      modelConfig: { model: 'claude-opus-4-8', maxTokens: 1000 },
+      memberStates: () => [],
+      cwd: '/tmp/team-manager-ai-test',
+      teamId: 'team_test',
+      objective: '让 GPT-5.5 和 Opus 分别调研并输出报告。',
+      availableModels: [
+        { modelId: 'openai:gpt-5.5', name: 'gpt-5.5', groupName: 'JDC OPEN AI' },
+        { modelId: 'anthropic:claude-opus-4-8', name: 'claude-opus-4-8', groupName: 'JDC CC' },
+      ],
+    } as any)
+
+    manager.triggerProactiveCheck({ kind: 'team_started' })
+    await waitFor(() => provider.calls.length === 1)
+
+    const promptText = systemPromptText(provider.calls[0].config.systemPrompt)
+    expect(promptText).toContain('<available-models>')
+    expect(promptText).toContain('modelId: "openai:gpt-5.5"')
+    expect(promptText).toContain('For teams, set add_member.spec.modelId exactly')
+
+    provider.respond(0, '[]')
+    await flush()
+  })
 })

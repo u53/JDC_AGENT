@@ -33,12 +33,22 @@ describe('Topbar', () => {
     expect(heading).not.toContain('jdcagnet-&gt;')
   })
 
-  it('makes the full project path a project console trigger', () => {
+  it('renders the full project path as draggable title text', () => {
     const html = renderToStaticMarkup(<Topbar />)
 
-    expect(html).toContain('topbar-project-console-trigger')
-    expect(html).toContain('aria-label="Open project console"')
+    expect(html).toContain('topbar-project-title')
+    expect(html).not.toContain('topbar-project-console-trigger')
+    expect(html).not.toContain('aria-label="Open project console"')
     expect(html).toContain(`JDC CODE · ${cwd}`)
+  })
+
+  it('keeps the titlebar draggable except for real controls', () => {
+    const html = renderToStaticMarkup(<Topbar />)
+
+    expect(html).toContain('topbar-drag-zone')
+    expect(html).not.toContain('topbar-drag-zone" style="-webkit-app-region:no-drag"')
+    expect(html).not.toMatch(/topbar-project-title[^>]+style="-webkit-app-region:no-drag"/)
+    expect(html).toMatch(/topbar-actions[^>]+style="-webkit-app-region:no-drag"/)
   })
 
   it('renders theme mode as a custom dropdown with system as the default option', () => {

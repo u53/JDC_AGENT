@@ -1,12 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useAgentStore, type AgentState } from '../stores/agent-store'
+import { useModelStore } from '../stores/model-store'
 import { AgentDetailPanel } from './AgentDetailPanel'
 
 const agent: AgentState = {
   agentToolUseId: 'agent-1',
   prompt: 'Audit the context renderer and report concrete findings.',
-  modelId: 'gpt-5.5',
+  modelId: 'group-uuid-1:deepseek-v4-flash',
   status: 'running',
   toolEvents: [{
     toolName: 'Read',
@@ -27,6 +28,26 @@ describe('AgentDetailPanel', () => {
     }
     useAgentStore.setState(state)
     Object.assign(useAgentStore.getInitialState(), state)
+    const modelState = {
+      activeModelId: 'model-entry-1',
+      groups: [{
+        id: 'group-uuid-1',
+        name: '公司DS',
+        protocol: 'openai-responses' as const,
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: '',
+        models: [{
+          id: 'model-entry-1',
+          name: 'DeepSeek V4 Flash',
+          modelId: 'deepseek-v4-flash',
+          contextWindow: 200000,
+          maxTokens: 32000,
+          compressAt: 0.9,
+        }],
+      }],
+    }
+    useModelStore.setState(modelState)
+    Object.assign(useModelStore.getInitialState(), modelState)
   })
 
   it('renders subagent details in the JDC dark inspection layout', () => {
@@ -36,6 +57,8 @@ describe('AgentDetailPanel', () => {
     expect(html).toContain('agent-detail-metrics')
     expect(html).toContain('agent-tool-timeline')
     expect(html).toContain('agent-output-panel')
+    expect(html).toContain('公司DS:DeepSeek V4 Flash')
+    expect(html).not.toContain('group-uuid-1:deepseek-v4-flash')
     expect(html).toContain('<h3')
     expect(html).toContain('scope')
     expect(html).not.toContain('[BG]')

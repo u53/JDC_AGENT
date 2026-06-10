@@ -2,7 +2,9 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useTeamStore, type TeamConversationEntry } from '../stores/team-store'
 import { useToastStore } from '../stores/toast-store'
+import { useModelStore, type ModelGroup } from '../stores/model-store'
 import { MarkdownRenderer } from './MarkdownRenderer'
+import { formatModelReference } from '../lib/model-display'
 
 export interface TeamDetailPanelProps {
   sessionId: string
@@ -29,6 +31,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
   const expandedMemberId = useTeamStore((s) => s.expandedMemberId)
   const setExpandedMember = useTeamStore((s) => s.setExpandedMember)
   const showToast = useToastStore((s) => s.showToast)
+  const modelGroups = useModelStore((s) => s.groups)
 
   const [message, setMessage] = useState('')
   const isComposingRef = useRef(false)
@@ -151,6 +154,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
               <MemberBoard
                 members={team.members ?? []}
                 tasks={team.tasks ?? []}
+                modelGroups={modelGroups}
                 onSelect={(memberId) => setExpandedMember(memberId)}
               />
             </Section>
@@ -255,6 +259,7 @@ export function TeamDetailPanel({ sessionId, taskId, onClose }: TeamDetailPanelP
           member={expandedMember}
           task={expandedMemberTask}
           events={events}
+          modelGroups={modelGroups}
           onClose={() => setExpandedMember(null)}
         />
       )}
@@ -565,10 +570,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function MemberBoard({
   members,
   tasks,
+  modelGroups,
   onSelect,
 }: {
   members: any[]
   tasks: any[]
+  modelGroups: ModelGroup[]
   onSelect: (memberId: string) => void
 }) {
   const taskById = useMemo(() => {
@@ -592,6 +599,7 @@ function MemberBoard({
           key={member.id}
           member={member}
           currentTask={member.currentTaskId ? taskById.get(member.currentTaskId) : null}
+          modelGroups={modelGroups}
           onClick={() => onSelect(member.id)}
         />
       ))}
@@ -602,12 +610,15 @@ function MemberBoard({
 function MemberCard({
   member,
   currentTask,
+  modelGroups,
   onClick,
 }: {
   member: any
   currentTask: any | null
+  modelGroups: ModelGroup[]
   onClick: () => void
 }) {
+  const modelLabel = formatModelReference(member.modelId, modelGroups, '')
   return (
     <li
       className="team-member-card min-w-0 rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)] px-3 py-2.5 cursor-pointer shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] transition-colors hover:border-[color-mix(in_srgb,var(--accent)_34%,var(--border))] hover:bg-[color-mix(in_srgb,var(--accent)_7%,var(--surface-2))]"
@@ -629,6 +640,7 @@ function MemberCard({
           )}
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <TaskMetaPill label={currentTask?.title ?? member.currentTaskId ?? 'Idle'} tone={currentTask ? 'var(--accent)' : 'var(--muted)'} />
+            {modelLabel && <TaskMetaPill label={modelLabel} />}
             <TaskMetaPill label={member.toolCount > 0 ? `${member.toolCount} tools` : '0 tools'} />
           </div>
         </div>
@@ -729,6 +741,7 @@ type MemberDetailModalProps = {
   member: any
   task: { id: string; title: string; description: string; status: string } | null
   events: string[]
+  modelGroups: ModelGroup[]
   onClose: () => void
 }
 
@@ -742,6 +755,7 @@ function MemberDetailModal({
   member,
   task,
   events,
+  modelGroups,
   onClose,
 }: MemberDetailModalProps) {
   const memberEvents = useMemo(() => {
@@ -846,7 +860,7 @@ function MemberDetailModal({
           <ModalSection title="Metadata">
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
               <MetaRow label="agentType" value={member.agentType} />
-              <MetaRow label="modelId" value={member.modelId ?? '(default)'} />
+              <MetaRow label="model" value={formatModelReference(member.modelId, modelGroups, '(default)')} />
               <MetaRow label="toolCount" value={String(member.toolCount ?? 0)} />
               <MetaRow
                 label="lastActivity"

@@ -376,6 +376,25 @@ describe('Team tools', () => {
     expect(result.isError).toBeFalsy()
     expect(result.content).toMatch(/team_started|task_created|member_created/)
   })
+
+  it('background_events formats worker model resolution warnings', async () => {
+    const bg = new BackgroundTaskManager(path.join(os.tmpdir(), 'team-tools-model-warning-' + Date.now()))
+    const task = bg.registerTeam('model warning test', [])
+    bg.emitEvent(task.id, {
+      type: 'model_resolution_warning',
+      memberId: 'member_gpt',
+      requestedModelId: 'GPT-5.5',
+      message: 'Configured model "GPT-5.5" was not found; falling back to main session model.',
+      timestamp: Date.now(),
+    } as any)
+
+    const eventsTool = createBackgroundEventsTool({ backgroundTasks: bg })
+    const result = await eventsTool.execute({ task_id: task.id } as any, {} as any)
+
+    expect(result.isError).toBeFalsy()
+    expect(result.content).toContain('model_warning member_gpt requested=GPT-5.5')
+    expect(result.content).toContain('falling back to main session model')
+  })
 })
 
 function mockFirstArgs<T>(mock: { mock: { calls: unknown[][] } }): T[] {

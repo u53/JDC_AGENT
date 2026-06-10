@@ -300,6 +300,8 @@ function eventContent(event: TeamEvent): string {
       return `Intervention ${event.intent} received from ${event.from}.`
     case 'team_synthesizing':
       return 'Team is synthesizing final output.'
+    case 'model_resolution_success':
+      return `Model resolved for ${event.memberId ?? 'team'}: ${event.requestedModelId} -> ${event.resolvedModelId}.`
     case 'model_resolution_warning':
       return `Model resolution warning for ${event.memberId ?? 'team'}: ${event.message}`
     case 'team_completed':

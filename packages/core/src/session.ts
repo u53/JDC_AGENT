@@ -48,6 +48,7 @@ import { BackgroundTaskManager } from './background-tasks.js'
 import { createTaskOutputTool } from './tools/task-output.js'
 import { monitorTool } from './tools/monitor.js'
 import { TeamRegistry } from './team/team-registry.js'
+import type { AvailableTeamModel } from './team/team-types.js'
 import { createTeamTool } from './tools/team.js'
 import { createBackgroundSendTool } from './tools/background-send.js'
 import { createBackgroundStatusTool } from './tools/background-status.js'
@@ -274,6 +275,7 @@ export class Session {
       provider: liveProvider,
       modelConfig: this.config.modelConfig,
       resolveModel: resolveModelWithProfile,
+      getAvailableModels: () => listAvailableTeamModels(loadAppConfig()),
       getSkillLoader: () => this.skillLoader,
       onUsage: onSubAgentUsage,
       onTeamEvent: this._teamEventHandler = (teamId, event) => {
@@ -1763,6 +1765,25 @@ function sanitizeModelConfigForHarvest(modelConfig: ModelConfig): ModelConfig {
   if (modelConfig.cacheKey !== undefined) sanitized.cacheKey = modelConfig.cacheKey
   if (modelConfig.cacheUser !== undefined) sanitized.cacheUser = modelConfig.cacheUser
   return sanitized
+}
+
+function listAvailableTeamModels(appConfig: Record<string, any>): AvailableTeamModel[] {
+  const modelGroups = appConfig.modelGroups
+  if (!Array.isArray(modelGroups?.groups)) return []
+  const result: AvailableTeamModel[] = []
+  for (const group of modelGroups.groups) {
+    if (!group?.id || !Array.isArray(group.models)) continue
+    for (const model of group.models) {
+      if (!model?.modelId) continue
+      result.push({
+        modelId: `${group.id}:${model.modelId}`,
+        name: model.name ?? model.modelId,
+        groupName: group.name,
+        current: model.id === modelGroups.activeModelId,
+      })
+    }
+  }
+  return result
 }
 
 function resolveConfiguredModelBindingMetadata(appConfig: Record<string, any>, sessionModelId: string | null, currentModel: string): { protocol?: string; modelGroupId?: string; baseUrl?: string } {

@@ -66,4 +66,25 @@ describe('JDC CODE base prompt operating contract', () => {
     expect(prompt).not.toContain('JDCAGNET uses a two-level configuration system')
     expect(prompt).toContain('JDCAGNET.md')
   })
+
+  it('treats WebSearch as discovery and requires WebFetch for evidence', () => {
+    const prompt = getBasePrompt({
+      toolDefs: [
+        { name: 'WebSearch', description: 'Search web snippets.', inputSchema: { type: 'object' } },
+        { name: 'WebFetch', description: 'Fetch web pages.', inputSchema: { type: 'object' } },
+      ],
+      environment: {
+        os: 'test-os',
+        cwd: '/tmp/user-project',
+        shell: '/bin/zsh',
+      },
+    })
+
+    expect(prompt).toContain('WebSearch is a discovery tool')
+    expect(prompt).toContain('not evidence')
+    expect(prompt).toContain('Use count=8 by default')
+    expect(prompt).toContain('count=5 is only an absolute floor')
+    expect(prompt).toContain('follow up with WebFetch on the relevant result URLs')
+    expect(prompt).toContain('use fetched page content as evidence')
+  })
 })

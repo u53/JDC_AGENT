@@ -2,7 +2,7 @@ import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 import { TeamRuntime, type TeamRuntimePlan } from '../team/team-runtime.js'
 import { TeamRegistry } from '../team/team-registry.js'
 import type { BackgroundTaskManager } from '../background-tasks.js'
-import type { TeamMemberSpec, TeamEvent } from '../team/team-types.js'
+import type { AvailableTeamModel, TeamMemberSpec, TeamEvent } from '../team/team-types.js'
 import { resolveExpertPrompt } from '../team/expert-prompts.js'
 import type { SubSessionOptions } from '../sub-session.js'
 import type { ModelProvider } from '../model-provider.js'
@@ -20,6 +20,7 @@ export interface TeamToolDeps {
   provider?: ModelProvider
   modelConfig?: ModelConfig
   resolveModel?: (modelId: string) => RuntimeModelResolution
+  getAvailableModels?: () => AvailableTeamModel[]
   /**
    * Lazy accessor for the skill loader. The team tool is registered before
    * the loader is ready, so the deps object holds a thunk that resolves the
@@ -183,6 +184,7 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
       const requestedTasks = (input.tasks as any[] | undefined) ?? []
       const maxWorkers = Math.min((input.maxWorkers as number | undefined) ?? 5, 10)
       const timeoutMinutes = input.timeoutMinutes as number | undefined
+      const availableModels = deps.getAvailableModels?.() ?? []
 
       // Resolve expertPrompt for each member (preset key → full text, custom → pass through)
       // Smart auto-assign: scan responsibility/role for domain keywords if expertPrompt not provided
@@ -272,6 +274,7 @@ export function createTeamTool(deps: TeamToolDeps): ToolHandler {
           teamTimeoutMs: typeof timeoutMinutes === 'number' && timeoutMinutes > 0 ? timeoutMinutes * 60_000 : undefined,
           subSessionDeps: deps.buildSubSessionDeps(),
           resolveModel: deps.resolveModel,
+          availableModels,
           aiPM,
           skillInjection: { pmContent: pmSkillContent, workerContent: workerSkillContent },
           onUsage: deps.onUsage,

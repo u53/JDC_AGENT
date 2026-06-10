@@ -24,6 +24,7 @@
     "sql.js": "^1.14.1",
     "tree-sitter-wasms": "0.1.13",
     "turndown": "^7.2.4",
+    "undici": "^7.25.0",
     "uuid": "^11.0.0",
     "web-tree-sitter": "0.25.10",
     "ws": "^8.20.1",

@@ -227,9 +227,16 @@ export class TeamMember {
           effectiveProvider = resolved.provider
           effectiveModelConfig = resolved.modelConfig
           this.opts.onEvent?.({
+            type: 'model_resolution_success',
+            memberId: this.id,
+            requestedModelId: this.modelId,
+            resolvedModelId: effectiveModelConfig.model,
+            timestamp: Date.now(),
+          })
+          this.opts.onEvent?.({
             type: 'member_progress',
             memberId: this.id,
-            text: `[modelId] using "${this.modelId}"`,
+            text: `[modelId] using "${this.modelId}" -> "${effectiveModelConfig.model}"`,
             timestamp: Date.now(),
           })
         } else {

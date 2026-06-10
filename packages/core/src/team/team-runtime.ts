@@ -1,4 +1,6 @@
 import { v4 as uuid } from 'uuid'
+import { existsSync } from 'node:fs'
+import path from 'node:path'
 import { TeamManager, type ManagerAction } from './team-manager.js'
 import { TeamManagerAI, type TeamManagerAIOptions, type ProactiveReason } from './team-manager-ai.js'
 import { TeamMember } from './team-member.js'
@@ -18,6 +20,8 @@ import {
   type Priority,
   type RiskLevel,
   type TeamMessageIntent,
+  type AvailableTeamModel,
+  type TeamTaskResult,
 } from './team-types.js'
 import { resolveExpertPrompt } from './expert-prompts.js'
 import { recordTeamEventEvidence, recordTeamTaskResultEvidence, type TeamLedgerContext } from '../context/team-ledger.js'
@@ -49,6 +53,7 @@ export interface TeamRuntimeOptions {
   archivePath?: string
   aiPM?: { provider: ModelProvider; modelConfig: ModelConfig }
   resolveModel?: (modelId: string) => RuntimeModelResolution
+  availableModels?: AvailableTeamModel[]
   // Skill content selected by SkillRouter at team start. Both fields are
   // OPTIONAL plain text. The PM content is appended to PM's system prompt
   // (dialogue methodology); the worker content is appended to each task
@@ -132,6 +137,7 @@ export class TeamRuntime {
         skillContent: opts.skillInjection?.pmContent,
         onUsage: opts.onUsage,
         contextEngine: opts.subSessionDeps.contextEngine,
+        availableModels: opts.availableModels,
       })
       this.manager = aiManager
     }
@@ -143,8 +149,9 @@ export class TeamRuntime {
     const memberSpecs = opts.plan.members.slice(0, 10)
     for (const spec of memberSpecs) {
       if (this.members.length >= 10) break
+      const normalizedSpec = this.normalizeMemberSpecModel(spec)
       const member = new TeamMember({
-        spec,
+        spec: normalizedSpec,
         taskPrompt: '', // assigned later
         teamId: this.id,
         teamObjective: this.objective,
@@ -156,7 +163,7 @@ export class TeamRuntime {
       })
       this.members.push(member)
       this.memberById.set(member.id, member)
-      this.recordEvent({ type: 'member_created', memberId: member.id, role: member.role, timestamp: Date.now() })
+      this.recordEvent({ type: 'member_created', memberId: member.id, role: member.role, modelId: member.modelId, timestamp: Date.now() })
     }
   }
 
@@ -234,7 +241,8 @@ export class TeamRuntime {
       })
       return null
     }
-    const resolvedSpec = { ...spec, expertPrompt: resolveExpertPrompt(spec.expertPrompt) || spec.expertPrompt }
+    const modelSpec = this.normalizeMemberSpecModel(spec)
+    const resolvedSpec = { ...modelSpec, expertPrompt: resolveExpertPrompt(modelSpec.expertPrompt) || modelSpec.expertPrompt }
     const member = new TeamMember({
       spec: resolvedSpec,
       taskPrompt: '',
@@ -253,6 +261,7 @@ export class TeamRuntime {
       memberId: member.id,
       role: member.role,
       agentType: member.agentType,
+      modelId: member.modelId,
       reason,
       timestamp: Date.now(),
     })
@@ -890,20 +899,15 @@ export class TeamRuntime {
       onEvent: (e) => this.recordEvent(e),
       onComplete: (_mId, result) => {
         if (this.memberById.get(memberId) !== taskMember) return
-        this.clearTaskTimeout(taskId)
-        this.kickCounts.delete(taskId)
-        this.manager.markTaskCompleted(taskId, result)
-        this.concurrency.markDone(memberId)
-        this.fallbackWriteResult(taskId, memberId, result.summary).catch(() => {})
-        void recordTeamTaskResultEvidence({
-          taskId,
-          memberId,
-          summary: result.summary,
-          path: `.team/tasks/${taskId}/result.md`,
-        }, this.ledgerContext()).catch(() => undefined)
-        this.recycleMember(memberId, memberSpec)
-        this.triggerProactive({ kind: 'task_completed', taskId })
-        this.scheduleTick()
+        this.finishTaskCompletion(taskId, memberId, taskMember, memberSpec, result).catch(err => {
+          const message = err instanceof Error ? err.message : String(err)
+          this.manager.markTaskFailed(taskId, `Completion handling failed: ${message}`)
+          this.concurrency.markDone(memberId)
+          this.workspace.updateTaskStatus(taskId, 'failed').catch(() => {})
+          this.recycleMember(memberId, memberSpec)
+          this.triggerProactive({ kind: 'task_failed', taskId })
+          this.scheduleTick()
+        })
       },
       onFail: (_mId, error) => {
         if (this.memberById.get(memberId) !== taskMember) return
@@ -1042,7 +1046,69 @@ export class TeamRuntime {
     this.memberById.set(memberId, freshMember)
     const idx = this.members.findIndex(m => m.id === memberId)
     if (idx >= 0) this.members[idx] = freshMember
-    this.recordEvent({ type: 'member_created', memberId, role: originalSpec.role, timestamp: Date.now() })
+    this.recordEvent({ type: 'member_created', memberId, role: originalSpec.role, modelId: originalSpec.modelId, timestamp: Date.now() })
+  }
+
+  private normalizeMemberSpecModel(spec: TeamMemberSpec): TeamMemberSpec {
+    if (spec.modelId || !this.opts.availableModels?.length) return spec
+    const inferred = inferModelIdFromSpec(spec, this.opts.availableModels)
+    if (!inferred) return spec
+    return { ...spec, modelId: inferred }
+  }
+
+  private async finishTaskCompletion(
+    taskId: string,
+    memberId: string,
+    taskMember: TeamMember,
+    memberSpec: { role: string; responsibility?: string; agentType: string; modelId?: string },
+    result: TeamTaskResult,
+  ): Promise<void> {
+    if (this.memberById.get(memberId) !== taskMember) return
+    this.clearTaskTimeout(taskId)
+    this.kickCounts.delete(taskId)
+
+    const validation = this.validateDeclaredOutputs(taskId)
+    if (!validation.passed) {
+      const error = `Completion rejected: ${validation.failures.join('; ')}`
+      this.manager.markTaskFailed(taskId, error)
+      this.concurrency.markDone(memberId)
+      await this.workspace.updateTaskStatus(taskId, 'failed').catch(() => {})
+      await this.workspace.appendLog(`completion rejected for ${taskId} by ${memberId}: ${error}`).catch(() => {})
+      this.recycleMember(memberId, memberSpec)
+      this.triggerProactive({ kind: 'task_failed', taskId })
+      this.scheduleTick()
+      return
+    }
+
+    this.manager.markTaskCompleted(taskId, result)
+    this.concurrency.markDone(memberId)
+    await this.fallbackWriteResult(taskId, memberId, result.summary).catch(() => {})
+    void recordTeamTaskResultEvidence({
+      taskId,
+      memberId,
+      summary: result.summary,
+      path: `.team/tasks/${taskId}/result.md`,
+    }, this.ledgerContext()).catch(() => undefined)
+    this.recycleMember(memberId, memberSpec)
+    this.triggerProactive({ kind: 'task_completed', taskId })
+    this.scheduleTick()
+  }
+
+  private validateDeclaredOutputs(taskId: string): { passed: boolean; failures: string[] } {
+    const task = this.manager.getTask(taskId)
+    if (!task) return { passed: true, failures: [] }
+
+    const expectedFiles = inferDeclaredOutputFiles(task.description)
+    const missing = expectedFiles.filter(file => {
+      const abs = path.isAbsolute(file) ? file : path.resolve(this.opts.subSessionDeps.cwd, file)
+      return !existsSync(abs)
+    })
+    if (missing.length === 0) return { passed: true, failures: [] }
+
+    return {
+      passed: false,
+      failures: [`declared output file(s) missing: ${missing.join(', ')}`],
+    }
   }
 
   private routeMessageToMember(memberId: string, content: string, intent?: string): void {
@@ -1448,4 +1514,64 @@ function buildWorkerTaskPrompt(args: WorkerTaskPromptArgs): string {
   )
 
   return sections.join('\n\n')
+}
+
+function inferModelIdFromSpec(spec: TeamMemberSpec, availableModels: AvailableTeamModel[]): string | undefined {
+  const haystack = normalizeForModelMatch([
+    spec.role,
+    spec.responsibility,
+    spec.expertPrompt,
+  ].filter(Boolean).join(' '))
+  if (!haystack) return undefined
+
+  const matches = new Set<string>()
+  for (const model of availableModels) {
+    const aliases = modelAliases(model)
+    if (aliases.some(alias => haystack.includes(normalizeForModelMatch(alias)))) {
+      matches.add(model.modelId)
+    }
+  }
+  return matches.size === 1 ? [...matches][0] : undefined
+}
+
+function modelAliases(model: AvailableTeamModel): string[] {
+  const aliases = new Set<string>()
+  for (const value of [model.modelId, model.name]) {
+    if (!value) continue
+    aliases.add(value)
+    const colon = value.indexOf(':')
+    if (colon >= 0 && colon < value.length - 1) aliases.add(value.slice(colon + 1))
+    for (const token of value.split(/[^A-Za-z0-9.]+/)) {
+      if (token.length >= 4) aliases.add(token)
+    }
+  }
+  return [...aliases].filter(alias => normalizeForModelMatch(alias).length >= 4)
+}
+
+function normalizeForModelMatch(text: string): string {
+  return text.trim().toLocaleLowerCase()
+}
+
+function inferDeclaredOutputFiles(description: string): string[] {
+  if (!description) return []
+  const outputIntent = /(?:write|wrote|create|save|output|generate|persist|deliver|produce|modify|update|写入|写到|写进|保存|输出|生成|产出|落盘|创建|新增|修改|更新)/i
+  if (!outputIntent.test(description)) return []
+
+  const files = new Set<string>()
+  const filePattern = /(?:^|[\s("'`])((?:\.\/|\.\.\/|\/)?[\w@./-]+\.[A-Za-z0-9]{1,12})(?=$|[\s)"'`,:;，。])/g
+  let match: RegExpExecArray | null
+  while ((match = filePattern.exec(description)) !== null) {
+    const file = match[1].trim().replace(/^["'`(]+|["'`),:;，。]+$/g, '')
+    if (!file || file.includes('*')) continue
+    if (file.startsWith('http://') || file.startsWith('https://')) continue
+    if (!file.includes('/') && !file.startsWith('.')) continue
+
+    const start = Math.max(0, match.index - 100)
+    const end = Math.min(description.length, match.index + match[0].length + 100)
+    const context = description.slice(start, end)
+    if (outputIntent.test(context) || /file scope/i.test(context)) {
+      files.add(file.replace(/^\.\//, ''))
+    }
+  }
+  return [...files]
 }

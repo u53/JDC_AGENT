@@ -8,7 +8,6 @@ export function Topbar() {
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const activeProjectCwd = useSessionStore((s) => s.activeProjectCwd)
   const addProject = useSessionStore((s) => s.addProject)
-  const openProjectConsole = useSessionStore((s) => s.openProjectConsole)
   const openSettings = useSettingsStore((s) => s.open)
 
   const activeProject = projects.find((p) =>
@@ -23,20 +22,15 @@ export function Topbar() {
       className="relative z-[80] h-12 flex items-center justify-between pl-[78px] pr-5 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] backdrop-blur"
       style={{ WebkitAppRegion: 'drag' } as any}
     >
-      <div className="min-w-0 flex flex-1 items-center gap-3 pr-4" style={{ WebkitAppRegion: 'no-drag' } as any}>
+      <div className="topbar-drag-zone min-w-0 flex flex-1 items-center gap-3 pr-4">
         <h1 className="min-w-0 truncate text-[15px] font-semibold tracking-[-0.01em]">
-          <button
-            type="button"
-            onClick={() => { if (project?.cwd) openProjectConsole(project.cwd) }}
-            className="topbar-project-console-trigger min-w-0 max-w-full truncate text-left transition-colors hover:text-[var(--accent)]"
-            aria-label="Open project console"
-          >
+          <span className="topbar-project-title block min-w-0 max-w-full truncate">
             {projectLabel}
-          </button>
+          </span>
         </h1>
       </div>
 
-      <div className="flex shrink-0 items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
+      <div className="topbar-actions flex shrink-0 items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
         <ThemeSegmented />
         <button
           onClick={addProject}

@@ -5,8 +5,10 @@ import { ToolCopyButton } from './ToolCopyButton'
 import { truncateText } from './shared'
 import { useAgentStore } from '../../stores/agent-store'
 import { useSessionStore } from '../../stores/session-store'
+import { useModelStore } from '../../stores/model-store'
 import { ipc } from '../../lib/ipc-client'
 import { deriveToolStatus, getToolVariant, shouldShowToolRail } from './tool-card-meta'
+import { formatModelReference } from '../../lib/model-display'
 
 export function AgentToolCard({ event, input, result, name }: ToolCardRouterProps) {
   const status = deriveToolStatus(event, result)
@@ -23,8 +25,10 @@ export function AgentToolCard({ event, input, result, name }: ToolCardRouterProp
   const setActiveAgent = useAgentStore((s) => s.setActiveAgent)
   const addAgent = useAgentStore((s) => s.addAgent)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const modelGroups = useModelStore((s) => s.groups)
 
   const modelId = (toolInput.modelId || '') as string
+  const modelLabel = formatModelReference(modelId, modelGroups, 'default')
 
   useEffect(() => {
     if (toolUseId && status === 'running' && !agentState) {
@@ -52,7 +56,7 @@ export function AgentToolCard({ event, input, result, name }: ToolCardRouterProp
     <div onClick={handleClick} className="agent-launch-control cursor-pointer">
       <ToolCardShell
         label="AGENT"
-        detail={modelId ? `${taskDescription} · ${modelId}` : taskDescription}
+        detail={modelId ? `${taskDescription} · ${modelLabel}` : taskDescription}
         status={status}
         defaultExpanded={status === 'running'}
         collapsible={status !== 'running'}
@@ -74,7 +78,7 @@ export function AgentToolCard({ event, input, result, name }: ToolCardRouterProp
       >
         {status === 'running' && (
           <div className="agent-launch-metrics mb-2 grid grid-cols-2 gap-1.5">
-            <AgentLaunchMetric label="Model" value={modelId || 'default'} />
+            <AgentLaunchMetric label="Model" value={modelLabel} />
             <AgentLaunchMetric label="Tools" value={`${toolCount} tools`} />
           </div>
         )}

@@ -3,6 +3,36 @@ import { describe, expect, it } from 'vitest'
 import { ConversationTurn } from './ConversationTurn'
 
 describe('ConversationTurn compact rendering', () => {
+  it('shows active tool calls without results as waiting instead of empty done cards', () => {
+    const html = renderToStaticMarkup(
+      <ConversationTurn
+        userContent={[{ type: 'text', text: 'fetch latest AI news' }]}
+        isActive
+        assistantMessages={[
+          {
+            message: {
+              id: 'assistant-tool-use',
+              role: 'assistant',
+              content: [{
+                type: 'tool_use',
+                id: 'tool-web-fetch-1',
+                name: 'WebFetch',
+                input: {
+                  url: 'https://example.com/news',
+                  prompt: 'Extract the latest AI-related headlines.',
+                },
+              }],
+              timestamp: 1,
+            } as any,
+          },
+        ]}
+      />,
+    )
+
+    expect(html).toContain('Waiting for remote response...')
+    expect(html).not.toContain('No result content.')
+  })
+
   it('renders compact notice messages as compact cards instead of raw assistant text', () => {
     const html = renderToStaticMarkup(
       <ConversationTurn

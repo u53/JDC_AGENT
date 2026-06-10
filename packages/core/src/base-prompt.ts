@@ -324,6 +324,8 @@ function getToolUsageSection(toolNames: string[]): string {
   const hasBash = toolNames.includes('Bash')
   const hasAgent = toolNames.includes('Agent')
   const hasSkill = toolNames.includes('Skill')
+  const hasWebSearch = toolNames.includes('WebSearch')
+  const hasWebFetch = toolNames.includes('WebFetch')
 
   const items: string[] = [
     'Do NOT use bash to run commands when a relevant dedicated tool is provided. Using dedicated tools allows the user to better understand and review your work.',
@@ -346,6 +348,17 @@ function getToolUsageSection(toolNames: string[]): string {
     items.push(
       'Use the Skill tool to invoke a named skill when the user\'s request matches an available skill. Skills are listed in the "Available Skills" section of this prompt. When a skill matches, invoke it BEFORE generating other responses.',
     )
+  }
+
+  if (hasWebSearch) {
+    items.push(
+      'WebSearch is a discovery tool: its results are titles, URLs, and snippets, not evidence. Use count=8 by default and count=10 for broad comparison queries; count=5 is only an absolute floor for narrow, exact lookups.',
+    )
+    if (hasWebFetch) {
+      items.push(
+        'For factual, current, or detail-sensitive answers found through WebSearch, follow up with WebFetch on the relevant result URLs and use fetched page content as evidence before making claims or citing sources. Do not loop on near-identical searches when fetching the source pages would answer the question.',
+      )
+    }
   }
 
   items.push(
