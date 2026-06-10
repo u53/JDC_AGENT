@@ -105,7 +105,7 @@ jobs:
             out/latest-mac.yml
 
   release-windows:
-    runs-on: windows-latest
+    runs-on: windows-2022
     env:
       ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
       ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.electron-builder-cache
@@ -159,7 +159,7 @@ jobs:
         run: |
           for attempt in 1 2 3; do
             if pnpm package; then
-              exit 0
+              break
             fi
             status=$?
             if [ "$attempt" -eq 3 ]; then
@@ -168,6 +168,9 @@ jobs:
             echo "pnpm package failed on attempt $attempt/3; retrying..."
             sleep $((attempt * 20))
           done
+          ls -la out
+          test -f out/JDC-Code-*-x64-win.exe
+          test -f out/latest.yml
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
