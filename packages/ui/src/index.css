@@ -1,6 +1,3 @@
-@import "@fontsource-variable/geist";
-@import "@fontsource-variable/noto-sans-sc";
-@import "@fontsource-variable/jetbrains-mono";
 @import "tailwindcss";
 
 :root {
@@ -30,9 +27,10 @@
   --syntax-number: #e8c16d;
   --syntax-comment: #718197;
   --syntax-punctuation: #b9c4d2;
-  --font-serif: "Geist Variable", "Noto Sans SC Variable", "Noto Sans SC", "PingFang SC", "Microsoft YaHei UI", sans-serif;
-  --font-sans: "Geist Variable", "Noto Sans SC Variable", "Noto Sans SC", "PingFang SC", "Microsoft YaHei UI", sans-serif;
-  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", "Cascadia Code", "SF Mono", monospace;
+  --font-editor: "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", "PingFang SC", "Microsoft YaHei UI", monospace;
+  --font-serif: var(--font-editor);
+  --font-sans: var(--font-editor);
+  --font-mono: var(--font-editor);
   color-scheme: dark;
 }
 
@@ -66,6 +64,36 @@
   color-scheme: dark;
 }
 
+[data-theme="light"] {
+  --bg: #f6f8fb;
+  --surface: #ffffff;
+  --surface-2: #eef3f8;
+  --surface-3: #dfe8f2;
+  --text: #172033;
+  --muted: #5f6f82;
+  --border: rgba(33, 49, 69, 0.14);
+  --border-strong: rgba(33, 49, 69, 0.24);
+  --accent: #1f9d5a;
+  --accent-soft: rgba(31, 157, 90, 0.12);
+  --accent-ink: #f7fff9;
+  --good: #1f9d5a;
+  --warn: #a86519;
+  --bad: #c84755;
+  --plan: #167f79;
+  --jdc-engine-accent: #1f9d5a;
+  --jdc-engine-secondary: #167f79;
+  --shadow: 0 1px 0 rgba(23, 32, 51, 0.04);
+  --shadow-soft: 0 18px 48px rgba(45, 60, 80, 0.16);
+  --syntax-keyword: #155fbd;
+  --syntax-string: #147a4b;
+  --syntax-attr: #18706f;
+  --syntax-title: #1b7f48;
+  --syntax-number: #8a5a00;
+  --syntax-comment: #768397;
+  --syntax-punctuation: #405066;
+  color-scheme: light;
+}
+
 body {
   font-family: var(--font-sans);
   color: var(--text);
@@ -79,6 +107,11 @@ input,
 textarea,
 select {
   font-family: var(--font-sans);
+}
+
+.theme-mode-select select option {
+  background: var(--surface);
+  color: var(--text);
 }
 
 code,

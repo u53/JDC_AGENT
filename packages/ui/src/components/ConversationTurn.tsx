@@ -78,13 +78,15 @@ function ConversationTurnView({
     if (isActive) setExpanded(false)
   }, [isActive])
 
-  const compactSummaryBlock = userContent.length === 1 && userContent[0]?.type === 'text' && isCompactSummaryText(userContent[0].text)
+  const compactSummaryText = userContent.length === 1 && userContent[0]?.type === 'text' && isCompactSummaryText(userContent[0].text)
+    ? userContent[0].text
+    : null
 
   return (
     <div className="min-w-0 py-5 border-b border-[var(--border)]">
       {/* User input section */}
-      {compactSummaryBlock ? (
-        <CompactSummary content={stripCompactSummaryPreamble(userContent[0].text)} />
+      {compactSummaryText ? (
+        <CompactSummary content={stripCompactSummaryPreamble(compactSummaryText)} />
       ) : (
         <div className="mb-4 min-w-0 overflow-hidden rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] p-4 shadow-[var(--shadow)]">
           <div className="mb-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--accent)]">

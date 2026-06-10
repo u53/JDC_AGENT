@@ -125,7 +125,7 @@ export function SettingsOverlay() {
         <main className="settings-content context-panel-scroll relative min-w-0 flex-1 overflow-y-auto bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_48%,transparent),color-mix(in_srgb,var(--bg)_34%,transparent))] px-6 py-5">
           <div className="mb-5 flex items-start justify-between gap-4 border-b border-[color-mix(in_srgb,var(--border)_86%,transparent)] pb-4 pr-8">
             <div>
-              <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted)]">JDC Dark</div>
+              <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted)]">JDC Theme</div>
               <h3 className="mt-1 text-[18px] font-semibold leading-7 text-[var(--text)]">{activeTabMeta.label}</h3>
             </div>
           </div>

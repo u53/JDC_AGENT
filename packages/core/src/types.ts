@@ -193,7 +193,8 @@ export const AppConfigSchema = z.object({
   customEndpoint: z.string().optional(),
   ollamaEndpoint: z.string().default('http://localhost:11434'),
   defaultModel: z.string().default('claude-sonnet-4-6'),
-  theme: z.enum(['dark', 'light']).default('dark'),
+  theme: z.enum(['system', 'dark', 'light']).default('system'),
+  themePreferenceVersion: z.number().optional(),
 })
 
 export type AppConfig = z.infer<typeof AppConfigSchema>

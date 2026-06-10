@@ -118,7 +118,7 @@ describe('compactMessages status', () => {
       .flatMap(msg => msg.content)
       .find(block => block.type === 'tool_result' && block.tool_use_id === 't-large')
     expect(toolResult?.type).toBe('tool_result')
-    expect(toolResult?.content).toContain('Tool result truncated')
+    expect(toolResult?.content).toContain('Tool result condensed: Bash')
     expect(toolResult?.content).toContain(`${largeOutput.length} chars`)
     expect(toolResult?.content.length).toBeLessThan(9_000)
     expect(toolResult?.content).toContain('start')
