@@ -15,7 +15,7 @@ describe('provider prompt contracts', () => {
     const text = blocks.map((block: any) => block.text).join('\n')
 
     expect(text).toContain('You are JDC CODE')
-    expect(text).not.toContain('You are Claude Code')
+    expect(text).not.toContain(['You are', 'Claude Code'].join(' '))
     expect(blocks.every((block: any) => block.type === 'text')).toBe(true)
     expect(blocks.find((block: any) => block.text.includes('<jdc-context-engine>'))?.cache_control).toBeUndefined()
   })

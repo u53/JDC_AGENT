@@ -80,7 +80,7 @@ function resolveStreamSystemPrompt(systemPrompt: string | PromptSegment[] | unde
   }
 
   if (typeof systemPrompt === 'string') {
-    // JDCAGNET owns the assistant identity. Keep Anthropic request shape as
+    // JDC CODE owns the assistant identity. Keep Anthropic request shape as
     // official text blocks, but never prepend a conflicting Claude Code persona.
     result.push({ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } })
     return result

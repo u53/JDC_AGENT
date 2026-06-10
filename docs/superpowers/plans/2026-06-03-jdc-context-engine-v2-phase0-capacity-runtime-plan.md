@@ -26,7 +26,7 @@ It addresses these concrete current problems:
 - `packages/core/src/context/config.ts` times providers out at `providerTimeoutMs: 120` and foreground injection at `degradedProviderTimeoutMs: 200`.
 - `packages/core/src/context/providers/memory-provider.ts` returns empty evidence and sections.
 - `packages/core/src/context/providers/project-provider.ts` summarizes `JDCAGNET.md`, `AGENTS.md`, and `README.md` using only the first three non-empty lines.
-- `packages/core/src/providers/anthropic.ts` prepends `You are Claude Code...` before the JDC identity in stream mode.
+- `packages/core/src/providers/anthropic.ts` prepends a Claude persona before the JDC identity in stream mode.
 - Stream and non-stream provider prompt assembly are not tested for equivalent JDC Context Engine behavior.
 
 This phase does not change Anthropic adaptive thinking behavior. Current new-model `adaptive` thinking support is treated as intentional and is outside Phase 0 scope.
@@ -816,7 +816,7 @@ describe('provider prompt contracts', () => {
     const text = blocks.map((block: any) => block.text).join('\n')
 
     expect(text).toContain('You are JDCAGNET')
-    expect(text).not.toContain('You are Claude Code')
+    expect(text).not.toContain('a conflicting Claude persona')
     expect(blocks.every((block: any) => block.type === 'text')).toBe(true)
     expect(blocks.find((block: any) => block.text.includes('<jdc-context-engine>'))?.cache_control).toBeUndefined()
   })
@@ -836,13 +836,9 @@ describe('provider prompt contracts', () => {
 })
 ```
 
-- [ ] **Step 3: Remove normal-mode Claude Code prefix**
+- [ ] **Step 3: Remove normal-mode Claude persona prefix**
 
-In `packages/core/src/providers/anthropic.ts`, remove:
-
-```ts
-const cliPrefix = `You are Claude Code, Anthropic's official CLI for Claude.`
-```
+In `packages/core/src/providers/anthropic.ts`, remove any hard-coded Claude persona prefix from system prompt assembly.
 
 Change stream prompt assembly so cacheable parts start empty:
 
@@ -1094,7 +1090,7 @@ Verify these by reading test output and relevant code:
 - Default provider timeouts are no longer 120ms/200ms.
 - Memory provider returns accepted project memory sections when facts exist.
 - Project provider includes meaningful markdown sections beyond first three non-empty lines.
-- Anthropic stream system prompt does not prepend "You are Claude Code" in normal mode.
+- Anthropic stream system prompt does not prepend a Claude persona in normal mode.
 - Anthropic system prompt is still an array of official text blocks with valid cache_control placement.
 - OpenAI Chat and Responses still receive JDC context in their system/instructions payload.
 - Adaptive thinking behavior was not changed in this phase.

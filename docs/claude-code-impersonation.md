@@ -68,7 +68,7 @@ x-stainless-retry-count: 0
     },
     {
       "type": "text",
-      "text": "You are Claude Code, Anthropic's official CLI for Claude.\n\n{其余所有 system prompt 内容合并在这里}",
+      "text": "# Identity\nYou are JDC CODE.\n\n{其余所有 JDC CODE system prompt 内容合并在这里}",
       "cache_control": {"type": "ephemeral"}
     }
   ]
@@ -78,7 +78,8 @@ x-stainless-retry-count: 0
 关键点：
 - **最多 2-3 个 system blocks**，多了会被上游拒绝
 - 第一个 block 是 billing header，**不带 cache_control**
-- 第二个 block 以 CLI prefix 开头，带 `cache_control`
+- 第二个 block 必须使用 JDC CODE 产品身份和 system prompt，带 `cache_control`
+- **禁止**在 system prompt 中注入任何 Claude 身份前缀；兼容信息只能存在于协议 header/metadata，不能覆盖产品身份
 - 所有自定义 system prompt 内容合并到第二个 block 里
 
 ### 4. Fingerprint 计算
@@ -214,7 +215,7 @@ curl -X POST "https://api.example.com/v1/messages?beta=true" \
     "max_tokens": 8000,
     "system": [
       {"type": "text", "text": "x-anthropic-billing-header: cc_version=2.1.139.{fp}; cc_entrypoint=cli; cch={hash};"},
-      {"type": "text", "text": "You are Claude Code, Anthropic'\''s official CLI for Claude.\n\n...", "cache_control": {"type": "ephemeral"}}
+      {"type": "text", "text": "# Identity\nYou are JDC CODE.\n\n...", "cache_control": {"type": "ephemeral"}}
     ],
     "messages": [{"role": "user", "content": [{"type": "text", "text": "hello"}]}],
     "tools": [{"name": "Bash", "description": "...", "input_schema": {...}}],

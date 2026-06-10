@@ -137,7 +137,7 @@ V2 must use a two-speed runtime:
 ### Prompt And Model Adapter Contract
 
 - `resolveStreamSystemPrompt()` and `resolveSystemPrompt()` must be semantically equivalent for cacheable/dynamic context layout.
-- Anthropic provider must not prepend "You are Claude Code..." ahead of the JDC identity in normal JDCAGNET operation.
+- Anthropic provider must not prepend a Claude persona ahead of the JDC identity in normal JDCAGNET operation.
 - Anthropic request construction must follow the official Anthropic Messages API / SDK shape. This includes valid `system` blocks, cache control placement, content block arrays, tool result blocks, and dynamic context placement. Avoiding 400 errors is a hard acceptance criterion.
 - Existing adaptive thinking behavior is not part of this phase. Do not change it in Phase 0.
 - OpenAI Chat and OpenAI Responses must receive the same JDC Context Engine payload semantics, including project packs and non-cacheable dynamic context markers where applicable.

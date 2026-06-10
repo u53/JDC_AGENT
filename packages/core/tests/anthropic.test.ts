@@ -114,6 +114,32 @@ describe('AnthropicProvider', () => {
     expect(dynamicBlocks[0]).not.toHaveProperty('cache_control')
   })
 
+  it('does not send a Claude persona in Anthropic stream system blocks', async () => {
+    const bodies: any[] = []
+    vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
+      bodies.push(JSON.parse(String((init as RequestInit).body)))
+      return new Response(anthropicSse([
+        { type: 'message_start', message: { usage: { input_tokens: 1, output_tokens: 0 } } },
+        { type: 'message_stop' },
+      ]), { status: 200 })
+    }))
+
+    const provider = new AnthropicProvider('test-key')
+    await collect(provider.stream(streamMessages, streamTools, {
+      ...streamConfig,
+      systemPrompt: [
+        { content: '# Identity\nYou are JDC CODE.', cacheable: true },
+        { content: '<jdc-context-engine>dynamic context</jdc-context-engine>', cacheable: false },
+      ],
+    }))
+
+    const systemText = bodies[0].system.map((block: any) => block.text).join('\n')
+    expect(systemText).toContain('You are JDC CODE')
+    expect(systemText).not.toContain(['You are', 'Claude'].join(' '))
+    expect(systemText).not.toContain('Claude Code, Anthropic')
+    expect(systemText).not.toContain('official CLI for Claude')
+  })
+
   it('retries a transient connection drop before the first chunk', async () => {
     const fetchMock = vi.fn()
       // First attempt: undici-style bare "terminated" while opening the stream.

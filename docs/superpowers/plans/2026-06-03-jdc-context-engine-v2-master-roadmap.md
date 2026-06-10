@@ -71,7 +71,7 @@ flowchart TD
 - Do not starve providers with 120ms/200ms defaults that make real project context empty.
 - Do not leave memory provider as an empty shell.
 - Do not reduce `JDCAGNET.md`, `AGENTS.md`, or `README.md` to the first three lines.
-- Do not prepend a conflicting Claude Code identity ahead of JDCAGNET in normal provider prompts.
+- Do not prepend a conflicting Claude persona ahead of JDCAGNET in normal provider prompts.
 - Do not change Anthropic adaptive thinking behavior in Phase 0.
 - Do not expose failed/no-op/rejected diagnostics as primary user memory.
 - Do not make normal users manually refresh or reindex context.
@@ -122,7 +122,7 @@ Make the existing engine actually deliver useful project context before deeper r
 | P0 | Provider timeout defaults `120ms/200ms` make real code/git/project providers degrade to empty context. | `packages/core/src/context/config.ts`, `packages/core/src/context/orchestrator.ts`, `packages/core/src/session.ts`, `packages/core/src/sub-session.ts` | Raise foreground soft provider timeout to a realistic baseline and keep heavy jobs out of foreground. |
 | P0 | Memory provider is an empty shell, so accepted project memories do not enter context through the provider layer. | `packages/core/src/context/providers/memory-provider.ts` | Emit accepted project memory sections with citations; Phase 1 replaces direct selection with retriever ranking. |
 | P0 | Project provider only reads first three non-empty lines for important markdown project docs. | `packages/core/src/context/providers/project-provider.ts` | Extract useful headings, conventions, workflows, scripts, and README/AGENTS/JDCAGNET content beyond the first three lines. |
-| P0 | Anthropic stream prompt prepends `You are Claude Code...`, creating identity conflict and wasting prompt space. | `packages/core/src/providers/anthropic.ts` | Keep JDC identity first and preserve official Anthropic Messages API block shape. |
+| P0 | Anthropic stream prompt prepends a Claude persona, creating identity conflict and wasting prompt space. | `packages/core/src/providers/anthropic.ts` | Keep JDC identity first and preserve official Anthropic Messages API block shape. |
 | P0 | Stream/non-stream/provider prompt semantics are not tested for JDC Context Engine parity. | `packages/core/src/providers/anthropic.ts`, `packages/core/src/providers/openai-chat.ts`, `packages/core/src/providers/openai-responses.ts` | Add provider prompt contract tests for Anthropic, OpenAI Chat, and OpenAI Responses. |
 | P1 | Git provider has useful hot-file signals but lacks direct branch/status/log style context. | `packages/core/src/context/providers/git-provider.ts` | Add direct git state signals while keeping hot-file summaries. |
 
