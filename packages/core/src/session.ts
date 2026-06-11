@@ -66,7 +66,6 @@ import { captureHarvestModelBinding } from './context/model-binding.js'
 import { createProviderDistillerModelClient } from './context/distillers/index.js'
 import { createProviderRepoWikiModelClient } from './context/repo-wiki/index.js'
 import { deriveVerificationRequirements } from './constraints/verification-requirements.js'
-import { evaluateTurnEndGate } from './constraints/turn-end-gate.js'
 import { hashContent } from './context/providers/shared.js'
 import { createContextScheduler, type ContextScheduler } from './context/scheduler.js'
 import type { ContextEngineConfig, ContextRequest, HarvestCandidate, HarvestModelBinding, ProviderProtocol } from './context/types.js'
@@ -1062,7 +1061,7 @@ export class Session {
       // which renders as text being split by tool cards. Group them into a clean structure.
       const reorderedContent = reorderAssistantContent(assistantContent)
       if (!hasToolUse) {
-        await this.applyTurnEndGateDisclosure(reorderedContent, runLoopUserMessage, events)
+        await this.applyTurnEndVerificationRequirements(runLoopUserMessage)
       }
 
       const assistantMessage: Message = {
@@ -1176,7 +1175,10 @@ export class Session {
     this.currentEvents = undefined
   }
 
-  private async applyTurnEndGateDisclosure(content: any[], userMessage: string, events: SessionEvents): Promise<void> {
+  private async applyTurnEndVerificationRequirements(userMessage: string): Promise<void> {
+    // Derive verification requirements for the constraint observability panel only.
+    // We intentionally do NOT append any "Verification status" disclosure to the
+    // assistant's reply — that runtime-injected tail was removed by request.
     const ledger = this.toolRunner.constraintRuntime.verificationLedger
     const changedFiles = ledger.getChangedFiles()
     if (changedFiles.length === 0) return
@@ -1187,16 +1189,6 @@ export class Session {
       userMessage,
     })
     ledger.setRequirements(plan.requirements)
-
-    const decision = evaluateTurnEndGate({
-      changedFiles: ledger.getChangedFiles(),
-      requirements: ledger.getRequirements(),
-      assistantText: textFromContent(content),
-    })
-    if (decision.action !== 'append_disclosure') return
-
-    appendTextContent(content, decision.disclosure)
-    events.onStreamChunk({ type: 'text_delta', text: decision.disclosure })
   }
 
   private async invalidateStaleFileFactsAfterRunLoop(): Promise<void> {
@@ -1842,19 +1834,6 @@ function latestUserText(messages: Message[]): string {
   const message = [...messages].reverse().find(item => item.role === 'user')
   if (!message) return ''
   return message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
-}
-
-function textFromContent(content: any[]): string {
-  return content.flatMap(block => block.type === 'text' ? [block.text || ''] : []).join('')
-}
-
-function appendTextContent(content: any[], text: string): void {
-  const lastText = [...content].reverse().find(block => block.type === 'text')
-  if (lastText) {
-    lastText.text = `${lastText.text || ''}${text}`
-    return
-  }
-  content.push({ type: 'text', text })
 }
 
 function stripThinkingForHarvest(message: Message): Message {

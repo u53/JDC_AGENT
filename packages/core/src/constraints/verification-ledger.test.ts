@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { VerificationLedger } from './verification-ledger.js'
-import { evaluateTurnEndGate } from './turn-end-gate.js'
 
 describe('VerificationLedger', () => {
   it('marks changed files pending until a verification command passes', () => {
@@ -398,14 +397,6 @@ describe('VerificationLedger', () => {
       id: 'verify_build',
       status: 'pending',
     })])
-    expect(evaluateTurnEndGate({
-      changedFiles: ledger.getChangedFiles(),
-      requirements: ledger.getRequirements(),
-      assistantText: 'Done.',
-    })).toEqual(expect.objectContaining({
-      action: 'append_disclosure',
-      severity: 'warning',
-    }))
   })
 
   it('does not match cwd-scoped verification commands for a different package scope', () => {
@@ -434,14 +425,6 @@ describe('VerificationLedger', () => {
       id: 'verify_build',
       status: 'pending',
     })])
-    expect(evaluateTurnEndGate({
-      changedFiles: ledger.getChangedFiles(),
-      requirements: ledger.getRequirements(),
-      assistantText: 'Done.',
-    })).toEqual(expect.objectContaining({
-      action: 'append_disclosure',
-      severity: 'warning',
-    }))
   })
 
   it('matches cwd-scoped verification commands for the changed package scope', () => {

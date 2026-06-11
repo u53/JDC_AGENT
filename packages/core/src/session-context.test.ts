@@ -35,7 +35,7 @@ afterEach(async () => {
 })
 
 describe('Session JDC Context Engine runtime integration', () => {
-  it('appends verification disclosure when final answer follows an unverified edit', async () => {
+  it('derives verification requirements without appending a disclosure tail to the reply', async () => {
     const session = await makeSession({
       provider: providerFromChunks([
         ...assistantToolUseChunks('toolu_write', 'Write', { file_path: 'src/app.ts', content: 'export const value = 1\n' }),
@@ -54,14 +54,18 @@ describe('Session JDC Context Engine runtime integration', () => {
       .map((call: [Message]) => call[0])
       .filter((message: Message) => message.role === 'assistant')
       .at(-1)
-    expect(textFromMessages(finalAssistant ? [finalAssistant] : [])).toContain('Verification status: Verification not completed.')
-    expect(events.onStreamChunk).toHaveBeenCalledWith(expect.objectContaining({
+    // The runtime-injected "Verification status" tail must never appear in the reply.
+    expect(textFromMessages(finalAssistant ? [finalAssistant] : [])).not.toContain('Verification status:')
+    expect(events.onStreamChunk).not.toHaveBeenCalledWith(expect.objectContaining({
       type: 'text_delta',
-      text: expect.stringContaining('Verification status: Verification not completed.'),
+      text: expect.stringContaining('Verification status:'),
     }))
+    // Requirements are still derived into the ledger for the constraint observability panel.
+    const ledger = (session as any).toolRunner.constraintRuntime.verificationLedger
+    expect(ledger.getRequirements().some((requirement: { kind: string }) => requirement.kind === 'test')).toBe(true)
   })
 
-  it('appends failed verification disclosure when a required command failed', async () => {
+  it('does not append a failure disclosure tail even when a required command failed', async () => {
     const session = await makeSession({
       provider: providerFromChunks([
         ...assistantToolUseChunks('toolu_write', 'Write', { file_path: 'src/app.ts', content: 'export const value = 1\n' }),
@@ -95,11 +99,10 @@ describe('Session JDC Context Engine runtime integration', () => {
       .filter((message: Message) => message.role === 'assistant')
       .at(-1)
     const finalText = textFromMessages(finalAssistant ? [finalAssistant] : [])
-    expect(finalText).toContain('Verification status: Verification failed.')
-    expect(finalText).toContain('1 failed')
-    expect(events.onStreamChunk).toHaveBeenCalledWith(expect.objectContaining({
+    expect(finalText).not.toContain('Verification status:')
+    expect(events.onStreamChunk).not.toHaveBeenCalledWith(expect.objectContaining({
       type: 'text_delta',
-      text: expect.stringContaining('Verification status: Verification failed.'),
+      text: expect.stringContaining('Verification status:'),
     }))
   })
 

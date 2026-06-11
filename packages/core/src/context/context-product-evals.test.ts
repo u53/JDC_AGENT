@@ -2,7 +2,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { evaluateTurnEndGate } from '../constraints/turn-end-gate.js'
 import { ContextEngine } from '../context-engine/engine.js'
 import { createContextEngineTools } from '../tools/context-engine-tools.js'
 import { buildContextBundle } from './orchestrator.js'
@@ -440,13 +439,13 @@ describe('JDC Context Engine product evals', () => {
     }))
   })
 
-  it('reuses Team artifact summaries across same-project sessions without leaking to another project', async () => {
+  it('reuses Team contract facts across same-project sessions without leaking to another project', async () => {
     const cwd = tempProject()
     const otherCwd = tempProject()
     const storeA = await openContextStore({ cwd, now: () => 1_000 })
     await recordTeamArtifactEvidence({
       artifactId: 'report',
-      artifactKind: 'artifact',
+      artifactKind: 'contract',
       artifactType: 'report',
       taskId: 'task_checkout',
       memberId: 'member_api',
@@ -716,63 +715,6 @@ describe('JDC Context Engine product evals', () => {
     expect(result.renderedPrompt).toContain('agent_contract')
     expect(result.renderedPrompt).toContain('Missing evidence')
     expect(result.renderedPrompt).toContain('Existing files must be read with fresh content before mutation.')
-  })
-
-  it('Phase 5 eval: final answer discloses pending verification after edit', () => {
-    const decision = evaluateTurnEndGate({
-      changedFiles: [{
-        filePath: 'packages/core/src/session.ts',
-        changedByToolUseId: 'edit_1',
-        changedAt: 100,
-        status: 'pending',
-        updatedAt: 100,
-      }],
-      requirements: [{
-        id: 'verify_test',
-        kind: 'test',
-        command: 'pnpm test',
-        status: 'pending',
-        files: ['packages/core/src/session.ts'],
-        reason: 'test script covers changed files.',
-        coveredChangedAt: 100,
-      }],
-      assistantText: '修好了。',
-    })
-
-    expect(decision).toEqual(expect.objectContaining({ action: 'append_disclosure' }))
-    if (decision.action === 'append_disclosure') {
-      expect(decision.disclosure).toContain('Verification not completed')
-    }
-  })
-
-  it('Phase 5 eval: final answer discloses failed verification', () => {
-    const decision = evaluateTurnEndGate({
-      changedFiles: [{
-        filePath: 'packages/core/src/session.ts',
-        changedByToolUseId: 'edit_1',
-        changedAt: 100,
-        status: 'failed',
-        verificationFailure: '1 failed',
-        updatedAt: 100,
-      }],
-      requirements: [{
-        id: 'verify_test',
-        kind: 'test',
-        command: 'pnpm test',
-        status: 'failed',
-        files: ['packages/core/src/session.ts'],
-        reason: 'test script covers changed files.',
-        coveredChangedAt: 100,
-        failure: '1 failed',
-      }],
-      assistantText: 'All done.',
-    })
-
-    expect(decision).toEqual(expect.objectContaining({ action: 'append_disclosure', severity: 'error' }))
-    if (decision.action === 'append_disclosure') {
-      expect(decision.disclosure).toContain('Verification failed')
-      expect(decision.disclosure).toContain('1 failed')
-    }
   })
 
   it('Phase 6 eval: strict model profile renders explicit evidence contract', async () => {

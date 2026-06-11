@@ -91,8 +91,15 @@ export async function recordTeamArtifactEvidence(input: TeamArtifactEvidenceInpu
         ref: input.path,
       },
     })
+    // Raw evidence is always retained for team replay/synthesis. Ordinary team
+    // artifact summaries are one-off work logs ("completed X analysis") — they are
+    // NOT durable project knowledge and must not pollute project memory. Only a
+    // contract (an explicit design agreement/spec the team committed to) is
+    // promoted to a durable fact.
     await store.saveRawEvidence(evidence)
-    await store.saveFact(artifactSummaryFact(input, context, evidence))
+    if (input.artifactKind === 'contract') {
+      await store.saveFact(artifactSummaryFact(input, context, evidence))
+    }
   })
 }
 
@@ -137,8 +144,13 @@ export async function recordTeamTaskResultEvidence(input: TeamTaskResultEvidence
         ref: input.path,
       },
     })
+    // A team task result is a one-off work log of what a worker did this run, not
+    // durable project knowledge. It is retained as raw evidence for team
+    // replay/synthesis but is NEVER promoted to a durable project memory fact —
+    // otherwise every team run pollutes the project memory panel with stale,
+    // self-referential "completed X" summaries. Durable knowledge must be captured
+    // as a team_decision, qa_issue, contract, or an explicit JdcMemoryWrite.
     await store.saveRawEvidence(evidence)
-    await store.saveFact(taskResultFact(input, context, evidence))
   })
 }
 
@@ -210,27 +222,6 @@ function qaIssueFact(input: TeamIssueEvidenceInput, context: TeamLedgerContext, 
     origin: origin(context, 'team_worker', { memberId: input.memberId, taskId: input.taskId, artifactId: input.issueId }),
     tags: ['team', 'team_issue', `severity_${input.severity}`, `status_${input.status}`],
     relatedTasks: input.taskId ? [input.taskId] : undefined,
-    relatedFiles: [input.path],
-  }
-}
-
-function taskResultFact(input: TeamTaskResultEvidenceInput, context: TeamLedgerContext, evidence: RawEvidence): ContextFact {
-  const now = timestamp(context)
-  return {
-    id: `task_result_${safeId(context.teamId)}_${safeId(input.taskId)}`,
-    kind: 'task_result',
-    scope: 'project',
-    content: `Task result: ${input.summary}`,
-    citations: [citation(`cit_${evidence.id}`, evidence)],
-    confidence: 0.9,
-    freshness: 'recent',
-    sourceProvider: 'TeamLedger',
-    sessionId: context.sessionId,
-    createdAt: now,
-    updatedAt: now,
-    origin: origin(context, 'team_worker', { memberId: input.memberId, taskId: input.taskId }),
-    tags: ['team', 'team_result'],
-    relatedTasks: [input.taskId],
     relatedFiles: [input.path],
   }
 }

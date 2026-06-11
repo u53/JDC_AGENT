@@ -152,7 +152,7 @@ describe('JDC Context Team ledger', () => {
     })
   })
 
-  it('records artifact, issue, and task result facts with deterministic ids', async () => {
+  it('records qa issue facts with deterministic ids while keeping all evidence raw', async () => {
     const store = makeWritableStore()
     const context = ledgerContext(store)
 
@@ -193,17 +193,56 @@ describe('JDC Context Team ledger', () => {
     }, context)
 
     const facts = mockFirstArgs<ContextFact>(store.saveFact)
+    // Ordinary artifacts and task results are work logs — raw evidence only, not
+    // durable facts. Only the QA issues (actionable bugs) become project memory.
     expect(facts.map((fact) => [fact.id, fact.kind, fact.freshness])).toEqual([
-      ['artifact_summary_team_alpha_task_checkout_report', 'artifact_summary', 'recent'],
       ['qa_issue_team_alpha_ISSUE_001', 'qa_issue', 'recent'],
       ['qa_issue_team_alpha_ISSUE_001', 'qa_issue', 'stale'],
-      ['task_result_team_alpha_task_checkout', 'task_result', 'recent'],
     ])
     expect(mockFirstArgs<RawEvidence>(store.saveRawEvidence).map((evidence) => evidence.id)).toEqual([
       'team_artifact_team_alpha_task_checkout_report',
       'team_issue_team_alpha_ISSUE_001',
       'team_issue_team_alpha_ISSUE_001',
       'team_result_team_alpha_task_checkout',
+    ])
+  })
+
+  it('retains raw evidence but never promotes task results or non-contract artifacts to durable facts', async () => {
+    const store = makeWritableStore()
+    const context = ledgerContext(store)
+
+    // Task results are one-off work logs — raw evidence only, never a fact.
+    await recordTeamTaskResultEvidence({
+      taskId: 'task_real',
+      memberId: 'member_api',
+      summary: 'checkout API validation was fixed in src/api/checkout.ts.',
+      path: '.team/tasks/task_real/result.md',
+    }, context)
+    // Ordinary artifact summaries are work logs too — raw evidence only.
+    await recordTeamArtifactEvidence({
+      artifactId: 'report',
+      artifactKind: 'artifact',
+      artifactType: 'report',
+      taskId: 'task_real',
+      memberId: 'member_api',
+      summary: 'Checkout report lists validation changes and regression notes.',
+      path: '.team/tasks/task_real/artifacts/report.md',
+    }, context)
+    // Contracts are explicit design agreements — promoted to a durable fact.
+    await recordTeamArtifactEvidence({
+      artifactId: 'api_contract',
+      artifactKind: 'contract',
+      taskId: 'task_real',
+      memberId: 'member_api',
+      summary: 'Checkout response envelope is frozen at v2.',
+      path: '.team/contracts/api_contract.md',
+    }, context)
+
+    // All three are retained as raw evidence (team replay/synthesis unaffected).
+    expect(store.saveRawEvidence).toHaveBeenCalledTimes(3)
+    // Only the contract becomes a durable project memory fact.
+    expect(mockFirstArgs<ContextFact>(store.saveFact).map((fact) => fact.id)).toEqual([
+      'artifact_summary_team_alpha_task_real_api_contract',
     ])
   })
 })
