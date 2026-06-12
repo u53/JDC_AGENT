@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useSessionStore } from '../stores/session-store'
 import { useBackgroundTaskStore, type BackgroundTaskItem } from '../stores/background-task-store'
 import { useTeamStore } from '../stores/team-store'
@@ -739,10 +740,11 @@ function ImageRow({ img }: { img: { path: string; format: string; bytes: number 
           <button onClick={handleShow} className="rounded-[4px] border border-[var(--border)] px-1.5 py-0.5 text-[9px] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]">文件夹</button>
         </div>
       </div>
-      {zoomed && preview && (
+      {zoomed && preview && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-8" onClick={() => setZoomed(false)}>
           <img src={preview} alt="" className="max-h-[90vh] max-w-[90vw] rounded-[8px] object-contain shadow-2xl" />
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )
