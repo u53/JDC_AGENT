@@ -16,6 +16,8 @@ import { useModelStore } from '../stores/model-store'
 import { useSettingsStore } from '../stores/settings-store'
 import { useAgentStore } from '../stores/agent-store'
 import { useTeamStore } from '../stores/team-store'
+import { useImageStore } from '../stores/image-store'
+import { GeneratedImageCard } from './GeneratedImageCard'
 import { useAgentEvents } from '../hooks/useAgentEvents'
 import { copyToClipboard } from '../lib/clipboard'
 import { PROJECT_INIT_PROMPT } from '../lib/init-prompt'
@@ -106,6 +108,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   const activeAgentId = useAgentStore((s) => s.activeAgentId)
   const activeTeamId = useTeamStore((s) => s.activeTeamId)
   const setActiveTeam = useTeamStore((s) => s.setActiveTeam)
+  const generatedImages = useImageStore((s) => (activeSessionId ? s.byTask[activeSessionId] : undefined))
   const scrollRef = useRef<HTMLDivElement>(null)
   const isNearBottomRef = useRef(true)
   const [showScrollToBottom, setShowScrollToBottom] = useState(false)
@@ -389,6 +392,11 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
                 />
               )
             })}
+
+            {generatedImages &&
+              Object.entries(generatedImages).map(([taskId, imgs]) => (
+                <GeneratedImageCard key={taskId} images={imgs} />
+              ))}
 
             {compacting && <CompactStatusCard status="running" />}
 
