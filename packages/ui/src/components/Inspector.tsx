@@ -702,7 +702,6 @@ function FilesSection({ files }: { files: FileChange[] }) {
     </InspectorSectionFrame>
   )
 }
-}
 
 function ImageActions({ path }: { path: string }) {
   const handleCopy = async (e: React.MouseEvent) => {
