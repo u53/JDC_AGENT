@@ -47,7 +47,7 @@ function mimeFromExt(p: string): string {
 }
 
 function resolveDir(cwd: string, outputPath?: string): string {
-  if (!outputPath || !outputPath.trim()) return cwd
+  if (!outputPath || !outputPath.trim()) return join(cwd, '.jdcagnet', 'image')
   const p = outputPath.trim()
   return isAbsolute(p) ? p : join(cwd, p)
 }
@@ -173,7 +173,7 @@ const SHARED_PROPS: Record<string, any> = {
   quality: { type: 'string', enum: ['auto', 'low', 'medium', 'high'], description: '图像质量。auto 由模型决定；low 更快；high 更精细。默认 auto。' },
   format: { type: 'string', enum: ['png', 'jpeg', 'webp'], description: '输出图片格式，默认 png。png：无损、适合图标/UI；jpeg：有损、适合照片、文件小；webp：现代格式、兼顾质量与体积。' },
   compression: { type: 'number', description: '压缩级别 0-100，仅对 jpeg 和 webp 生效（png 无损忽略此参数）。100=最高质量/最大文件，值越小压缩率越高。默认 100。' },
-  output_path: { type: 'string', description: '图片输出目录。默认当前项目根目录。相对路径相对于项目根解析；也可传绝对路径。文件名自动生成为 img_时间戳_序号.格式。' },
+  output_path: { type: 'string', description: '图片输出目录。默认 .jdcagnet/image/（项目内隐藏目录，不会污染项目根目录）。相对路径相对于项目根解析；也可传绝对路径。文件名自动生成为 img_时间戳_序号.格式。' },
   count: { type: 'number', description: '一次生成几张图，默认 1，最大 10。生成多张时每张使用相同 prompt 和参数，适合要多个变体供选择。' },
 }
 
