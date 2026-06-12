@@ -1,4 +1,4 @@
-import { ipcMain, dialog } from 'electron'
+import { ipcMain, dialog, nativeImage, shell, clipboard } from 'electron'
 import { IPC_CHANNELS } from './ipc-channels.js'
 import type { SessionManager } from './session-manager.js'
 import { loadAppConfig, saveAppConfig, AnthropicProvider, OpenAIChatProvider, OpenAIResponsesProvider, inspectContext, refreshContextProviders, getContextProviderHealth, createDefaultRefreshProviders, searchMemoryRecords, writeMemoryRecord, ContextInspectPayloadSchema, ContextRefreshPayloadSchema, MemorySearchPayloadSchema, MemoryWritePayloadSchema, openContextStore } from '@jdcagnet/core'
@@ -456,6 +456,22 @@ export function registerIpcHandlers(sessionManager: SessionManager, services: De
 
   ipcMain.handle(IPC_CHANNELS.TEAM_SEND, async (_event, { sessionId, taskId, payload }) => {
     sessionManager.sendTeamMessage(sessionId, taskId, payload)
+    return { success: true }
+  })
+
+  // Images
+  ipcMain.handle('images:copy-to-clipboard', (_e, { filePath }: { filePath: string }) => {
+    try {
+      const img = nativeImage.createFromPath(filePath)
+      if (img.isEmpty()) return { success: false, error: '图片为空或无法读取' }
+      clipboard.writeImage(img)
+      return { success: true }
+    } catch (err) {
+      return { success: false, error: (err as Error).message }
+    }
+  })
+  ipcMain.handle('images:show-in-folder', (_e, { filePath }: { filePath: string }) => {
+    shell.showItemInFolder(filePath)
     return { success: true }
   })
 }

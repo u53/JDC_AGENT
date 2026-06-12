@@ -35,6 +35,13 @@ const api = {
   getPlanMode: (sessionId: string) =>
     ipcRenderer.invoke('session:get-plan-mode', { sessionId }),
   writeClipboard: (text: string) => clipboard.writeText(text),
+  copyImageFile: (filePath: string) => ipcRenderer.invoke('images:copy-to-clipboard', { filePath }),
+  showImageInFolder: (filePath: string) => ipcRenderer.invoke('images:show-in-folder', { filePath }),
+  onImageGenerated: (callback: (payload: { sessionId: string; taskId: string; images: any[] }) => void) => {
+    const listener = (_e: unknown, payload: any) => callback(payload)
+    ipcRenderer.on('image:generated', listener)
+    return () => { ipcRenderer.removeListener('image:generated', listener) }
+  },
 
   // Git
   gitBranchList: (cwd: string) => ipcRenderer.invoke('git:branch-list', { cwd }),
