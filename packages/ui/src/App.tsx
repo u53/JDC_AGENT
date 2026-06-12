@@ -15,6 +15,7 @@ import { useSettingsStore } from './stores/settings-store'
 import { useTerminalStore } from './stores/terminal-store'
 import { useHotkeys } from './hooks/useHotkeys'
 import { initIdeListeners } from './stores/ide-store'
+import { useImageStore } from './stores/image-store'
 
 export function App() {
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
@@ -29,6 +30,12 @@ export function App() {
 
   useEffect(() => { loadModels() }, [loadModels])
   useEffect(() => { return initIdeListeners() }, [])
+  useEffect(() => {
+    const off = (window as any).electronAPI?.onImageGenerated?.((payload: { sessionId: string; taskId: string; images: any[] }) => {
+      useImageStore.getState().addGenerated(payload.sessionId, payload.taskId, payload.images)
+    })
+    return () => { off?.() }
+  }, [])
 
   const activeProject = projects.find((p) =>
     p.sessions.some((s) => s.id === activeSessionId)
