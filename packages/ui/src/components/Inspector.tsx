@@ -526,7 +526,7 @@ function TasksSection({ tasks, backgroundTasks, onOpenTeam }: {
 
   return (
     <div className="space-y-4">
-      {imageTasks.length > 0 && (
+      {imageTasks.length > 0 ? (
         <InspectorSectionFrame title="Image" meta={`${imageTasks.filter(t => t.status === 'running').length} running / ${imageTasks.filter(t => t.status === 'completed').length} done`}>
           <div className="space-y-1.5">
             {imageTasks.map((task) => (
@@ -556,6 +556,10 @@ function TasksSection({ tasks, backgroundTasks, onOpenTeam }: {
               </div>
             ))}
           </div>
+        </InspectorSectionFrame>
+      ) : (
+        <InspectorSectionFrame title="Image" meta="idle">
+          <InspectorEmptyState title="No image tasks" detail="Image generation jobs will appear here when triggered." />
         </InspectorSectionFrame>
       )}
 
