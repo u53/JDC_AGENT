@@ -10,7 +10,7 @@ import type { ImageModelConfig } from '../images/image-config.js'
 const cfg: ImageModelConfig = { enabled: true, baseUrl: 'https://x', apiKey: 'k', model: 'gpt-image-2' }
 function setup(getConfig: () => ImageModelConfig | null = () => cfg) {
   const backgroundTasks = new BackgroundTaskManager(mkdtempSync(join(tmpdir(), 'imgtool-')))
-  const runImageJob = vi.fn(async () => {})
+  const runImageJob = vi.fn(async (_params: any) => {})
   const [gen, edit] = createImageTools({ getImageConfig: getConfig, backgroundTasks, runImageJob })
   return { gen, edit, runImageJob, backgroundTasks }
 }
