@@ -509,6 +509,8 @@ function TasksSection({ tasks, backgroundTasks, onOpenTeam }: {
 }) {
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const runningBg = backgroundTasks.filter(t => t.status === 'running')
+  const imageTasks = backgroundTasks.filter(t => t.type === 'image')
+  const otherBgTasks = backgroundTasks.filter(t => t.type !== 'image')
 
   const handleStop = (taskId: string) => {
     if (activeSessionId) {
@@ -524,10 +526,43 @@ function TasksSection({ tasks, backgroundTasks, onOpenTeam }: {
 
   return (
     <div className="space-y-4">
-      {backgroundTasks.length > 0 && (
-        <InspectorSectionFrame title="Background" meta={`${runningBg.length} running`}>
+      {imageTasks.length > 0 && (
+        <InspectorSectionFrame title="Image" meta={`${imageTasks.filter(t => t.status === 'running').length} running / ${imageTasks.filter(t => t.status === 'completed').length} done`}>
           <div className="space-y-1.5">
-            {backgroundTasks.map((task) => (
+            {imageTasks.map((task) => (
+              <div key={task.id} className="min-w-0 rounded-[6px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-2)_36%,transparent)] px-2.5 py-2">
+                <div className="flex items-center gap-2 text-[12px]">
+                  <StatusDot
+                    color={task.status === 'running' ? 'var(--accent)' : task.status === 'completed' ? 'var(--good)' : 'var(--bad)'}
+                    pulse={task.status === 'running'}
+                  />
+                  <span className="w-[32px] flex-shrink-0 font-mono text-[10px] uppercase text-[var(--accent)]">IMG</span>
+                  <span className="min-w-0 flex-1 truncate text-[var(--text)]">
+                    {task.prompt ? task.prompt.slice(0, 50) : '生成中…'}
+                  </span>
+                </div>
+                {task.status === 'completed' && task.images && task.images.length > 0 && (
+                  <div className="mt-1.5 flex gap-1 overflow-x-auto">
+                    {task.images.filter((img: any) => img.path).slice(0, 4).map((img: any, i: number) => (
+                      <div key={i} className="flex-shrink-0 text-[10px] text-[var(--muted)]">
+                        {img.format} {img.bytes > 0 ? `${(img.bytes / 1024).toFixed(0)}KB` : ''}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {task.status === 'failed' && task.result && (
+                  <div className="mt-1 text-[10px] text-[var(--bad)] truncate">{task.result.slice(0, 100)}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </InspectorSectionFrame>
+      )}
+
+      {otherBgTasks.length > 0 && (
+        <InspectorSectionFrame title="Background" meta={`${runningBg.filter(t => t.type !== 'image').length} running`}>
+          <div className="space-y-1.5">
+            {otherBgTasks.map((task) => (
               <div
                 key={task.id}
                 className={cx(

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 
 export interface BackgroundTaskItem {
   id: string
-  type: 'shell' | 'agent' | 'team'
+  type: 'shell' | 'agent' | 'team' | 'image'
   status: 'running' | 'completed' | 'failed'
   command?: string
   prompt?: string
@@ -13,6 +13,7 @@ export interface BackgroundTaskItem {
   result?: string
   turns?: number
   toolsUsed?: string[]
+  images?: Array<{ path: string; bytes: number; format: string; downloadError?: string }>
 }
 
 interface BackgroundTaskStoreState {
