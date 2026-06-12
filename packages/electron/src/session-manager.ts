@@ -309,9 +309,6 @@ export class SessionManager {
       notification.show()
     }
     session.registerTool(createNotifyTool(onNotify))
-    session.onImageGenerated = (taskId: string, images: any[], error?: string) => {
-      this.window?.webContents.send('image:generated', { sessionId, taskId, images, error })
-    }
     session.loadHistory()
     ;(session as any)._protocol = protocol
     session.onNotificationReady = () => {

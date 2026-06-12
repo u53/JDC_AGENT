@@ -204,7 +204,7 @@ export function createImageTools(deps: ImageToolDeps): ToolHandler[] {
       count: params.count, outputDir: params.outputDir, imageDataUrls,
       backgroundTasks: deps.backgroundTasks, onImageGenerated: deps.onImageGenerated,
     })
-    return { content: `图像生成已在后台启动 (task_id=${task.id})，将生成 ${params.count} 张到 ${params.outputDir}。完成后会通知你，不要轮询。` }
+    return { content: `图像生成已在后台启动 (task_id=${task.id})，将生成 ${params.count} 张到 ${params.outputDir}。完成后会收到通知，图片信息也会显示在右侧 Inspector 面板的 Image 区域。` }
   }
 
   const generateImageTool: ToolHandler = {
