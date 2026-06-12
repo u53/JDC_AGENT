@@ -556,6 +556,7 @@ function TasksSection({ tasks, backgroundTasks, onOpenTeam }: {
               </div>
             ))}
           </div>
+          <div className="mt-2 text-[9px] text-[var(--muted)]">点击文件名可预览图片</div>
         </InspectorSectionFrame>
       ) : (
         <InspectorSectionFrame title="Image" meta="idle">
