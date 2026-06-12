@@ -545,12 +545,7 @@ function TasksSection({ tasks, backgroundTasks, onOpenTeam }: {
                 {task.status === 'completed' && task.images && task.images.length > 0 && (
                   <div className="mt-1.5 space-y-1">
                     {task.images.filter((img: any) => img.path).map((img: any, i: number) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <span className="flex-1 text-[10px] text-[var(--muted)] truncate">
-                          {img.path.split('/').pop() || img.path} · {img.format} · {img.bytes > 0 ? `${(img.bytes / 1024).toFixed(0)}KB` : ''}
-                        </span>
-                        <ImageActions path={img.path} />
-                      </div>
+                      <ImageRow key={i} img={img} />
                     ))}
                   </div>
                 )}
@@ -703,24 +698,52 @@ function FilesSection({ files }: { files: FileChange[] }) {
   )
 }
 
-function ImageActions({ path }: { path: string }) {
+function ImageRow({ img }: { img: { path: string; format: string; bytes: number } }) {
+  const [preview, setPreview] = useState<string | null>(null)
+  const [zoomed, setZoomed] = useState(false)
+  const filename = img.path.split('/').pop() || img.path
+  const size = img.bytes > 0 ? `${(img.bytes / 1024).toFixed(0)}KB` : ''
+
+  const loadPreview = async () => {
+    if (preview) { setZoomed(true); return }
+    const api = (window as any).electronAPI
+    if (api?.readImageFile) {
+      const res = await api.readImageFile(img.path)
+      if (res?.success && res.dataUrl) {
+        setPreview(res.dataUrl)
+        setZoomed(true)
+      }
+    }
+  }
+
   const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    try { await copyImageFile(path) } catch { /* ignore */ }
+    try { await copyImageFile(img.path) } catch { /* ignore */ }
   }
   const handleCopyPath = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    await copyToClipboard(path)
+    await copyToClipboard(img.path)
   }
   const handleShow = (e: React.MouseEvent) => {
     e.stopPropagation()
-    ipc.images.showInFolder(path)
+    ipc.images.showInFolder(img.path)
   }
+
   return (
-    <div className="flex gap-1 flex-shrink-0">
-      <button onClick={handleCopy} className="rounded-[4px] border border-[var(--border)] px-1.5 py-0.5 text-[9px] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]" title="复制图片">IMG</button>
-      <button onClick={handleCopyPath} className="rounded-[4px] border border-[var(--border)] px-1.5 py-0.5 text-[9px] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]" title="复制路径">PTH</button>
-      <button onClick={handleShow} className="rounded-[4px] border border-[var(--border)] px-1.5 py-0.5 text-[9px] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]" title="在文件夹显示">FND</button>
-    </div>
+    <>
+      <div className="flex items-center gap-2 cursor-pointer hover:bg-[color-mix(in_srgb,var(--accent)_5%,transparent)] rounded-[4px] px-1 -mx-1" onClick={loadPreview}>
+        <span className="flex-1 text-[10px] text-[var(--muted)] truncate">{filename} · {img.format} · {size}</span>
+        <div className="flex gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          <button onClick={handleCopy} className="rounded-[4px] border border-[var(--border)] px-1.5 py-0.5 text-[9px] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]">复制</button>
+          <button onClick={handleCopyPath} className="rounded-[4px] border border-[var(--border)] px-1.5 py-0.5 text-[9px] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]">路径</button>
+          <button onClick={handleShow} className="rounded-[4px] border border-[var(--border)] px-1.5 py-0.5 text-[9px] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]">文件夹</button>
+        </div>
+      </div>
+      {zoomed && preview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-8" onClick={() => setZoomed(false)}>
+          <img src={preview} alt="" className="max-h-[90vh] max-w-[90vw] rounded-[8px] object-contain shadow-2xl" />
+        </div>
+      )}
+    </>
   )
 }
