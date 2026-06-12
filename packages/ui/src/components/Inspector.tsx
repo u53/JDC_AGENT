@@ -3,6 +3,7 @@ import { useSessionStore } from '../stores/session-store'
 import { useBackgroundTaskStore, type BackgroundTaskItem } from '../stores/background-task-store'
 import { useTeamStore } from '../stores/team-store'
 import { ipc } from '../lib/ipc-client'
+import { copyImageFile, copyToClipboard } from '../lib/clipboard'
 import { IconTasks, IconQueue, IconUsage, IconFiles, IconSession, IconX, IconTeam, IconJdcGraph } from './icons'
 import { TeamDetailPanel } from './TeamDetailPanel'
 import { ContextPanel } from './context/ContextPanel'
@@ -542,10 +543,13 @@ function TasksSection({ tasks, backgroundTasks, onOpenTeam }: {
                   </span>
                 </div>
                 {task.status === 'completed' && task.images && task.images.length > 0 && (
-                  <div className="mt-1.5 flex gap-1 overflow-x-auto">
-                    {task.images.filter((img: any) => img.path).slice(0, 4).map((img: any, i: number) => (
-                      <div key={i} className="flex-shrink-0 text-[10px] text-[var(--muted)]">
-                        {img.format} {img.bytes > 0 ? `${(img.bytes / 1024).toFixed(0)}KB` : ''}
+                  <div className="mt-1.5 space-y-1">
+                    {task.images.filter((img: any) => img.path).map((img: any, i: number) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="flex-1 text-[10px] text-[var(--muted)] truncate">
+                          {img.path.split('/').pop() || img.path} · {img.format} · {img.bytes > 0 ? `${(img.bytes / 1024).toFixed(0)}KB` : ''}
+                        </span>
+                        <ImageActions path={img.path} />
                       </div>
                     ))}
                   </div>
@@ -696,5 +700,28 @@ function FilesSection({ files }: { files: FileChange[] }) {
         ))}
       </div>
     </InspectorSectionFrame>
+  )
+}
+}
+
+function ImageActions({ path }: { path: string }) {
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    try { await copyImageFile(path) } catch { /* ignore */ }
+  }
+  const handleCopyPath = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    await copyToClipboard(path)
+  }
+  const handleShow = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    ipc.images.showInFolder(path)
+  }
+  return (
+    <div className="flex gap-1 flex-shrink-0">
+      <button onClick={handleCopy} className="rounded-[4px] border border-[var(--border)] px-1.5 py-0.5 text-[9px] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]" title="复制图片">IMG</button>
+      <button onClick={handleCopyPath} className="rounded-[4px] border border-[var(--border)] px-1.5 py-0.5 text-[9px] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]" title="复制路径">PTH</button>
+      <button onClick={handleShow} className="rounded-[4px] border border-[var(--border)] px-1.5 py-0.5 text-[9px] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]" title="在文件夹显示">FND</button>
+    </div>
   )
 }
