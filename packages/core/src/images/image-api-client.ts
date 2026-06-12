@@ -16,7 +16,6 @@ export interface BuildImageRequestInput {
   outputFormat: OutputFormat;
   compression: number;
   imageDataUrls?: string[];
-  background?: 'transparent' | 'opaque' | 'auto';
 }
 
 export interface BuiltImageRequest {
@@ -50,10 +49,6 @@ export class ImageApiClient {
 
     if (input.outputFormat === 'jpeg' || input.outputFormat === 'webp') {
       payload.output_compression = input.compression;
-    }
-
-    if (input.background) {
-      payload.background = input.background
     }
 
     if (imageDataUrls.length > 0) {
