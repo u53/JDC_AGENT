@@ -5,7 +5,8 @@ import {
   createContextPromptSnapshotKey,
   resolveContextPromptSnapshot,
 } from './prompt-snapshot-cache.js'
-import type { ActorContextProfile, ContextRequest } from './types.js'
+import type { ContextRequest } from './types.js'
+import type { ContextPromptSnapshotActorProfile } from './prompt-snapshot-cache.js'
 
 const request: ContextRequest = {
   sessionId: 'session_1',
@@ -20,12 +21,9 @@ const request: ContextRequest = {
 
 describe('ContextPromptSnapshotCache', () => {
   it('derives stable keys from normalized intent and isolates actor, project, mode, and model', () => {
-    const profile: ActorContextProfile = {
+    const profile: ContextPromptSnapshotActorProfile = {
       actor: 'main_session',
       sessionId: 'session_1',
-      cwd: '/repo/project',
-      mode: 'chat',
-      objective: 'Fix Cache Bug',
     }
 
     const first = createContextPromptSnapshotKey({
@@ -45,12 +43,12 @@ describe('ContextPromptSnapshotCache', () => {
     })
     const differentProject = createContextPromptSnapshotKey({
       request: { ...request, cwd: '/repo/other-project' },
-      actorProfile: { ...profile, cwd: '/repo/other-project' },
+      actorProfile: profile,
       providerProtocol: 'anthropic',
     })
     const differentMode = createContextPromptSnapshotKey({
       request: { ...request, mode: 'plan' },
-      actorProfile: { ...profile, mode: 'plan' },
+      actorProfile: profile,
       providerProtocol: 'anthropic',
     })
     const differentModel = createContextPromptSnapshotKey({
@@ -76,7 +74,7 @@ describe('ContextPromptSnapshotCache', () => {
     const first = await resolveContextPromptSnapshot({
       cache,
       request,
-      actorProfile: { actor: 'main_session', sessionId: 'session_1', objective: 'Fix Cache Bug' },
+      actorProfile: { actor: 'main_session', sessionId: 'session_1' },
       providerProtocol: 'anthropic',
       build,
     })
@@ -84,7 +82,7 @@ describe('ContextPromptSnapshotCache', () => {
     const second = await resolveContextPromptSnapshot({
       cache,
       request,
-      actorProfile: { actor: 'main_session', sessionId: 'session_1', objective: 'Fix Cache Bug' },
+      actorProfile: { actor: 'main_session', sessionId: 'session_1' },
       providerProtocol: 'anthropic',
       build,
     })
@@ -92,7 +90,7 @@ describe('ContextPromptSnapshotCache', () => {
     const third = await resolveContextPromptSnapshot({
       cache,
       request,
-      actorProfile: { actor: 'main_session', sessionId: 'session_1', objective: 'Fix Cache Bug' },
+      actorProfile: { actor: 'main_session', sessionId: 'session_1' },
       providerProtocol: 'anthropic',
       build,
     })
@@ -112,13 +110,13 @@ describe('ContextPromptSnapshotCache', () => {
     const first = await resolveContextPromptSnapshot({
       cache,
       request,
-      actorProfile: { actor: 'main_session', sessionId: 'session_1', objective: 'Fix Cache Bug' },
+      actorProfile: { actor: 'main_session', sessionId: 'session_1' },
       build,
     })
     const second = await resolveContextPromptSnapshot({
       cache,
       request,
-      actorProfile: { actor: 'main_session', sessionId: 'session_1', objective: 'Fix Cache Bug' },
+      actorProfile: { actor: 'main_session', sessionId: 'session_1' },
       build,
     })
 
@@ -136,13 +134,13 @@ describe('ContextPromptSnapshotCache', () => {
     await resolveContextPromptSnapshot({
       cache,
       request,
-      actorProfile: { actor: 'main_session', sessionId: 'session_1', objective: 'Fix Cache Bug' },
+      actorProfile: { actor: 'main_session', sessionId: 'session_1' },
       build,
     })
     const forced = await resolveContextPromptSnapshot({
       cache,
       request,
-      actorProfile: { actor: 'main_session', sessionId: 'session_1', objective: 'Fix Cache Bug' },
+      actorProfile: { actor: 'main_session', sessionId: 'session_1' },
       forceRefresh: true,
       build,
     })

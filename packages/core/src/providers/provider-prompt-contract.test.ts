@@ -52,4 +52,19 @@ describe('provider prompt contracts', () => {
     expect(prompt).toContain('You are JDC CODE')
     expect(prompt).not.toContain('<jdc-context-engine>')
   })
+
+  it('keeps cached JDC Context Engine prompt segments outside Anthropic cache_control breakpoints', () => {
+    const cachedContext = '<jdc-context-engine bundle="ctx_cached">cached project context</jdc-context-engine>'
+    const segments: PromptSegment[] = [
+      { content: '# Identity\nYou are JDC CODE.', cacheable: true },
+      { content: cachedContext, cacheable: false },
+    ]
+
+    const blocks = __anthropicPromptTest.resolveStreamSystemPrompt(segments, 'x-anthropic-billing-header: cc_version=test;')
+    const contextBlock = blocks.find((block: any) => block.text.includes('ctx_cached'))
+
+    expect(contextBlock).toBeDefined()
+    expect(contextBlock?.cache_control).toBeUndefined()
+    expect(blocks.filter((block: any) => block.cache_control).length).toBe(1)
+  })
 })
