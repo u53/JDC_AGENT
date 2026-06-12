@@ -166,16 +166,16 @@ async function readInputImages(images: unknown, cwd: string): Promise<string[]> 
 }
 
 const SHARED_PROPS: Record<string, any> = {
-  prompt: { type: 'string', description: '图像描述（生成或编辑指令）' },
-  size: { type: 'string', description: '尺寸。常用预设：1024x1024(1K方) / 1536x1024(3:2) / 3840x2160(4K横16:9) / 2160x3840(4K竖9:16) / 2048x1152(2K横) / auto(模型自动)。自定义须为 宽x高、宽高均为16倍数、比例≤3:1。默认 auto。用户说"4K横屏"传 3840x2160，"4K竖屏"传 2160x3840。' },
-  quality: { type: 'string', enum: ['auto', 'low', 'medium', 'high'], description: '质量，默认 auto' },
-  format: { type: 'string', enum: ['png', 'jpeg', 'webp'], description: '输出格式，默认 png。' },
-  compression: { type: 'number', description: '压缩 0-100，仅 jpeg/webp 生效，默认 100' },
-  output_path: { type: 'string', description: '输出目录。默认当前项目根目录。相对路径相对项目根解析；也可传绝对路径。' },
-  count: { type: 'number', description: '生成张数，默认 1，最多 10' },
+  prompt: { type: 'string', description: '图像生成或编辑的描述指令（英文更稳定）。描述越具体效果越好：主体、风格、构图、光线、色调等。' },
+  size: { type: 'string', description: '输出尺寸，默认 auto（模型自动选择）。\n常用预设：1024x1024(1K方1:1) / 1792x1008(1K横16:9) / 2048x1152(2K横16:9) / 2560x1440(2.5K横16:9) / 3072x1728(3K横16:9) / 3840x2160(4K横16:9) / 1008x1792(1K竖9:16) / 1152x2048(2K竖9:16) / 2160x3840(4K竖9:16) / 1536x1024(3:2横) / 1024x1536(2:3竖) / 2048x2048(2K方)。\n用户说"4K"或"4K横屏"→3840x2160，"4K竖屏"→2160x3840，"方图"→1024x1024。\n自定义格式：宽x高（如 1920x1080），宽高必须都是 16 的倍数，比例不超过 3:1。' },
+  quality: { type: 'string', enum: ['auto', 'low', 'medium', 'high'], description: '图像质量。auto 由模型决定；low 更快；high 更精细。默认 auto。' },
+  format: { type: 'string', enum: ['png', 'jpeg', 'webp'], description: '输出图片格式，默认 png。png：无损、适合图标/UI；jpeg：有损、适合照片、文件小；webp：现代格式、兼顾质量与体积。' },
+  compression: { type: 'number', description: '压缩级别 0-100，仅对 jpeg 和 webp 生效（png 无损忽略此参数）。100=最高质量/最大文件，值越小压缩率越高。默认 100。' },
+  output_path: { type: 'string', description: '图片输出目录。默认当前项目根目录。相对路径相对于项目根解析；也可传绝对路径。文件名自动生成为 img_时间戳_序号.格式。' },
+  count: { type: 'number', description: '一次生成几张图，默认 1，最大 10。生成多张时每张使用相同 prompt 和参数，适合要多个变体供选择。' },
 }
 
-const ASYNC_NOTE = '\n\n这是后台异步执行：调用后立即返回 task_id，生成完成会收到 <task-notification>（含落盘路径）。不要轮询。生成可能耗时较久。不限制同时发起多个生成任务。'
+const ASYNC_NOTE = '\n\n后台异步执行：调用后立即返回 task_id，生成完成会收到 <task-notification> 通知（含每张图的落盘路径、尺寸、格式）。生成耗时可能较长（数十秒到几分钟），不要反复调用或轮询同一请求。可以同时发起多个任务。'
 
 export function createImageTools(deps: ImageToolDeps): ToolHandler[] {
   const runJob = deps.runImageJob ?? defaultRunImageJob
@@ -217,12 +217,12 @@ export function createImageTools(deps: ImageToolDeps): ToolHandler[] {
   const editImageTool: ToolHandler = {
     definition: {
       name: 'EditImage',
-      description: '图生图/编辑：基于一张或多张参考图（最多4张，单张<4MB）按 prompt 生成/修改。images 传图片路径，可引用：①之前生成的图的落盘路径 ②项目里已有的图（相对路径）③用户在输入框发的参考图（已落盘的路径）。' + ASYNC_NOTE,
+      description: '图生图/编辑：基于参考图片按 prompt 生成新图或修改。images 为本地图片文件路径，支持三种来源：①之前生成的图的落盘路径（从 <task-notification> 获取）②项目里已有的图（相对路径）③用户在输入框发的参考图（自动落盘到 .jdc-image-input/，消息中有路径）。最多 4 张，单张 < 4MB。使用场景：风格迁移、局部修改、基于参考图生成变体、多图合成。' + ASYNC_NOTE,
       inputSchema: {
         type: 'object',
         properties: {
           ...SHARED_PROPS,
-          images: { type: 'array', items: { type: 'string' }, description: '输入图片路径数组，最多 4 张，单张 < 4MB' },
+          images: { type: 'array', items: { type: 'string' }, description: '输入参考图片的本地路径数组。最大 4 张，单张文件不超过 4MB。支持相对路径和绝对路径。' },
         },
         required: ['prompt', 'images'],
       },
