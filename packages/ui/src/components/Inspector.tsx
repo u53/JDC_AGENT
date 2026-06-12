@@ -735,9 +735,9 @@ function ImageRow({ img }: { img: { path: string; format: string; bytes: number 
       <div className="flex items-center gap-2 cursor-pointer hover:bg-[color-mix(in_srgb,var(--accent)_5%,transparent)] rounded-[4px] px-1 -mx-1" onClick={loadPreview}>
         <span className="flex-1 text-[10px] text-[var(--muted)] truncate">{filename} · {img.format} · {size}</span>
         <div className="flex gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-          <button onClick={handleCopy} className="rounded-[4px] border border-[var(--border)] px-1.5 py-0.5 text-[9px] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]">复制</button>
-          <button onClick={handleCopyPath} className="rounded-[4px] border border-[var(--border)] px-1.5 py-0.5 text-[9px] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]">路径</button>
-          <button onClick={handleShow} className="rounded-[4px] border border-[var(--border)] px-1.5 py-0.5 text-[9px] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]">文件夹</button>
+          <button onClick={handleCopy} className="rounded-[4px] border border-[var(--border)] px-1.5 py-0.5 text-[9px] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]">复制图片</button>
+          <button onClick={handleCopyPath} className="rounded-[4px] border border-[var(--border)] px-1.5 py-0.5 text-[9px] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]">复制路径</button>
+          <button onClick={handleShow} className="rounded-[4px] border border-[var(--border)] px-1.5 py-0.5 text-[9px] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]">文件夹打开</button>
         </div>
       </div>
       {zoomed && preview && createPortal(
