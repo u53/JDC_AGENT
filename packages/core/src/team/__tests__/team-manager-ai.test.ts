@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { TeamManagerAI } from '../team-manager-ai.js'
 import { strictToolGroundingProfile } from '../../model-profile.js'
 import type { ModelProvider } from '../../model-provider.js'
 import type { ContextProvider } from '../../context/orchestrator.js'
+import { ContextPromptSnapshotCache } from '../../context/prompt-snapshot-cache.js'
 import type { ContextRequest } from '../../context/types.js'
 import type { Message, ModelConfig, StreamChunk, ToolDefinition } from '../../types.js'
 
@@ -46,7 +47,7 @@ function systemPromptText(systemPrompt: ModelConfig['systemPrompt']): string {
 function makeContextStore() {
   return {
     saveRawEvidence: async () => ({ ok: true, value: undefined, diagnostics: [] }),
-    saveBundleSnapshot: async () => ({ ok: true, value: undefined, diagnostics: [] }),
+    saveBundleSnapshot: vi.fn(async () => ({ ok: true, value: undefined, diagnostics: [] })),
     saveDiagnostic: async () => ({ ok: true, value: undefined, diagnostics: [] }),
     queryFacts: async () => ({ ok: true, value: [], diagnostics: [] }),
     listAcceptedProjectFacts: async () => ({ ok: true, value: [], diagnostics: [] }),
@@ -148,6 +149,69 @@ describe('TeamManagerAI scheduling', () => {
     provider.respond(0, '[]')
     await flush()
   })
+
+  it('reuses the rendered context prompt for repeated Team PM cycles inside the snapshot window', async () => {
+    const provider = new DeferredProvider()
+    const cache = new ContextPromptSnapshotCache({ now: () => 10_000 })
+    const store = makeContextStore()
+    let collectCount = 0
+    const contextProviders: ContextProvider[] = [{
+      id: 'runtime',
+      collect: async () => {
+        collectCount++
+        return {
+          evidence: [],
+          sections: [{
+            id: `team_pm_runtime_${collectCount}`,
+            kind: 'runtime_state',
+            title: 'Team PM runtime',
+            content: `Team PM snapshot ${collectCount}`,
+            citations: [],
+            priority: 90,
+            confidence: 0.9,
+            freshness: 'live',
+            sourceProvider: 'RuntimeSignalProvider',
+            tokenEstimate: 4,
+          }],
+          diagnostics: [],
+          health: { id: 'runtime', status: 'enabled', updatedAt: 1 },
+        }
+      },
+    }]
+    const manager = new TeamManagerAI({
+      initialTasks: [{ title: 'A', description: 'do A' }],
+      provider,
+      modelConfig: { model: 'test-model', maxTokens: 1000 },
+      memberStates: () => [],
+      cwd: '/tmp/team-manager-ai-test',
+      teamId: 'team_cache_test',
+      objective: 'Fix cache coordination',
+      contextEngine: {
+        sessionId: 'team_pm_cache_session',
+        config: { enabled: true, injectionEnabled: true, harvestEnabled: false },
+        store: store as any,
+        providers: contextProviders,
+        promptSnapshotCache: cache,
+      },
+    })
+
+    manager.triggerProactiveCheck({ kind: 'task_completed', taskId: manager.getTasks()[0].id })
+    await waitFor(() => provider.calls.length === 1, 3000)
+    const firstPrompt = systemPromptText(provider.calls[0].config.systemPrompt)
+    provider.respond(0, '[]')
+    await flush()
+
+    manager.triggerProactiveCheck({ kind: 'task_completed', taskId: manager.getTasks()[0].id })
+    await waitFor(() => provider.calls.length === 2, 3000)
+    const secondPrompt = systemPromptText(provider.calls[1].config.systemPrompt)
+    provider.respond(1, '[]')
+    await flush()
+
+    expect(collectCount).toBe(1)
+    expect(store.saveBundleSnapshot).toHaveBeenCalledTimes(1)
+    expect(firstPrompt).toContain('<jdc-context-engine')
+    expect(secondPrompt).toBe(firstPrompt)
+  }, 10000)
 
   it('shows available worker model ids to the PM', async () => {
     const provider = new DeferredProvider()

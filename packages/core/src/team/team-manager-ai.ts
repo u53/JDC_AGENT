@@ -6,10 +6,11 @@ import type { ModelProvider } from '../model-provider.js'
 import type { ModelConfig, Message } from '../types.js'
 import { buildContextBundle, type ContextProvider } from '../context/orchestrator.js'
 import { teamPmProfile } from '../context/actor-profile.js'
+import { globalContextPromptSnapshotCache, resolveContextPromptSnapshot, type ContextPromptSnapshotCache } from '../context/prompt-snapshot-cache.js'
 import { DEFAULT_CONTEXT_ENGINE_CONFIG, resolveContextEngineConfig, type ContextEngineConfigInput } from '../context/config.js'
 import { createContextScheduler, type ContextScheduler } from '../context/scheduler.js'
 import type { ContextStore } from '../context/store.js'
-import type { ProviderProtocol } from '../context/types.js'
+import type { ContextRequest, ProviderProtocol } from '../context/types.js'
 
 /**
  * Structured proactive trigger reasons. PM gets richer context than a bare string.
@@ -58,6 +59,7 @@ export interface TeamManagerAIOptions extends TeamManagerOptions {
     scheduler?: ContextScheduler
     id?: () => string
     protocol?: ProviderProtocol | 'openai'
+    promptSnapshotCache?: ContextPromptSnapshotCache
     modelGroupId?: string
     baseUrl?: string
   }
@@ -993,7 +995,7 @@ export class TeamManagerAI extends TeamManager {
     if (!engine) return systemPrompt
 
     const contextConfig = resolveContextEngineConfig(engine.config)
-    if (!contextConfig.enabled) return systemPrompt
+    if (!contextConfig.enabled || !contextConfig.injectionEnabled) return systemPrompt
     const scheduler = engine.scheduler ?? createContextScheduler({ maxBackgroundPerProject: contextPerformanceConfig(contextConfig).maxBackgroundJobsPerProject })
     const performance = contextPerformanceConfig(contextConfig)
     const contextSessionId = engine.sessionId ?? `team_pm_${this.teamId}`
@@ -1003,14 +1005,7 @@ export class TeamManagerAI extends TeamManager {
         'context:team-pm-inject',
         performance.degradedProviderTimeoutMs,
         async (signal) => {
-          const actorProfile = teamPmProfile({
-            sessionId: contextSessionId,
-            cwd: this.cwd,
-            mode: 'plan',
-            objective: this.objective,
-            teamId: this.teamId,
-          })
-          const result = await buildContextBundle({
+          const request: ContextRequest = {
             sessionId: contextSessionId,
             cwd: this.cwd,
             userMessage: userText,
@@ -1027,18 +1022,35 @@ export class TeamManagerAI extends TeamManager {
             runtime: { teamId: this.teamId, memberStates: this.getMemberStates() },
             signal,
             createdAt: Date.now(),
-          }, {
-            injectionEnabled: contextConfig.injectionEnabled,
-            includeAgentContract: true,
-            store: engine.store,
-            providers: engine.providers ?? [],
-            providerTimeoutMs: performance.providerTimeoutMs,
-            scheduler,
-            actorProfile,
-            id: engine.id,
+          }
+          const actorProfile = teamPmProfile({
+            sessionId: contextSessionId,
+            cwd: this.cwd,
+            mode: 'plan',
+            objective: this.objective,
+            teamId: this.teamId,
           })
-          if (!result.renderedPrompt) return systemPrompt
-          return appendContextPromptSegment(systemPrompt, result.renderedPrompt)
+          const snapshot = await resolveContextPromptSnapshot({
+            cache: engine.promptSnapshotCache ?? globalContextPromptSnapshotCache,
+            request,
+            actorProfile,
+            providerProtocol: engine.protocol ?? this.provider.name,
+            build: async () => {
+              const result = await buildContextBundle(request, {
+                injectionEnabled: contextConfig.injectionEnabled,
+                includeAgentContract: true,
+                store: engine.store,
+                providers: engine.providers ?? [],
+                providerTimeoutMs: performance.providerTimeoutMs,
+                scheduler,
+                actorProfile,
+                id: engine.id,
+              })
+              return { renderedPrompt: result.renderedPrompt, bundleId: result.bundle.id }
+            },
+          })
+          if (!snapshot.renderedPrompt) return systemPrompt
+          return appendContextPromptSegment(systemPrompt, snapshot.renderedPrompt)
         },
         systemPrompt,
       )
