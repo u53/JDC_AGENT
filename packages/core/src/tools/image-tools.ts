@@ -13,7 +13,7 @@ const PER_JOB_CONCURRENCY = 3
 export interface ImageToolDeps {
   getImageConfig: () => ImageModelConfig | null
   backgroundTasks: BackgroundTaskManager
-  onImageGenerated?: (taskId: string, images: ImageOutput[]) => void
+  onImageGenerated?: (taskId: string, images: ImageOutput[], error?: string) => void
   /** inject for testing */
   runImageJob?: (params: RunImageJobParams) => Promise<void>
 }
@@ -30,7 +30,7 @@ export interface RunImageJobParams {
   outputDir: string
   imageDataUrls: string[]
   backgroundTasks: BackgroundTaskManager
-  onImageGenerated?: (taskId: string, images: ImageOutput[]) => void
+  onImageGenerated?: (taskId: string, images: ImageOutput[], error?: string) => void
 }
 
 function timestamp(): string {
@@ -109,7 +109,9 @@ async function defaultRunImageJob(params: RunImageJobParams): Promise<void> {
 
     if (outputs.length === 0) {
       const detail = errors.length ? `：\n${errors.join('\n')}` : '（API 未返回图片数据，请检查 API Key 和 baseUrl 是否正确，端点是否能正常访问）'
-      backgroundTasks.failImage(taskId, `生成失败（${errors.length}/${count} 张全部失败）${detail}`)
+      const msg = `生成失败（${errors.length}/${count} 张全部失败）${detail}`
+      backgroundTasks.failImage(taskId, msg)
+      onImageGenerated?.(taskId, [], msg)
       return
     }
     if (errors.length > 0) {

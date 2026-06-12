@@ -9,20 +9,23 @@ export interface GeneratedImage {
   downloadError?: string
 }
 
-interface ImageState {
-  byTask: Record<string, Record<string, GeneratedImage[]>>
-  addGenerated: (sessionId: string, taskId: string, images: GeneratedImage[]) => void
-  getForSession: (sessionId: string) => Record<string, GeneratedImage[]>
+export interface TaskGeneratedImages {
+  images: GeneratedImage[]
+  error?: string
 }
 
-export const useImageStore = create<ImageState>((set, get) => ({
+interface ImageState {
+  byTask: Record<string, Record<string, TaskGeneratedImages>>
+  addGenerated: (sessionId: string, taskId: string, images: GeneratedImage[], error?: string) => void
+}
+
+export const useImageStore = create<ImageState>((set) => ({
   byTask: {},
-  addGenerated: (sessionId, taskId, images) =>
+  addGenerated: (sessionId, taskId, images, error) =>
     set((s) => ({
       byTask: {
         ...s.byTask,
-        [sessionId]: { ...(s.byTask[sessionId] ?? {}), [taskId]: images },
+        [sessionId]: { ...(s.byTask[sessionId] ?? {}), [taskId]: { images, error } },
       },
     })),
-  getForSession: (sessionId) => get().byTask[sessionId] ?? {},
 }))

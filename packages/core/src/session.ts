@@ -173,8 +173,8 @@ export class Session {
     images?: ImageOutput[]
   }> = []
   onNotificationReady?: () => void
-  /** UI 转发：图像生成完成（含磁盘路径），不进上下文 */
-  onImageGenerated?: (taskId: string, images: ImageOutput[]) => void
+  /** UI 转发：图像生成完成（成功含磁盘路径；失败含 error），不进上下文 */
+  onImageGenerated?: (taskId: string, images: ImageOutput[], error?: string) => void
   /** @internal exposed for testing */ _teamEventHandler?: (teamId: string, event: any) => void
 
   constructor(
@@ -199,6 +199,8 @@ export class Session {
     this.contextScheduler = this.createContextScheduler()
     this.backgroundTasks.setOnComplete((task) => {
       if (task.type === 'image') {
+        const error = task.status === 'failed' ? (task.result ?? 'unknown error') : undefined
+        this.onImageGenerated?.(task.id, task.images ?? [], error)
         this.pendingNotifications.push({
           type: 'image_complete',
           taskId: task.id,
@@ -457,8 +459,8 @@ export class Session {
       for (const tool of createImageTools({
         getImageConfig: loadImageModelConfig,
         backgroundTasks: this.backgroundTasks,
-        onImageGenerated: (taskId, images) => {
-          this.onImageGenerated?.(taskId, images)
+        onImageGenerated: (taskId, images, error) => {
+          this.onImageGenerated?.(taskId, images, error)
         },
       })) {
         this.toolRegistry.register(tool)

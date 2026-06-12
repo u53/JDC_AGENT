@@ -1,16 +1,24 @@
 import { useState, useEffect } from 'react'
-import type { GeneratedImage } from '../stores/image-store'
+import type { GeneratedImage, TaskGeneratedImages } from '../stores/image-store'
 import { copyImageFile, copyToClipboard } from '../lib/clipboard'
 
-export function GeneratedImageCard({ images }: { images: GeneratedImage[] }) {
+export function GeneratedImageCard({ data }: { data: TaskGeneratedImages }) {
+  const { images, error } = data
+  if (error && !images?.length) {
+    return (
+      <div className="mb-3 rounded-[8px] border border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] p-3">
+        <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--accent)]">Image Generation Failed</div>
+        <pre className="text-[12px] whitespace-pre-wrap break-words text-[var(--text)] leading-5">{error}</pre>
+      </div>
+    )
+  }
   if (!images?.length) return null
-  const real = images.filter((img) => img.path) // skip error-annotation entries
-  if (!real.length) return null
   return (
     <div className="mb-3 rounded-[8px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_82%,transparent)] p-3">
       <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--accent)]">Generated Images</div>
+      {error && <div className="mb-2 text-[11px] text-[var(--muted)]">{error}</div>}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {images.map((img) => <ImageTile key={img.path} img={img} />)}
+        {images.filter((img) => img.path).map((img) => <ImageTile key={img.path} img={img} />)}
       </div>
     </div>
   )
@@ -66,7 +74,7 @@ function ImageTile({ img }: { img: GeneratedImage }) {
         </div>
         <div className="px-2 pb-2 text-[10px] text-[var(--muted)]">
           {img.width && img.height ? `${img.width}x${img.height} · ` : ''}{img.format}
-          {(img as any).downloadError ? ' · 下载失败' : ''}
+          {img.downloadError ? ' · 下载失败' : ''}
         </div>
       </div>
 

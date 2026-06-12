@@ -31,8 +31,8 @@ export function App() {
   useEffect(() => { loadModels() }, [loadModels])
   useEffect(() => { return initIdeListeners() }, [])
   useEffect(() => {
-    const off = (window as any).electronAPI?.onImageGenerated?.((payload: { sessionId: string; taskId: string; images: any[] }) => {
-      useImageStore.getState().addGenerated(payload.sessionId, payload.taskId, payload.images)
+    const off = (window as any).electronAPI?.onImageGenerated?.((payload: { sessionId: string; taskId: string; images: any[]; error?: string }) => {
+      useImageStore.getState().addGenerated(payload.sessionId, payload.taskId, payload.images, payload.error)
     })
     return () => { off?.() }
   }, [])

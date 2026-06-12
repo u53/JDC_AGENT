@@ -394,8 +394,8 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
             })}
 
             {generatedImages &&
-              Object.entries(generatedImages).map(([taskId, imgs]) => (
-                <GeneratedImageCard key={taskId} images={imgs} />
+              Object.entries(generatedImages).map(([taskId, data]) => (
+                <GeneratedImageCard key={taskId} data={data} />
               ))}
 
             {compacting && <CompactStatusCard status="running" />}
