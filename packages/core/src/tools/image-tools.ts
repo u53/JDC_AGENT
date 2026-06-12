@@ -73,34 +73,52 @@ async function defaultRunImageJob(params: RunImageJobParams): Promise<void> {
     const outputs: ImageOutput[] = []
     const transparent = background === 'transparent'
 
+    const errors: string[] = []
+
     const tasks = Array.from({ length: count }, (_, index) => async () => {
-      const result = await client.generate({
-        prompt,
-        size,
-        quality,
-        model: cfg.model,
-        outputFormat: format,
-        compression,
-        background,
-        imageDataUrls: imageDataUrls.length ? imageDataUrls : undefined,
-      })
-      if (!result) return
-      if (result.type === 'remote_url') {
-        outputs.push({ path: result.url, bytes: 0, format, background, transparent, downloadError: result.downloadError })
-        return
+      try {
+        const result = await client.generate({
+          prompt,
+          size,
+          quality,
+          model: cfg.model,
+          outputFormat: format,
+          compression,
+          background,
+          imageDataUrls: imageDataUrls.length ? imageDataUrls : undefined,
+        })
+        if (!result) {
+          errors.push(`[#${index + 1}] API 返回成功但无图片数据，请检查 API 响应格式是否包含 b64_json / url 字段`)
+          return
+        }
+        if (result.type === 'remote_url') {
+          if (result.downloadError) {
+            errors.push(`[#${index + 1}] 远程图片下载失败：${result.downloadError}`)
+          }
+          outputs.push({ path: result.url, bytes: 0, format, background, transparent, downloadError: result.downloadError })
+          return
+        }
+        const raw = Buffer.from(result.base64, 'base64')
+        const filename = `img_${timestamp()}_${index + 1}.${format}`
+        const full = join(outputDir, filename)
+        await writeFile(full, raw)
+        outputs.push({ path: full, bytes: raw.byteLength, format, background, transparent })
+      } catch (err) {
+        errors.push(`[#${index + 1}] ${err instanceof Error ? err.message : String(err)}`)
       }
-      const raw = Buffer.from(result.base64, 'base64')
-      const filename = `img_${timestamp()}_${index + 1}.${format}`
-      const full = join(outputDir, filename)
-      await writeFile(full, raw)
-      outputs.push({ path: full, bytes: raw.byteLength, format, background, transparent })
     })
 
     await runLimited(tasks, PER_JOB_CONCURRENCY)
 
     if (outputs.length === 0) {
-      backgroundTasks.failImage(taskId, '生成失败：无图片数据')
+      const detail = errors.length ? `：\n${errors.join('\n')}` : '（API 未返回图片数据，请检查 API Key 和 baseUrl 是否正确，端点是否能正常访问）'
+      backgroundTasks.failImage(taskId, `生成失败（${errors.length}/${count} 张全部失败）${detail}`)
       return
+    }
+    if (errors.length > 0) {
+      // Partial success — push success with error notes
+      outputs.push({ path: '', bytes: 0, format: '', background: '', transparent: false,
+        downloadError: `${errors.length} 张失败：\n${errors.slice(0, 5).join('\n')}` })
     }
     backgroundTasks.completeImage(taskId, { images: outputs })
     onImageGenerated?.(taskId, outputs)
