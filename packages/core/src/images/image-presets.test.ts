@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveOutputSize, clampCompression, QUALITY_OPTIONS, FORMAT_OPTIONS, SIZE_PRESETS, BACKGROUND_OPTIONS } from './image-presets.js'
+import { resolveOutputSize, clampCompression, QUALITY_OPTIONS, FORMAT_OPTIONS, SIZE_PRESETS } from './image-presets.js'
 
 describe('resolveOutputSize', () => {
   it('auto 返回 null', () => {
@@ -50,8 +50,5 @@ describe('常量', () => {
   })
   it('FORMAT_OPTIONS 完整', () => {
     expect(FORMAT_OPTIONS).toEqual(['png', 'jpeg', 'webp'])
-  })
-  it('BACKGROUND_OPTIONS 完整', () => {
-    expect(BACKGROUND_OPTIONS).toEqual(['transparent', 'opaque', 'auto'])
   })
 })

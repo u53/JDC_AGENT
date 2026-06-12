@@ -22,14 +22,7 @@ describe('buildRequest', () => {
     const jpeg = client.buildRequest({ prompt: 'x', size: 'auto', quality: 'auto', model: 'm', outputFormat: 'jpeg', compression: 80 })
     expect(jpeg.payload.output_compression).toBe(80)
   })
-  it('background 非空写入', () => {
-    const r = client.buildRequest({ prompt: 'x', size: 'auto', quality: 'auto', model: 'm', outputFormat: 'png', compression: 100, background: 'transparent' })
-    expect(r.payload.background).toBe('transparent')
-  })
-  it('background 为空不写入', () => {
-    const r = client.buildRequest({ prompt: 'x', size: 'auto', quality: 'auto', model: 'm', outputFormat: 'png', compression: 100 })
-    expect(r.payload.background).toBeUndefined()
-  })
+
 })
 
 describe('extractImageApiResult', () => {

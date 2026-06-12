@@ -18,7 +18,6 @@ export const SIZE_PRESETS: SizePreset[] = [
 
 export const QUALITY_OPTIONS = ['auto', 'low', 'medium', 'high'] as const
 export const FORMAT_OPTIONS = ['png', 'jpeg', 'webp'] as const
-export const BACKGROUND_OPTIONS = ['transparent', 'opaque', 'auto'] as const
 
 const MAX_RATIO = 3
 

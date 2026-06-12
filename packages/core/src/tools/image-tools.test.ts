@@ -30,16 +30,6 @@ describe('GenerateImage', () => {
     expect(r.content).toMatch(/task_id=/)
     expect(runImageJob).toHaveBeenCalledOnce()
   })
-  it('透明背景 + jpeg → 强制 png', async () => {
-    const { gen, runImageJob } = setup()
-    await gen.execute({ prompt: 'icon', background: 'transparent', format: 'jpeg' }, ctx)
-    expect(runImageJob.mock.calls[0][0]).toMatchObject({ format: 'png', background: 'transparent' })
-  })
-  it('background=transparent 时结果提示已改 png', async () => {
-    const { gen } = setup()
-    const r = await gen.execute({ prompt: 'icon', background: 'transparent', format: 'jpeg' }, ctx)
-    expect(r.content).toContain('透明背景已自动改用 png')
-  })
   it('非法尺寸报错', async () => {
     const { gen } = setup()
     const r = await gen.execute({ prompt: 'x', size: '1000x1000' }, ctx)
@@ -71,16 +61,6 @@ describe('GenerateImage', () => {
     const { gen, runImageJob } = setup()
     await gen.execute({ prompt: 'x', size: '3840x2160' }, ctx)
     expect(runImageJob.mock.calls[0][0].size).toBe('3840x2160')
-  })
-  it('opaque 背景不触发 format 调整', async () => {
-    const { gen, runImageJob } = setup()
-    await gen.execute({ prompt: 'x', background: 'opaque', format: 'jpeg' }, ctx)
-    expect(runImageJob.mock.calls[0][0]).toMatchObject({ format: 'jpeg', background: 'opaque' })
-  })
-  it('默认 background=transparent', async () => {
-    const { gen, runImageJob } = setup()
-    await gen.execute({ prompt: 'x' }, ctx)
-    expect(runImageJob.mock.calls[0][0].background).toBe('transparent')
   })
   it('默认 count=1', async () => {
     const { gen, runImageJob } = setup()

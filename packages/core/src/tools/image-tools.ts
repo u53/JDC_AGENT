@@ -4,7 +4,7 @@ import type { ToolHandler, ToolContext, ToolResult } from '../tool-registry.js'
 import type { BackgroundTaskManager, ImageOutput } from '../background-tasks.js'
 import type { ImageModelConfig } from '../images/image-config.js'
 import { ImageApiClient, type OutputFormat } from '../images/image-api-client.js'
-import { resolveOutputSize, clampCompression, QUALITY_OPTIONS, FORMAT_OPTIONS, BACKGROUND_OPTIONS } from '../images/image-presets.js'
+import { resolveOutputSize, clampCompression, QUALITY_OPTIONS, FORMAT_OPTIONS } from '../images/image-presets.js'
 
 const MAX_INPUT_IMAGES = 4
 const MAX_INPUT_BYTES = 4 * 1024 * 1024
@@ -26,7 +26,6 @@ export interface RunImageJobParams {
   quality: string
   format: OutputFormat
   compression: number
-  background: 'transparent' | 'opaque' | 'auto'
   count: number
   outputDir: string
   imageDataUrls: string[]
@@ -66,12 +65,11 @@ async function runLimited(tasks: Array<() => Promise<void>>, concurrency: number
 }
 
 async function defaultRunImageJob(params: RunImageJobParams): Promise<void> {
-  const { taskId, cfg, prompt, size, quality, format, compression, background, count, outputDir, imageDataUrls, backgroundTasks, onImageGenerated } = params
+  const { taskId, cfg, prompt, size, quality, format, compression, count, outputDir, imageDataUrls, backgroundTasks, onImageGenerated } = params
   try {
     const client = new ImageApiClient(cfg.baseUrl, cfg.apiKey)
     await mkdir(outputDir, { recursive: true })
     const outputs: ImageOutput[] = []
-    const transparent = background === 'transparent'
 
     const errors: string[] = []
 
@@ -84,7 +82,6 @@ async function defaultRunImageJob(params: RunImageJobParams): Promise<void> {
           model: cfg.model,
           outputFormat: format,
           compression,
-          background,
           imageDataUrls: imageDataUrls.length ? imageDataUrls : undefined,
         })
         if (!result) {
@@ -95,14 +92,14 @@ async function defaultRunImageJob(params: RunImageJobParams): Promise<void> {
           if (result.downloadError) {
             errors.push(`[#${index + 1}] 远程图片下载失败：${result.downloadError}`)
           }
-          outputs.push({ path: result.url, bytes: 0, format, background, transparent, downloadError: result.downloadError })
+          outputs.push({ path: result.url, bytes: 0, format, background: '', transparent: false, downloadError: result.downloadError })
           return
         }
         const raw = Buffer.from(result.base64, 'base64')
         const filename = `img_${timestamp()}_${index + 1}.${format}`
         const full = join(outputDir, filename)
         await writeFile(full, raw)
-        outputs.push({ path: full, bytes: raw.byteLength, format, background, transparent })
+        outputs.push({ path: full, bytes: raw.byteLength, format, background: '', transparent: false })
       } catch (err) {
         errors.push(`[#${index + 1}] ${err instanceof Error ? err.message : String(err)}`)
       }
@@ -133,10 +130,8 @@ interface NormalizedParams {
   quality: string
   format: OutputFormat
   compression: number
-  background: 'transparent' | 'opaque' | 'auto'
   count: number
   outputDir: string
-  formatAdjusted: boolean
 }
 
 function normalizeParams(input: Record<string, unknown>, cwd: string): NormalizedParams {
@@ -148,19 +143,10 @@ function normalizeParams(input: Record<string, unknown>, cwd: string): Normalize
 
   const quality = QUALITY_OPTIONS.includes(input.quality as any) ? String(input.quality) : 'auto'
   let format: OutputFormat = (FORMAT_OPTIONS.includes(input.format as any) ? input.format : 'png') as OutputFormat
-  const background = (BACKGROUND_OPTIONS.includes(input.background as any) ? input.background : 'transparent') as 'transparent' | 'opaque' | 'auto'
-
-  // transparent background requires png/webp (jpeg has no alpha channel)
-  let formatAdjusted = false
-  if (background === 'transparent' && format === 'jpeg') {
-    format = 'png'
-    formatAdjusted = true
-  }
-
   const compression = clampCompression(typeof input.compression === 'number' ? input.compression : 100)
   const count = Math.min(10, Math.max(1, Math.floor(Number(input.count ?? 1)) || 1))
   const outputDir = resolveDir(cwd, input.output_path as string | undefined)
-  return { prompt, size, quality, format, compression, background, count, outputDir, formatAdjusted }
+  return { prompt, size, quality, format, compression, count, outputDir }
 }
 
 async function readInputImages(images: unknown, cwd: string): Promise<string[]> {
@@ -183,8 +169,7 @@ const SHARED_PROPS: Record<string, any> = {
   prompt: { type: 'string', description: '图像描述（生成或编辑指令）' },
   size: { type: 'string', description: '尺寸。常用预设：1024x1024(1K方) / 1536x1024(3:2) / 3840x2160(4K横16:9) / 2160x3840(4K竖9:16) / 2048x1152(2K横) / auto(模型自动)。自定义须为 宽x高、宽高均为16倍数、比例≤3:1。默认 auto。用户说"4K横屏"传 3840x2160，"4K竖屏"传 2160x3840。' },
   quality: { type: 'string', enum: ['auto', 'low', 'medium', 'high'], description: '质量，默认 auto' },
-  format: { type: 'string', enum: ['png', 'jpeg', 'webp'], description: '输出格式，默认 png。透明背景必须 png/webp。' },
-  background: { type: 'string', enum: ['transparent', 'opaque', 'auto'], description: '背景。默认 transparent（可抠图）：图标/Logo/单个物体/人物/贴纸等都用 transparent。只有画面本身是带场景/环境的完整图（风景/海报/带背景插画）才用 opaque。不确定用 auto。注意：transparent 会自动用 png。' },
+  format: { type: 'string', enum: ['png', 'jpeg', 'webp'], description: '输出格式，默认 png。' },
   compression: { type: 'number', description: '压缩 0-100，仅 jpeg/webp 生效，默认 100' },
   output_path: { type: 'string', description: '输出目录。默认当前项目根目录。相对路径相对项目根解析；也可传绝对路径。' },
   count: { type: 'number', description: '生成张数，默认 1，最多 10' },
@@ -213,12 +198,11 @@ export function createImageTools(deps: ImageToolDeps): ToolHandler[] {
     const task = deps.backgroundTasks.registerImage(params.prompt)
     void runJob({
       taskId: task.id, cfg, prompt: params.prompt, size: params.size, quality: params.quality,
-      format: params.format, compression: params.compression, background: params.background,
+      format: params.format, compression: params.compression,
       count: params.count, outputDir: params.outputDir, imageDataUrls,
       backgroundTasks: deps.backgroundTasks, onImageGenerated: deps.onImageGenerated,
     })
-    const adjust = params.formatAdjusted ? '（透明背景已自动改用 png）' : ''
-    return { content: `图像生成已在后台启动 (task_id=${task.id})，将生成 ${params.count} 张到 ${params.outputDir}${adjust}。完成后会通知你，不要轮询。` }
+    return { content: `图像生成已在后台启动 (task_id=${task.id})，将生成 ${params.count} 张到 ${params.outputDir}。完成后会通知你，不要轮询。` }
   }
 
   const generateImageTool: ToolHandler = {
