@@ -71,6 +71,7 @@ import { createProviderRepoWikiModelClient } from './context/repo-wiki/index.js'
 import { deriveVerificationRequirements } from './constraints/verification-requirements.js'
 import { hashContent } from './context/providers/shared.js'
 import { createContextScheduler, type ContextScheduler } from './context/scheduler.js'
+import { globalContextPromptSnapshotCache, resolveContextPromptSnapshot, type ContextPromptSnapshotCache } from './context/prompt-snapshot-cache.js'
 import type { ContextEngineConfig, ContextRequest, HarvestCandidate, HarvestModelBinding, ProviderProtocol } from './context/types.js'
 import type { RuntimeModelResolution } from './model-resolution.js'
 import {
@@ -146,6 +147,7 @@ export class Session {
   private contextProtocol?: ProviderProtocol
   private contextModelGroupId?: string
   private contextBaseUrl?: string
+  private contextPromptSnapshotCache: ContextPromptSnapshotCache = globalContextPromptSnapshotCache
   private modelProfile?: ModelCapabilityProfile
   private recentToolEvents: ToolExecutionEvent[] = []
   private turnIndex = 0
@@ -280,6 +282,7 @@ export class Session {
           protocol: this.contextProtocol,
           modelGroupId: this.contextModelGroupId,
           baseUrl: this.contextBaseUrl,
+          promptSnapshotCache: this.contextPromptSnapshotCache,
         },
       } : {}),
     })
@@ -447,6 +450,7 @@ export class Session {
           protocol: this.contextProtocol,
           modelGroupId: this.contextModelGroupId,
           baseUrl: this.contextBaseUrl,
+          promptSnapshotCache: this.contextPromptSnapshotCache,
         }
       },
     }))
@@ -553,6 +557,7 @@ export class Session {
     protocol?: ProviderProtocol | 'openai'
     modelGroupId?: string
     baseUrl?: string
+    promptSnapshotCache?: ContextPromptSnapshotCache
   }): void {
     this.contextConfig = resolveContextEngineConfig(options.config)
     this.contextScheduler = options.scheduler ?? this.createContextScheduler()
@@ -562,6 +567,7 @@ export class Session {
     this.contextProtocol = normalizeProviderProtocol(options.protocol)
     this.contextModelGroupId = options.modelGroupId
     this.contextBaseUrl = options.baseUrl
+    this.contextPromptSnapshotCache = options.promptSnapshotCache ?? globalContextPromptSnapshotCache
   }
 
   setContextModelBindingMetadata(metadata: { protocol?: ProviderProtocol | 'openai'; modelGroupId?: string; baseUrl?: string }): void {
@@ -1269,31 +1275,43 @@ export class Session {
   }
 
   private async injectContextForRunLoop(userMessage: string): Promise<void> {
-    if (!this.contextConfig.enabled) return
+    if (!this.contextConfig.enabled || !this.contextConfig.injectionEnabled) return
     const request = await this.createContextRequest(userMessage)
     const performance = this.contextPerformanceConfig()
+    const actorProfile = mainSessionProfile(request, userMessage)
     let renderedPrompt = ''
     try {
-      renderedPrompt = await this.contextScheduler.runForeground(
+      const resolved = await this.contextScheduler.runForeground(
         'context:inject',
         performance.degradedProviderTimeoutMs,
         async (signal) => {
-          const store = await this.getContextStore()
-          if (signal.aborted) throw new Error('context injection budget expired')
-          const result = await buildContextBundle({ ...request, signal }, {
-            injectionEnabled: this.contextConfig.injectionEnabled,
-            includeAgentContract: true,
-            store,
-            providers: this.getContextProviders(),
-            providerTimeoutMs: performance.providerTimeoutMs,
-            scheduler: this.contextScheduler,
-            actorProfile: mainSessionProfile(request, userMessage),
-            id: this.contextId,
+          const requestWithSignal = { ...request, signal }
+          const snapshot = await resolveContextPromptSnapshot({
+            cache: this.contextPromptSnapshotCache,
+            request: requestWithSignal,
+            actorProfile,
+            providerProtocol: this.contextProtocol ?? normalizeProviderProtocol(this.provider.name),
+            build: async () => {
+              const store = await this.getContextStore()
+              if (signal.aborted) throw new Error('context injection budget expired')
+              const result = await buildContextBundle(requestWithSignal, {
+                injectionEnabled: this.contextConfig.injectionEnabled,
+                includeAgentContract: true,
+                store,
+                providers: this.getContextProviders(),
+                providerTimeoutMs: performance.providerTimeoutMs,
+                scheduler: this.contextScheduler,
+                actorProfile,
+                id: this.contextId,
+              })
+              return { renderedPrompt: result.renderedPrompt, bundleId: result.bundle.id }
+            },
           })
-          return result.renderedPrompt
+          return snapshot.renderedPrompt
         },
         '',
       )
+      renderedPrompt = resolved
     } catch (error) {
       void this.saveContextInjectionDiagnostic(error)
     }

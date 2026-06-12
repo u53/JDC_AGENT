@@ -22,6 +22,7 @@ import type { Message, ModelConfig, StreamChunk, ToolDefinition } from './types.
 import { closeAllContextStores, type ContextStoreResult } from './context/store.js'
 import type { ContextRequest, HarvestJob } from './context/types.js'
 import type { ContextScheduler } from './context/scheduler.js'
+import { ContextPromptSnapshotCache } from './context/prompt-snapshot-cache.js'
 
 const tmpDirs: string[] = []
 
@@ -508,6 +509,163 @@ describe('Session JDC Context Engine runtime integration', () => {
 
     await fallbackSession.sendMessage('context failure should not fail chat', makeEvents())
     expect(fallbackSession.getMessages().at(-1)?.content).toEqual([{ type: 'text', text: 'still works' }])
+  })
+
+  it('reuses the same rendered context prompt for the same main-session intent inside the snapshot window', async () => {
+    const cache = new ContextPromptSnapshotCache({ now: () => 10_000 })
+    const store = makeContextStore()
+    let collectCount = 0
+    const prompts: string[] = []
+    const session = await makeSession({
+      provider: providerFromChunks([
+        { type: 'text_delta', text: 'first' },
+        { type: 'message_end', usage: { inputTokens: 10, outputTokens: 2 } },
+        { type: 'text_delta', text: 'second' },
+        { type: 'message_end', usage: { inputTokens: 10, outputTokens: 2 } },
+      ], (_messages, config) => {
+        prompts.push(textFromSystemPrompt(config.systemPrompt))
+      }),
+      contextConfig: { injectionEnabled: true, harvestEnabled: false },
+      contextStore: store,
+      contextProviders: [{
+        id: 'runtime',
+        collect: async () => {
+          collectCount++
+          return {
+            evidence: [],
+            sections: [{
+              id: `section_runtime_${collectCount}`,
+              kind: 'runtime_state',
+              title: 'Runtime context',
+              content: `Runtime snapshot ${collectCount}`,
+              citations: [],
+              priority: 90,
+              confidence: 0.9,
+              freshness: 'live',
+              sourceProvider: 'RuntimeSignalProvider',
+              tokenEstimate: 4,
+            }],
+            diagnostics: [],
+            health: { id: 'runtime', status: 'enabled', updatedAt: 1 },
+          }
+        },
+      }],
+      promptSnapshotCache: cache,
+    })
+
+    await session.sendMessage('Fix cache bug', makeEvents())
+    await session.sendMessage(' fix   cache bug ', makeEvents())
+
+    expect(collectCount).toBe(1)
+    expect(store.saveBundleSnapshot).toHaveBeenCalledTimes(1)
+    expect(prompts).toHaveLength(2)
+    expect(prompts[0]).toContain('Runtime snapshot 1')
+    expect(prompts[1]).toContain('Runtime snapshot 1')
+    expect(prompts[1]).not.toContain('Runtime snapshot 2')
+    expect(prompts[1]).toBe(prompts[0])
+  })
+
+  it('refreshes the main-session context prompt after the snapshot window expires', async () => {
+    let now = 10_000
+    const cache = new ContextPromptSnapshotCache({ now: () => now })
+    let collectCount = 0
+    const prompts: string[] = []
+    const session = await makeSession({
+      provider: providerFromChunks([
+        { type: 'text_delta', text: 'first' },
+        { type: 'message_end', usage: { inputTokens: 10, outputTokens: 2 } },
+        { type: 'text_delta', text: 'second' },
+        { type: 'message_end', usage: { inputTokens: 10, outputTokens: 2 } },
+      ], (_messages, config) => {
+        prompts.push(textFromSystemPrompt(config.systemPrompt))
+      }),
+      contextConfig: { injectionEnabled: true, harvestEnabled: false },
+      contextStore: makeContextStore(),
+      contextProviders: [{
+        id: 'runtime',
+        collect: async () => {
+          collectCount++
+          return {
+            evidence: [],
+            sections: [{
+              id: `section_runtime_${collectCount}`,
+              kind: 'runtime_state',
+              title: 'Runtime context',
+              content: `Runtime snapshot ${collectCount}`,
+              citations: [],
+              priority: 90,
+              confidence: 0.9,
+              freshness: 'live',
+              sourceProvider: 'RuntimeSignalProvider',
+              tokenEstimate: 4,
+            }],
+            diagnostics: [],
+            health: { id: 'runtime', status: 'enabled', updatedAt: 1 },
+          }
+        },
+      }],
+      promptSnapshotCache: cache,
+    })
+
+    await session.sendMessage('Fix cache bug', makeEvents())
+    now += 5 * 60_000 + 1
+    await session.sendMessage('fix cache bug', makeEvents())
+
+    expect(collectCount).toBe(2)
+    expect(prompts[0]).toContain('Runtime snapshot 1')
+    expect(prompts[1]).toContain('Runtime snapshot 2')
+    expect(prompts[1]).not.toBe(prompts[0])
+  })
+
+  it('does not share main-session context snapshots across different user intents', async () => {
+    const cache = new ContextPromptSnapshotCache({ now: () => 10_000 })
+    let collectCount = 0
+    const prompts: string[] = []
+    const session = await makeSession({
+      provider: providerFromChunks([
+        { type: 'text_delta', text: 'first' },
+        { type: 'message_end', usage: { inputTokens: 10, outputTokens: 2 } },
+        { type: 'text_delta', text: 'second' },
+        { type: 'message_end', usage: { inputTokens: 10, outputTokens: 2 } },
+      ], (_messages, config) => {
+        prompts.push(textFromSystemPrompt(config.systemPrompt))
+      }),
+      contextConfig: { injectionEnabled: true, harvestEnabled: false },
+      contextStore: makeContextStore(),
+      contextProviders: [{
+        id: 'runtime',
+        collect: async () => {
+          collectCount++
+          return {
+            evidence: [],
+            sections: [{
+              id: `section_runtime_${collectCount}`,
+              kind: 'runtime_state',
+              title: 'Runtime context',
+              content: `Runtime snapshot ${collectCount}`,
+              citations: [],
+              priority: 90,
+              confidence: 0.9,
+              freshness: 'live',
+              sourceProvider: 'RuntimeSignalProvider',
+              tokenEstimate: 4,
+            }],
+            diagnostics: [],
+            health: { id: 'runtime', status: 'enabled', updatedAt: 1 },
+          }
+        },
+      }],
+      promptSnapshotCache: cache,
+    })
+
+    await session.sendMessage('Fix cache bug', makeEvents())
+    await session.sendMessage('Review provider prompt shape', makeEvents())
+
+    expect(collectCount).toBe(2)
+    expect(prompts[0]).toContain('<jdc-context-engine')
+    expect(prompts[1]).toContain('<jdc-context-engine')
+    expect(prompts[1]).not.toBe(prompts[0])
+    expect(prompts[1]).toContain('Review provider prompt shape')
   })
 
   it('passes active task refs into context requests without copying task content', async () => {
@@ -1418,6 +1576,7 @@ async function makeSession(options: {
   runtimeProtocol?: 'anthropic' | 'openai' | 'openai-chat' | 'openai-responses'
   sessionModelId?: string
   scheduler?: ReturnType<typeof makeManualScheduler>
+  promptSnapshotCache?: ContextPromptSnapshotCache
 } = {}) {
   const dir = makeTempDir()
   const history = new ConversationHistory(path.join(dir, 'history.db'))
@@ -1439,6 +1598,7 @@ async function makeSession(options: {
     protocol: options.providerProtocol,
     modelGroupId: options.modelGroupId,
     baseUrl: options.baseUrl,
+    promptSnapshotCache: options.promptSnapshotCache,
   })
   if (options.runtimeProtocol) (session as any)._protocol = options.runtimeProtocol
   return session
