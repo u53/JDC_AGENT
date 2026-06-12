@@ -114,6 +114,9 @@ export interface StreamChunk {
 export interface PromptSegment {
   content: string
   cacheable: boolean
+  // Marks the auto-injected <jdc-context-engine> snapshot bundle so providers can
+  // keep it in the stable cacheable prefix rather than the dynamic tail.
+  jdcContextEngine?: boolean
 }
 
 export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'

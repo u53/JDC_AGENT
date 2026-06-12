@@ -24,7 +24,7 @@ const request: ContextRequest = {
 }
 
 describe('ContextPromptSnapshotCache', () => {
-  it('derives stable keys from normalized intent and isolates actor, project, mode, and model', () => {
+  it('derives stable keys across user turns and isolates actor, project, mode, and model', () => {
     const profile: ContextPromptSnapshotActorProfile = {
       actor: 'main_session',
       sessionId: 'session_1',
@@ -35,8 +35,9 @@ describe('ContextPromptSnapshotCache', () => {
       actorProfile: profile,
       providerProtocol: 'anthropic',
     })
-    const sameIntent = createContextPromptSnapshotKey({
-      request: { ...request, userMessage: ' fix cache   bug ' },
+    const nextTurnRequest: ContextRequest = { ...request, userMessage: 'Review provider prompt shape' }
+    const nextTurn = createContextPromptSnapshotKey({
+      request: nextTurnRequest,
       actorProfile: profile,
       providerProtocol: 'anthropic',
     })
@@ -61,7 +62,7 @@ describe('ContextPromptSnapshotCache', () => {
       providerProtocol: 'openai-responses',
     })
 
-    expect(sameIntent).toBe(first)
+    expect(nextTurn).toBe(first)
     expect(differentActor).not.toBe(first)
     expect(differentProject).not.toBe(first)
     expect(differentMode).not.toBe(first)

@@ -8,6 +8,7 @@ import { withStreamRetry } from './stream-retry.js'
 
 const CC_VERSION = '2.1.139'
 const FINGERPRINT_SALT = '59cf53e54c78'
+const TOOL_RESULT_CACHE_CHECKPOINT = '<tool-result-cache-checkpoint/>'
 
 // Stable device_id and session_id per process run. metadata.user_id must
 // not change across requests in the same conversation, or some relays use
@@ -16,6 +17,16 @@ const STABLE_DEVICE_ID = (globalThis as any).__JDC_DEVICE_ID__
   || ((globalThis as any).__JDC_DEVICE_ID__ = (globalThis as any).crypto?.randomUUID?.() || Math.random().toString(36).slice(2))
 const STABLE_SESSION_ID = (globalThis as any).__JDC_SESSION_ID__
   || ((globalThis as any).__JDC_SESSION_ID__ = (globalThis as any).crypto?.randomUUID?.() || Math.random().toString(36).slice(2))
+
+// Client Code Hash. The relay only checks it exists and is non-zero, but it sits
+// in system[0] (the billing header) — which is part of the cached prefix — so it
+// MUST be byte-stable across turns. Generate once per process; never per-request
+// (a per-request cch changes system[0] and kills every downstream cache read).
+const STABLE_CCH = (() => {
+  const seed = `${STABLE_DEVICE_ID}${STABLE_SESSION_ID}${CC_VERSION}`
+  const h = createHash('sha256').update(seed).digest('hex').slice(0, 5)
+  return h === '00000' ? 'a1b2c' : h
+})()
 
 function computeFingerprint(firstUserText: string): string {
   const indices = [4, 7, 20]
@@ -26,55 +37,105 @@ function computeFingerprint(firstUserText: string): string {
 
 function getAttributionHeader(fingerprint: string): string {
   const version = `${CC_VERSION}.${fingerprint}`
-  return `x-anthropic-billing-header: cc_version=${version}; cc_entrypoint=cli;`
+  return `x-anthropic-billing-header: cc_version=${version}; cc_entrypoint=cli; cch=${STABLE_CCH};`
+}
+
+// Canonical Claude Code beta header set (docs/claude-code-impersonation.md). The
+// relay validates the request against the real CC fingerprint and only serves
+// prompt-cache READS for the canonical shape — `claude-code-20250219` is the core
+// identity and the full string is what genuine CC sends. Keep this list byte-exact
+// and in this order; do NOT trim it to "look cleaner" — deviating drops the relay
+// to a write-only / non-CC path. Order is stable across requests so it never
+// perturbs the cached prefix.
+const STREAM_BETAS = [
+  'interleaved-thinking-2025-05-14',
+  'claude-code-20250219',
+  'context-1m-2025-08-07',
+  'token-efficient-tools-2026-03-28',
+  'structured-outputs-2025-12-15',
+  'effort-2025-11-24',
+  'prompt-caching-scope-2026-01-05',
+] as const
+
+export function buildStreamBetas(): string[] {
+  return [...STREAM_BETAS]
+}
+
+// --- Prompt-cache diagnostic (opt-in via JDC_CACHE_DEBUG) ---------------------
+// Logs a per-block hash of the cached prefix (betas + tools + each system block)
+// and flags which block CHANGED from the previous request in this process. If the
+// relay keeps returning cache writes only, the changed block is the silent
+// invalidator; if nothing changes across turns yet reads stay zero, the problem
+// is the relay/account, not our prompt shape.
+const __lastPrefixHashes: string[] = []
+function sha8(s: string): string {
+  return createHash('sha1').update(s).digest('hex').slice(0, 8)
+}
+function debugPromptPrefix(params: any, betaHeaders: string): void {
+  const blocks: Array<{ where: string; hash: string }> = []
+  blocks.push({ where: 'betas', hash: sha8(betaHeaders) })
+  blocks.push({ where: `tools[x${(params.tools || []).length}]`, hash: sha8(JSON.stringify(params.tools || [])) })
+  const system = Array.isArray(params.system) ? params.system : (params.system ? [{ text: params.system }] : [])
+  system.forEach((b: any, i: number) => blocks.push({ where: `system[${i}]${b?.cache_control ? '*' : ''}`, hash: sha8(b?.text || '') }))
+  const diff = blocks.map((b, i) => ({ ...b, changed: __lastPrefixHashes[i] !== undefined && __lastPrefixHashes[i] !== b.hash }))
+  __lastPrefixHashes.length = 0
+  for (const b of blocks) __lastPrefixHashes.push(b.hash)
+  // eslint-disable-next-line no-console
+  console.error('[jdc-cache] prefix', JSON.stringify(diff))
+}
+function debugPromptUsage(usage: { inputTokens: number; cacheCreationInputTokens: number; cacheReadInputTokens: number }): void {
+  // eslint-disable-next-line no-console
+  console.error('[jdc-cache] usage', JSON.stringify({ read: usage.cacheReadInputTokens, write: usage.cacheCreationInputTokens, uncached: usage.inputTokens }))
+}
+
+// Partition system segments into three caching tiers so the rendered prompt is
+// ordered stable→volatile, which is what Anthropic prefix caching requires:
+//
+//   base    — cacheable, shared across actors/turns (identity, engine
+//             instructions, project rules). Cached prefix #1.
+//   cached  — everything byte-stable across turns: base prompt (identity, engine
+//             instructions, rules) + the auto-injected <jdc-context-engine>
+//             snapshot bundle (cacheable:true). MERGED into ONE block with a
+//             single cache_control.
+//   dynamic — non-cacheable, changes every turn (active tasks, model groups,
+//             per-request markers). Never marked, sits after the cached block.
+//
+// IMPORTANT — relay shape contract (docs/claude-code-impersonation.md): the relay
+// validates the request against the canonical Claude Code shape and only serves
+// prompt-cache READS for it. That shape is: system[0] = billing header (no
+// cache_control), system[1] = ONE merged cacheable block, optional dynamic tail.
+// Do NOT split the cacheable content across multiple breakpoints — extra system
+// blocks / breakpoints deviate from the fingerprint and the relay falls back to
+// write-only (and >4-5 system blocks 400s upstream).
+function partitionSystemSegments(segments: PromptSegment[]): { cached: string[]; dynamic: string[] } {
+  const base: string[] = []
+  const engine: string[] = []
+  const dynamic: string[] = []
+  for (const seg of segments) {
+    if (!seg.content) continue
+    if (seg.jdcContextEngine) engine.push(seg.content)
+    else if (seg.cacheable) base.push(seg.content)
+    else dynamic.push(seg.content)
+  }
+  // base first, then the engine snapshot — one stable cacheable prefix.
+  return { cached: [...base, ...engine], dynamic }
 }
 
 function resolveSystemPrompt(systemPrompt?: string | PromptSegment[]): any {
   if (!systemPrompt) return undefined
   if (typeof systemPrompt === 'string') return [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }]
 
-  // Anthropic allows up to 4 cache_control breakpoints PER REQUEST (across
-  // system + tools + messages). We reserve 1 for tools, 1 for the last user
-  // message — leaving up to 2 for system prompt segments. Place them at
-  // strategic boundaries so the maximum prefix is reused across calls:
-  //
-  //   1. End of the FIRST cacheable segment   → matches "anyone with the same
-  //      base preamble" (e.g. all team workers share the main session base).
-  //   2. End of the LAST cacheable segment    → matches "anyone with the full
-  //      stable prefix" (the heavy hitter for repeated turns of the same role).
-  //
-  // Leaving any non-cacheable tail un-marked is correct: it would invalidate
-  // every call anyway. resolveSystemPrompt only adds breakpoints to segments
-  // explicitly tagged cacheable.
-  const cacheableIdxs: number[] = []
-  for (let i = 0; i < systemPrompt.length; i++) {
-    if (systemPrompt[i].cacheable) cacheableIdxs.push(i)
-  }
-  const breakpointSet = new Set<number>()
-  if (cacheableIdxs.length > 0) {
-    breakpointSet.add(cacheableIdxs[cacheableIdxs.length - 1])
-  }
-  if (cacheableIdxs.length > 1) {
-    breakpointSet.add(cacheableIdxs[0])
-  }
-
+  const { cached, dynamic } = partitionSystemSegments(systemPrompt)
   const blocks: any[] = []
-  for (let i = 0; i < systemPrompt.length; i++) {
-    const seg = systemPrompt[i]
-    if (!seg.content) continue
-    const block: any = { type: 'text', text: seg.content }
-    if (breakpointSet.has(i)) {
-      block.cache_control = { type: 'ephemeral' }
-    }
-    blocks.push(block)
-  }
+  if (cached.length > 0) blocks.push({ type: 'text', text: cached.join('\n\n'), cache_control: { type: 'ephemeral' } })
+  if (dynamic.length > 0) blocks.push({ type: 'text', text: dynamic.join('\n\n') })
   return blocks
 }
 
 function resolveStreamSystemPrompt(systemPrompt: string | PromptSegment[] | undefined, attribution: string): any[] {
   const result: any[] = []
 
-  // Block 1: attribution header (no cache_control, stable across requests)
+  // Block 0: billing/attribution header (no cache_control, stable across turns).
   if (attribution) {
     result.push({ type: 'text', text: attribution })
   }
@@ -86,28 +147,17 @@ function resolveStreamSystemPrompt(systemPrompt: string | PromptSegment[] | unde
     return result
   }
 
-  // Structured segments: separate cacheable (stable) from non-cacheable (dynamic)
-  const segments = systemPrompt || []
-  const cacheableParts: string[] = []
-  const dynamicParts: string[] = []
+  const { cached, dynamic } = partitionSystemSegments(systemPrompt || [])
 
-  for (const seg of segments) {
-    if (!seg.content) continue
-    if (seg.cacheable) {
-      cacheableParts.push(seg.content)
-    } else {
-      dynamicParts.push(seg.content)
-    }
+  // Block 1: the single merged cacheable block (base + engine snapshot). ONE
+  // breakpoint — this is the shape the relay caches against.
+  if (cached.length > 0) {
+    result.push({ type: 'text', text: cached.join('\n\n'), cache_control: { type: 'ephemeral' } })
   }
 
-  // Block 2: all cacheable content merged (with cache_control)
-  if (cacheableParts.length > 0) {
-    result.push({ type: 'text', text: cacheableParts.join('\n\n'), cache_control: { type: 'ephemeral' } })
-  }
-
-  // Block 3: all dynamic content merged (no cache_control — changes every turn)
-  if (dynamicParts.length > 0) {
-    result.push({ type: 'text', text: dynamicParts.join('\n\n') })
+  // Block 2: dynamic content (no cache_control — changes every turn).
+  if (dynamic.length > 0) {
+    result.push({ type: 'text', text: dynamic.join('\n\n') })
   }
 
   return result
@@ -312,15 +362,11 @@ export class AnthropicProvider implements ModelProvider {
 
   private async *streamRawOnce(params: any, signal?: AbortSignal): AsyncIterable<StreamChunk> {
     const url = this.baseURL.replace(/\/$/, '') + '/v1/messages?beta=true'
-    const betaHeaders = [
-      'interleaved-thinking-2025-05-14',
-      'claude-code-20250219',
-      'context-1m-2025-08-07',
-      'token-efficient-tools-2026-03-28',
-      'structured-outputs-2025-12-15',
-      'effort-2025-11-24',
-      'prompt-caching-scope-2026-01-05',
-    ].join(',')
+    const betaHeaders = buildStreamBetas().join(',')
+    // Canonical Claude Code header envelope (docs/claude-code-impersonation.md).
+    // x-client-request-id is per-request by design in real CC and is NOT part of
+    // the prompt-cache key (genuine CC reads cache with it), so it is restored to
+    // match the validated fingerprint.
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'x-api-key': this.apiKey,
@@ -329,7 +375,7 @@ export class AnthropicProvider implements ModelProvider {
       'User-Agent': `claude-cli/${CC_VERSION} (consumer, cli)`,
       'x-app': 'cli',
       'X-Claude-Code-Session-Id': STABLE_SESSION_ID,
-      'x-client-request-id': crypto.randomUUID(),
+      'x-client-request-id': (globalThis as any).crypto?.randomUUID?.() || `${Date.now()}`,
       'X-Stainless-Lang': 'js',
       'X-Stainless-Package-Version': '0.39.0',
       'X-Stainless-OS': process.platform,
@@ -338,6 +384,7 @@ export class AnthropicProvider implements ModelProvider {
       'X-Stainless-Runtime-Version': process.versions.node,
       'x-stainless-retry-count': '0',
     }
+    if (process.env.JDC_CACHE_DEBUG) debugPromptPrefix(params, betaHeaders)
     const body = JSON.stringify(params)
 
     const response = await fetch(url, {
@@ -383,6 +430,7 @@ export class AnthropicProvider implements ModelProvider {
             usage.outputTokens = event.message.usage.output_tokens || 0
             usage.cacheCreationInputTokens = event.message.usage.cache_creation_input_tokens || 0
             usage.cacheReadInputTokens = event.message.usage.cache_read_input_tokens || 0
+            if (process.env.JDC_CACHE_DEBUG) debugPromptUsage(usage)
           }
         } else if (event.type === 'message_delta') {
           if (event.usage) {
@@ -519,6 +567,23 @@ export class AnthropicProvider implements ModelProvider {
           }
         }
       }
+    }
+
+    let latestToolResultCheckpoint: any | undefined
+    for (const msg of merged) {
+      if (msg.role !== 'user') continue
+      const content = Array.isArray(msg.content) ? msg.content as any[] : []
+      if (!content.some((b: any) => b.type === 'tool_result')) continue
+      let checkpoint = content.find((b: any) => b.type === 'text' && b.text === TOOL_RESULT_CACHE_CHECKPOINT)
+      if (!checkpoint) {
+        checkpoint = { type: 'text', text: TOOL_RESULT_CACHE_CHECKPOINT }
+        content.push(checkpoint)
+      }
+      msg.content = content as any
+      latestToolResultCheckpoint = checkpoint
+    }
+    if (latestToolResultCheckpoint) {
+      latestToolResultCheckpoint.cache_control = { type: 'ephemeral' }
     }
 
     // Add cache_control to the last message (user or assistant) — matches Claude Code's

@@ -1876,7 +1876,11 @@ function nonEmptyString(value: unknown): string | undefined {
 }
 
 function appendContextPromptSegment(systemPrompt: ModelConfig['systemPrompt'], renderedPrompt: string): ModelConfig['systemPrompt'] {
-  const segment = { content: renderedPrompt, cacheable: false, jdcContextEngine: true }
+  // The bundle is now served from a stable per-window snapshot, so it is
+  // byte-stable across turns and SHOULD be cached. cacheable:true makes the
+  // provider merge it into the stable cacheable system block with the base
+  // prompt instead of the dynamic tail.
+  const segment = { content: renderedPrompt, cacheable: true, jdcContextEngine: true }
   if (Array.isArray(systemPrompt)) return [...removeContextPromptSegments(systemPrompt) as NonNullable<ModelConfig['systemPrompt']> & Array<{ content: string; cacheable: boolean }>, segment]
   if (typeof systemPrompt === 'string' && systemPrompt.length > 0) return [{ content: systemPrompt, cacheable: true }, segment]
   return [segment]

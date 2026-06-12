@@ -4,7 +4,7 @@
 
 **Goal:** Add a 5 minute in-process rendered prompt snapshot for JDC Context Engine system prompt injection.
 
-**Architecture:** Add a focused `ContextPromptSnapshotCache` module that derives stable keys from project, actor, mode, normalized intent, and model/protocol. Main session, sub-session, and Team PM injection paths call one shared helper before `buildContextBundle()`, so cache hits reuse the exact rendered `<jdc-context-engine>` prompt without changing provider request shapes or context capacity behavior.
+**Architecture:** Add a focused `ContextPromptSnapshotCache` module that derives stable keys from project, actor, mode, model/protocol, model profile, and actor selection bucket. Main session, sub-session, and Team PM injection paths call one shared helper before `buildContextBundle()`, so cache hits reuse the exact rendered `<jdc-context-engine>` prompt across user turns for five minutes without changing provider request shapes or context capacity behavior.
 
 **Tech Stack:** TypeScript, Vitest, existing `ContextRequest` / `ActorContextProfile` types, existing Context Engine orchestrator, existing prompt segment system.
 
@@ -65,7 +65,7 @@ const request: ContextRequest = {
 }
 
 describe('ContextPromptSnapshotCache', () => {
-  it('derives stable keys from normalized intent and isolates actor, project, mode, and model', () => {
+  it('derives stable keys across user turns and isolates actor, project, mode, and model', () => {
     const profile: ActorContextProfile = {
       actor: 'main_session',
       sessionId: 'session_1',
@@ -338,7 +338,6 @@ export function createContextPromptSnapshotKey(input: ContextPromptSnapshotKeyIn
     projectRoot: path.resolve(input.request.cwd),
     actorKey: actorKey(input.actorProfile, input.request.sessionId),
     mode: input.request.mode,
-    normalizedIntentHash: hashText(normalizeIntent(input.request.userMessage)),
     modelFamilyKey: modelFamilyKey(input.providerProtocol, input.request.model),
   }
   return `ctx_prompt_snapshot_${hashText(JSON.stringify(parts)).slice(0, 24)}`
@@ -408,7 +407,7 @@ import { ContextPromptSnapshotCache } from './context/prompt-snapshot-cache.js'
 Then add these tests inside `describe('Session JDC Context Engine runtime integration', () => { ... })`, after the existing test named `injects a protocol-neutral context bundle before streaming and falls back when bundle generation fails`:
 
 ```ts
-  it('reuses the same rendered context prompt for the same main-session intent inside the snapshot window', async () => {
+  it('reuses the same rendered context prompt across main-session user turns inside the snapshot window', async () => {
     const cache = new ContextPromptSnapshotCache({ now: () => 10_000 })
     const store = makeContextStore()
     let collectCount = 0
@@ -514,7 +513,7 @@ Then add these tests inside `describe('Session JDC Context Engine runtime integr
     expect(prompts[1]).not.toBe(prompts[0])
   })
 
-  it('does not share main-session context snapshots across different user intents', async () => {
+  it('reuses main-session context snapshots across different user turns inside the snapshot window', async () => {
     const cache = new ContextPromptSnapshotCache({ now: () => 10_000 })
     let collectCount = 0
     const prompts: string[] = []
@@ -1155,7 +1154,7 @@ git commit -m "test(context): lock snapshot prompt provider contract"
 
 ## Final Acceptance
 
-- Same project + actor + mode + normalized intent + model/protocol reuses identical rendered JDC Context Engine prompt for 5 minutes.
+- Same project + actor + mode + model/protocol + model profile + selection bucket reuses identical rendered JDC Context Engine prompt for 5 minutes, even when the next user turn text differs.
 - Empty rendered prompts are not cached.
 - Expired snapshots rebuild normally.
 - Main session, sub-session, and Team PM all use the same cache helper.

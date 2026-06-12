@@ -1,6 +1,18 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import { AnthropicProvider } from '../src/providers/anthropic.js'
+import { AnthropicProvider, buildStreamBetas } from '../src/providers/anthropic.js'
 import type { Message, ModelConfig, StreamChunk, ToolDefinition } from '../src/types.js'
+
+// Canonical Claude Code beta set the relay validates against
+// (docs/claude-code-impersonation.md). Must be sent byte-exact and in order.
+const CANONICAL_STREAM_BETAS = [
+  'interleaved-thinking-2025-05-14',
+  'claude-code-20250219',
+  'context-1m-2025-08-07',
+  'token-efficient-tools-2026-03-28',
+  'structured-outputs-2025-12-15',
+  'effort-2025-11-24',
+  'prompt-caching-scope-2026-01-05',
+]
 
 function anthropicSse(events: any[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder()
@@ -68,6 +80,41 @@ describe('AnthropicProvider', () => {
     expect(formatted[0]).toEqual({ role: 'user', content: [{ type: 'text', text: 'hello', cache_control: { type: 'ephemeral' } }] })
   })
 
+  it('uses a stable text checkpoint after tool_result blocks for message cache reuse', () => {
+    const provider = new AnthropicProvider('test-key')
+    const formatted = (provider as any).formatMessages([
+      { id: '1', role: 'user', content: [{ type: 'text', text: 'read src/App.tsx' }], timestamp: Date.now() },
+      { id: '2', role: 'assistant', content: [{ type: 'tool_use', id: 'tool_1', name: 'Read', input: { file_path: 'src/App.tsx' } }], timestamp: Date.now() },
+      { id: '3', role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tool_1', content: 'file contents' }], timestamp: Date.now() },
+    ])
+
+    const toolResultMessage = formatted[2]
+    expect(toolResultMessage.role).toBe('user')
+    expect(toolResultMessage.content).toEqual([
+      { type: 'tool_result', tool_use_id: 'tool_1', content: 'file contents' },
+      { type: 'text', text: '<tool-result-cache-checkpoint/>', cache_control: { type: 'ephemeral' } },
+    ])
+  })
+
+  it('keeps the latest tool_result checkpoint cacheable alongside the latest user cache marker', () => {
+    const provider = new AnthropicProvider('test-key')
+    const formatted = (provider as any).formatMessages([
+      { id: '1', role: 'user', content: [{ type: 'text', text: 'read src/App.tsx' }], timestamp: Date.now() },
+      { id: '2', role: 'assistant', content: [{ type: 'tool_use', id: 'tool_1', name: 'Read', input: { file_path: 'src/App.tsx' } }], timestamp: Date.now() },
+      { id: '3', role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tool_1', content: 'file contents' }], timestamp: Date.now() },
+      { id: '4', role: 'assistant', content: [{ type: 'text', text: 'done' }], timestamp: Date.now() },
+      { id: '5', role: 'user', content: [{ type: 'text', text: 'next turn' }], timestamp: Date.now() },
+    ])
+
+    expect(formatted[2].content).toEqual([
+      { type: 'tool_result', tool_use_id: 'tool_1', content: 'file contents' },
+      { type: 'text', text: '<tool-result-cache-checkpoint/>', cache_control: { type: 'ephemeral' } },
+    ])
+    expect(formatted[4].content).toEqual([
+      { type: 'text', text: 'next turn', cache_control: { type: 'ephemeral' } },
+    ])
+  })
+
   it('should map content blocks', () => {
     const provider = new AnthropicProvider('test-key')
     const textBlock = (provider as any).mapContentBlock({ type: 'text', text: 'hi' })
@@ -112,6 +159,54 @@ describe('AnthropicProvider', () => {
     const dynamicBlocks = system.filter((block: any) => block.text.includes('dynamic system prompt'))
     expect(dynamicBlocks).toHaveLength(1)
     expect(dynamicBlocks[0]).not.toHaveProperty('cache_control')
+  })
+
+  it('sends the canonical Claude Code envelope the relay validates against', async () => {
+    const captured: Array<{ headers: Record<string, string> }> = []
+    vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
+      captured.push({ headers: (init as RequestInit).headers as Record<string, string> })
+      return new Response(anthropicSse([
+        { type: 'message_start', message: { usage: { input_tokens: 1, output_tokens: 0 } } },
+        { type: 'message_stop' },
+      ]), { status: 200 })
+    }))
+
+    const provider = new AnthropicProvider('test-key')
+    await collect(provider.stream(streamMessages, streamTools, streamConfig))
+
+    // Beta string must match the validated CC fingerprint byte-exact and in order.
+    expect(captured[0].headers['anthropic-beta']).toBe(CANONICAL_STREAM_BETAS.join(','))
+    // x-client-request-id is part of the genuine CC envelope (not a cache key).
+    expect(captured[0].headers).toHaveProperty('x-client-request-id')
+    expect(captured[0].headers['x-app']).toBe('cli')
+  })
+
+  it('builds the canonical beta list', () => {
+    expect(buildStreamBetas()).toEqual(CANONICAL_STREAM_BETAS)
+  })
+
+  it('puts a stable, non-zero cch in the billing header (system[0])', async () => {
+    const systems: any[][] = []
+    vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
+      systems.push(JSON.parse(String((init as RequestInit).body)).system)
+      return new Response(anthropicSse([
+        { type: 'message_start', message: { usage: { input_tokens: 1, output_tokens: 0 } } },
+        { type: 'message_stop' },
+      ]), { status: 200 })
+    }))
+
+    const provider = new AnthropicProvider('test-key')
+    await collect(provider.stream(streamMessages, streamTools, streamConfig))
+    await collect(provider.stream(streamMessages, streamTools, streamConfig))
+
+    const cch = (text: string) => text.match(/cch=([0-9a-f]+);/)?.[1]
+    const cch1 = cch(systems[0][0].text)
+    expect(cch1).toMatch(/^[0-9a-f]{5}$/)
+    expect(cch1).not.toBe('00000')
+    // billing header (system[0]) must be byte-identical across turns, or the
+    // cached block after it can never read.
+    expect(systems[0][0].text).toBe(systems[1][0].text)
+    expect(systems[0][0]).not.toHaveProperty('cache_control')
   })
 
   it('does not send a Claude persona in Anthropic stream system blocks', async () => {

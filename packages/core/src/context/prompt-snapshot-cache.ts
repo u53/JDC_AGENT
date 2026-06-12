@@ -24,7 +24,7 @@ export type ContextPromptSnapshotActorProfile =
   Partial<Pick<ActorContextProfile, 'sessionId' | 'subSessionId' | 'teamId' | 'memberId' | 'taskId' | 'fileScope' | 'preferredFactCount'>>
 
 export interface ContextPromptSnapshotKeyInput {
-  request: Pick<ContextRequest, 'cwd' | 'sessionId' | 'mode' | 'userMessage' | 'model' | 'modelProfile'>
+  request: Pick<ContextRequest, 'cwd' | 'sessionId' | 'mode' | 'model' | 'modelProfile'>
   actorProfile?: ContextPromptSnapshotActorProfile
   providerProtocol?: ProviderProtocol | 'openai' | string
 }
@@ -155,13 +155,12 @@ export function createContextPromptSnapshotKey(input: ContextPromptSnapshotKeyIn
     projectRoot: path.resolve(input.request.cwd),
     actorKey: actorKey(input.actorProfile, input.request.sessionId),
     mode: input.request.mode,
-    normalizedIntentHash: hashText(normalizeIntent(input.request.userMessage)),
     modelFamilyKey: modelFamilyKey(input.providerProtocol, input.request.model),
     // Strict vs standard model profiles inject different contract text, so the
     // rendered bundle differs even for the same prompt/model.
     modelProfileKey: modelProfileKey(input.request.modelProfile),
     // Retrieval scores/suppresses facts by file scope and preferred fact count,
-    // so two requests with the same intent but different selection knobs must
+    // so two requests in the same snapshot window with different selection knobs must
     // not share a snapshot.
     selectionKey: selectionKey(input.actorProfile),
   }
@@ -201,10 +200,6 @@ function selectionKey(profile: ContextPromptSnapshotActorProfile | undefined): s
     : 'all'
   const factCount = profile.preferredFactCount ?? 'default'
   return `scope:${fileScope}|facts:${factCount}`
-}
-
-function normalizeIntent(value: string): string {
-  return value.replace(/\s+/g, ' ').trim().toLowerCase()
 }
 
 function hashText(value: string): string {

@@ -211,6 +211,8 @@ describe('TeamManagerAI scheduling', () => {
     expect(store.saveBundleSnapshot).toHaveBeenCalledTimes(1)
     expect(firstPrompt).toContain('<jdc-context-engine')
     expect(secondPrompt).toBe(firstPrompt)
+    const contextSegment = (provider.calls[0].config.systemPrompt as any[]).find(segment => segment.content.includes('<jdc-context-engine'))
+    expect(contextSegment).toMatchObject({ cacheable: true, jdcContextEngine: true })
   }, 10000)
 
   it('shows available worker model ids to the PM', async () => {

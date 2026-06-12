@@ -33,6 +33,22 @@ describe('provider prompt contracts', () => {
     expect(chatBlocks.map((block: any) => block.text).join('\n')).toContain('<jdc-context-engine>')
   })
 
+  it('moves the snapshot JDC Context Engine segment into the OpenAI stable prompt', () => {
+    // Once the bundle is a stable snapshot (cacheable:true), it belongs in the
+    // stable (cache-eligible) prefix for OpenAI too — not the <dynamic-context>
+    // tail it used to land in when it was re-ranked every turn.
+    const parts = __openAiChatPromptTest.resolvePromptParts([
+      { content: '# Identity\nYou are JDC CODE.', cacheable: true },
+      { content: 'Active task: ship it.', cacheable: false },
+      { content: '<jdc-context-engine bundle="ctx_snap">snapshot context</jdc-context-engine>', cacheable: true, jdcContextEngine: true },
+    ])
+
+    expect(parts.stablePrompt).toContain('You are JDC CODE')
+    expect(parts.stablePrompt).toContain('<jdc-context-engine bundle="ctx_snap">')
+    expect(parts.dynamicPrompt ?? '').not.toContain('<jdc-context-engine')
+    expect(parts.dynamicPrompt ?? '').toContain('Active task')
+  })
+
   it('keeps only cacheable segments in OpenAI Chat system prompt', () => {
     const prompt = __openAiChatPromptTest.resolveSystemPrompt([
       { content: '# Identity\nYou are JDC CODE.', cacheable: true },
@@ -53,15 +69,39 @@ describe('provider prompt contracts', () => {
     expect(prompt).not.toContain('<jdc-context-engine>')
   })
 
-  it('keeps cached JDC Context Engine prompt segments outside Anthropic cache_control breakpoints', () => {
+  it('merges the snapshot JDC Context Engine segment into the single cached system block', () => {
+    // Relay shape contract: billing header (no cache) → ONE merged cacheable block
+    // (base + engine snapshot) → optional dynamic tail. Exactly one cache breakpoint.
     const cachedContext = '<jdc-context-engine bundle="ctx_cached">cached project context</jdc-context-engine>'
     const segments: PromptSegment[] = [
       { content: '# Identity\nYou are JDC CODE.', cacheable: true },
-      { content: cachedContext, cacheable: false },
+      { content: 'Active task: build the thing.', cacheable: false },
+      { content: cachedContext, cacheable: true, jdcContextEngine: true },
     ]
 
     const blocks = __anthropicPromptTest.resolveStreamSystemPrompt(segments, 'x-anthropic-billing-header: cc_version=test;')
-    const contextBlock = blocks.find((block: any) => block.text.includes('ctx_cached'))
+    const cachedBlock = blocks.find((block: any) => block.cache_control)
+    const dynamicBlock = blocks.find((block: any) => block.text.includes('Active task'))
+
+    // Exactly one breakpoint, and it carries BOTH the base identity and the engine snapshot.
+    expect(blocks.filter((block: any) => block.cache_control).length).toBe(1)
+    expect(cachedBlock?.text).toContain('You are JDC CODE')
+    expect(cachedBlock?.text).toContain('ctx_cached')
+    // Base appears before the engine snapshot inside the merged block.
+    expect(cachedBlock.text.indexOf('You are JDC CODE')).toBeLessThan(cachedBlock.text.indexOf('ctx_cached'))
+    // Dynamic content stays out of the cached block.
+    expect(dynamicBlock?.cache_control).toBeUndefined()
+    expect(cachedBlock?.text).not.toContain('Active task')
+  })
+
+  it('keeps genuinely dynamic (unflagged, non-cacheable) segments outside breakpoints', () => {
+    const segments: PromptSegment[] = [
+      { content: '# Identity\nYou are JDC CODE.', cacheable: true },
+      { content: '<jdc-context-engine bundle="ctx_dyn">uncached dynamic context</jdc-context-engine>', cacheable: false },
+    ]
+
+    const blocks = __anthropicPromptTest.resolveStreamSystemPrompt(segments, 'x-anthropic-billing-header: cc_version=test;')
+    const contextBlock = blocks.find((block: any) => block.text.includes('ctx_dyn'))
 
     expect(contextBlock).toBeDefined()
     expect(contextBlock?.cache_control).toBeUndefined()

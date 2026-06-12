@@ -617,7 +617,7 @@ describe('Session JDC Context Engine runtime integration', () => {
     expect(prompts[1]).not.toBe(prompts[0])
   })
 
-  it('does not share main-session context snapshots across different user intents', async () => {
+  it('reuses main-session context snapshots across different user turns inside the snapshot window', async () => {
     const cache = new ContextPromptSnapshotCache({ now: () => 10_000 })
     let collectCount = 0
     const prompts: string[] = []
@@ -661,11 +661,12 @@ describe('Session JDC Context Engine runtime integration', () => {
     await session.sendMessage('Fix cache bug', makeEvents())
     await session.sendMessage('Review provider prompt shape', makeEvents())
 
-    expect(collectCount).toBe(2)
+    expect(collectCount).toBe(1)
     expect(prompts[0]).toContain('<jdc-context-engine')
     expect(prompts[1]).toContain('<jdc-context-engine')
-    expect(prompts[1]).not.toBe(prompts[0])
-    expect(prompts[1]).toContain('Review provider prompt shape')
+    expect(prompts[1]).toBe(prompts[0])
+    expect(prompts[1]).toContain('Runtime snapshot 1')
+    expect(prompts[1]).not.toContain('Runtime snapshot 2')
   })
 
   it('passes active task refs into context requests without copying task content', async () => {

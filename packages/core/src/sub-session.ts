@@ -670,7 +670,9 @@ function harvestMinIntervalMs(contextConfig: ContextEngineConfig): number {
 }
 
 function appendContextPromptSegment(systemPrompt: ModelConfig['systemPrompt'], renderedPrompt: string): ModelConfig['systemPrompt'] {
-  const segment = { content: renderedPrompt, cacheable: false, jdcContextEngine: true }
+  // Snapshot bundle is byte-stable across turns → cache it with the stable base
+  // prompt instead of placing it in the dynamic tail.
+  const segment = { content: renderedPrompt, cacheable: true, jdcContextEngine: true }
   if (Array.isArray(systemPrompt)) return [...removeContextPromptSegments(systemPrompt) as NonNullable<ModelConfig['systemPrompt']> & Array<{ content: string; cacheable: boolean }>, segment]
   if (typeof systemPrompt === 'string' && systemPrompt.length > 0) return [{ content: systemPrompt, cacheable: true }, segment]
   return [segment]

@@ -71,7 +71,7 @@ function contextPerformanceConfig(contextConfig: ReturnType<typeof resolveContex
 }
 
 function appendContextPromptSegment(systemPrompt: ModelConfig['systemPrompt'], renderedPrompt: string): ModelConfig['systemPrompt'] {
-  const segment = { content: renderedPrompt, cacheable: false, jdcContextEngine: true }
+  const segment = { content: renderedPrompt, cacheable: true, jdcContextEngine: true }
   if (Array.isArray(systemPrompt)) return [...removeContextPromptSegments(systemPrompt) as NonNullable<ModelConfig['systemPrompt']> & Array<{ content: string; cacheable: boolean }>, segment]
   if (typeof systemPrompt === 'string' && systemPrompt.length > 0) return [{ content: systemPrompt, cacheable: true }, segment]
   return [segment]
