@@ -37,6 +37,7 @@ const api = {
   writeClipboard: (text: string) => clipboard.writeText(text),
   copyImageFile: (filePath: string) => ipcRenderer.invoke('images:copy-to-clipboard', { filePath }),
   showImageInFolder: (filePath: string) => ipcRenderer.invoke('images:show-in-folder', { filePath }),
+  readImageFile: (filePath: string) => ipcRenderer.invoke('images:read-image', { filePath }) as Promise<{ success: boolean; dataUrl?: string; error?: string }>,
   onImageGenerated: (callback: (payload: { sessionId: string; taskId: string; images: any[] }) => void) => {
     const listener = (_e: unknown, payload: any) => callback(payload)
     ipcRenderer.on('image:generated', listener)

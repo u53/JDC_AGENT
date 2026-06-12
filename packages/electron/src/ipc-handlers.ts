@@ -1,4 +1,5 @@
 import { ipcMain, dialog, nativeImage, shell, clipboard } from 'electron'
+import { readFileSync } from 'node:fs'
 import { IPC_CHANNELS } from './ipc-channels.js'
 import type { SessionManager } from './session-manager.js'
 import { loadAppConfig, saveAppConfig, AnthropicProvider, OpenAIChatProvider, OpenAIResponsesProvider, inspectContext, refreshContextProviders, getContextProviderHealth, createDefaultRefreshProviders, searchMemoryRecords, writeMemoryRecord, ContextInspectPayloadSchema, ContextRefreshPayloadSchema, MemorySearchPayloadSchema, MemoryWritePayloadSchema, openContextStore } from '@jdcagnet/core'
@@ -473,5 +474,15 @@ export function registerIpcHandlers(sessionManager: SessionManager, services: De
   ipcMain.handle('images:show-in-folder', (_e, { filePath }: { filePath: string }) => {
     shell.showItemInFolder(filePath)
     return { success: true }
+  })
+  ipcMain.handle('images:read-image', (_e, { filePath }: { filePath: string }) => {
+    try {
+      const buf = readFileSync(filePath)
+      const ext = filePath.split('.').pop()?.toLowerCase() ?? 'png'
+      const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : ext === 'gif' ? 'image/gif' : 'image/png'
+      return { success: true, dataUrl: `data:${mime};base64,${buf.toString('base64')}` }
+    } catch (err) {
+      return { success: false, error: (err as Error).message }
+    }
   })
 }
