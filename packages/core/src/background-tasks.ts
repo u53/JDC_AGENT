@@ -7,9 +7,20 @@ import type { TeamEvent, TeamMemberSpec, TeamMessage } from './team/team-types.j
 import { findGitBash, findPowerShell } from './utils/shell-detection.js'
 import { powerShellCommandArgs } from './utils/powershell-encoding.js'
 
-export type TaskType = 'shell' | 'agent' | 'team'
+export type TaskType = 'shell' | 'agent' | 'team' | 'image'
 
 export type BackgroundShell = 'bash' | 'powershell'
+
+export interface ImageOutput {
+  path: string
+  width?: number
+  height?: number
+  bytes: number
+  format: string
+  background: string
+  transparent: boolean
+  downloadError?: string
+}
 
 export interface BackgroundTask {
   id: string
@@ -29,6 +40,7 @@ export interface BackgroundTask {
   archiveError?: string
   turns?: number
   toolsUsed?: string[]
+  images?: ImageOutput[]
 }
 
 export class BackgroundTaskManager {
@@ -169,6 +181,35 @@ export class BackgroundTaskManager {
     task.result = error
     this.onComplete?.(task)
     this.releaseAgentSlot()
+  }
+
+  registerImage(prompt: string): BackgroundTask {
+    const id = uuid().slice(0, 8)
+    const logFile = path.join(this.logDir, `${id}.log`)
+    writeFileSync(logFile, '')
+    const task: BackgroundTask = {
+      id, type: 'image', prompt, pid: 0, status: 'running', logFile, startedAt: Date.now(),
+    }
+    this.tasks.set(id, task)
+    return task
+  }
+
+  completeImage(id: string, opts: { images: ImageOutput[] }): void {
+    const task = this.tasks.get(id)
+    if (!task || task.type !== 'image') return
+    task.status = 'completed'
+    task.completedAt = Date.now()
+    task.images = opts.images
+    this.onComplete?.(task)
+  }
+
+  failImage(id: string, error: string): void {
+    const task = this.tasks.get(id)
+    if (!task || task.type !== 'image') return
+    task.status = 'failed'
+    task.completedAt = Date.now()
+    task.result = error
+    this.onComplete?.(task)
   }
 
   registerTeam(objective: string, members: TeamMemberSpec[]): BackgroundTask {
