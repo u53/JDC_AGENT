@@ -4,6 +4,12 @@ import type { ActorContextProfile, ContextRequest, ProviderProtocol } from './ty
 
 export const CONTEXT_PROMPT_SNAPSHOT_TTL_MS = 5 * 60_000
 
+// Bound the in-process cache so unique prompts cannot accumulate large rendered
+// <jdc-context-engine> strings for the whole app lifetime. This is a memory
+// safety guard for the cache map only; it is NOT a context capacity cap on the
+// Engine bundle itself, which stays relevance-first and uncapped.
+export const CONTEXT_PROMPT_SNAPSHOT_MAX_ENTRIES = 200
+
 export interface ContextPromptSnapshot {
   key: string
   renderedPrompt: string
@@ -15,10 +21,10 @@ export interface ContextPromptSnapshot {
 
 export type ContextPromptSnapshotActorProfile =
   Pick<ActorContextProfile, 'actor'> &
-  Partial<Pick<ActorContextProfile, 'sessionId' | 'subSessionId' | 'teamId' | 'memberId' | 'taskId'>>
+  Partial<Pick<ActorContextProfile, 'sessionId' | 'subSessionId' | 'teamId' | 'memberId' | 'taskId' | 'fileScope' | 'preferredFactCount'>>
 
 export interface ContextPromptSnapshotKeyInput {
-  request: Pick<ContextRequest, 'cwd' | 'sessionId' | 'mode' | 'userMessage' | 'model'>
+  request: Pick<ContextRequest, 'cwd' | 'sessionId' | 'mode' | 'userMessage' | 'model' | 'modelProfile'>
   actorProfile?: ContextPromptSnapshotActorProfile
   providerProtocol?: ProviderProtocol | 'openai' | string
 }
@@ -26,6 +32,7 @@ export interface ContextPromptSnapshotKeyInput {
 export interface ContextPromptSnapshotCacheOptions {
   ttlMs?: number
   now?: () => number
+  maxEntries?: number
 }
 
 export interface ResolveContextPromptSnapshotOptions {
@@ -47,11 +54,13 @@ export interface ResolveContextPromptSnapshotResult {
 export class ContextPromptSnapshotCache {
   private readonly ttlMs: number
   private readonly now: () => number
+  private readonly maxEntries: number
   private readonly entries = new Map<string, ContextPromptSnapshot>()
 
   constructor(options: ContextPromptSnapshotCacheOptions = {}) {
     this.ttlMs = options.ttlMs ?? CONTEXT_PROMPT_SNAPSHOT_TTL_MS
     this.now = options.now ?? Date.now
+    this.maxEntries = options.maxEntries ?? CONTEXT_PROMPT_SNAPSHOT_MAX_ENTRIES
   }
 
   get(key: string): ContextPromptSnapshot | undefined {
@@ -61,6 +70,9 @@ export class ContextPromptSnapshotCache {
       this.entries.delete(key)
       return undefined
     }
+    // Refresh recency so the LRU eviction order reflects real usage.
+    this.entries.delete(key)
+    this.entries.set(key, snapshot)
     return snapshot
   }
 
@@ -75,11 +87,32 @@ export class ContextPromptSnapshotCache {
       source: 'fresh',
     }
     this.entries.set(key, snapshot)
+    this.pruneExpired(createdAt)
+    this.evictOverflow()
     return snapshot
   }
 
   clear(): void {
     this.entries.clear()
+  }
+
+  get size(): number {
+    return this.entries.size
+  }
+
+  private pruneExpired(reference: number): void {
+    for (const [key, snapshot] of this.entries) {
+      if (snapshot.expiresAt <= reference) this.entries.delete(key)
+    }
+  }
+
+  private evictOverflow(): void {
+    if (this.maxEntries <= 0) return
+    while (this.entries.size > this.maxEntries) {
+      const oldest = this.entries.keys().next().value
+      if (oldest === undefined) break
+      this.entries.delete(oldest)
+    }
   }
 }
 
@@ -124,6 +157,13 @@ export function createContextPromptSnapshotKey(input: ContextPromptSnapshotKeyIn
     mode: input.request.mode,
     normalizedIntentHash: hashText(normalizeIntent(input.request.userMessage)),
     modelFamilyKey: modelFamilyKey(input.providerProtocol, input.request.model),
+    // Strict vs standard model profiles inject different contract text, so the
+    // rendered bundle differs even for the same prompt/model.
+    modelProfileKey: modelProfileKey(input.request.modelProfile),
+    // Retrieval scores/suppresses facts by file scope and preferred fact count,
+    // so two requests with the same intent but different selection knobs must
+    // not share a snapshot.
+    selectionKey: selectionKey(input.actorProfile),
   }
   return `ctx_prompt_snapshot_${hashText(JSON.stringify(parts)).slice(0, 24)}`
 }
@@ -147,6 +187,20 @@ function actorKey(profile: ContextPromptSnapshotKeyInput['actorProfile'], sessio
 function modelFamilyKey(protocol: ContextPromptSnapshotKeyInput['providerProtocol'], model: string): string {
   const normalizedProtocol = protocol === 'openai' ? 'openai-chat' : (protocol || 'unknown')
   return `${normalizedProtocol}:${model}`
+}
+
+function modelProfileKey(profile: ContextRequest['modelProfile']): string {
+  if (!profile) return 'profile:none'
+  return `profile:${profile.id}:${profile.evidenceStrictness}`
+}
+
+function selectionKey(profile: ContextPromptSnapshotActorProfile | undefined): string {
+  if (!profile) return 'scope:none'
+  const fileScope = profile.fileScope && profile.fileScope.length > 0
+    ? [...profile.fileScope].sort().join(',')
+    : 'all'
+  const factCount = profile.preferredFactCount ?? 'default'
+  return `scope:${fileScope}|facts:${factCount}`
 }
 
 function normalizeIntent(value: string): string {

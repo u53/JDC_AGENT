@@ -6,7 +6,11 @@ import {
   resolveContextPromptSnapshot,
 } from './prompt-snapshot-cache.js'
 import type { ContextRequest } from './types.js'
+import type { ModelCapabilityProfile } from '../model-profile.js'
 import type { ContextPromptSnapshotActorProfile } from './prompt-snapshot-cache.js'
+
+const strictProfile = { id: 'strict_model', evidenceStrictness: 'strict' } as ModelCapabilityProfile
+const standardProfile = { id: 'standard_default', evidenceStrictness: 'standard' } as ModelCapabilityProfile
 
 const request: ContextRequest = {
   sessionId: 'session_1',
@@ -147,5 +151,81 @@ describe('ContextPromptSnapshotCache', () => {
 
     expect(forced).toMatchObject({ renderedPrompt: '<jdc-context-engine>forced</jdc-context-engine>', cacheHit: false, bundleId: 'bundle_2' })
     expect(build).toHaveBeenCalledTimes(2)
+  })
+
+  it('isolates keys by model profile id/evidence strictness and actor selection fields', () => {
+    const profile: ContextPromptSnapshotActorProfile = { actor: 'main_session', sessionId: 'session_1' }
+    const base = createContextPromptSnapshotKey({ request, actorProfile: profile, providerProtocol: 'anthropic' })
+
+    const standardKey = createContextPromptSnapshotKey({
+      request: { ...request, modelProfile: standardProfile },
+      actorProfile: profile,
+      providerProtocol: 'anthropic',
+    })
+    const strictKey = createContextPromptSnapshotKey({
+      request: { ...request, modelProfile: strictProfile },
+      actorProfile: profile,
+      providerProtocol: 'anthropic',
+    })
+    const scopedKey = createContextPromptSnapshotKey({
+      request,
+      actorProfile: { ...profile, fileScope: ['src/a.ts'] },
+      providerProtocol: 'anthropic',
+    })
+    const otherScopeKey = createContextPromptSnapshotKey({
+      request,
+      actorProfile: { ...profile, fileScope: ['src/b.ts'] },
+      providerProtocol: 'anthropic',
+    })
+    const factCountKey = createContextPromptSnapshotKey({
+      request,
+      actorProfile: { ...profile, preferredFactCount: 5 },
+      providerProtocol: 'anthropic',
+    })
+
+    expect(standardKey).not.toBe(base)
+    expect(strictKey).not.toBe(standardKey)
+    expect(scopedKey).not.toBe(base)
+    expect(otherScopeKey).not.toBe(scopedKey)
+    expect(factCountKey).not.toBe(base)
+  })
+
+  it('treats file scope as order-independent', () => {
+    const profile: ContextPromptSnapshotActorProfile = { actor: 'subagent', sessionId: 'session_1', subSessionId: 'sub_1' }
+    const ab = createContextPromptSnapshotKey({
+      request,
+      actorProfile: { ...profile, fileScope: ['src/a.ts', 'src/b.ts'] },
+      providerProtocol: 'anthropic',
+    })
+    const ba = createContextPromptSnapshotKey({
+      request,
+      actorProfile: { ...profile, fileScope: ['src/b.ts', 'src/a.ts'] },
+      providerProtocol: 'anthropic',
+    })
+    expect(ab).toBe(ba)
+  })
+
+  it('prunes expired entries and enforces the max-entry LRU cap on set', () => {
+    let now = 1_000
+    const cache = new ContextPromptSnapshotCache({ now: () => now, maxEntries: 2 })
+
+    cache.set('expiring', '<jdc-context-engine>expiring</jdc-context-engine>')
+    now += CONTEXT_PROMPT_SNAPSHOT_TTL_MS + 1
+    // A later set() should opportunistically prune the now-expired entry even
+    // though nobody read it again.
+    cache.set('fresh_1', '<jdc-context-engine>fresh_1</jdc-context-engine>')
+    expect(cache.get('expiring')).toBeUndefined()
+    expect(cache.size).toBe(1)
+
+    cache.set('fresh_2', '<jdc-context-engine>fresh_2</jdc-context-engine>')
+    expect(cache.size).toBe(2)
+    // Touch fresh_1 so it is the most-recently used, then overflow.
+    cache.get('fresh_1')
+    cache.set('fresh_3', '<jdc-context-engine>fresh_3</jdc-context-engine>')
+
+    expect(cache.size).toBe(2)
+    expect(cache.get('fresh_2')).toBeUndefined()
+    expect(cache.get('fresh_1')).toBeDefined()
+    expect(cache.get('fresh_3')).toBeDefined()
   })
 })
