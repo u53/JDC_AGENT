@@ -309,6 +309,9 @@ export class SessionManager {
       notification.show()
     }
     session.registerTool(createNotifyTool(onNotify))
+    session.onImageGenerated = (taskId: string, images: any[]) => {
+      this.window?.webContents.send('image:generated', { sessionId, taskId, images })
+    }
     session.loadHistory()
     ;(session as any)._protocol = protocol
     session.onNotificationReady = () => {
@@ -469,8 +472,34 @@ export class SessionManager {
       )
     }
 
+    // Persist user-attached reference images to .jdc-image-input/ so the model
+    // can reference them by PATH in EditImage (decision A1: everything is a path).
+    let inputImageNote = ''
+    if (extraContent?.length) {
+      try {
+        const cwd = this.getSessionCwd(sessionId) || process.cwd()
+        const inputDir = path.join(cwd, '.jdc-image-input')
+        const { mkdirSync, writeFileSync } = await import('node:fs')
+        mkdirSync(inputDir, { recursive: true })
+        const paths: string[] = []
+        extraContent.forEach((img: any, i: number) => {
+          const ext = img.source.media_type === 'image/jpeg' ? 'jpg'
+            : img.source.media_type === 'image/webp' ? 'webp'
+            : img.source.media_type === 'image/gif' ? 'gif' : 'png'
+          const file = path.join(inputDir, `input_${Date.now()}_${i + 1}.${ext}`)
+          writeFileSync(file, Buffer.from(img.source.data, 'base64'))
+          paths.push(file)
+        })
+        if (paths.length) {
+          inputImageNote = `\n\n<image-input-paths>\n${paths.join('\n')}\n</image-input-paths>`
+        }
+      } catch (err) {
+        console.warn('[IMAGE] persist input image failed:', (err as Error).message)
+      }
+    }
+
     try {
-      await session.sendMessage(text, events, extraContent)
+      await session.sendMessage(text + inputImageNote, events, extraContent)
       this.window?.webContents.send('query:finished', { sessionId })
     } catch (err: any) {
       console.error('[SEND] Error:', err.message, err.stack)
