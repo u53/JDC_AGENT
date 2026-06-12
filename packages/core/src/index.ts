@@ -93,3 +93,6 @@ export {
   type ResolvedConfiguredModel,
   type RuntimeModelResolution,
 } from './model-resolution.js'
+export { createImageTools, type ImageToolDeps } from './tools/image-tools.js'
+export { loadImageModelConfig, isImageModelConfigured, type ImageModelConfig } from './images/image-config.js'
+export type { ImageOutput } from './background-tasks.js'

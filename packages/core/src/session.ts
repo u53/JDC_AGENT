@@ -31,6 +31,9 @@ import { createSkillTool } from './tools/skill.js'
 import { createEnterPlanModeTool, isPlanModeToolAllowed } from './tools/enter-plan-mode.js'
 import { createExitPlanModeTool } from './tools/exit-plan-mode.js'
 import { createAgentTool } from './tools/agent.js'
+import { createImageTools } from './tools/image-tools.js'
+import { loadImageModelConfig } from './images/image-config.js'
+import type { ImageOutput } from './background-tasks.js'
 import { classifyError, getMaxRetries, getRetryDelay } from './retry.js'
 import { UsageTracker, type UsageSnapshot } from './usage-tracker.js'
 import { FileTracker } from './file-tracker.js'
@@ -156,7 +159,7 @@ export class Session {
   resolveModel?: (modelId: string) => RuntimeModelResolution
   ideContext?: { filePath?: string; text?: string; selection?: { start: { line: number }; end: { line: number } } | null }
   private pendingNotifications: Array<{
-    type: 'shell_complete' | 'agent_complete' | 'team_progress' | 'team_complete'
+    type: 'shell_complete' | 'agent_complete' | 'team_progress' | 'team_complete' | 'image_complete'
     taskId: string
     status: 'completed' | 'failed' | 'running'
     command?: string
@@ -167,8 +170,11 @@ export class Session {
     turns?: number
     toolsUsed?: string[]
     teamEvent?: string
+    images?: ImageOutput[]
   }> = []
   onNotificationReady?: () => void
+  /** UI 转发：图像生成完成（含磁盘路径），不进上下文 */
+  onImageGenerated?: (taskId: string, images: ImageOutput[]) => void
   /** @internal exposed for testing */ _teamEventHandler?: (teamId: string, event: any) => void
 
   constructor(
@@ -192,6 +198,18 @@ export class Session {
     this.contextConfig = resolveContextEngineConfig(loadAppConfig().contextEngine as ContextEngineConfigInput | undefined)
     this.contextScheduler = this.createContextScheduler()
     this.backgroundTasks.setOnComplete((task) => {
+      if (task.type === 'image') {
+        this.pendingNotifications.push({
+          type: 'image_complete',
+          taskId: task.id,
+          status: task.status as 'completed' | 'failed',
+          prompt: task.prompt,
+          result: task.result,
+          images: task.images,
+        })
+        this.onNotificationReady?.()
+        return
+      }
       if (task.type === 'shell') {
         const output = this.backgroundTasks.getOutput(task.id, 50)
         if (task.command && task.shell) {
@@ -433,6 +451,19 @@ export class Session {
         }
       },
     }))
+
+    // Image tools — only when imageModel is configured
+    if (loadImageModelConfig()) {
+      for (const tool of createImageTools({
+        getImageConfig: loadImageModelConfig,
+        backgroundTasks: this.backgroundTasks,
+        onImageGenerated: (taskId, images) => {
+          this.onImageGenerated?.(taskId, images)
+        },
+      })) {
+        this.toolRegistry.register(tool)
+      }
+    }
   }
 
   private async initHooks(onPermissionRequest?: PermissionCallback): Promise<void> {
@@ -843,6 +874,18 @@ export class Session {
       }
       if (n.type === 'team_complete') {
         return `<task-notification>\n<task-id>${n.taskId}</task-id>\n<type>team_complete</type>\n<status>${n.status}</status>\n<event>${n.teamEvent || ''}</event>\n</task-notification>`
+      }
+      if (n.type === 'image_complete') {
+        if (n.status === 'failed') {
+          return `<task-notification>\n<task-id>${n.taskId}</task-id>\n<type>image_complete</type>\n<status>failed</status>\n<error>${n.result || 'unknown'}</error>\n</task-notification>`
+        }
+        const lines = (n.images || []).map((img) => {
+          const dim = img.width && img.height ? `${img.width}x${img.height}` : 'auto'
+          const sz = img.bytes ? `${(img.bytes / 1024).toFixed(0)}KB` : 'remote'
+          const err = img.downloadError ? ` | 下载失败(可用url): ${img.downloadError}` : ''
+          return `${img.path} | ${dim} | ${img.format} | ${img.background}${img.transparent ? '(可抠图)' : ''} | ${sz}${err}`
+        }).join('\n')
+        return `<task-notification>\n<task-id>${n.taskId}</task-id>\n<type>image_complete</type>\n<status>completed</status>\n<images>\n${lines}\n</images>\nImages are on disk. To make variants or edits, call EditImage with these paths. Do NOT re-read the image into context.\n</task-notification>`
       }
       return `<task-notification>\n<task-id>${n.taskId}</task-id>\n<type>agent_complete</type>\n<status>${n.status}</status>\n<agent-prompt>${n.prompt || ''}</agent-prompt>\n<result>${n.result || '(no result)'}</result>\n<turns>${n.turns ?? 0}</turns>\n<tools-used>${(n.toolsUsed || []).join(', ')}</tools-used>\n</task-notification>`
     })
