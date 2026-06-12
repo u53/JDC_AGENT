@@ -9,6 +9,7 @@ import { PermissionChecker } from './permissions.js'
 import type { ToolExecutionEvent, PermissionCallback } from './tool-runner.js'
 import { getAgentType, filterToolsForAgent, isWriteAllowedForPlanAgent, isBashAllowedForAuditor } from './agent-types.js'
 import { buildContextBundle, type ContextProvider } from './context/orchestrator.js'
+import { globalContextPromptSnapshotCache, resolveContextPromptSnapshot, type ContextPromptSnapshotCache } from './context/prompt-snapshot-cache.js'
 import { subAgentProfile, teamWorkerProfile } from './context/actor-profile.js'
 import { DEFAULT_CONTEXT_ENGINE_CONFIG, resolveContextEngineConfig, type ContextEngineConfigInput } from './context/config.js'
 import type { ContextStore } from './context/store.js'
@@ -78,6 +79,7 @@ export interface SubSessionOptions {
     protocol?: ProviderProtocol | 'openai'
     modelGroupId?: string
     baseUrl?: string
+    promptSnapshotCache?: ContextPromptSnapshotCache
   }
 }
 
@@ -447,14 +449,14 @@ async function buildSubSessionContextPrompt(
   prompt: string,
   systemPrompt: ModelConfig['systemPrompt'],
 ): Promise<ModelConfig['systemPrompt']> {
-  if (!opts.contextEngine || !contextConfig.enabled) return systemPrompt
+  if (!opts.contextEngine || !contextConfig.enabled || !contextConfig.injectionEnabled) return systemPrompt
   const performance = contextPerformanceConfig(contextConfig)
   try {
     return await contextScheduler.runForeground(
       'context:sub-session-inject',
       performance.degradedProviderTimeoutMs,
       async (signal) => {
-        const result = await buildContextBundle({
+        const request: ContextRequest = {
           sessionId: contextSessionId,
           cwd: opts.cwd,
           userMessage: prompt,
@@ -471,18 +473,29 @@ async function buildSubSessionContextPrompt(
           runtime: {},
           signal,
           createdAt: Date.now(),
-        }, {
-          injectionEnabled: contextConfig.injectionEnabled,
-          includeAgentContract: true,
-          store: opts.contextEngine!.store,
-          providers: opts.contextEngine!.providers ?? [],
-          providerTimeoutMs: performance.providerTimeoutMs,
-          scheduler: contextScheduler,
-          id: opts.contextEngine!.id,
-          actorProfile: buildSubSessionActorProfile(opts, contextSessionId, prompt),
+        }
+        const actorProfile = buildSubSessionActorProfile(opts, contextSessionId, prompt)
+        const snapshot = await resolveContextPromptSnapshot({
+          cache: opts.contextEngine!.promptSnapshotCache ?? globalContextPromptSnapshotCache,
+          request,
+          actorProfile,
+          providerProtocol: opts.contextEngine!.protocol ?? opts.provider.name,
+          build: async () => {
+            const result = await buildContextBundle(request, {
+              injectionEnabled: contextConfig.injectionEnabled,
+              includeAgentContract: true,
+              store: opts.contextEngine!.store,
+              providers: opts.contextEngine!.providers ?? [],
+              providerTimeoutMs: performance.providerTimeoutMs,
+              scheduler: contextScheduler,
+              id: opts.contextEngine!.id,
+              actorProfile,
+            })
+            return { renderedPrompt: result.renderedPrompt, bundleId: result.bundle.id }
+          },
         })
-        if (!result.renderedPrompt) return systemPrompt
-        return appendContextPromptSegment(systemPrompt, result.renderedPrompt)
+        if (!snapshot.renderedPrompt) return systemPrompt
+        return appendContextPromptSegment(systemPrompt, snapshot.renderedPrompt)
       },
       systemPrompt,
     )
