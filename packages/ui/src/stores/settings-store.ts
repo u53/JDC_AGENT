@@ -3,7 +3,7 @@ import { ipc } from '../lib/ipc-client'
 
 export type ResolvedTheme = 'dark' | 'light'
 export type ThemeMode = 'system' | ResolvedTheme
-export type SettingsTab = 'models' | 'mcp' | 'tools' | 'shortcuts' | 'advanced'
+export type SettingsTab = 'models' | 'mcp' | 'tools' | 'shortcuts' | 'advanced' | 'image'
 
 interface SettingsState {
   config: any | null

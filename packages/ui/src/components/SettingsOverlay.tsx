@@ -70,6 +70,7 @@ const TABS: { key: SettingsTab; label: string }[] = [
   { key: 'models', label: '模型' },
   { key: 'mcp', label: 'MCP' },
   { key: 'tools', label: '工具' },
+  { key: 'image', label: '图像' },
   { key: 'shortcuts', label: '快捷键' },
   { key: 'advanced', label: '版本信息' },
 ]
@@ -142,6 +143,7 @@ export function SettingsOverlay() {
           {activeTab === 'models' && <ModelsTab />}
           {activeTab === 'mcp' && <McpTab />}
           {activeTab === 'tools' && <ToolsTab />}
+          {activeTab === 'image' && <ImageModelTab />}
           {activeTab === 'shortcuts' && <ShortcutsTab />}
           {activeTab === 'advanced' && <AdvancedTab />}
         </main>
@@ -885,6 +887,62 @@ function ToolsTab() {
         >
           {saved ? '已保存 ✓' : '保存'}
         </button>
+      </div>
+    </div>
+  )
+}
+
+/* ─── Image Model ─── */
+function ImageModelTab() {
+  const [enabled, setEnabled] = useState(false)
+  const [baseUrl, setBaseUrl] = useState('')
+  const [apiKey, setApiKey] = useState('')
+  const [model, setModel] = useState('gpt-image-2')
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    ipc.config.get().then((cfg: any) => {
+      const im = cfg?.imageModel || {}
+      setEnabled(im.enabled === true)
+      setBaseUrl(im.baseUrl || '')
+      setApiKey(im.apiKey || '')
+      setModel(im.model || 'gpt-image-2')
+    })
+  }, [])
+
+  const handleSave = async () => {
+    await ipc.config.set({ imageModel: { enabled, baseUrl: baseUrl.trim(), apiKey: apiKey.trim(), model: model.trim() } } as any)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  const inputCls = 'w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-[6px] px-3 py-2 text-[13px] text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]'
+  const labelCls = 'text-[12px] text-[var(--muted)] mb-1'
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-[14px] font-medium text-[var(--text)] mb-3">图像生成模型</h3>
+        <label className="flex items-center gap-2 mb-4 text-[13px] text-[var(--text)]">
+          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+          启用图像生成（GenerateImage / EditImage 工具）
+        </label>
+        <div className="mb-3">
+          <div className={labelCls}>Base URL</div>
+          <input className={inputCls} value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://www.codexapis.com" />
+        </div>
+        <div className="mb-3">
+          <div className={labelCls}>API Key</div>
+          <input type="password" className={inputCls} value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-..." />
+        </div>
+        <div className="mb-3">
+          <div className={labelCls}>Model</div>
+          <input className={inputCls} value={model} onChange={(e) => setModel(e.target.value)} placeholder="gpt-image-2" />
+        </div>
+        <button onClick={handleSave} className="rounded-[6px] border border-[var(--accent)] px-3 py-1.5 text-[13px] text-[var(--accent)] hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)]">
+          {saved ? '已保存' : '保存'}
+        </button>
+        <p className="mt-3 text-[11px] text-[var(--muted)]">保存后需新建会话生效（工具在会话创建时注册）。所有生成参数（尺寸/质量/格式/背景等）由 AI 按你的需求自动决定。</p>
       </div>
     </div>
   )
