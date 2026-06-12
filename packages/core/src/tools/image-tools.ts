@@ -92,14 +92,14 @@ async function defaultRunImageJob(params: RunImageJobParams): Promise<void> {
           if (result.downloadError) {
             errors.push(`[#${index + 1}] 远程图片下载失败：${result.downloadError}`)
           }
-          outputs.push({ path: result.url, bytes: 0, format, background: '', transparent: false, downloadError: result.downloadError })
+          outputs.push({ path: result.url, bytes: 0, format, downloadError: result.downloadError })
           return
         }
         const raw = Buffer.from(result.base64, 'base64')
         const filename = `img_${timestamp()}_${index + 1}.${format}`
         const full = join(outputDir, filename)
         await writeFile(full, raw)
-        outputs.push({ path: full, bytes: raw.byteLength, format, background: '', transparent: false })
+        outputs.push({ path: full, bytes: raw.byteLength, format })
       } catch (err) {
         errors.push(`[#${index + 1}] ${err instanceof Error ? err.message : String(err)}`)
       }
@@ -114,7 +114,7 @@ async function defaultRunImageJob(params: RunImageJobParams): Promise<void> {
     }
     if (errors.length > 0) {
       // Partial success — push success with error notes
-      outputs.push({ path: '', bytes: 0, format: '', background: '', transparent: false,
+      outputs.push({ path: '', bytes: 0, format: '',
         downloadError: `${errors.length} 张失败：\n${errors.slice(0, 5).join('\n')}` })
     }
     backgroundTasks.completeImage(taskId, { images: outputs })

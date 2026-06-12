@@ -17,8 +17,6 @@ export interface ImageOutput {
   height?: number
   bytes: number
   format: string
-  background: string
-  transparent: boolean
   downloadError?: string
 }
 

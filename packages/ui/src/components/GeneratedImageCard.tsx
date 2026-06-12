@@ -65,7 +65,7 @@ function ImageTile({ img }: { img: GeneratedImage }) {
           {toast && <span className="self-center text-[var(--accent)]">{toast}</span>}
         </div>
         <div className="px-2 pb-2 text-[10px] text-[var(--muted)]">
-          {img.width && img.height ? `${img.width}x${img.height} · ` : ''}{img.format}{img.transparent ? ' · 透明' : ''}
+          {img.width && img.height ? `${img.width}x${img.height} · ` : ''}{img.format}
           {(img as any).downloadError ? ' · 下载失败' : ''}
         </div>
       </div>

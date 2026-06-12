@@ -883,7 +883,7 @@ export class Session {
           const dim = img.width && img.height ? `${img.width}x${img.height}` : 'auto'
           const sz = img.bytes ? `${(img.bytes / 1024).toFixed(0)}KB` : 'remote'
           const err = img.downloadError ? ` | 下载失败(可用url): ${img.downloadError}` : ''
-          return `${img.path} | ${dim} | ${img.format} | ${img.background}${img.transparent ? '(可抠图)' : ''} | ${sz}${err}`
+          return `${img.path} | ${dim} | ${img.format} | ${sz}${err}`
         }).join('\n')
         return `<task-notification>\n<task-id>${n.taskId}</task-id>\n<type>image_complete</type>\n<status>completed</status>\n<images>\n${lines}\n</images>\nImages are on disk. To make variants or edits, call EditImage with these paths. Do NOT re-read the image into context.\n</task-notification>`
       }
