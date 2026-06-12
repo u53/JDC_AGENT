@@ -24,3 +24,16 @@ export async function copyToClipboard(text: string): Promise<void> {
     throw new Error('Copy command failed')
   }
 }
+
+export async function copyImageFile(filePath: string): Promise<void> {
+  const api = (window as any).electronAPI
+  if (api?.copyImageFile) {
+    const res = await api.copyImageFile(filePath)
+    if (res && res.success === false) throw new Error(res.error || '复制图片失败')
+    return
+  }
+  // Browser fallback: fetch file:// usually blocked, try navigator.clipboard
+  const resp = await fetch(`file://${filePath}`)
+  const blob = await resp.blob()
+  await (navigator.clipboard as any).write([new (window as any).ClipboardItem({ [blob.type]: blob })])
+}

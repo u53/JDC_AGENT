@@ -157,6 +157,13 @@ export const ipc = {
       invoke('config:set', config) as Promise<{ success: boolean }>,
   },
 
+  images: {
+    copyToClipboard: (filePath: string) =>
+      invoke('images:copy-to-clipboard', { filePath }) as Promise<{ success: boolean; error?: string }>,
+    showInFolder: (filePath: string) =>
+      invoke('images:show-in-folder', { filePath }) as Promise<{ success: boolean }>,
+  },
+
   dialog: {
     openFolder: () =>
       invoke('dialog:open-folder') as Promise<{ path: string | null }>,
