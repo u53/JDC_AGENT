@@ -259,14 +259,11 @@ export class AnthropicProvider implements ModelProvider {
       max_tokens: config.maxTokens,
       system: injectedSystem,
       messages: formattedMessages,
-      tools: tools.map((t, i) => {
+      tools: tools.map((t) => {
         const tool: any = {
           name: t.name,
           description: t.description,
           input_schema: t.inputSchema as Anthropic.Tool['input_schema'],
-        }
-        if (i === tools.length - 1) {
-          tool.cache_control = { type: 'ephemeral' }
         }
         return tool
       }),
@@ -569,7 +566,6 @@ export class AnthropicProvider implements ModelProvider {
       }
     }
 
-    let latestToolResultCheckpoint: any | undefined
     for (const msg of merged) {
       if (msg.role !== 'user') continue
       const content = Array.isArray(msg.content) ? msg.content as any[] : []
@@ -580,22 +576,21 @@ export class AnthropicProvider implements ModelProvider {
         content.push(checkpoint)
       }
       msg.content = content as any
-      latestToolResultCheckpoint = checkpoint
-    }
-    if (latestToolResultCheckpoint) {
-      latestToolResultCheckpoint.cache_control = { type: 'ephemeral' }
     }
 
-    // Add cache_control to the last message (user or assistant) — matches Claude Code's
-    // strategy of exactly ONE message-level breakpoint per request.
-    // The system+tools prefix is cached via the system block's cache_control.
-    // Messages cache relies on the 5-min TTL window for consecutive turns.
-    if (merged.length > 0) {
-      const lastMsg = merged[merged.length - 1]
-      const content = lastMsg.content as any[]
-      if (content.length > 0) {
-        content[content.length - 1].cache_control = { type: 'ephemeral' }
-      }
+    // Keep the previous user breakpoint when advancing to the next turn. ccmax's
+    // Anthropic relay only reliably reads prefixes at breakpoints present in the
+    // current request, so marking only the latest user makes every third normal
+    // turn fall back to a full system write. We mark the latest two user messages:
+    // previous = read anchor, latest = write anchor for the following request.
+    const userMessages = merged.filter((msg) => msg.role === 'user')
+    const messageBreakpointTargets = userMessages.slice(-2)
+    for (const msg of messageBreakpointTargets) {
+      const content = Array.isArray(msg.content) ? msg.content as any[] : []
+      if (content.length === 0) continue
+      const toolCheckpoint = content.find((b: any) => b.type === 'text' && b.text === TOOL_RESULT_CACHE_CHECKPOINT)
+      const target = toolCheckpoint ?? content[content.length - 1]
+      target.cache_control = { type: 'ephemeral' }
     }
 
     return merged

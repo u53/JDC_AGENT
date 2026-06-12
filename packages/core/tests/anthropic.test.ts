@@ -115,6 +115,22 @@ describe('AnthropicProvider', () => {
     ])
   })
 
+  it('keeps the previous user cache marker when advancing to the next user turn', () => {
+    const provider = new AnthropicProvider('test-key')
+    const formatted = (provider as any).formatMessages([
+      { id: '1', role: 'user', content: [{ type: 'text', text: 'first turn' }], timestamp: Date.now() },
+      { id: '2', role: 'assistant', content: [{ type: 'text', text: 'first answer' }], timestamp: Date.now() },
+      { id: '3', role: 'user', content: [{ type: 'text', text: 'second turn' }], timestamp: Date.now() },
+    ])
+
+    expect(formatted[0].content).toEqual([
+      { type: 'text', text: 'first turn', cache_control: { type: 'ephemeral' } },
+    ])
+    expect(formatted[2].content).toEqual([
+      { type: 'text', text: 'second turn', cache_control: { type: 'ephemeral' } },
+    ])
+  })
+
   it('should map content blocks', () => {
     const provider = new AnthropicProvider('test-key')
     const textBlock = (provider as any).mapContentBlock({ type: 'text', text: 'hi' })
@@ -159,6 +175,23 @@ describe('AnthropicProvider', () => {
     const dynamicBlocks = system.filter((block: any) => block.text.includes('dynamic system prompt'))
     expect(dynamicBlocks).toHaveLength(1)
     expect(dynamicBlocks[0]).not.toHaveProperty('cache_control')
+  })
+
+  it('does not put cache_control on tool definitions in stream requests', async () => {
+    const bodies: any[] = []
+    vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
+      bodies.push(JSON.parse(String((init as RequestInit).body)))
+      return new Response(anthropicSse([
+        { type: 'message_start', message: { usage: { input_tokens: 1, output_tokens: 0 } } },
+        { type: 'message_stop' },
+      ]), { status: 200 })
+    }))
+
+    const provider = new AnthropicProvider('test-key')
+    await collect(provider.stream(streamMessages, streamTools, streamConfig))
+
+    expect(bodies[0].tools).toHaveLength(streamTools.length)
+    expect(bodies[0].tools.every((tool: any) => tool.cache_control === undefined)).toBe(true)
   })
 
   it('sends the canonical Claude Code envelope the relay validates against', async () => {
