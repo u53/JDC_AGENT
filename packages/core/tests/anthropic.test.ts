@@ -80,7 +80,7 @@ describe('AnthropicProvider', () => {
     expect(formatted[0]).toEqual({ role: 'user', content: [{ type: 'text', text: 'hello', cache_control: { type: 'ephemeral' } }] })
   })
 
-  it('uses a stable text checkpoint after tool_result blocks for message cache reuse', () => {
+  it('marks tool_result blocks directly for message cache reuse', () => {
     const provider = new AnthropicProvider('test-key')
     const formatted = (provider as any).formatMessages([
       { id: '1', role: 'user', content: [{ type: 'text', text: 'read src/App.tsx' }], timestamp: Date.now() },
@@ -91,12 +91,11 @@ describe('AnthropicProvider', () => {
     const toolResultMessage = formatted[2]
     expect(toolResultMessage.role).toBe('user')
     expect(toolResultMessage.content).toEqual([
-      { type: 'tool_result', tool_use_id: 'tool_1', content: 'file contents' },
-      { type: 'text', text: '<tool-result-cache-checkpoint/>', cache_control: { type: 'ephemeral' } },
+      { type: 'tool_result', tool_use_id: 'tool_1', content: 'file contents', cache_control: { type: 'ephemeral' } },
     ])
   })
 
-  it('keeps the latest tool_result checkpoint cacheable alongside the latest user cache marker', () => {
+  it('keeps exactly one message cache marker on the latest user message', () => {
     const provider = new AnthropicProvider('test-key')
     const formatted = (provider as any).formatMessages([
       { id: '1', role: 'user', content: [{ type: 'text', text: 'read src/App.tsx' }], timestamp: Date.now() },
@@ -108,14 +107,13 @@ describe('AnthropicProvider', () => {
 
     expect(formatted[2].content).toEqual([
       { type: 'tool_result', tool_use_id: 'tool_1', content: 'file contents' },
-      { type: 'text', text: '<tool-result-cache-checkpoint/>', cache_control: { type: 'ephemeral' } },
     ])
     expect(formatted[4].content).toEqual([
       { type: 'text', text: 'next turn', cache_control: { type: 'ephemeral' } },
     ])
   })
 
-  it('keeps the previous user cache marker when advancing to the next user turn', () => {
+  it('does not keep the previous user cache marker when advancing to the next user turn', () => {
     const provider = new AnthropicProvider('test-key')
     const formatted = (provider as any).formatMessages([
       { id: '1', role: 'user', content: [{ type: 'text', text: 'first turn' }], timestamp: Date.now() },
@@ -124,10 +122,34 @@ describe('AnthropicProvider', () => {
     ])
 
     expect(formatted[0].content).toEqual([
-      { type: 'text', text: 'first turn', cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: 'first turn' },
     ])
     expect(formatted[2].content).toEqual([
       { type: 'text', text: 'second turn', cache_control: { type: 'ephemeral' } },
+    ])
+  })
+
+  it('marks the latest assistant non-thinking content block when assistant is last', () => {
+    const provider = new AnthropicProvider('test-key')
+    const formatted = (provider as any).formatMessages([
+      { id: '1', role: 'user', content: [{ type: 'text', text: 'think then answer' }], timestamp: Date.now() },
+      {
+        id: '2',
+        role: 'assistant',
+        content: [
+          { type: 'thinking', thinking: 'private chain', signature: 'sig' },
+          { type: 'text', text: 'final answer' },
+        ],
+        timestamp: Date.now(),
+      },
+    ])
+
+    expect(formatted[0].content).toEqual([
+      { type: 'text', text: 'think then answer' },
+    ])
+    expect(formatted[1].content).toEqual([
+      { type: 'thinking', thinking: 'private chain', signature: 'sig' },
+      { type: 'text', text: 'final answer', cache_control: { type: 'ephemeral' } },
     ])
   })
 

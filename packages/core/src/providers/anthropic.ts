@@ -8,7 +8,6 @@ import { withStreamRetry } from './stream-retry.js'
 
 const CC_VERSION = '2.1.139'
 const FINGERPRINT_SALT = '59cf53e54c78'
-const TOOL_RESULT_CACHE_CHECKPOINT = '<tool-result-cache-checkpoint/>'
 
 // Stable device_id and session_id per process run. metadata.user_id must
 // not change across requests in the same conversation, or some relays use
@@ -68,8 +67,41 @@ export function buildStreamBetas(): string[] {
 // invalidator; if nothing changes across turns yet reads stay zero, the problem
 // is the relay/account, not our prompt shape.
 const __lastPrefixHashes: string[] = []
+let __debugRequestSeq = 0
 function sha8(s: string): string {
   return createHash('sha1').update(s).digest('hex').slice(0, 8)
+}
+function summarizeCacheBreakpoints(params: any, betaHeaders: string, requestSeq: number): void {
+  const system = Array.isArray(params.system) ? params.system : (params.system ? [{ text: params.system }] : [])
+  const messages = Array.isArray(params.messages) ? params.messages : []
+  const messageBreakpoints: string[] = []
+  const messageShape = messages.map((message: any, mi: number) => {
+    const content = Array.isArray(message.content) ? message.content : (message.content ? [{ type: 'text', text: message.content }] : [])
+    const types = content.map((block: any, bi: number) => {
+      if (block?.cache_control) messageBreakpoints.push(`messages[${mi}].${message.role}[${bi}].${block.type || 'unknown'}`)
+      return `${block?.type || typeof block}${block?.cache_control ? '*' : ''}`
+    })
+    return `${mi}:${message.role}:${types.join(',')}`
+  })
+  const summary = {
+    requestSeq,
+    pid: process.pid,
+    model: params.model,
+    betasHash: sha8(betaHeaders),
+    toolCount: (params.tools || []).length,
+    toolHash: sha8(JSON.stringify(params.tools || [])),
+    toolCacheCount: (params.tools || []).filter((tool: any) => tool?.cache_control).length,
+    system: system.map((block: any, index: number) => ({
+      index,
+      cache: Boolean(block?.cache_control),
+      chars: String(block?.text || '').length,
+      hash: sha8(String(block?.text || '')),
+    })),
+    messageBreakpoints,
+    messageShape,
+  }
+  // eslint-disable-next-line no-console
+  console.error('[jdc-cache] request', JSON.stringify(summary))
 }
 function debugPromptPrefix(params: any, betaHeaders: string): void {
   const blocks: Array<{ where: string; hash: string }> = []
@@ -83,9 +115,9 @@ function debugPromptPrefix(params: any, betaHeaders: string): void {
   // eslint-disable-next-line no-console
   console.error('[jdc-cache] prefix', JSON.stringify(diff))
 }
-function debugPromptUsage(usage: { inputTokens: number; cacheCreationInputTokens: number; cacheReadInputTokens: number }): void {
+function debugPromptUsage(usage: { inputTokens: number; cacheCreationInputTokens: number; cacheReadInputTokens: number }, requestSeq?: number): void {
   // eslint-disable-next-line no-console
-  console.error('[jdc-cache] usage', JSON.stringify({ read: usage.cacheReadInputTokens, write: usage.cacheCreationInputTokens, uncached: usage.inputTokens }))
+  console.error('[jdc-cache] usage', JSON.stringify({ requestSeq, read: usage.cacheReadInputTokens, write: usage.cacheCreationInputTokens, uncached: usage.inputTokens }))
 }
 
 // Partition system segments into three caching tiers so the rendered prompt is
@@ -381,7 +413,11 @@ export class AnthropicProvider implements ModelProvider {
       'X-Stainless-Runtime-Version': process.versions.node,
       'x-stainless-retry-count': '0',
     }
-    if (process.env.JDC_CACHE_DEBUG) debugPromptPrefix(params, betaHeaders)
+    const debugRequestSeq = process.env.JDC_CACHE_DEBUG ? ++__debugRequestSeq : undefined
+    if (process.env.JDC_CACHE_DEBUG) {
+      summarizeCacheBreakpoints(params, betaHeaders, debugRequestSeq!)
+      debugPromptPrefix(params, betaHeaders)
+    }
     const body = JSON.stringify(params)
 
     const response = await fetch(url, {
@@ -427,7 +463,7 @@ export class AnthropicProvider implements ModelProvider {
             usage.outputTokens = event.message.usage.output_tokens || 0
             usage.cacheCreationInputTokens = event.message.usage.cache_creation_input_tokens || 0
             usage.cacheReadInputTokens = event.message.usage.cache_read_input_tokens || 0
-            if (process.env.JDC_CACHE_DEBUG) debugPromptUsage(usage)
+            if (process.env.JDC_CACHE_DEBUG) debugPromptUsage(usage, debugRequestSeq)
           }
         } else if (event.type === 'message_delta') {
           if (event.usage) {
@@ -566,34 +602,27 @@ export class AnthropicProvider implements ModelProvider {
       }
     }
 
-    for (const msg of merged) {
-      if (msg.role !== 'user') continue
-      const content = Array.isArray(msg.content) ? msg.content as any[] : []
-      if (!content.some((b: any) => b.type === 'tool_result')) continue
-      let checkpoint = content.find((b: any) => b.type === 'text' && b.text === TOOL_RESULT_CACHE_CHECKPOINT)
-      if (!checkpoint) {
-        checkpoint = { type: 'text', text: TOOL_RESULT_CACHE_CHECKPOINT }
-        content.push(checkpoint)
-      }
-      msg.content = content as any
-    }
-
-    // Keep the previous user breakpoint when advancing to the next turn. ccmax's
-    // Anthropic relay only reliably reads prefixes at breakpoints present in the
-    // current request, so marking only the latest user makes every third normal
-    // turn fall back to a full system write. We mark the latest two user messages:
-    // previous = read anchor, latest = write anchor for the following request.
-    const userMessages = merged.filter((msg) => msg.role === 'user')
-    const messageBreakpointTargets = userMessages.slice(-2)
-    for (const msg of messageBreakpointTargets) {
-      const content = Array.isArray(msg.content) ? msg.content as any[] : []
-      if (content.length === 0) continue
-      const toolCheckpoint = content.find((b: any) => b.type === 'text' && b.text === TOOL_RESULT_CACHE_CHECKPOINT)
-      const target = toolCheckpoint ?? content[content.length - 1]
-      target.cache_control = { type: 'ephemeral' }
-    }
+    this.addLatestMessageCacheMarker(merged)
 
     return merged
+  }
+
+  private addLatestMessageCacheMarker(messages: Anthropic.MessageParam[]): void {
+    const latest = messages[messages.length - 1]
+    if (!latest) return
+
+    if (!Array.isArray(latest.content)) {
+      latest.content = [{ type: 'text', text: String(latest.content || '') }] as any
+    }
+
+    const content = latest.content as any[]
+    if (content.length === 0) return
+
+    const target = latest.role === 'assistant'
+      ? [...content].reverse().find((block: any) => block.type !== 'thinking' && block.type !== 'redacted_thinking')
+      : content[content.length - 1]
+
+    if (target) target.cache_control = { type: 'ephemeral' }
   }
 
   private mapContentBlock(block: Anthropic.ContentBlock): ContentBlock {

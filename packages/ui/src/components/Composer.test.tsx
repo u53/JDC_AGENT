@@ -61,4 +61,24 @@ describe('Composer', () => {
     expect(html).toContain('推理:超高')
     expect(html).not.toMatch(/>推理:超</)
   })
+
+  it('keeps control popovers in a layer above the chat timeline', () => {
+    const html = renderToStaticMarkup(
+      <Composer
+        onSend={vi.fn()}
+        onAbort={vi.fn()}
+        isStreaming={false}
+        permissionMode="standard"
+        effort="medium"
+        modelId="model-1"
+        modelName="GPT 5.5"
+        models={[{ id: 'model-1', name: 'GPT 5.5', groupName: 'JDC AI' }]}
+      />,
+    )
+
+    expect(html).toContain('composer-shell')
+    expect(html).toContain('relative')
+    expect(html).toContain('z-[70]')
+    expect(html).toContain('overflow-visible')
+  })
 })

@@ -321,7 +321,7 @@ export function Composer({
   return (
     <div
       ref={composerRef}
-      className="composer-shell border-t border-[color-mix(in_srgb,var(--border)_86%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_88%,transparent),color-mix(in_srgb,var(--bg)_94%,transparent))] px-6 py-4 shadow-[0_-18px_42px_-38px_rgba(0,0,0,0.86),inset_0_1px_0_rgba(255,255,255,0.025)] backdrop-blur"
+      className="composer-shell relative z-[70] overflow-visible border-t border-[color-mix(in_srgb,var(--border)_86%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_88%,transparent),color-mix(in_srgb,var(--bg)_94%,transparent))] px-6 py-4 shadow-[0_-18px_42px_-38px_rgba(0,0,0,0.86),inset_0_1px_0_rgba(255,255,255,0.025)] backdrop-blur"
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
