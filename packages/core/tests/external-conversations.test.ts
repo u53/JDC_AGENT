@@ -14,12 +14,15 @@ describe('external conversation persistence', () => {
     await history.ensureReady()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    history.close()
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
-  it('creates and reuses an external conversation mapping', () => {
+  it('updates an existing external conversation mapping', () => {
     history.createSession('session_1', 'Project', '/repo/project')
+    history.createSession('session_2', 'Project', '/repo/other')
+
     const first = history.upsertExternalConversation({
       channel: 'feishu',
       bindingId: 'binding_1',
@@ -30,18 +33,21 @@ describe('external conversation persistence', () => {
       cwd: '/repo/project',
       sessionId: 'session_1',
     })
-    const second = history.findExternalConversation({
+    const updated = history.upsertExternalConversation({
       channel: 'feishu',
       bindingId: 'binding_1',
       tenantKey: 'tenant_1',
       chatId: 'chat_1',
       threadKey: 'thread_1',
       userKey: 'user_1',
+      cwd: '/repo/other',
+      sessionId: 'session_2',
     })
 
-    expect(first.sessionId).toBe('session_1')
-    expect(second?.id).toBe(first.id)
-    expect(second?.cwd).toBe('/repo/project')
+    expect(updated.id).toBe(first.id)
+    expect(updated.sessionId).toBe('session_2')
+    expect(updated.cwd).toBe('/repo/other')
+    expect(updated.state).toBe('active')
   })
 
   it('dedupes external events before model invocation', () => {

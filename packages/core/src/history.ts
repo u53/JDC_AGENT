@@ -294,6 +294,8 @@ export class ConversationHistory {
   deleteSession(sessionId: string): void {
     this.db!.run('DELETE FROM tasks WHERE session_id = ?', [sessionId])
     this.db!.run('DELETE FROM messages WHERE session_id = ?', [sessionId])
+    this.db!.run('DELETE FROM external_messages WHERE session_id = ?', [sessionId])
+    this.db!.run('DELETE FROM external_conversations WHERE session_id = ?', [sessionId])
     this.db!.run('DELETE FROM sessions WHERE id = ?', [sessionId])
     this.save()
   }
@@ -563,22 +565,23 @@ export class ConversationHistory {
   }
 
   beginExternalEvent(input: ExternalEventInput): { status: 'accepted' | 'duplicate' } {
-    const now = Date.now()
-    try {
-      this.db!.run(
-        `INSERT INTO external_events (channel, event_id, message_id, binding_id, received_at, status)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [input.channel, input.eventId, input.messageId ?? null, input.bindingId, now, 'accepted']
-      )
-      this.save()
-      return { status: 'accepted' }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (message.includes('UNIQUE') || message.includes('constraint failed')) {
-        return { status: 'duplicate' }
-      }
-      throw error
+    const stmt = this.db!.prepare('SELECT 1 FROM external_events WHERE channel = ? AND event_id = ? LIMIT 1')
+    stmt.bind([input.channel, input.eventId])
+    const exists = stmt.step()
+    stmt.free()
+
+    if (exists) {
+      return { status: 'duplicate' }
     }
+
+    const now = Date.now()
+    this.db!.run(
+      `INSERT INTO external_events (channel, event_id, message_id, binding_id, received_at, status)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [input.channel, input.eventId, input.messageId ?? null, input.bindingId, now, 'accepted']
+    )
+    this.save()
+    return { status: 'accepted' }
   }
 
   completeExternalEvent(channel: string, eventId: string, status: 'processed' | 'failed'): void {
