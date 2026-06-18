@@ -12,6 +12,8 @@ export function BashToolCard({ event, input, result, name }: ToolCardRouterProps
   const description = (event?.input?.description || input?.description || '') as string
   const output = event?.result?.content || result?.content || ''
   const isError = event?.result?.isError || result?.is_error
+  const exitCode = event?.result?.metadata?.command?.exitCode ?? result?.metadata?.command?.exitCode
+  const statusLabel = isError && typeof exitCode === 'number' ? `EXIT ${exitCode}` : undefined
 
   const displayCommand = truncateText(command, 60)
   const detail = toolName === 'Monitor' && description
@@ -26,6 +28,7 @@ export function BashToolCard({ event, input, result, name }: ToolCardRouterProps
       defaultExpanded={status === 'running'}
       rail={shouldShowToolRail(toolName, status)}
       variant={getToolVariant(toolName)}
+      statusLabel={statusLabel}
       actions={status === 'done' ? (
         <div className="flex items-center gap-1">
           {command && <ToolCopyButton text={command} label="Cmd" copiedLabel="Copied" title="Copy command" toastLabel="Command" />}

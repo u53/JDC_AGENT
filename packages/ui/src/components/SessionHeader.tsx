@@ -57,7 +57,7 @@ export function SessionHeader({ permissionMode, effort, planMode }: Props) {
   const permLabel = PERM_LABELS[permissionMode] || permissionMode
 
   return (
-    <div className="h-11 flex min-w-0 items-center justify-between gap-4 px-5 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] backdrop-blur flex-shrink-0">
+    <div className="session-header relative z-[100] h-11 flex min-w-0 flex-shrink-0 items-center justify-between gap-4 overflow-visible border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] px-5 backdrop-blur">
       {/* Left: project / session ID */}
       <div className="flex min-w-0 flex-1 items-center gap-2 text-[12px] font-[var(--font-mono)]">
         <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />

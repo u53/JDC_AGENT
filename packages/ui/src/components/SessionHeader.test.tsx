@@ -46,4 +46,15 @@ describe('SessionHeader', () => {
     expect(html).toContain('推理:超高')
     expect(html).not.toMatch(/>推理:超</)
   })
+
+  it('keeps launcher menus above the chat timeline', () => {
+    const html = renderToStaticMarkup(
+      <SessionHeader permissionMode="standard" effort="high" planMode={false} />,
+    )
+
+    expect(html).toContain('session-header')
+    expect(html).toContain('relative')
+    expect(html).toContain('z-[100]')
+    expect(html).toContain('overflow-visible')
+  })
 })

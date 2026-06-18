@@ -79,4 +79,50 @@ describe('ConversationTurn compact rendering', () => {
     expect(html).toContain('已隐藏早期长对话')
     expect(html).not.toContain('[Context from prior conversation')
   })
+
+  it('shows the bash exit code for non-zero command results', () => {
+    const html = renderToStaticMarkup(
+      <ConversationTurn
+        userContent={[{ type: 'text', text: 'run retrieval smoke test' }]}
+        assistantMessages={[
+          {
+            message: {
+              id: 'assistant-bash',
+              role: 'assistant',
+              content: [{
+                type: 'tool_use',
+                id: 'tool-bash-1',
+                name: 'Bash',
+                input: {
+                  command: 'python scripts/check_retrieval.py',
+                },
+              }],
+              timestamp: 1,
+            } as any,
+            toolResultMessage: {
+              id: 'result-bash',
+              role: 'user',
+              content: [{
+                type: 'tool_result',
+                tool_use_id: 'tool-bash-1',
+                content: '=== 向量检索 (dense) ===\nEmbedding dim: 3072',
+                is_error: true,
+                metadata: {
+                  command: {
+                    shell: 'bash',
+                    command: 'python scripts/check_retrieval.py',
+                    exitCode: 1,
+                  },
+                },
+              }],
+              timestamp: 2,
+            } as any,
+          },
+        ]}
+      />,
+    )
+
+    expect(html).toContain('EXIT 1')
+    expect(html).not.toContain('ERROR')
+  })
 })

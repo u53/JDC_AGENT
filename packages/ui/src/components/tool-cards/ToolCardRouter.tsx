@@ -1,4 +1,4 @@
-import type { ToolExecutionEvent } from '@jdcagnet/core'
+import type { ToolExecutionEvent, ToolResultMetadata } from '@jdcagnet/core'
 import type { ComponentType } from 'react'
 import { GenericToolCard } from './GenericToolCard'
 import { BashToolCard } from './BashToolCard'
@@ -20,7 +20,7 @@ export interface ToolCardRouterProps {
   event?: ToolExecutionEvent
   name?: string
   input?: Record<string, unknown>
-  result?: { content: string; is_error?: boolean }
+  result?: { content: string; is_error?: boolean; metadata?: ToolResultMetadata }
 }
 
 const TOOL_CARD_REGISTRY: Record<string, ComponentType<ToolCardRouterProps>> = {

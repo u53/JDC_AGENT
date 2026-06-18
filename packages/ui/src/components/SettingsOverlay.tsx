@@ -86,7 +86,7 @@ export function SettingsOverlay() {
 
   return (
     <div
-      className="settings-overlay settings-overlay-soft fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,9,17,0.58)] p-4 backdrop-blur-xl"
+      className="settings-overlay settings-overlay-soft fixed inset-0 z-[110] flex items-center justify-center bg-[rgba(3,9,17,0.58)] p-4 backdrop-blur-xl"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) close()
       }}

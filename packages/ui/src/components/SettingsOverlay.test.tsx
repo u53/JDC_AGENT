@@ -17,6 +17,7 @@ describe('SettingsOverlay', () => {
 
     expect(html).toContain('settings-overlay')
     expect(html).toContain('settings-overlay-soft')
+    expect(html).toContain('z-[110]')
     expect(html).toContain('settings-shell')
     expect(html).toContain('settings-shell-soft')
     expect(html).toContain('h-[min(720px,86vh)]')

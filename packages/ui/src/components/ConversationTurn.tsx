@@ -46,13 +46,13 @@ interface Props {
 function findToolResult(
   toolUseId: string,
   toolResultMessage?: Message
-): { content: string; is_error?: boolean } | undefined {
+): { content: string; is_error?: boolean; metadata?: ToolResultContent['metadata'] } | undefined {
   if (!toolResultMessage || toolResultMessage.role !== 'user') return undefined
   const block = toolResultMessage.content.find(
     (b): b is ToolResultContent => b.type === 'tool_result' && b.tool_use_id === toolUseId
   )
   if (!block) return undefined
-  return { content: block.content, is_error: block.is_error }
+  return { content: block.content, is_error: block.is_error, metadata: block.metadata }
 }
 
 function ConversationTurnView({
