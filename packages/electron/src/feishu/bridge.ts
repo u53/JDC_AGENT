@@ -4,6 +4,18 @@ import { FeishuSink } from './feishu-sink.js'
 import type { SessionEventSink, SessionInteractionSink } from '../session-event-sink.js'
 import type { FeishuBinding, FeishuClientPort, FeishuInboundMessage } from './types.js'
 
+type FeishuRuntimeBridgePort = {
+  start(): Promise<void>
+  stop(): Promise<void>
+}
+
+export function createFeishuRuntime({ bridge }: { bridge: FeishuRuntimeBridgePort }): FeishuRuntimeBridgePort {
+  return {
+    start: () => bridge.start(),
+    stop: () => bridge.stop(),
+  }
+}
+
 type ExternalEventStatus = { status: 'accepted' | 'duplicate' }
 
 type FeishuBindingPort = {

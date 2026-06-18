@@ -90,6 +90,10 @@ export class SessionManager {
     await this.readyPromise
   }
 
+  getHistory(): ConversationHistory {
+    return this.history
+  }
+
   setWindow(window: BrowserWindow): void {
     this.window = window
   }

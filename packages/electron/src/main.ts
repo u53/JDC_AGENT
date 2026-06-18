@@ -9,6 +9,8 @@ import { registerMcpIpcHandlers } from './mcp-ipc.js'
 import { GitService } from './git-service.js'
 import { AppLauncher } from './app-launcher.js'
 import { TerminalService } from './terminal-service.js'
+import { FeishuBindingStore } from './feishu/binding-store.js'
+import { FeishuBridge, createFeishuRuntime } from './feishu/bridge.js'
 
 // Point the JDC Context Engine at the Tree-sitter wasm assets bundled into dist
 // (copied by build.mjs). In dev these resolve from node_modules automatically,
@@ -55,6 +57,8 @@ const sessionManager = new SessionManager()
 const gitService = new GitService()
 const appLauncher = new AppLauncher()
 const terminalService = new TerminalService()
+const feishuBindingStore = new FeishuBindingStore()
+let feishuRuntime: ReturnType<typeof createFeishuRuntime> | null = null
 
 // Auto-updater setup
 autoUpdater.autoDownload = false
@@ -113,8 +117,17 @@ app.whenReady().then(async () => {
   }
 
   await sessionManager.ensureReady()
-  registerIpcHandlers(sessionManager, { gitService, appLauncher, terminalService })
+  const feishuBridge = new FeishuBridge({
+    bindings: feishuBindingStore,
+    history: sessionManager.getHistory(),
+    sessions: sessionManager,
+  })
+  feishuRuntime = createFeishuRuntime({ bridge: feishuBridge })
+  registerIpcHandlers(sessionManager, { gitService, appLauncher, terminalService, feishuBindingStore, feishuBridge })
   registerMcpIpcHandlers(sessionManager)
+  await feishuRuntime.start().catch(() => {
+    console.warn('[JDC Code] Feishu bridge start failed')
+  })
 
   const win = createMainWindow()
   sessionManager.setWindow(win)
@@ -143,6 +156,9 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  void feishuRuntime?.stop().catch(() => {
+    console.warn('[JDC Code] Feishu bridge stop failed')
+  })
   terminalService.destroyAll()
   sessionManager.close()
 })
