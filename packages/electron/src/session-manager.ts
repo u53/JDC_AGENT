@@ -120,6 +120,23 @@ export class SessionManager {
     return createSinkMultiplexer(sinks)
   }
 
+  private createRunSink(sessionId: string, extraSink?: SessionEventSink): { sink: SessionEventSink; events: SessionEvents; didError: () => boolean } {
+    let sawError = false
+    const combinedSink = this.getCombinedSink(sessionId, extraSink)
+    const sink: SessionEventSink = {
+      ...combinedSink,
+      error: (targetSessionId, error) => {
+        sawError = true
+        return combinedSink.error?.(targetSessionId, error)
+      },
+    }
+    return {
+      sink,
+      events: createSessionEvents(sessionId, sink),
+      didError: () => sawError,
+    }
+  }
+
   startIdeDiscovery(cwd: string): void {
     this.ideManager.startDiscovery(cwd)
   }
@@ -351,13 +368,14 @@ export class SessionManager {
     session.onNotificationReady = () => {
       this.window?.webContents.send('background:state-changed', { sessionId })
       if ((session as any).abortController) return
-      const notificationSink = this.getCombinedSink(sessionId)
-      const notificationEvents = createSessionEvents(sessionId, notificationSink)
+      const runSink = this.createRunSink(sessionId)
       this.window?.webContents.send('background:notification', { sessionId })
-      session.processNotifications(notificationEvents).then(() => {
-        notificationSink.finished?.(sessionId)
+      session.processNotifications(runSink.events).then(() => {
+        if (!runSink.didError()) {
+          runSink.sink.finished?.(sessionId)
+        }
       }).catch((err: any) => {
-        notificationSink.error?.(sessionId, err)
+        runSink.sink.error?.(sessionId, err)
       })
     }
     this.sessions.set(sessionId, session)
@@ -398,9 +416,9 @@ export class SessionManager {
       }
     }
 
+    // Task 4 will wire interaction sinks into permission/ask-user/plan-review routing.
     void options?.interactionSink
-    const sink = this.getCombinedSink(sessionId, options?.sink)
-    const events = createSessionEvents(sessionId, sink)
+    const runSink = this.createRunSink(sessionId, options?.sink)
 
     // Compress and convert images to ImageContent blocks
     let extraContent: Array<{ type: 'image'; source: { type: 'base64'; media_type: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'; data: string } }> | undefined
@@ -467,11 +485,13 @@ export class SessionManager {
     }
 
     try {
-      await session.sendMessage(text + inputImageNote, events, extraContent)
-      sink.finished?.(sessionId)
+      await session.sendMessage(text + inputImageNote, runSink.events, extraContent)
+      if (!runSink.didError()) {
+        runSink.sink.finished?.(sessionId)
+      }
     } catch (err: any) {
       console.error('[SEND] Error:', err.message, err.stack)
-      sink.error?.(sessionId, err)
+      runSink.sink.error?.(sessionId, err)
     }
   }
 
@@ -481,15 +501,16 @@ export class SessionManager {
     }
     const session = this.sessions.get(sessionId)!
 
-    const sink = this.getCombinedSink(sessionId)
-    const events = createSessionEvents(sessionId, sink)
+    const runSink = this.createRunSink(sessionId)
 
     try {
-      await session.retryLastTurn(events)
-      sink.finished?.(sessionId)
+      await session.retryLastTurn(runSink.events)
+      if (!runSink.didError()) {
+        runSink.sink.finished?.(sessionId)
+      }
     } catch (err: any) {
       console.error('[RETRY] Error:', err.message, err.stack)
-      sink.error?.(sessionId, err)
+      runSink.sink.error?.(sessionId, err)
     }
   }
 
@@ -533,6 +554,7 @@ export class SessionManager {
   }
 
   deleteSession(sessionId: string): void {
+    this.externalEventSinks.delete(sessionId)
     this.sessions.delete(sessionId)
     this.history.deleteSession(sessionId)
   }

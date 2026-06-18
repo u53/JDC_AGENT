@@ -9,18 +9,20 @@ export interface RetrySinkEvent {
   category: string
 }
 
+type SinkResult = void | Promise<void>
+
 export interface SessionEventSink {
-  stream?(sessionId: string, chunk: StreamChunk): void
-  toolEvent?(sessionId: string, event: ToolExecutionEvent): void
-  messageComplete?(sessionId: string, message: Message): void
-  messagesReplaced?(sessionId: string, messages: Message[]): void
-  usage?(sessionId: string, usage: UsageSnapshot): void
-  retrying?(sessionId: string, event: RetrySinkEvent): void
-  error?(sessionId: string, error: Error): void
-  finished?(sessionId: string): void
-  agentProgress?(sessionId: string, agentToolUseId: string, event: any): void
-  agentText?(sessionId: string, agentToolUseId: string, text: string): void
-  agentComplete?(sessionId: string, agentToolUseId: string, result: any): void
+  stream?(sessionId: string, chunk: StreamChunk): SinkResult
+  toolEvent?(sessionId: string, event: ToolExecutionEvent): SinkResult
+  messageComplete?(sessionId: string, message: Message): SinkResult
+  messagesReplaced?(sessionId: string, messages: Message[]): SinkResult
+  usage?(sessionId: string, usage: UsageSnapshot): SinkResult
+  retrying?(sessionId: string, event: RetrySinkEvent): SinkResult
+  error?(sessionId: string, error: Error): SinkResult
+  finished?(sessionId: string): SinkResult
+  agentProgress?(sessionId: string, agentToolUseId: string, event: any): SinkResult
+  agentText?(sessionId: string, agentToolUseId: string, text: string): SinkResult
+  agentComplete?(sessionId: string, agentToolUseId: string, result: any): SinkResult
 }
 
 export interface SessionInteractionSink {
@@ -31,10 +33,17 @@ export interface SessionInteractionSink {
 
 type SinkMethod = keyof SessionEventSink
 
+function isCatchable(value: unknown): value is { catch: (onRejected: (error: unknown) => void) => unknown } {
+  return Boolean(value && typeof (value as { catch?: unknown }).catch === 'function')
+}
+
 function fanOut(sinks: SessionEventSink[], method: SinkMethod, args: unknown[]): void {
   for (const sink of sinks) {
     try {
-      ;(sink[method] as ((...args: unknown[]) => void) | undefined)?.(...args)
+      const result = (sink[method] as ((...args: unknown[]) => SinkResult) | undefined)?.(...args)
+      if (isCatchable(result)) {
+        result.catch(error => console.error('[session-sink] sink failed:', error))
+      }
     } catch (error) {
       console.error('[session-sink] sink failed:', error)
     }
