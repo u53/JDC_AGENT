@@ -96,6 +96,19 @@ describe('SettingsOverlay', () => {
     expect(html).not.toContain('settings-model-group-card overflow-hidden')
   })
 
+  it('renders Feishu settings with multiple bot bindings', () => {
+    const settingsState = { isOpen: true, activeTab: 'feishu' as const, theme: 'dark' as const, config: null }
+    useSettingsStore.setState(settingsState)
+    Object.assign(useSettingsStore.getInitialState(), settingsState)
+
+    const html = renderToStaticMarkup(<SettingsOverlay />)
+
+    expect(html).toContain('飞书')
+    expect(html).toContain('添加机器人')
+    expect(html).toContain('App ID')
+    expect(html).toContain('项目路径')
+  })
+
   it('renders a Chinese product introduction in the about section', () => {
     const settingsState = { isOpen: true, activeTab: 'advanced' as const, theme: 'dark' as const, config: null }
     useSettingsStore.setState(settingsState)

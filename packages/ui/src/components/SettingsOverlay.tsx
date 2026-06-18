@@ -3,7 +3,7 @@ import { useSettingsStore, type SettingsTab } from '../stores/settings-store'
 import { useModelStore, type ApiProtocol, type ModelGroup } from '../stores/model-store'
 import { useSessionStore } from '../stores/session-store'
 import { IconX } from './icons'
-import type { McpServerState } from '../lib/ipc-client'
+import type { FeishuBinding, FeishuBindingInput, FeishuPermissionMode, FeishuSessionStrategy, McpServerState } from '../lib/ipc-client'
 import { ipc } from '../lib/ipc-client'
 
 function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
@@ -71,6 +71,7 @@ const TABS: { key: SettingsTab; label: string }[] = [
   { key: 'mcp', label: 'MCP' },
   { key: 'tools', label: '工具' },
   { key: 'image', label: '图像' },
+  { key: 'feishu', label: '飞书' },
   { key: 'shortcuts', label: '快捷键' },
   { key: 'advanced', label: '版本信息' },
 ]
@@ -144,6 +145,7 @@ export function SettingsOverlay() {
           {activeTab === 'mcp' && <McpTab />}
           {activeTab === 'tools' && <ToolsTab />}
           {activeTab === 'image' && <ImageModelTab />}
+          {activeTab === 'feishu' && <FeishuTab />}
           {activeTab === 'shortcuts' && <ShortcutsTab />}
           {activeTab === 'advanced' && <AdvancedTab />}
         </main>
@@ -321,6 +323,273 @@ function AdvancedTab() {
           <p className="text-[12px] leading-5 text-[var(--muted)]">
             它的目标不是堆更多按钮，而是把危险操作挡住，把复杂任务拆清楚，把验证结果摆出来，让你在一个安静、可信的开发驾驶舱里推进项目。
           </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ─── Feishu ─── */
+type FeishuBindingDraft = {
+  name: string
+  enabled: boolean
+  appId: string
+  appSecret: string
+  cwd: string
+  projectName: string
+  sessionStrategy: FeishuSessionStrategy
+  permissionMode: FeishuPermissionMode
+  allowedChatIds: string
+  allowedOpenIds: string
+}
+
+const EMPTY_FEISHU_DRAFT: FeishuBindingDraft = {
+  name: '',
+  enabled: true,
+  appId: '',
+  appSecret: '',
+  cwd: '',
+  projectName: '',
+  sessionStrategy: 'thread',
+  permissionMode: 'standard',
+  allowedChatIds: '',
+  allowedOpenIds: '',
+}
+
+function listToText(values?: string[]) {
+  return values?.join('\n') ?? ''
+}
+
+function textToList(value: string) {
+  return value
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function bindingToDraft(binding: FeishuBinding): FeishuBindingDraft {
+  return {
+    name: binding.name,
+    enabled: binding.enabled,
+    appId: binding.appId,
+    appSecret: binding.appSecret,
+    cwd: binding.cwd,
+    projectName: binding.projectName,
+    sessionStrategy: binding.sessionStrategy,
+    permissionMode: binding.permissionMode,
+    allowedChatIds: listToText(binding.allowedChatIds),
+    allowedOpenIds: listToText(binding.allowedOpenIds),
+  }
+}
+
+function draftToInput(draft: FeishuBindingDraft): FeishuBindingInput {
+  return {
+    name: draft.name.trim(),
+    enabled: draft.enabled,
+    appId: draft.appId.trim(),
+    appSecret: draft.appSecret.trim(),
+    cwd: draft.cwd.trim(),
+    projectName: draft.projectName.trim(),
+    sessionStrategy: draft.sessionStrategy,
+    permissionMode: draft.permissionMode,
+    allowedChatIds: textToList(draft.allowedChatIds),
+    allowedOpenIds: textToList(draft.allowedOpenIds),
+  }
+}
+
+function FeishuTab() {
+  const [bindings, setBindings] = useState<FeishuBinding[]>([])
+  const [draft, setDraft] = useState<FeishuBindingDraft>(EMPTY_FEISHU_DRAFT)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const inputCls = 'w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-[6px] px-3 py-2 text-[13px] text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]'
+  const labelCls = 'text-[12px] text-[var(--muted)] mb-1'
+  const btnPrimary = 'rounded-[6px] bg-[var(--accent)] px-3 py-1.5 text-[12px] text-[var(--accent-ink)] hover:opacity-90 disabled:opacity-50'
+  const btnGhost = 'rounded-[6px] border border-[var(--border)] px-3 py-1.5 text-[12px] text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] disabled:opacity-50'
+
+  const loadBindings = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const result = await ipc.feishu.listBindings()
+      setBindings(result?.bindings ?? [])
+    } catch {
+      setError('操作失败')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { loadBindings() }, [loadBindings])
+
+  const updateDraft = <K extends keyof FeishuBindingDraft>(key: K, value: FeishuBindingDraft[K]) => {
+    setDraft((current) => ({ ...current, [key]: value }))
+  }
+
+  const resetDraft = () => {
+    setDraft(EMPTY_FEISHU_DRAFT)
+    setEditingId(null)
+    setError('')
+  }
+
+  const restartAndReload = async () => {
+    await ipc.feishu.restart()
+    await loadBindings()
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    setError('')
+    try {
+      const input = draftToInput(draft)
+      if (editingId) {
+        await ipc.feishu.updateBinding(editingId, input)
+      } else {
+        await ipc.feishu.addBinding(input)
+      }
+      await restartAndReload()
+      resetDraft()
+    } catch {
+      setError('操作失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleToggle = async (binding: FeishuBinding) => {
+    setSaving(true)
+    setError('')
+    try {
+      await ipc.feishu.updateBinding(binding.id, { enabled: !binding.enabled })
+      await restartAndReload()
+    } catch {
+      setError('操作失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    setSaving(true)
+    setError('')
+    try {
+      await ipc.feishu.deleteBinding(id)
+      await restartAndReload()
+      if (editingId === id) resetDraft()
+    } catch {
+      setError('操作失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handlePickFolder = async () => {
+    try {
+      const result = await ipc.dialog.openFolder()
+      if (result?.path) updateDraft('cwd', result.path)
+    } catch {
+      setError('操作失败')
+    }
+  }
+
+  return (
+    <div className="settings-tab-body space-y-4">
+      <section className="settings-section flex items-center justify-between gap-4 rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
+        <div className="min-w-0">
+          <h4 className="text-[13px] font-semibold text-[var(--text)]">飞书机器人绑定</h4>
+          <p className="mt-1 text-[12px] leading-5 text-[var(--muted)]">为不同项目绑定多个飞书机器人，并在保存后重启飞书桥接。</p>
+        </div>
+        <button type="button" onClick={resetDraft} className={btnPrimary}>添加机器人</button>
+      </section>
+
+      {error && <div className="rounded-[6px] border border-red-500/30 bg-red-500/10 px-3 py-2 text-[12px] text-red-400">{error}</div>}
+
+      <div className="space-y-2">
+        {loading && <p className="text-[13px] text-[var(--muted)] animate-pulse">加载中...</p>}
+        {!loading && bindings.length === 0 && <p className="rounded-[8px] border border-dashed border-[var(--border)] bg-[var(--surface-2)] px-4 py-5 text-center text-[13px] text-[var(--muted)]">暂无飞书机器人绑定</p>}
+        {bindings.map((binding) => (
+          <div key={binding.id} className="rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-[13px] font-medium text-[var(--text)]">{binding.name || binding.projectName}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] ${binding.enabled ? 'bg-green-500/12 text-green-400' : 'bg-[var(--surface-3)] text-[var(--muted)]'}`}>{binding.enabled ? '已启用' : '已停用'}</span>
+                </div>
+                <div className="mt-1 truncate text-[11px] text-[var(--muted)]">{binding.projectName} · {binding.cwd} · {binding.sessionStrategy}</div>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button type="button" disabled={saving} onClick={() => handleToggle(binding)} className={btnGhost}>{binding.enabled ? '停用' : '启用'}</button>
+                <button type="button" onClick={() => { setDraft(bindingToDraft(binding)); setEditingId(binding.id) }} className={btnGhost}>编辑</button>
+                <button type="button" disabled={saving} onClick={() => handleDelete(binding.id)} className="rounded-[6px] px-3 py-1.5 text-[12px] text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-red-400">删除</button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="settings-form-card rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h4 className="text-[13px] font-semibold text-[var(--text)]">{editingId ? '编辑机器人' : '添加机器人'}</h4>
+          {editingId && <button type="button" onClick={resetDraft} className="text-[12px] text-[var(--muted)] hover:text-[var(--text)]">取消编辑</button>}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <label>
+            <div className={labelCls}>名称</div>
+            <input value={draft.name} onChange={(e) => updateDraft('name', e.target.value)} placeholder="研发助手" className={inputCls} />
+          </label>
+          <label>
+            <div className={labelCls}>项目名称</div>
+            <input value={draft.projectName} onChange={(e) => updateDraft('projectName', e.target.value)} placeholder="jdcagnet" className={inputCls} />
+          </label>
+          <label>
+            <div className={labelCls}>App ID</div>
+            <input value={draft.appId} onChange={(e) => updateDraft('appId', e.target.value)} placeholder="cli_a..." className={inputCls} />
+          </label>
+          <label>
+            <div className={labelCls}>App Secret</div>
+            <input type="password" value={draft.appSecret} onChange={(e) => updateDraft('appSecret', e.target.value)} placeholder="app secret" className={inputCls} />
+          </label>
+          <label className="col-span-2">
+            <div className={labelCls}>项目路径</div>
+            <div className="flex gap-2">
+              <input value={draft.cwd} onChange={(e) => updateDraft('cwd', e.target.value)} placeholder="/path/to/project" className={inputCls} />
+              <button type="button" onClick={handlePickFolder} className={`${btnGhost} shrink-0`}>选择</button>
+            </div>
+          </label>
+          <label>
+            <div className={labelCls}>会话策略</div>
+            <select value={draft.sessionStrategy} onChange={(e) => updateDraft('sessionStrategy', e.target.value as FeishuSessionStrategy)} className={inputCls}>
+              <option value="thread">按话题线程</option>
+              <option value="chat">按群聊</option>
+            </select>
+          </label>
+          <label>
+            <div className={labelCls}>权限模式</div>
+            <select value={draft.permissionMode} onChange={(e) => updateDraft('permissionMode', e.target.value as FeishuPermissionMode)} className={inputCls}>
+              <option value="standard">标准</option>
+              <option value="relaxed">宽松</option>
+              <option value="strict">严格</option>
+            </select>
+          </label>
+          <label>
+            <div className={labelCls}>允许的 Chat ID</div>
+            <textarea value={draft.allowedChatIds} onChange={(e) => updateDraft('allowedChatIds', e.target.value)} placeholder="每行或逗号分隔" rows={3} className={inputCls} />
+          </label>
+          <label>
+            <div className={labelCls}>允许的 Open ID</div>
+            <textarea value={draft.allowedOpenIds} onChange={(e) => updateDraft('allowedOpenIds', e.target.value)} placeholder="每行或逗号分隔" rows={3} className={inputCls} />
+          </label>
+        </div>
+        <label className="flex items-center gap-2 text-[13px] text-[var(--text)]">
+          <input type="checkbox" checked={draft.enabled} onChange={(e) => updateDraft('enabled', e.target.checked)} />
+          启用此机器人
+        </label>
+        <div className="flex gap-2">
+          <button type="button" disabled={saving} onClick={handleSave} className={btnPrimary}>{saving ? '保存中...' : '保存并重启'}</button>
+          <button type="button" onClick={resetDraft} className={btnGhost}>清空</button>
         </div>
       </div>
     </div>
