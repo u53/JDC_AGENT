@@ -116,17 +116,12 @@ function summarizeToolEvent(event: ToolExecutionEvent): string {
   }
   if (event.type === 'complete') {
     const suffix = event.result?.isError ? ' with error' : ''
-    return truncate(`Tool completed${suffix}: ${name}${resultMessage(event.result)}`, MAX_STATUS_CHARS)
+    return truncate(`Tool completed${suffix}: ${name}`, MAX_STATUS_CHARS)
   }
   if (event.type === 'error') {
     return truncate(`Tool failed: ${name}${event.message ? ` - ${event.message}` : ''}`, MAX_STATUS_CHARS)
   }
   return truncate(`Tool progress: ${name}${event.message ? ` - ${event.message}` : ''}`, MAX_STATUS_CHARS)
-}
-
-function resultMessage(result: ToolExecutionEvent['result']): string {
-  if (!result?.content || result.content.length > 200) return ''
-  return ` - ${result.content}`
 }
 
 function summarizeInput(input: Record<string, unknown>): string {

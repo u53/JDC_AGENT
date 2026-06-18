@@ -21,11 +21,15 @@ describe('FeishuSink', () => {
     const sink = new FeishuSink(client as any, { chatId: 'chat_1' })
 
     sink.toolEvent?.('session_1', { type: 'start', toolName: 'Bash', input: { command: 'pnpm test' } } as any)
-    sink.toolEvent?.('session_1', { type: 'complete', toolName: 'Bash', result: { content: 'x'.repeat(10_000) } } as any)
+    sink.toolEvent?.('session_1', { type: 'complete', toolName: 'Bash', result: { content: 'short secret output' } } as any)
+    sink.toolEvent?.('session_1', { type: 'complete', toolName: 'Read', result: { content: 'x'.repeat(10_000) } } as any)
     await sink.flushStatus()
 
     const text = client.sendText.mock.calls.map((call: any[]) => call[0].text).join('\n')
     expect(text).toContain('Bash')
+    expect(text).toContain('Read')
+    expect(text).not.toContain('short secret output')
+    expect(text).not.toContain('x'.repeat(200))
     expect(text.length).toBeLessThan(1000)
   })
   it('asks for permission through Feishu and resolves on approval', async () => {
