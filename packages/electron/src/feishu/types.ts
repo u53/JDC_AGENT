@@ -26,3 +26,21 @@ export type FeishuBindingInput = Omit<FeishuBinding, 'id' | 'createdAt' | 'updat
   allowedChatIds?: string[]
   allowedOpenIds?: string[]
 }
+
+export interface FeishuInboundMessage {
+  eventId: string
+  messageId: string
+  chatId: string
+  chatType: 'group' | 'p2p'
+  senderOpenId: string
+  text: string
+  threadKey?: string
+  raw: unknown
+}
+
+export type FeishuCommand = 'new' | 'status' | 'stop' | 'compact' | 'session'
+
+export type FeishuResolvedConversation =
+  | { kind: 'message'; sessionId: string; text: string }
+  | { kind: 'command'; command: FeishuCommand; sessionId?: string; text: string }
+  | { kind: 'unauthorized'; reason: string }
