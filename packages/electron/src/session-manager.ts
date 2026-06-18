@@ -9,8 +9,14 @@ import {
   compressImageForAPI, getContextEngine, ensureCodeIndexJob, resolveConfiguredModel, type ConfiguredModelResolution,
   inspectContext, type ConstraintObservabilitySnapshot,
 } from '@jdcagnet/core'
-import type { ToolExecutionEvent } from '@jdcagnet/core'
 import { Notification, type BrowserWindow } from 'electron'
+import {
+  createSessionEvents,
+  createSinkMultiplexer,
+  createUiSink as createBrowserWindowUiSink,
+  type SessionEventSink,
+  type SessionInteractionSink,
+} from './session-event-sink.js'
 
 type RuntimeModelResolutionWithProtocol =
   | { status: 'resolved'; provider: any; modelConfig: ModelConfig; protocol: string; warning?: string }
@@ -38,6 +44,7 @@ export class SessionManager {
   private pendingAskUser = new Map<string, { resolve: (answer: string) => void }>()
   private pendingPlanReviews = new Map<string, { resolve: (result: { approved: boolean; feedback?: string }) => void }>()
   private permissionModes = new Map<string, string>()
+  private externalEventSinks = new Map<string, Map<string, SessionEventSink>>()
   constructor() {
     const dbPath = path.join(getConfigDir(), 'history.db')
     this.history = new ConversationHistory(dbPath)
@@ -81,6 +88,36 @@ export class SessionManager {
 
   setWindow(window: BrowserWindow): void {
     this.window = window
+  }
+
+  attachSessionSink(sessionId: string, key: string, sink: SessionEventSink): () => void {
+    let sinks = this.externalEventSinks.get(sessionId)
+    if (!sinks) {
+      sinks = new Map<string, SessionEventSink>()
+      this.externalEventSinks.set(sessionId, sinks)
+    }
+    sinks.set(key, sink)
+
+    return () => {
+      const current = this.externalEventSinks.get(sessionId)
+      if (!current) return
+      current.delete(key)
+      if (current.size === 0) {
+        this.externalEventSinks.delete(sessionId)
+      }
+    }
+  }
+
+  private createUiSink(): SessionEventSink {
+    return createBrowserWindowUiSink(() => this.window)
+  }
+
+  private getCombinedSink(sessionId: string, extraSink?: SessionEventSink): SessionEventSink {
+    const sinks: SessionEventSink[] = [this.createUiSink()]
+    const attached = this.externalEventSinks.get(sessionId)
+    if (attached) sinks.push(...attached.values())
+    if (extraSink) sinks.push(extraSink)
+    return createSinkMultiplexer(sinks)
   }
 
   startIdeDiscovery(cwd: string): void {
@@ -314,49 +351,24 @@ export class SessionManager {
     session.onNotificationReady = () => {
       this.window?.webContents.send('background:state-changed', { sessionId })
       if ((session as any).abortController) return
-      const notificationEvents: SessionEvents = {
-        onStreamChunk: (chunk: StreamChunk) => {
-          this.window?.webContents.send('query:stream', { sessionId, chunk })
-        },
-        onToolEvent: (event: ToolExecutionEvent) => {
-          this.window?.webContents.send('query:tool-event', { sessionId, event })
-        },
-        onMessageComplete: (message) => {
-          this.window?.webContents.send('query:complete', { sessionId, message })
-        },
-        onMessagesReplaced: (messages) => {
-          this.window?.webContents.send('session:messages-updated', { sessionId, messages })
-        },
-        onError: (error) => {
-          this.window?.webContents.send('query:error', { sessionId, error: error.message })
-        },
-        onRetrying: (attempt: number, error: Error, delayMs: number, category: string, maxRetries: number) => {
-          this.window?.webContents.send('query:retrying', { sessionId, attempt, maxRetries, error: error.message, delayMs, category })
-        },
-        onAgentProgress: (agentToolUseId: string, event: any) => {
-          this.window?.webContents.send('agent:progress', { sessionId, agentToolUseId, ...event })
-        },
-        onAgentText: (agentToolUseId: string, text: string) => {
-          this.window?.webContents.send('agent:text', { sessionId, agentToolUseId, text })
-        },
-        onAgentComplete: (agentToolUseId: string, result: any) => {
-          this.window?.webContents.send('agent:complete', { sessionId, agentToolUseId, ...result })
-        },
-        onUsage: (usage) => {
-          this.window?.webContents.send('query:usage', { sessionId, usage })
-        },
-      }
+      const notificationSink = this.getCombinedSink(sessionId)
+      const notificationEvents = createSessionEvents(sessionId, notificationSink)
       this.window?.webContents.send('background:notification', { sessionId })
       session.processNotifications(notificationEvents).then(() => {
-        this.window?.webContents.send('query:finished', { sessionId })
+        notificationSink.finished?.(sessionId)
       }).catch((err: any) => {
-        this.window?.webContents.send('query:error', { sessionId, error: err.message })
+        notificationSink.error?.(sessionId, err)
       })
     }
     this.sessions.set(sessionId, session)
   }
 
-  async sendMessage(sessionId: string, text: string, images?: { data: string; mediaType: string }[]): Promise<void> {
+  async sendMessage(
+    sessionId: string,
+    text: string,
+    images?: { data: string; mediaType: string }[],
+    options?: { sink?: SessionEventSink; interactionSink?: SessionInteractionSink }
+  ): Promise<void> {
     // Ensure session is activated with latest model config
     if (!this.sessions.has(sessionId)) {
       await this.activateSession(sessionId)
@@ -386,50 +398,9 @@ export class SessionManager {
       }
     }
 
-    const events: SessionEvents = {
-      onStreamChunk: (chunk: StreamChunk) => {
-        this.window?.webContents.send('query:stream', { sessionId, chunk })
-      },
-      onToolEvent: (event: ToolExecutionEvent) => {
-        this.window?.webContents.send('query:tool-event', { sessionId, event })
-        if (event.type === 'complete' && event.toolName === 'EnterPlanMode') {
-          this.window?.webContents.send('plan:mode-changed', { sessionId, mode: 'planning' })
-        } else if (event.type === 'complete' && event.toolName === 'ExitPlanMode') {
-          this.window?.webContents.send('plan:mode-changed', { sessionId, mode: 'normal' })
-        }
-      },
-      onMessageComplete: (message) => {
-        this.window?.webContents.send('query:complete', { sessionId, message })
-      },
-      onMessagesReplaced: (messages) => {
-        this.window?.webContents.send('session:messages-updated', { sessionId, messages })
-      },
-      onError: (error) => {
-        this.window?.webContents.send('query:error', { sessionId, error: error.message })
-      },
-      onRetrying: (attempt: number, error: Error, delayMs: number, category: string, maxRetries: number) => {
-        this.window?.webContents.send('query:retrying', {
-          sessionId,
-          attempt,
-          maxRetries,
-          error: error.message || String(error),
-          delayMs,
-          category,
-        })
-      },
-      onAgentProgress: (agentToolUseId: string, event: any) => {
-        this.window?.webContents.send('agent:progress', { sessionId, agentToolUseId, ...event })
-      },
-      onAgentText: (agentToolUseId: string, text: string) => {
-        this.window?.webContents.send('agent:text', { sessionId, agentToolUseId, text })
-      },
-      onAgentComplete: (agentToolUseId: string, result: any) => {
-        this.window?.webContents.send('agent:complete', { sessionId, agentToolUseId, ...result })
-      },
-      onUsage: (usage) => {
-        this.window?.webContents.send('query:usage', { sessionId, usage })
-      },
-    }
+    void options?.interactionSink
+    const sink = this.getCombinedSink(sessionId, options?.sink)
+    const events = createSessionEvents(sessionId, sink)
 
     // Compress and convert images to ImageContent blocks
     let extraContent: Array<{ type: 'image'; source: { type: 'base64'; media_type: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'; data: string } }> | undefined
@@ -497,10 +468,10 @@ export class SessionManager {
 
     try {
       await session.sendMessage(text + inputImageNote, events, extraContent)
-      this.window?.webContents.send('query:finished', { sessionId })
+      sink.finished?.(sessionId)
     } catch (err: any) {
       console.error('[SEND] Error:', err.message, err.stack)
-      this.window?.webContents.send('query:error', { sessionId, error: err.message })
+      sink.error?.(sessionId, err)
     }
   }
 
@@ -510,57 +481,15 @@ export class SessionManager {
     }
     const session = this.sessions.get(sessionId)!
 
-    const events: SessionEvents = {
-      onStreamChunk: (chunk: StreamChunk) => {
-        this.window?.webContents.send('query:stream', { sessionId, chunk })
-      },
-      onToolEvent: (event: ToolExecutionEvent) => {
-        this.window?.webContents.send('query:tool-event', { sessionId, event })
-        if (event.type === 'complete' && event.toolName === 'EnterPlanMode') {
-          this.window?.webContents.send('plan:mode-changed', { sessionId, mode: 'planning' })
-        } else if (event.type === 'complete' && event.toolName === 'ExitPlanMode') {
-          this.window?.webContents.send('plan:mode-changed', { sessionId, mode: 'normal' })
-        }
-      },
-      onMessageComplete: (message) => {
-        this.window?.webContents.send('query:complete', { sessionId, message })
-      },
-      onMessagesReplaced: (messages) => {
-        this.window?.webContents.send('session:messages-updated', { sessionId, messages })
-      },
-      onError: (error) => {
-        this.window?.webContents.send('query:error', { sessionId, error: error.message })
-      },
-      onRetrying: (attempt: number, error: Error, delayMs: number, category: string, maxRetries: number) => {
-        this.window?.webContents.send('query:retrying', {
-          sessionId,
-          attempt,
-          maxRetries,
-          error: error.message || String(error),
-          delayMs,
-          category,
-        })
-      },
-      onAgentProgress: (agentToolUseId: string, event: any) => {
-        this.window?.webContents.send('agent:progress', { sessionId, agentToolUseId, ...event })
-      },
-      onAgentText: (agentToolUseId: string, text: string) => {
-        this.window?.webContents.send('agent:text', { sessionId, agentToolUseId, text })
-      },
-      onAgentComplete: (agentToolUseId: string, result: any) => {
-        this.window?.webContents.send('agent:complete', { sessionId, agentToolUseId, ...result })
-      },
-      onUsage: (usage) => {
-        this.window?.webContents.send('query:usage', { sessionId, usage })
-      },
-    }
+    const sink = this.getCombinedSink(sessionId)
+    const events = createSessionEvents(sessionId, sink)
 
     try {
       await session.retryLastTurn(events)
-      this.window?.webContents.send('query:finished', { sessionId })
+      sink.finished?.(sessionId)
     } catch (err: any) {
       console.error('[RETRY] Error:', err.message, err.stack)
-      this.window?.webContents.send('query:error', { sessionId, error: err.message })
+      sink.error?.(sessionId, err)
     }
   }
 

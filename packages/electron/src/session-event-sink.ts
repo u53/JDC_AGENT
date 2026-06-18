@@ -1,0 +1,108 @@
+import type { BrowserWindow } from 'electron'
+import type { Message, SessionEvents, StreamChunk, ToolExecutionEvent, UsageSnapshot } from '@jdcagnet/core'
+
+export interface RetrySinkEvent {
+  attempt: number
+  maxRetries: number
+  error: string
+  delayMs: number
+  category: string
+}
+
+export interface SessionEventSink {
+  stream?(sessionId: string, chunk: StreamChunk): void
+  toolEvent?(sessionId: string, event: ToolExecutionEvent): void
+  messageComplete?(sessionId: string, message: Message): void
+  messagesReplaced?(sessionId: string, messages: Message[]): void
+  usage?(sessionId: string, usage: UsageSnapshot): void
+  retrying?(sessionId: string, event: RetrySinkEvent): void
+  error?(sessionId: string, error: Error): void
+  finished?(sessionId: string): void
+  agentProgress?(sessionId: string, agentToolUseId: string, event: any): void
+  agentText?(sessionId: string, agentToolUseId: string, text: string): void
+  agentComplete?(sessionId: string, agentToolUseId: string, result: any): void
+}
+
+export interface SessionInteractionSink {
+  requestPermission?(request: { toolName: string; input: Record<string, unknown> }): Promise<boolean>
+  askUser?(question: string, options?: string[], multiSelect?: boolean): Promise<string>
+  reviewPlan?(planFile: string, content: string): Promise<{ approved: boolean; feedback?: string }>
+}
+
+type SinkMethod = keyof SessionEventSink
+
+function fanOut(sinks: SessionEventSink[], method: SinkMethod, args: unknown[]): void {
+  for (const sink of sinks) {
+    try {
+      ;(sink[method] as ((...args: unknown[]) => void) | undefined)?.(...args)
+    } catch (error) {
+      console.error('[session-sink] sink failed:', error)
+    }
+  }
+}
+
+export function createSinkMultiplexer(sinks: SessionEventSink[]): SessionEventSink {
+  return {
+    stream: (sessionId, chunk) => fanOut(sinks, 'stream', [sessionId, chunk]),
+    toolEvent: (sessionId, event) => fanOut(sinks, 'toolEvent', [sessionId, event]),
+    messageComplete: (sessionId, message) => fanOut(sinks, 'messageComplete', [sessionId, message]),
+    messagesReplaced: (sessionId, messages) => fanOut(sinks, 'messagesReplaced', [sessionId, messages]),
+    usage: (sessionId, usage) => fanOut(sinks, 'usage', [sessionId, usage]),
+    retrying: (sessionId, event) => fanOut(sinks, 'retrying', [sessionId, event]),
+    error: (sessionId, error) => fanOut(sinks, 'error', [sessionId, error]),
+    finished: (sessionId) => fanOut(sinks, 'finished', [sessionId]),
+    agentProgress: (sessionId, agentToolUseId, event) => fanOut(sinks, 'agentProgress', [sessionId, agentToolUseId, event]),
+    agentText: (sessionId, agentToolUseId, text) => fanOut(sinks, 'agentText', [sessionId, agentToolUseId, text]),
+    agentComplete: (sessionId, agentToolUseId, result) => fanOut(sinks, 'agentComplete', [sessionId, agentToolUseId, result]),
+  }
+}
+
+export function createSessionEvents(sessionId: string, sink: SessionEventSink): SessionEvents {
+  return {
+    onStreamChunk: (chunk) => sink.stream?.(sessionId, chunk),
+    onToolEvent: (event) => sink.toolEvent?.(sessionId, event),
+    onMessageComplete: (message) => sink.messageComplete?.(sessionId, message),
+    onMessagesReplaced: (messages) => sink.messagesReplaced?.(sessionId, messages),
+    onError: (error) => sink.error?.(sessionId, error),
+    onRetrying: (attempt, error, delayMs, category, maxRetries) => {
+      sink.retrying?.(sessionId, {
+        attempt,
+        maxRetries,
+        error: error.message || String(error),
+        delayMs,
+        category,
+      })
+    },
+    onUsage: (usage) => sink.usage?.(sessionId, usage),
+    onAgentProgress: (agentToolUseId, event) => sink.agentProgress?.(sessionId, agentToolUseId, event),
+    onAgentText: (agentToolUseId, text) => sink.agentText?.(sessionId, agentToolUseId, text),
+    onAgentComplete: (agentToolUseId, result) => sink.agentComplete?.(sessionId, agentToolUseId, result),
+  }
+}
+
+export function createUiSink(getWindow: () => BrowserWindow | null): SessionEventSink {
+  const send = (channel: string, payload: unknown) => {
+    getWindow()?.webContents.send(channel, payload)
+  }
+
+  return {
+    stream: (sessionId, chunk) => send('query:stream', { sessionId, chunk }),
+    toolEvent: (sessionId, event) => {
+      send('query:tool-event', { sessionId, event })
+      if (event.type === 'complete' && event.toolName === 'EnterPlanMode') {
+        send('plan:mode-changed', { sessionId, mode: 'planning' })
+      } else if (event.type === 'complete' && event.toolName === 'ExitPlanMode') {
+        send('plan:mode-changed', { sessionId, mode: 'normal' })
+      }
+    },
+    messageComplete: (sessionId, message) => send('query:complete', { sessionId, message }),
+    messagesReplaced: (sessionId, messages) => send('session:messages-updated', { sessionId, messages }),
+    usage: (sessionId, usage) => send('query:usage', { sessionId, usage }),
+    retrying: (sessionId, event) => send('query:retrying', { sessionId, ...event }),
+    error: (sessionId, error) => send('query:error', { sessionId, error: error.message }),
+    finished: (sessionId) => send('query:finished', { sessionId }),
+    agentProgress: (sessionId, agentToolUseId, event) => send('agent:progress', { sessionId, agentToolUseId, ...event }),
+    agentText: (sessionId, agentToolUseId, text) => send('agent:text', { sessionId, agentToolUseId, text }),
+    agentComplete: (sessionId, agentToolUseId, result) => send('agent:complete', { sessionId, agentToolUseId, ...result }),
+  }
+}
