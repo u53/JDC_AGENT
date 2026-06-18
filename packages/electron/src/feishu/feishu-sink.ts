@@ -43,8 +43,10 @@ export class FeishuSink implements SessionEventSink, SessionInteractionSink {
   async flushStatus(): Promise<void> {
     if (!this.statusLines.length) return
 
-    const text = truncate(this.statusLines.splice(0).join('\n'), MAX_REPLY_CHARS)
+    const pending = [...this.statusLines]
+    const text = truncate(pending.join('\n'), MAX_REPLY_CHARS)
     await this.sendText(text)
+    this.statusLines.splice(0, pending.length)
   }
 
   async requestPermission(request: { toolName: string; input: Record<string, unknown> }): Promise<boolean> {
@@ -53,15 +55,16 @@ export class FeishuSink implements SessionEventSink, SessionInteractionSink {
     const approval = await this.client.sendApproval({
       ...this.target,
       toolName: request.toolName,
-      summary: summarizeInput(request.input),
+      summary: summarizeInput(request.toolName, request.input),
     })
     return this.client.waitForApproval(approval.requestId)
   }
 
   async askUser(question: string, options?: string[], multiSelect?: boolean): Promise<string> {
+    if (!this.client.waitForReply) return ''
+
     const prompt = formatQuestion(question, options, multiSelect)
     const message = await this.sendText(prompt)
-    if (!this.client.waitForReply) return ''
 
     return this.client.waitForReply({
       ...this.target,
@@ -70,8 +73,9 @@ export class FeishuSink implements SessionEventSink, SessionInteractionSink {
   }
 
   async reviewPlan(planFile: string, _content: string): Promise<{ approved: boolean; feedback?: string }> {
-    const message = await this.sendText(`Please review the plan ${planFile}. Reply yes/approve to approve, or provide feedback.`)
     if (!this.client.waitForReply) return { approved: false, feedback: 'No reply handler is available.' }
+
+    const message = await this.sendText(`Please review the plan ${planFile}. Reply yes/approve to approve, or provide feedback.`)
 
     const reply = await this.client.waitForReply({
       ...this.target,
@@ -112,20 +116,44 @@ function statusFromChunk(chunk: StreamChunk): string | null {
 function summarizeToolEvent(event: ToolExecutionEvent): string {
   const name = event.toolName
   if (event.type === 'start') {
-    return truncate(`Tool started: ${name}${event.input ? ` (${summarizeInput(event.input)})` : ''}`, MAX_STATUS_CHARS)
+    return truncate(`Tool started: ${name}${event.input ? ` (${summarizeInput(name, event.input)})` : ''}`, MAX_STATUS_CHARS)
   }
   if (event.type === 'complete') {
     const suffix = event.result?.isError ? ' with error' : ''
     return truncate(`Tool completed${suffix}: ${name}`, MAX_STATUS_CHARS)
   }
   if (event.type === 'error') {
-    return truncate(`Tool failed: ${name}${event.message ? ` - ${event.message}` : ''}`, MAX_STATUS_CHARS)
+    return truncate(`Tool failed: ${name}`, MAX_STATUS_CHARS)
   }
-  return truncate(`Tool progress: ${name}${event.message ? ` - ${event.message}` : ''}`, MAX_STATUS_CHARS)
+  return truncate(`Tool progress: ${name}`, MAX_STATUS_CHARS)
 }
 
-function summarizeInput(input: Record<string, unknown>): string {
-  return truncate(stableStringify(input), 240)
+function summarizeInput(toolName: string, input: Record<string, unknown>): string {
+  if (isShellTool(toolName)) return summarizeShellInput(input)
+
+  const safeKeys = Object.keys(input)
+    .filter((key) => !isSensitiveKey(key))
+    .sort()
+  const omittedCount = Object.keys(input).length - safeKeys.length
+  const keyText = safeKeys.length ? `keys: ${safeKeys.join(', ')}` : 'no safe keys'
+  const omittedText = omittedCount ? `; ${omittedCount} sensitive field${omittedCount === 1 ? '' : 's'} omitted` : ''
+  return truncate(`${keyText}${omittedText}`, 240)
+}
+
+function summarizeShellInput(input: Record<string, unknown>): string {
+  const parts: string[] = []
+  if (typeof input.command === 'string' && input.command.length > 0) parts.push('command provided')
+  if (typeof input.run_in_background === 'boolean') parts.push(`background: ${input.run_in_background}`)
+  if (typeof input.timeout === 'number') parts.push(`timeout: ${input.timeout}`)
+  return parts.length ? parts.join(', ') : 'shell input provided'
+}
+
+function isShellTool(toolName: string): boolean {
+  return /^(?:bash|powershell|shell|cmd)$/i.test(toolName)
+}
+
+function isSensitiveKey(key: string): boolean {
+  return /(?:token|secret|password|passwd|credential|auth|api[_-]?key|private[_-]?key|command)/i.test(key)
 }
 
 function formatQuestion(question: string, options?: string[], multiSelect?: boolean): string {
@@ -144,12 +172,4 @@ function splitText(text: string, maxChars: number): string[] {
 
 function truncate(text: string, maxChars: number): string {
   return text.length <= maxChars ? text : `${text.slice(0, maxChars - 1)}…`
-}
-
-function stableStringify(value: unknown): string {
-  try {
-    return JSON.stringify(value)
-  } catch {
-    return String(value)
-  }
 }
