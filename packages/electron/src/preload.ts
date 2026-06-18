@@ -38,6 +38,12 @@ const api = {
   copyImageFile: (filePath: string) => ipcRenderer.invoke('images:copy-to-clipboard', { filePath }),
   showImageInFolder: (filePath: string) => ipcRenderer.invoke('images:show-in-folder', { filePath }),
   readImageFile: (filePath: string) => ipcRenderer.invoke('images:read-image', { filePath }) as Promise<{ success: boolean; dataUrl?: string; error?: string }>,
+  feishuListBindings: () => ipcRenderer.invoke('feishu:bindings:list'),
+  feishuAddBinding: (binding: any) => ipcRenderer.invoke('feishu:bindings:add', binding),
+  feishuUpdateBinding: (id: string, patch: any) => ipcRenderer.invoke('feishu:bindings:update', { id, patch }),
+  feishuDeleteBinding: (id: string) => ipcRenderer.invoke('feishu:bindings:delete', { id }),
+  feishuStatus: () => ipcRenderer.invoke('feishu:status'),
+  feishuRestart: () => ipcRenderer.invoke('feishu:restart'),
   onImageGenerated: (callback: (payload: { sessionId: string; taskId: string; images: any[] }) => void) => {
     const listener = (_e: unknown, payload: any) => callback(payload)
     ipcRenderer.on('image:generated', listener)

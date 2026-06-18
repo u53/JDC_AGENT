@@ -6,11 +6,20 @@ import { loadAppConfig, saveAppConfig, AnthropicProvider, OpenAIChatProvider, Op
 import { GitService } from './git-service.js'
 import { AppLauncher } from './app-launcher.js'
 import { TerminalService } from './terminal-service.js'
+import { FeishuBindingStore } from './feishu/binding-store.js'
+import type { FeishuBindingInput } from './feishu/types.js'
+
+interface FeishuBridgeService {
+  getStatus?: () => unknown | Promise<unknown>
+  restart?: () => unknown | Promise<unknown>
+}
 
 interface DevToolServices {
   gitService: GitService
   appLauncher: AppLauncher
   terminalService: TerminalService
+  feishuBindingStore?: FeishuBindingStore
+  feishuBridge?: FeishuBridgeService
 }
 
 function contextPayload(payload: unknown): Record<string, unknown> {
@@ -188,6 +197,42 @@ export function registerIpcHandlers(sessionManager: SessionManager, services: De
   })
 
   const { gitService, appLauncher, terminalService } = services
+  const feishuBindingStore = services.feishuBindingStore ?? new FeishuBindingStore()
+
+  // Feishu
+  ipcMain.handle(IPC_CHANNELS.FEISHU_BINDINGS_LIST, async () => {
+    return { bindings: feishuBindingStore.listBindings() }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.FEISHU_BINDINGS_ADD, async (_event, binding: FeishuBindingInput) => {
+    return { success: true, binding: feishuBindingStore.addBinding(binding) }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.FEISHU_BINDINGS_UPDATE, async (_event, { id, patch }: { id: string; patch: Partial<FeishuBindingInput> }) => {
+    return { success: true, binding: feishuBindingStore.updateBinding(id, patch) }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.FEISHU_BINDINGS_DELETE, async (_event, { id }: { id: string }) => {
+    feishuBindingStore.deleteBinding(id)
+    return { success: true }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.FEISHU_STATUS, async () => {
+    if (services.feishuBridge?.getStatus) {
+      return services.feishuBridge.getStatus()
+    }
+    return {
+      running: false,
+      bindings: feishuBindingStore.listBindings().map(({ id, enabled }) => ({ id, enabled, connected: false })),
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.FEISHU_RESTART, async () => {
+    if (services.feishuBridge?.restart) {
+      return services.feishuBridge.restart()
+    }
+    return { success: true }
+  })
 
   // Git
   ipcMain.handle(IPC_CHANNELS.GIT_BRANCH_LIST, async (_event, { cwd }) => {

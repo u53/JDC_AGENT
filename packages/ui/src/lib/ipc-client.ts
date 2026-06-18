@@ -1,5 +1,34 @@
 import type { AppConfig, ConstraintObservabilitySnapshot, Message, StreamChunk, ToolExecutionEvent } from '@jdcagnet/core'
 
+export interface FeishuBinding {
+  id: string
+  name: string
+  enabled: boolean
+  appId: string
+  appSecret: string
+  tenantKey?: string
+  verificationToken?: string
+  encryptKey?: string
+  projectName: string
+  cwd: string
+  defaultModelId?: string
+  permissionMode: FeishuPermissionMode
+  allowedChatIds: string[]
+  allowedOpenIds: string[]
+  sessionStrategy: FeishuSessionStrategy
+  createdAt: number
+  updatedAt: number
+}
+
+export type FeishuPermissionMode = 'standard' | 'relaxed' | 'strict'
+export type FeishuSessionStrategy = 'thread' | 'chat'
+
+export type FeishuBindingInput = Omit<FeishuBinding, 'id' | 'createdAt' | 'updatedAt' | 'permissionMode' | 'allowedChatIds' | 'allowedOpenIds'> & {
+  permissionMode?: FeishuPermissionMode
+  allowedChatIds?: string[]
+  allowedOpenIds?: string[]
+}
+
 export interface McpServerState {
   name: string
   config: { transport: string; command?: string; args?: string[]; url?: string; disabled?: boolean }
@@ -30,6 +59,12 @@ declare global {
       setPlanMode: (sessionId: string, mode: string) => Promise<unknown>
       getPlanMode: (sessionId: string) => Promise<unknown>
       writeClipboard: (text: string) => void
+      feishuListBindings: () => Promise<{ bindings: FeishuBinding[] }>
+      feishuAddBinding: (binding: FeishuBindingInput) => Promise<{ success: boolean; binding: FeishuBinding }>
+      feishuUpdateBinding: (id: string, patch: Partial<FeishuBindingInput>) => Promise<{ success: boolean; binding: FeishuBinding }>
+      feishuDeleteBinding: (id: string) => Promise<{ success: boolean }>
+      feishuStatus: () => Promise<{ running: boolean; bindings: Array<{ id: string; enabled: boolean; connected: boolean; lastError?: string }> }>
+      feishuRestart: () => Promise<{ success: boolean }>
       // Git
       gitBranchList: (cwd: string) => Promise<{ branches: string[]; current: string }>
       gitBranchSwitch: (cwd: string, branch: string) => Promise<{ success: boolean; error?: string }>
@@ -193,6 +228,21 @@ export const ipc = {
       on('background:state-changed', (_e, data) => cb(data as any)),
     onNotification: (cb: (data: { sessionId: string }) => void) =>
       on('background:notification', (_e, data) => cb(data as any)),
+  },
+
+  feishu: {
+    listBindings: () =>
+      invoke('feishu:bindings:list') as Promise<{ bindings: FeishuBinding[] }>,
+    addBinding: (binding: FeishuBindingInput) =>
+      invoke('feishu:bindings:add', binding) as Promise<{ success: boolean; binding: FeishuBinding }>,
+    updateBinding: (id: string, patch: Partial<FeishuBindingInput>) =>
+      invoke('feishu:bindings:update', { id, patch }) as Promise<{ success: boolean; binding: FeishuBinding }>,
+    deleteBinding: (id: string) =>
+      invoke('feishu:bindings:delete', { id }) as Promise<{ success: boolean }>,
+    status: () =>
+      invoke('feishu:status') as Promise<{ running: boolean; bindings: Array<{ id: string; enabled: boolean; connected: boolean; lastError?: string }> }>,
+    restart: () =>
+      invoke('feishu:restart') as Promise<{ success: boolean }>,
   },
 
   constraint: {
