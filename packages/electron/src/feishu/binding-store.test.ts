@@ -64,4 +64,59 @@ describe('FeishuBindingStore', () => {
     store.deleteBinding(binding.id)
     expect(store.listBindings()).toEqual([])
   })
+
+  it('applies safe defaults for omitted binding fields', async () => {
+    const { FeishuBindingStore } = await import('./binding-store')
+    const store = new FeishuBindingStore()
+
+    const binding = store.addBinding({
+      name: 'HR bot',
+      appId: 'cli_hr',
+      appSecret: 'secret_hr',
+      projectName: 'hr_demo',
+      cwd: '/repo/hr_demo',
+      enabled: true,
+    })
+
+    expect(binding).toMatchObject({
+      permissionMode: 'standard',
+      allowedChatIds: [],
+      allowedOpenIds: [],
+      sessionStrategy: 'thread',
+    })
+  })
+
+  it('throws when updating or deleting an unknown binding', async () => {
+    const { FeishuBindingStore } = await import('./binding-store')
+    const store = new FeishuBindingStore()
+
+    expect(() => store.updateBinding('missing', { enabled: false })).toThrow('Feishu binding not found: missing')
+    expect(() => store.deleteBinding('missing')).toThrow('Feishu binding not found: missing')
+  })
+
+  it('rejects invalid create and update input', async () => {
+    const { FeishuBindingStore } = await import('./binding-store')
+    const store = new FeishuBindingStore()
+
+    expect(() => store.addBinding({
+      name: 'HR bot',
+      appId: ' ',
+      appSecret: 'secret_hr',
+      projectName: 'hr_demo',
+      cwd: '/repo/hr_demo',
+      enabled: true,
+    })).toThrow('Feishu binding appId is required')
+
+    const binding = store.addBinding({
+      name: 'HR bot',
+      appId: 'cli_hr',
+      appSecret: 'secret_hr',
+      projectName: 'hr_demo',
+      cwd: '/repo/hr_demo',
+      enabled: true,
+    })
+
+    expect(() => store.updateBinding(binding.id, { cwd: ' ' })).toThrow('Feishu binding cwd is required')
+    expect(() => store.updateBinding(binding.id, { permissionMode: 'open' as any })).toThrow('Feishu binding permissionMode must be standard, relaxed, or strict')
+  })
 })

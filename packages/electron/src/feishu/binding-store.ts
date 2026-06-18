@@ -20,6 +20,71 @@ function isSessionStrategy(value: unknown): value is FeishuSessionStrategy {
   return value === 'thread' || value === 'chat'
 }
 
+const requiredStringFields = ['name', 'appId', 'appSecret', 'projectName', 'cwd'] as const
+const optionalStringFields = ['tenantKey', 'verificationToken', 'encryptKey', 'defaultModelId'] as const
+const stringArrayFields = ['allowedChatIds', 'allowedOpenIds'] as const
+
+function trimRequiredString(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(`Feishu binding ${field} is required`)
+  }
+  return value.trim()
+}
+
+function assertOptionalString(value: unknown, field: string): void {
+  if (value !== undefined && typeof value !== 'string') {
+    throw new Error(`Feishu binding ${field} must be a string`)
+  }
+}
+
+function assertStringArray(value: unknown, field: string): void {
+  if (value !== undefined && (!Array.isArray(value) || value.some((item) => typeof item !== 'string'))) {
+    throw new Error(`Feishu binding ${field} must be a string array`)
+  }
+}
+
+function assertBoolean(value: unknown, field: string): void {
+  if (value !== undefined && typeof value !== 'boolean') {
+    throw new Error(`Feishu binding ${field} must be a boolean`)
+  }
+}
+
+function prepareBindingInput(input: FeishuBindingInput): FeishuBindingInput {
+  const next = { ...input } as Record<string, unknown>
+  for (const field of requiredStringFields) {
+    next[field] = trimRequiredString(next[field], field)
+  }
+  assertBoolean(next.enabled, 'enabled')
+  for (const field of optionalStringFields) assertOptionalString(next[field], field)
+  for (const field of stringArrayFields) assertStringArray(next[field], field)
+  if (next.sessionStrategy !== undefined && !isSessionStrategy(next.sessionStrategy)) {
+    throw new Error('Feishu binding sessionStrategy must be thread or chat')
+  }
+  if (next.permissionMode !== undefined && !isPermissionMode(next.permissionMode)) {
+    throw new Error('Feishu binding permissionMode must be standard, relaxed, or strict')
+  }
+  return next as FeishuBindingInput
+}
+
+function prepareBindingPatch(patch: Partial<FeishuBindingInput>): Partial<FeishuBindingInput> {
+  const next = { ...patch } as Record<string, unknown>
+  for (const field of requiredStringFields) {
+    if (Object.prototype.hasOwnProperty.call(next, field)) {
+      next[field] = trimRequiredString(next[field], field)
+    }
+  }
+  assertBoolean(next.enabled, 'enabled')
+  for (const field of optionalStringFields) assertOptionalString(next[field], field)
+  for (const field of stringArrayFields) assertStringArray(next[field], field)
+  if (next.sessionStrategy !== undefined && !isSessionStrategy(next.sessionStrategy)) {
+    throw new Error('Feishu binding sessionStrategy must be thread or chat')
+  }
+  if (next.permissionMode !== undefined && !isPermissionMode(next.permissionMode)) {
+    throw new Error('Feishu binding permissionMode must be standard, relaxed, or strict')
+  }
+  return next as Partial<FeishuBindingInput>
+}
+
 function cloneBinding(binding: FeishuBinding): FeishuBinding {
   return {
     ...binding,
@@ -68,7 +133,7 @@ export class FeishuBindingStore {
   addBinding(input: FeishuBindingInput): FeishuBinding {
     const now = Date.now()
     const binding = normalizeBinding({
-      ...input,
+      ...prepareBindingInput(input),
       id: randomUUID(),
       createdAt: now,
       updatedAt: now,
@@ -87,7 +152,7 @@ export class FeishuBindingStore {
 
     const updated = normalizeBinding({
       ...bindings[index],
-      ...patch,
+      ...prepareBindingPatch(patch),
       id,
       createdAt: bindings[index].createdAt,
       updatedAt: Date.now(),
@@ -99,8 +164,12 @@ export class FeishuBindingStore {
   }
 
   deleteBinding(id: string): void {
-    const bindings = this.readBindings().filter((binding) => binding.id !== id)
-    this.writeBindings(bindings)
+    const bindings = this.readBindings()
+    const nextBindings = bindings.filter((binding) => binding.id !== id)
+    if (nextBindings.length === bindings.length) {
+      throw new Error(`Feishu binding not found: ${id}`)
+    }
+    this.writeBindings(nextBindings)
   }
 
   private readBindings(): FeishuBinding[] {
