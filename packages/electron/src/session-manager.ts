@@ -1,4 +1,5 @@
 import { v4 as uuid } from 'uuid'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import path from 'node:path'
 import {
   Session, type SessionEvents, AnthropicProvider, OpenAIChatProvider, OpenAIResponsesProvider,
@@ -47,6 +48,7 @@ export class SessionManager {
   private permissionModes = new Map<string, string>()
   private externalEventSinks = new Map<string, Map<string, SessionEventSink>>()
   private interactionRouter = createInteractionRouter((sessionId) => this.createUiInteractionSink(sessionId))
+  private interactionRunKey = new AsyncLocalStorage<string>()
   constructor() {
     const dbPath = path.join(getConfigDir(), 'history.db')
     this.history = new ConversationHistory(dbPath)
@@ -102,7 +104,7 @@ export class SessionManager {
 
     return () => {
       const current = this.externalEventSinks.get(sessionId)
-      if (!current) return
+      if (!current || current.get(key) !== sink) return
       current.delete(key)
       if (current.size === 0) {
         this.externalEventSinks.delete(sessionId)
@@ -360,10 +362,10 @@ export class SessionManager {
       id: sessionId, projectName: meta.projectName, cwd: meta.cwd, modelConfig,
     }
     const permissionCallback: PermissionCallback = (request) => {
-      return this.interactionRouter.requestPermission(sessionId, request)
+      return this.interactionRouter.requestPermission(sessionId, request, this.interactionRunKey.getStore())
     }
     const onPlanReview = async (planFile: string, content: string) => {
-      return this.interactionRouter.reviewPlan(sessionId, planFile, content)
+      return this.interactionRouter.reviewPlan(sessionId, planFile, content, this.interactionRunKey.getStore())
     }
     const session = new Session(sessionConfig, provider, this.history, permissionCallback, this.mcpManager, onPlanReview)
     session.resolveModel = (modelId: string) => {
@@ -374,7 +376,7 @@ export class SessionManager {
       return { status: 'resolved', provider: runtime.provider, modelConfig: runtime.modelConfig, warning: runtime.warning }
     }
     const onAskUser: AskUserCallback = async (question, options, multiSelect) => {
-      return this.interactionRouter.askUser(sessionId, question, options, multiSelect)
+      return this.interactionRouter.askUser(sessionId, question, options, multiSelect, this.interactionRunKey.getStore())
     }
     session.registerTool(createAskUserTool(onAskUser))
     const onNotify: NotifyCallback = (message: string) => {
@@ -502,12 +504,23 @@ export class SessionManager {
       }
     }
 
-    const detachInteractionSink = options?.interactionSink
-      ? this.attachSessionInteractionSink(sessionId, `external:run:${Date.now()}:${Math.random().toString(36).slice(2)}`, options.interactionSink)
+    const interactionRunKey = options?.interactionSink
+      ? `external:run:${Date.now()}:${Math.random().toString(36).slice(2)}`
+      : undefined
+    const detachInteractionSink = options?.interactionSink && interactionRunKey
+      ? this.attachSessionInteractionSink(sessionId, interactionRunKey, options.interactionSink)
       : undefined
 
-    try {
+    const runSessionMessage = async () => {
       await session.sendMessage(text + inputImageNote, runSink.events, extraContent)
+    }
+
+    try {
+      if (interactionRunKey) {
+        await this.interactionRunKey.run(interactionRunKey, runSessionMessage)
+      } else {
+        await runSessionMessage()
+      }
       if (!runSink.didError()) {
         runSink.sink.finished?.(sessionId)
       }

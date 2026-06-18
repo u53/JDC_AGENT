@@ -33,11 +33,24 @@ export interface SessionInteractionSink {
 
 type InteractionFallback = SessionInteractionSink | ((sessionId: string) => SessionInteractionSink)
 
-export function createInteractionRouter(fallback: InteractionFallback) {
+type PermissionRequest = { toolName: string; input: Record<string, unknown> }
+type PlanReviewResult = { approved: boolean; feedback?: string }
+
+export interface InteractionRouter {
+  attach(sessionId: string, key: string, sink: SessionInteractionSink): () => void
+  clear(sessionId: string): void
+  requestPermission(sessionId: string, request: PermissionRequest, key?: string): Promise<boolean>
+  askUser(sessionId: string, question: string, options?: string[], multiSelect?: boolean, key?: string): Promise<string>
+  reviewPlan(sessionId: string, planFile: string, content: string, key?: string): Promise<PlanReviewResult>
+}
+
+export function createInteractionRouter(fallback: InteractionFallback): InteractionRouter {
   const sinks = new Map<string, Map<string, SessionInteractionSink>>()
   const fallbackFor = (sessionId: string) => typeof fallback === 'function' ? fallback(sessionId) : fallback
-  const current = (sessionId: string) => {
-    const values = Array.from(sinks.get(sessionId)?.values() ?? [])
+  const current = (sessionId: string, key?: string) => {
+    const sessionSinks = sinks.get(sessionId)
+    if (key) return sessionSinks?.get(key)
+    const values = Array.from(sessionSinks?.values() ?? [])
     return values[values.length - 1]
   }
 
@@ -47,6 +60,7 @@ export function createInteractionRouter(fallback: InteractionFallback) {
       sessionSinks.set(key, sink)
       sinks.set(sessionId, sessionSinks)
       return () => {
+        if (sessionSinks.get(key) !== sink) return
         sessionSinks.delete(key)
         if (sessionSinks.size === 0) sinks.delete(sessionId)
       }
@@ -54,17 +68,17 @@ export function createInteractionRouter(fallback: InteractionFallback) {
     clear(sessionId: string) {
       sinks.delete(sessionId)
     },
-    requestPermission(sessionId: string, request: { toolName: string; input: Record<string, unknown> }) {
+    requestPermission(sessionId: string, request: PermissionRequest, key?: string) {
       const fallbackSink = fallbackFor(sessionId)
-      return (current(sessionId)?.requestPermission ?? fallbackSink.requestPermission)?.(request) ?? Promise.resolve(false)
+      return (current(sessionId, key)?.requestPermission ?? fallbackSink.requestPermission)?.(request) ?? Promise.resolve(false)
     },
-    askUser(sessionId: string, question: string, options?: string[], multiSelect?: boolean) {
+    askUser(sessionId: string, question: string, options?: string[], multiSelect?: boolean, key?: string) {
       const fallbackSink = fallbackFor(sessionId)
-      return (current(sessionId)?.askUser ?? fallbackSink.askUser)?.(question, options, multiSelect) ?? Promise.resolve('')
+      return (current(sessionId, key)?.askUser ?? fallbackSink.askUser)?.(question, options, multiSelect) ?? Promise.resolve('')
     },
-    reviewPlan(sessionId: string, planFile: string, content: string) {
+    reviewPlan(sessionId: string, planFile: string, content: string, key?: string) {
       const fallbackSink = fallbackFor(sessionId)
-      return (current(sessionId)?.reviewPlan ?? fallbackSink.reviewPlan)?.(planFile, content) ?? Promise.resolve({ approved: false, feedback: 'No review handler is available.' })
+      return (current(sessionId, key)?.reviewPlan ?? fallbackSink.reviewPlan)?.(planFile, content) ?? Promise.resolve({ approved: false, feedback: 'No review handler is available.' })
     },
   }
 }
