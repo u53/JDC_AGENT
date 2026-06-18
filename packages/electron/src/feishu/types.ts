@@ -44,3 +44,23 @@ export type FeishuResolvedConversation =
   | { kind: 'message'; sessionId: string; text: string }
   | { kind: 'command'; command: FeishuCommand; sessionId?: string; text: string }
   | { kind: 'unauthorized'; reason: string }
+
+export interface FeishuSendTextInput {
+  chatId: string
+  threadKey?: string
+  text: string
+}
+
+export interface FeishuApprovalInput {
+  chatId: string
+  threadKey?: string
+  toolName: string
+  summary: string
+}
+
+export interface FeishuClientPort {
+  sendText(input: FeishuSendTextInput): Promise<{ messageId: string }>
+  sendApproval?(input: FeishuApprovalInput): Promise<{ requestId: string }>
+  waitForApproval?(requestId: string): Promise<boolean>
+  waitForReply?(input: { chatId: string; threadKey?: string; promptMessageId: string }): Promise<string>
+}
