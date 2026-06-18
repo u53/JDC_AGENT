@@ -28,7 +28,6 @@ describe('FeishuSink', () => {
     expect(text).toContain('Bash')
     expect(text.length).toBeLessThan(1000)
   })
-
   it('asks for permission through Feishu and resolves on approval', async () => {
     const client = {
       sendApproval: vi.fn().mockResolvedValue({ requestId: 'approval_1' }),
@@ -40,5 +39,18 @@ describe('FeishuSink', () => {
 
     expect(allowed).toBe(true)
     expect(client.sendApproval).toHaveBeenCalledWith(expect.objectContaining({ toolName: 'Bash' }))
+  })
+
+  it.each(['同意', '通过'])('approves localized plan review reply %s', async (reply) => {
+    const client = {
+      sendText: vi.fn().mockResolvedValue({ messageId: 'plan_prompt_1' }),
+      waitForReply: vi.fn().mockResolvedValue(reply),
+    }
+    const sink = new FeishuSink(client as any, { chatId: 'chat_1' })
+
+    const result = await sink.reviewPlan?.('plan.md', 'Plan content')
+
+    expect(result).toEqual({ approved: true })
+    expect(client.waitForReply).toHaveBeenCalledWith(expect.objectContaining({ promptMessageId: 'plan_prompt_1' }))
   })
 })

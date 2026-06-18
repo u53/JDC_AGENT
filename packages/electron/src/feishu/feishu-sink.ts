@@ -77,7 +77,7 @@ export class FeishuSink implements SessionEventSink, SessionInteractionSink {
       ...this.target,
       promptMessageId: message.messageId,
     })
-    const approved = /^(yes|approve|approved|同意|通过)\b/i.test(reply.trim())
+    const approved = /^(?:(?:yes|approved?)(?:\b|$)|(?:同意|通过)(?:\s|$|[，。！？,.!?]))/i.test(reply.trim())
     return approved ? { approved: true } : { approved: false, feedback: reply }
   }
 
