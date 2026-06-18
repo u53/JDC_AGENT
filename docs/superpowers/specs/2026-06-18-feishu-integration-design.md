@@ -6,13 +6,14 @@
 
 ## Summary
 
-JDCAGNET will support Feishu access through a self-built Feishu bot. For the first version, the bot runs as an Electron main-process bridge while the desktop app is open. The bridge uses Feishu long-connection events, maps one bot binding to one JDC workspace project, and forwards Feishu messages into the existing JDC `Session` runtime.
+JDCAGNET will support Feishu access through self-built Feishu bots. For the first version, the bots run through an Electron main-process bridge while the desktop app is open. The bridge uses Feishu long-connection events, supports multiple bot bindings, maps each bot binding to one JDC workspace project, and forwards Feishu messages into the existing JDC `Session` runtime.
 
 Feishu is only a client transport. It must not create a separate chat engine, prompt builder, tool runner, compaction path, or context store. All normal JDC capabilities, including tools, MCP, skills, subagents, teams, JDC Context Engine snapshot injection, usage tracking, micro compaction, and full compaction, must continue through the same session path used by the desktop chat UI.
 
 ## Goals
 
-- Bind a Feishu bot to a JDC workspace, where workspace means a project `cwd`.
+- Allow multiple Feishu bot bindings.
+- Bind each Feishu bot to a JDC workspace when it is added, where workspace means a project `cwd`.
 - Receive Feishu single-chat and group-chat messages while the desktop app is running.
 - Route Feishu turns into normal JDC sessions, preserving existing history, usage, compaction, and context behavior.
 - Support the normal tool surface without creating a reduced bot-only mode.
@@ -78,7 +79,7 @@ Owns Feishu connectivity.
 
 ### FeishuBindingStore
 
-Stores bot-to-project configuration.
+Stores bot-to-project configuration. The product can contain multiple bindings, and each binding represents one Feishu bot connected to one project `cwd`.
 
 Recommended first-version config shape:
 
@@ -105,7 +106,7 @@ interface FeishuBinding {
 
 Secrets should be stored through the existing app config mechanism only if that is already the product convention. If a platform keychain abstraction is available later, `appSecretRef` and `encryptKeyRef` should point to keychain entries.
 
-One Feishu bot can bind to one project `cwd` in the first version. Supporting multiple projects behind one bot can be a later extension through explicit commands or chat allowlist routing.
+Each Feishu bot binding points to one project `cwd`. Users can add multiple Feishu bots, and each bot is bound to its own selected project when it is created or edited. Supporting multiple projects behind a single bot can be a later extension through explicit commands or chat allowlist routing.
 
 ### ConversationResolver
 
@@ -329,8 +330,8 @@ Diagnostics should show enough correlation to debug a Feishu request without exp
 First version can expose a minimal settings panel:
 
 - Enable Feishu integration.
-- Add/edit one bot binding.
-- Choose project `cwd`.
+- Add/edit/delete bot bindings.
+- Choose one project `cwd` for each bot binding.
 - Set allowlisted chat ids and user ids.
 - Pick default model or use global active model.
 - Pick permission mode.
