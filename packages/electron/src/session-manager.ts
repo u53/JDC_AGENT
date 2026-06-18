@@ -11,6 +11,7 @@ import {
 } from '@jdcagnet/core'
 import { Notification, type BrowserWindow } from 'electron'
 import {
+  createInteractionRouter,
   createSessionEvents,
   createSinkMultiplexer,
   createUiSink as createBrowserWindowUiSink,
@@ -45,6 +46,7 @@ export class SessionManager {
   private pendingPlanReviews = new Map<string, { resolve: (result: { approved: boolean; feedback?: string }) => void }>()
   private permissionModes = new Map<string, string>()
   private externalEventSinks = new Map<string, Map<string, SessionEventSink>>()
+  private interactionRouter = createInteractionRouter((sessionId) => this.createUiInteractionSink(sessionId))
   constructor() {
     const dbPath = path.join(getConfigDir(), 'history.db')
     this.history = new ConversationHistory(dbPath)
@@ -108,8 +110,38 @@ export class SessionManager {
     }
   }
 
+  attachSessionInteractionSink(sessionId: string, key: string, sink: SessionInteractionSink): () => void {
+    return this.interactionRouter.attach(sessionId, key, sink)
+  }
+
   private createUiSink(): SessionEventSink {
     return createBrowserWindowUiSink(() => this.window)
+  }
+
+  private createUiInteractionSink(sessionId: string): SessionInteractionSink {
+    return {
+      requestPermission: (request) => {
+        return new Promise<boolean>((resolve) => {
+          const id = uuid()
+          this.pendingPermissions.set(id, { resolve })
+          this.window?.webContents.send('permission:request', { id, sessionId, toolName: request.toolName, input: request.input })
+        })
+      },
+      askUser: (question, options, multiSelect) => {
+        return new Promise<string>((resolve) => {
+          const id = uuid()
+          this.pendingAskUser.set(id, { resolve })
+          this.window?.webContents.send('ask_user:request', { id, sessionId, question, options, multiSelect })
+        })
+      },
+      reviewPlan: (planFile, content) => {
+        return new Promise<{ approved: boolean; feedback?: string }>((resolve) => {
+          const id = uuid()
+          this.pendingPlanReviews.set(id, { resolve })
+          this.window?.webContents.send('plan:review', { id, sessionId, planFile, content })
+        })
+      },
+    }
   }
 
   private getCombinedSink(sessionId: string, extraSink?: SessionEventSink): SessionEventSink {
@@ -328,18 +360,10 @@ export class SessionManager {
       id: sessionId, projectName: meta.projectName, cwd: meta.cwd, modelConfig,
     }
     const permissionCallback: PermissionCallback = (request) => {
-      return new Promise<boolean>((resolve) => {
-        const id = uuid()
-        this.pendingPermissions.set(id, { resolve })
-        this.window?.webContents.send('permission:request', { id, sessionId, toolName: request.toolName, input: request.input })
-      })
+      return this.interactionRouter.requestPermission(sessionId, request)
     }
     const onPlanReview = async (planFile: string, content: string) => {
-      return new Promise<{ approved: boolean; feedback?: string }>((resolve) => {
-        const id = uuid()
-        this.pendingPlanReviews.set(id, { resolve })
-        this.window?.webContents.send('plan:review', { id, sessionId, planFile, content })
-      })
+      return this.interactionRouter.reviewPlan(sessionId, planFile, content)
     }
     const session = new Session(sessionConfig, provider, this.history, permissionCallback, this.mcpManager, onPlanReview)
     session.resolveModel = (modelId: string) => {
@@ -350,11 +374,7 @@ export class SessionManager {
       return { status: 'resolved', provider: runtime.provider, modelConfig: runtime.modelConfig, warning: runtime.warning }
     }
     const onAskUser: AskUserCallback = async (question, options, multiSelect) => {
-      return new Promise<string>((resolve) => {
-        const id = uuid()
-        this.pendingAskUser.set(id, { resolve })
-        this.window?.webContents.send('ask_user:request', { id, sessionId, question, options, multiSelect })
-      })
+      return this.interactionRouter.askUser(sessionId, question, options, multiSelect)
     }
     session.registerTool(createAskUserTool(onAskUser))
     const onNotify: NotifyCallback = (message: string) => {
@@ -416,8 +436,6 @@ export class SessionManager {
       }
     }
 
-    // Task 4 will wire interaction sinks into permission/ask-user/plan-review routing.
-    void options?.interactionSink
     const runSink = this.createRunSink(sessionId, options?.sink)
 
     // Compress and convert images to ImageContent blocks
@@ -484,6 +502,10 @@ export class SessionManager {
       }
     }
 
+    const detachInteractionSink = options?.interactionSink
+      ? this.attachSessionInteractionSink(sessionId, `external:run:${Date.now()}:${Math.random().toString(36).slice(2)}`, options.interactionSink)
+      : undefined
+
     try {
       await session.sendMessage(text + inputImageNote, runSink.events, extraContent)
       if (!runSink.didError()) {
@@ -492,6 +514,8 @@ export class SessionManager {
     } catch (err: any) {
       console.error('[SEND] Error:', err.message, err.stack)
       runSink.sink.error?.(sessionId, err)
+    } finally {
+      detachInteractionSink?.()
     }
   }
 
@@ -555,6 +579,7 @@ export class SessionManager {
 
   deleteSession(sessionId: string): void {
     this.externalEventSinks.delete(sessionId)
+    this.interactionRouter.clear(sessionId)
     this.sessions.delete(sessionId)
     this.history.deleteSession(sessionId)
   }

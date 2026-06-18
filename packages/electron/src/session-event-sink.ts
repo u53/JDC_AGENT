@@ -31,6 +31,44 @@ export interface SessionInteractionSink {
   reviewPlan?(planFile: string, content: string): Promise<{ approved: boolean; feedback?: string }>
 }
 
+type InteractionFallback = SessionInteractionSink | ((sessionId: string) => SessionInteractionSink)
+
+export function createInteractionRouter(fallback: InteractionFallback) {
+  const sinks = new Map<string, Map<string, SessionInteractionSink>>()
+  const fallbackFor = (sessionId: string) => typeof fallback === 'function' ? fallback(sessionId) : fallback
+  const current = (sessionId: string) => {
+    const values = Array.from(sinks.get(sessionId)?.values() ?? [])
+    return values[values.length - 1]
+  }
+
+  return {
+    attach(sessionId: string, key: string, sink: SessionInteractionSink) {
+      const sessionSinks = sinks.get(sessionId) ?? new Map<string, SessionInteractionSink>()
+      sessionSinks.set(key, sink)
+      sinks.set(sessionId, sessionSinks)
+      return () => {
+        sessionSinks.delete(key)
+        if (sessionSinks.size === 0) sinks.delete(sessionId)
+      }
+    },
+    clear(sessionId: string) {
+      sinks.delete(sessionId)
+    },
+    requestPermission(sessionId: string, request: { toolName: string; input: Record<string, unknown> }) {
+      const fallbackSink = fallbackFor(sessionId)
+      return (current(sessionId)?.requestPermission ?? fallbackSink.requestPermission)?.(request) ?? Promise.resolve(false)
+    },
+    askUser(sessionId: string, question: string, options?: string[], multiSelect?: boolean) {
+      const fallbackSink = fallbackFor(sessionId)
+      return (current(sessionId)?.askUser ?? fallbackSink.askUser)?.(question, options, multiSelect) ?? Promise.resolve('')
+    },
+    reviewPlan(sessionId: string, planFile: string, content: string) {
+      const fallbackSink = fallbackFor(sessionId)
+      return (current(sessionId)?.reviewPlan ?? fallbackSink.reviewPlan)?.(planFile, content) ?? Promise.resolve({ approved: false, feedback: 'No review handler is available.' })
+    },
+  }
+}
+
 type SinkMethod = keyof SessionEventSink
 
 function isCatchable(value: unknown): value is { catch: (onRejected: (error: unknown) => void) => unknown } {
