@@ -34,10 +34,10 @@ export class FeishuSink implements SessionEventSink, SessionInteractionSink {
     await this.flushStatus()
 
     const text = (this.textBySession.get(sessionId) ?? '').trim()
-    this.textBySession.delete(sessionId)
     if (!text) return
 
     await this.sendSplitText(text)
+    this.textBySession.delete(sessionId)
   }
 
   async flushStatus(): Promise<void> {

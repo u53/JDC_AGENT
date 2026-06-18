@@ -144,6 +144,23 @@ describe('FeishuSink', () => {
     expect(client.sendText.mock.calls[1][0].text).not.toContain('SECRET_STATUS_TOKEN')
   })
 
+  it('preserves final reply text when sending final reply fails', async () => {
+    const client = {
+      sendText: vi.fn()
+        .mockRejectedValueOnce(new Error('network failed'))
+        .mockResolvedValueOnce({ messageId: 'reply_1' }),
+    }
+    const sink = new FeishuSink(client as any, { chatId: 'chat_1' })
+
+    sink.stream('session_1', { type: 'text_delta', text: 'retry me' } as any)
+    await expect(sink.finished?.('session_1')).rejects.toThrow('network failed')
+    await sink.finished?.('session_1')
+
+    expect(client.sendText).toHaveBeenCalledTimes(2)
+    expect(client.sendText.mock.calls[0][0].text).toBe('retry me')
+    expect(client.sendText.mock.calls[1][0].text).toBe('retry me')
+  })
+
   it('splits long final replies and does not resend them on a second finish', async () => {
     const client = { sendText: vi.fn().mockResolvedValue({ messageId: 'reply_1' }) }
     const sink = new FeishuSink(client as any, { chatId: 'chat_1' })
