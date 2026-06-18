@@ -105,9 +105,9 @@ function statusFromChunk(chunk: StreamChunk): string | null {
         : 'Compaction complete.'
     }
     case 'compact_skipped':
-      return `Compaction skipped: ${chunk.compactSkipped?.reason ?? 'unknown'}.`
+      return 'Compaction skipped.'
     case 'compact_failed':
-      return `Compaction failed: ${chunk.compactFailed?.message ?? chunk.compactFailed?.reason ?? 'unknown'}.`
+      return 'Compaction failed.'
     default:
       return null
   }

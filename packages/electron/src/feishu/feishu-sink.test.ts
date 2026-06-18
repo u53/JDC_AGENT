@@ -54,6 +54,25 @@ describe('FeishuSink', () => {
     expect(text).not.toContain('stdout')
     expect(text).not.toContain('file contents')
   })
+
+  it('summarizes compaction status without raw skipped or failed details', async () => {
+    const client = { sendText: vi.fn().mockResolvedValue({ messageId: 'reply_1' }) }
+    const sink = new FeishuSink(client as any, { chatId: 'chat_1' })
+
+    sink.stream('session_1', { type: 'compact_skipped', compactSkipped: { reason: 'SECRET_SKIP_TOKEN /Users/private/session.md' } } as any)
+    sink.stream('session_1', { type: 'compact_failed', compactFailed: { message: 'SECRET_FAIL_MESSAGE raw model output', reason: 'SECRET_FAIL_REASON' } } as any)
+    await sink.flushStatus()
+
+    const text = client.sendText.mock.calls.map((call: any[]) => call[0].text).join('\n')
+    expect(text).toContain('Compaction skipped.')
+    expect(text).toContain('Compaction failed.')
+    expect(text).not.toContain('SECRET_SKIP_TOKEN')
+    expect(text).not.toContain('/Users/private/session.md')
+    expect(text).not.toContain('SECRET_FAIL_MESSAGE')
+    expect(text).not.toContain('raw model output')
+    expect(text).not.toContain('SECRET_FAIL_REASON')
+  })
+
   it('asks for permission through Feishu and resolves on approval', async () => {
     const client = {
       sendApproval: vi.fn().mockResolvedValue({ requestId: 'approval_1' }),
@@ -89,6 +108,23 @@ describe('FeishuSink', () => {
 
     expect(result).toEqual({ approved: false, feedback: 'No reply handler is available.' })
     expect(client.sendText).not.toHaveBeenCalled()
+  })
+
+  it('does not send plan content when requesting review replies', async () => {
+    const client = {
+      sendText: vi.fn().mockResolvedValue({ messageId: 'plan_prompt_1' }),
+      waitForReply: vi.fn().mockResolvedValue('approved'),
+    }
+    const sink = new FeishuSink(client as any, { chatId: 'chat_1' })
+
+    const result = await sink.reviewPlan?.('secret-plan.md', 'SECRET_PLAN_CONTENT\n/private/path')
+
+    expect(result).toEqual({ approved: true })
+    expect(client.sendText).toHaveBeenCalledWith(expect.objectContaining({
+      text: expect.stringContaining('secret-plan.md'),
+    }))
+    expect(client.sendText.mock.calls[0][0].text).not.toContain('SECRET_PLAN_CONTENT')
+    expect(client.sendText.mock.calls[0][0].text).not.toContain('/private/path')
   })
 
   it('preserves buffered status when sending status fails', async () => {
