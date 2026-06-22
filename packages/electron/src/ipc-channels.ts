@@ -98,6 +98,14 @@ export const IPC_CHANNELS = {
   CONTEXT_CONFIG_GET: 'context:config:get',
   CONTEXT_CONFIG_UPDATE: 'context:config:update',
 
+  // Feishu
+  FEISHU_BINDINGS_LIST: 'feishu:bindings:list',
+  FEISHU_BINDINGS_ADD: 'feishu:bindings:add',
+  FEISHU_BINDINGS_UPDATE: 'feishu:bindings:update',
+  FEISHU_BINDINGS_DELETE: 'feishu:bindings:delete',
+  FEISHU_STATUS: 'feishu:status',
+  FEISHU_RESTART: 'feishu:restart',
+
   // Model
   MODEL_TEST: 'model:test',
 } as const

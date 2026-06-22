@@ -1,7 +1,51 @@
 import initSqlJs, { type Database } from 'sql.js'
 import path from 'node:path'
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import type { Message } from './types.js'
+
+export interface ExternalConversationInput {
+  channel: string
+  bindingId: string
+  tenantKey?: string
+  chatId: string
+  threadKey: string
+  userKey?: string
+  cwd: string
+  sessionId: string
+}
+
+export interface ExternalConversationRecord extends ExternalConversationInput {
+  id: string
+  state: 'active' | 'archived'
+  createdAt: number
+  updatedAt: number
+}
+
+export interface ExternalConversationLookup {
+  channel: string
+  bindingId: string
+  tenantKey?: string
+  chatId: string
+  threadKey: string
+  userKey?: string
+}
+
+export interface ExternalEventInput {
+  channel: string
+  eventId: string
+  messageId?: string
+  bindingId: string
+}
+
+export interface ExternalMessageMappingInput {
+  channel: string
+  bindingId: string
+  sessionId: string
+  feishuMessageId: string
+  jdcMessageId?: string
+  replyMessageId?: string
+}
 
 export class ConversationHistory {
   private db: Database | null = null
@@ -115,6 +159,57 @@ export class ConversationHistory {
     `)
     this.db!.run(`CREATE INDEX IF NOT EXISTS idx_tasks_session ON tasks(session_id, status)`)
 
+    // External conversations table
+    this.db!.run(`
+      CREATE TABLE IF NOT EXISTS external_conversations (
+        id TEXT PRIMARY KEY,
+        channel TEXT NOT NULL,
+        binding_id TEXT NOT NULL,
+        tenant_key TEXT,
+        chat_id TEXT NOT NULL,
+        thread_key TEXT NOT NULL,
+        user_key TEXT,
+        cwd TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        state TEXT NOT NULL DEFAULT 'active',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES sessions(id)
+      )
+    `)
+    this.db!.run(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_external_conversation_lookup
+      ON external_conversations(channel, binding_id, COALESCE(tenant_key, ''), chat_id, thread_key, COALESCE(user_key, ''))
+    `)
+
+    // External events table (for deduplication)
+    this.db!.run(`
+      CREATE TABLE IF NOT EXISTS external_events (
+        channel TEXT NOT NULL,
+        event_id TEXT NOT NULL,
+        message_id TEXT,
+        binding_id TEXT NOT NULL,
+        received_at INTEGER NOT NULL,
+        processed_at INTEGER,
+        status TEXT NOT NULL,
+        PRIMARY KEY (channel, event_id)
+      )
+    `)
+
+    // External messages table (correlation mapping)
+    this.db!.run(`
+      CREATE TABLE IF NOT EXISTS external_messages (
+        channel TEXT NOT NULL,
+        binding_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        feishu_message_id TEXT NOT NULL,
+        jdc_message_id TEXT,
+        reply_message_id TEXT,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (channel, feishu_message_id)
+      )
+    `)
+
     this.save()
   }
 
@@ -199,6 +294,8 @@ export class ConversationHistory {
   deleteSession(sessionId: string): void {
     this.db!.run('DELETE FROM tasks WHERE session_id = ?', [sessionId])
     this.db!.run('DELETE FROM messages WHERE session_id = ?', [sessionId])
+    this.db!.run('DELETE FROM external_messages WHERE session_id = ?', [sessionId])
+    this.db!.run('DELETE FROM external_conversations WHERE session_id = ?', [sessionId])
     this.db!.run('DELETE FROM sessions WHERE id = ?', [sessionId])
     this.save()
   }
@@ -378,6 +475,160 @@ export class ConversationHistory {
     while (stmt.step()) {
       const row = stmt.getAsObject()
       results.push({ id: row.id, subject: row.subject, description: row.description || '', status: row.status })
+    }
+    stmt.free()
+    return results
+  }
+
+  private externalConversationFromRow(row: any): ExternalConversationRecord {
+    return {
+      id: row.id as string,
+      channel: row.channel as string,
+      bindingId: row.binding_id as string,
+      tenantKey: (row.tenant_key as string | null) ?? undefined,
+      chatId: row.chat_id as string,
+      threadKey: row.thread_key as string,
+      userKey: (row.user_key as string | null) ?? undefined,
+      cwd: row.cwd as string,
+      sessionId: row.session_id as string,
+      state: row.state as 'active' | 'archived',
+      createdAt: row.created_at as number,
+      updatedAt: row.updated_at as number,
+    }
+  }
+
+  upsertExternalConversation(input: ExternalConversationInput): ExternalConversationRecord {
+    const existing = this.findExternalConversation(input)
+    const now = Date.now()
+
+    if (existing) {
+      this.db!.run(
+        `UPDATE external_conversations
+         SET cwd = ?, session_id = ?, state = ?, updated_at = ?
+         WHERE id = ?`,
+        [input.cwd, input.sessionId, 'active', now, existing.id]
+      )
+      this.save()
+      return this.findExternalConversation(input)!
+    }
+
+    const id = randomUUID()
+    this.db!.run(
+      `INSERT INTO external_conversations (
+        id, channel, binding_id, tenant_key, chat_id, thread_key, user_key,
+        cwd, session_id, state, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        input.channel,
+        input.bindingId,
+        input.tenantKey ?? null,
+        input.chatId,
+        input.threadKey,
+        input.userKey ?? null,
+        input.cwd,
+        input.sessionId,
+        'active',
+        now,
+        now,
+      ]
+    )
+    this.save()
+    return this.findExternalConversation(input)!
+  }
+
+  findExternalConversation(input: ExternalConversationLookup): ExternalConversationRecord | null {
+    const stmt = this.db!.prepare(`
+      SELECT * FROM external_conversations
+      WHERE channel = ?
+        AND binding_id = ?
+        AND COALESCE(tenant_key, '') = ?
+        AND chat_id = ?
+        AND thread_key = ?
+        AND COALESCE(user_key, '') = ?
+      LIMIT 1
+    `)
+    stmt.bind([
+      input.channel,
+      input.bindingId,
+      input.tenantKey ?? '',
+      input.chatId,
+      input.threadKey,
+      input.userKey ?? '',
+    ])
+    let result: ExternalConversationRecord | null = null
+    if (stmt.step()) {
+      result = this.externalConversationFromRow(stmt.getAsObject())
+    }
+    stmt.free()
+    return result
+  }
+
+  beginExternalEvent(input: ExternalEventInput): { status: 'accepted' | 'duplicate' } {
+    const stmt = this.db!.prepare('SELECT 1 FROM external_events WHERE channel = ? AND event_id = ? LIMIT 1')
+    stmt.bind([input.channel, input.eventId])
+    const exists = stmt.step()
+    stmt.free()
+
+    if (exists) {
+      return { status: 'duplicate' }
+    }
+
+    const now = Date.now()
+    this.db!.run(
+      `INSERT INTO external_events (channel, event_id, message_id, binding_id, received_at, status)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [input.channel, input.eventId, input.messageId ?? null, input.bindingId, now, 'accepted']
+    )
+    this.save()
+    return { status: 'accepted' }
+  }
+
+  completeExternalEvent(channel: string, eventId: string, status: 'processed' | 'failed'): void {
+    this.db!.run(
+      'UPDATE external_events SET processed_at = ?, status = ? WHERE channel = ? AND event_id = ?',
+      [Date.now(), status, channel, eventId]
+    )
+    this.save()
+  }
+
+  addExternalMessageMapping(input: ExternalMessageMappingInput): void {
+    this.db!.run(
+      `INSERT OR REPLACE INTO external_messages (
+        channel, binding_id, session_id, feishu_message_id, jdc_message_id, reply_message_id, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        input.channel,
+        input.bindingId,
+        input.sessionId,
+        input.feishuMessageId,
+        input.jdcMessageId ?? null,
+        input.replyMessageId ?? null,
+        Date.now(),
+      ]
+    )
+    this.save()
+  }
+
+  listExternalMessageMappings(channel: string, sessionId: string): Array<ExternalMessageMappingInput & { createdAt: number }> {
+    const stmt = this.db!.prepare(`
+      SELECT * FROM external_messages
+      WHERE channel = ? AND session_id = ?
+      ORDER BY created_at ASC
+    `)
+    stmt.bind([channel, sessionId])
+    const results: Array<ExternalMessageMappingInput & { createdAt: number }> = []
+    while (stmt.step()) {
+      const row = stmt.getAsObject()
+      results.push({
+        channel: row.channel as string,
+        bindingId: row.binding_id as string,
+        sessionId: row.session_id as string,
+        feishuMessageId: row.feishu_message_id as string,
+        jdcMessageId: (row.jdc_message_id as string | null) ?? undefined,
+        replyMessageId: (row.reply_message_id as string | null) ?? undefined,
+        createdAt: row.created_at as number,
+      })
     }
     stmt.free()
     return results
