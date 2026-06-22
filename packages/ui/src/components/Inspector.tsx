@@ -742,7 +742,7 @@ function ImageRow({ img }: { img: { path: string; format: string; bytes: number 
         </div>
       </div>
       {zoomed && preview && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-8" onClick={() => setZoomed(false)}>
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-8" onClick={() => setZoomed(false)}>
           <img src={preview} alt="" className="max-h-[90vh] max-w-[90vw] rounded-[8px] object-contain shadow-2xl" />
         </div>,
         document.body
