@@ -34,7 +34,7 @@ const buildSubSessionDeps = () => {
 }
 
 describe('Team tools', () => {
-  it('team_artifact captures artifacts, contracts, issues, and task results into Context Engine ledger', async () => {
+  it('team_artifact captures raw evidence while promoting only durable team facts into Context Engine ledger', async () => {
     const cwd = path.join(os.tmpdir(), `team-artifact-ledger-${Date.now()}-${Math.random().toString(36).slice(2)}`)
     mkdirSync(cwd, { recursive: true })
     try {
@@ -99,11 +99,9 @@ describe('Team tools', () => {
 
       const facts = mockFirstArgs<ContextFact>(store.saveFact)
       expect(facts.map((fact) => [fact.id, fact.kind, fact.freshness])).toEqual([
-        ['artifact_summary_team_alpha_T001_report', 'artifact_summary', 'recent'],
         ['artifact_summary_team_alpha_T001_checkout_api', 'artifact_summary', 'recent'],
         ['qa_issue_team_alpha_ISSUE_001', 'qa_issue', 'recent'],
         ['qa_issue_team_alpha_ISSUE_001', 'qa_issue', 'stale'],
-        ['task_result_team_alpha_T001', 'task_result', 'recent'],
       ])
       expect(mockFirstArgs<RawEvidence>(store.saveRawEvidence).map((evidence) => evidence.metadata.eventType)).toEqual([
         'team_artifact_written',
