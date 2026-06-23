@@ -103,11 +103,31 @@ describe('OpenAIChatProvider', () => {
 
     expect(capturedParams.messages[0]).toEqual({ role: 'system', content: '# Identity\nYou are JDC CODE.' })
     expect(capturedParams.messages[0].content).not.toContain('<jdc-context-engine>')
-    expect(capturedParams.messages[1]).toEqual({ role: 'user', content: 'old question' })
-    expect(capturedParams.messages[2]).toEqual({ role: 'assistant', content: 'old answer' })
-    expect(capturedParams.messages[3]).toEqual({ role: 'user', content: 'current question' })
-    expect(capturedParams.messages[4].role).toBe('system')
-    expect(capturedParams.messages[4].content).toContain('<jdc-context-engine>项目上下文</jdc-context-engine>')
+    expect(capturedParams.messages[1].role).toBe('system')
+    expect(capturedParams.messages[1].content).toContain('<jdc-context-engine>项目上下文</jdc-context-engine>')
+    expect(capturedParams.messages[2]).toEqual({ role: 'user', content: 'old question' })
+    expect(capturedParams.messages[3]).toEqual({ role: 'assistant', content: 'old answer' })
+    expect(capturedParams.messages[4]).toEqual({ role: 'user', content: 'current question' })
+  })
+
+  it('places dynamic prompt before conversation messages so tool-result turns preserve the cached prefix', () => {
+    const provider = new OpenAIChatProvider('test-key')
+    const first = (provider as any).formatMessages([
+      { id: '1', role: 'user', content: [{ type: 'text', text: 'Use lookup then answer.' }], timestamp: 0 },
+    ], '# Stable', '# Sub-agent context\nUse the worker rules.')
+    const second = (provider as any).formatMessages([
+      { id: '1', role: 'user', content: [{ type: 'text', text: 'Use lookup then answer.' }], timestamp: 0 },
+      { id: '2', role: 'assistant', content: [{ type: 'tool_use', id: 'call_1', name: 'lookup', input: { q: 'x' } }], timestamp: 0 },
+      { id: '3', role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call_1', content: 'result' }], timestamp: 0 },
+    ], '# Stable', '# Sub-agent context\nUse the worker rules.')
+
+    expect(first[0]).toEqual({ role: 'system', content: '# Stable' })
+    expect(first[1]).toMatchObject({ role: 'system' })
+    expect(second[0]).toEqual(first[0])
+    expect(second[1]).toEqual(first[1])
+    expect(second[2]).toEqual(first[2])
+    expect((second[3] as any).tool_calls?.[0]?.id).toBe('call_1')
+    expect(second[4]).toEqual({ role: 'tool', tool_call_id: 'call_1', content: 'result' })
   })
 
   it('reports stream retries before the first chunk', async () => {

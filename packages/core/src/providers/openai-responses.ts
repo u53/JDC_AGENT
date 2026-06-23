@@ -485,7 +485,7 @@ export class OpenAIResponsesProvider implements ModelProvider {
     const dynamicText = formatOpenAIDynamicPrompt(dynamicPrompt)
     const dynamicInput: ResponsesInput = { role: 'system', content: dynamicText }
 
-    input.push(dynamicInput)
+    input.unshift(dynamicInput)
     return input
   }
 }

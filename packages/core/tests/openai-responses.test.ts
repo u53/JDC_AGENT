@@ -173,11 +173,29 @@ describe('OpenAIResponsesProvider', () => {
 
     expect(capturedParams.instructions).toBe('# Identity\nYou are JDC CODE.')
     expect(capturedParams.instructions).not.toContain('<jdc-context-engine>')
-    expect(capturedParams.input[0]).toEqual({ role: 'user', content: 'old question' })
-    expect(capturedParams.input[1]).toEqual({ role: 'assistant', content: 'old answer' })
-    expect(capturedParams.input[2]).toEqual({ role: 'user', content: 'current question' })
-    expect(capturedParams.input[3].role).toBe('system')
-    expect(capturedParams.input[3].content).toContain('<jdc-context-engine>项目上下文</jdc-context-engine>')
+    expect(capturedParams.input[0].role).toBe('system')
+    expect(capturedParams.input[0].content).toContain('<jdc-context-engine>项目上下文</jdc-context-engine>')
+    expect(capturedParams.input[1]).toEqual({ role: 'user', content: 'old question' })
+    expect(capturedParams.input[2]).toEqual({ role: 'assistant', content: 'old answer' })
+    expect(capturedParams.input[3]).toEqual({ role: 'user', content: 'current question' })
+  })
+
+  it('places dynamic prompt before conversation input so tool-result turns preserve the cached prefix', () => {
+    const provider = new OpenAIResponsesProvider('test-key')
+    const first = (provider as any).formatInput([
+      { id: '1', role: 'user', content: [{ type: 'text', text: 'Use lookup then answer.' }], timestamp: 0 },
+    ], '# Sub-agent context\nUse the worker rules.')
+    const second = (provider as any).formatInput([
+      { id: '1', role: 'user', content: [{ type: 'text', text: 'Use lookup then answer.' }], timestamp: 0 },
+      { id: '2', role: 'assistant', content: [{ type: 'tool_use', id: 'call_1', name: 'lookup', input: { q: 'x' } }], timestamp: 0 },
+      { id: '3', role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call_1', content: 'result' }], timestamp: 0 },
+    ], '# Sub-agent context\nUse the worker rules.')
+
+    expect(first[0]).toMatchObject({ role: 'system' })
+    expect(second[0]).toEqual(first[0])
+    expect(second[1]).toEqual(first[1])
+    expect(second[2]).toMatchObject({ type: 'function_call', call_id: 'call_1' })
+    expect(second[3]).toMatchObject({ type: 'function_call_output', call_id: 'call_1' })
   })
 
   it('omits store from Responses params for OpenAI-compatible proxy compatibility', async () => {

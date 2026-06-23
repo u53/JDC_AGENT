@@ -398,7 +398,8 @@ export class OpenAIChatProvider implements ModelProvider {
     const dynamicText = formatOpenAIDynamicPrompt(dynamicPrompt)
     const dynamicMessage: OpenAI.ChatCompletionSystemMessageParam = { role: 'system', content: dynamicText }
 
-    messages.push(dynamicMessage)
+    const insertAt = messages[0]?.role === 'system' ? 1 : 0
+    messages.splice(insertAt, 0, dynamicMessage)
     return messages
   }
 }
