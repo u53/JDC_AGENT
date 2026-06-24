@@ -38,7 +38,7 @@ export interface FeishuInboundMessage {
   raw: unknown
 }
 
-export type FeishuCommand = 'new' | 'status' | 'stop' | 'compact' | 'session'
+export type FeishuCommand = 'new' | 'status' | 'stop' | 'compact' | 'session' | 'model'
 
 export type FeishuResolvedConversation =
   | { kind: 'message'; sessionId: string; text: string }
@@ -46,6 +46,12 @@ export type FeishuResolvedConversation =
   | { kind: 'unauthorized'; reason: string }
 
 export interface FeishuSendTextInput {
+  chatId: string
+  threadKey?: string
+  text: string
+}
+
+export interface FeishuSendMarkdownInput {
   chatId: string
   threadKey?: string
   text: string
@@ -60,6 +66,7 @@ export interface FeishuApprovalInput {
 
 export interface FeishuClientPort {
   sendText(input: FeishuSendTextInput): Promise<{ messageId: string }>
+  sendMarkdown?(input: FeishuSendMarkdownInput): Promise<{ messageId: string }>
   sendApproval?(input: FeishuApprovalInput): Promise<{ requestId: string }>
   waitForApproval?(requestId: string): Promise<boolean>
   waitForReply?(input: { chatId: string; threadKey?: string; promptMessageId: string }): Promise<string>

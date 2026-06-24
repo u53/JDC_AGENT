@@ -112,4 +112,22 @@ describe('session interaction routing', () => {
     expect(second.requestPermission).not.toHaveBeenCalled()
     expect(ui.requestPermission).not.toHaveBeenCalled()
   })
+
+  it('keeps method this binding when routing to class-based external sinks', async () => {
+    class ExternalSink {
+      private readonly allowed = true
+
+      async requestPermission() {
+        return this.allowed
+      }
+    }
+    const ui = { requestPermission: vi.fn().mockResolvedValue(false) }
+    const router = createInteractionRouter(ui as any)
+
+    router.attach('session_1', 'external:run_1', new ExternalSink() as any)
+    const allowed = await router.requestPermission('session_1', { toolName: 'Bash', input: {} }, 'external:run_1')
+
+    expect(allowed).toBe(true)
+    expect(ui.requestPermission).not.toHaveBeenCalled()
+  })
 })

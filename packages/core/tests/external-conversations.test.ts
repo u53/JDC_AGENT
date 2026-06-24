@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -15,6 +15,7 @@ describe('external conversation persistence', () => {
   })
 
   afterEach(async () => {
+    vi.useRealTimers()
     history.close()
     fs.rmSync(dir, { recursive: true, force: true })
   })
@@ -68,6 +69,64 @@ describe('external conversation persistence', () => {
     expect(duplicate.status).toBe('duplicate')
   })
 
+  it('allows failed external events to be retried once', () => {
+    const first = history.beginExternalEvent({
+      channel: 'feishu',
+      eventId: 'event_failed',
+      messageId: 'message_1',
+      bindingId: 'binding_1',
+    })
+    history.completeExternalEvent('feishu', 'event_failed', 'failed')
+
+    const retry = history.beginExternalEvent({
+      channel: 'feishu',
+      eventId: 'event_failed',
+      messageId: 'message_1',
+      bindingId: 'binding_1',
+    })
+    const duplicateRetry = history.beginExternalEvent({
+      channel: 'feishu',
+      eventId: 'event_failed',
+      messageId: 'message_1',
+      bindingId: 'binding_1',
+    })
+
+    expect(first.status).toBe('accepted')
+    expect(retry.status).toBe('accepted')
+    expect(duplicateRetry.status).toBe('duplicate')
+  })
+
+  it('allows stale in-flight external events to be retried', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-24T00:00:00.000Z'))
+
+    const first = history.beginExternalEvent({
+      channel: 'feishu',
+      eventId: 'event_stale',
+      messageId: 'message_1',
+      bindingId: 'binding_1',
+    })
+
+    vi.setSystemTime(new Date('2026-06-24T00:11:00.000Z'))
+
+    const retry = history.beginExternalEvent({
+      channel: 'feishu',
+      eventId: 'event_stale',
+      messageId: 'message_1',
+      bindingId: 'binding_1',
+    })
+    const duplicateRetry = history.beginExternalEvent({
+      channel: 'feishu',
+      eventId: 'event_stale',
+      messageId: 'message_1',
+      bindingId: 'binding_1',
+    })
+
+    expect(first.status).toBe('accepted')
+    expect(retry.status).toBe('accepted')
+    expect(duplicateRetry.status).toBe('duplicate')
+  })
+
   it('stores external message correlation without duplicating transcript content', () => {
     history.createSession('session_1', 'Project', '/repo/project')
     history.addExternalMessageMapping({
@@ -88,5 +147,36 @@ describe('external conversation persistence', () => {
       }),
     ])
     expect(history.getMessages('session_1')).toEqual([])
+  })
+
+  it('marks sessions with external Feishu mappings in session lists', () => {
+    history.createSession('session_1', 'Project', '/repo/project')
+    history.upsertExternalConversation({
+      channel: 'feishu',
+      bindingId: 'binding_1',
+      chatId: 'chat_1',
+      threadKey: 'thread_1',
+      cwd: '/repo/project',
+      sessionId: 'session_1',
+    })
+
+    expect(history.listSessions('/repo/project')).toEqual([
+      expect.objectContaining({
+        id: 'session_1',
+        externalChannel: 'feishu',
+      }),
+    ])
+  })
+
+  it('persists a session permission mode for external sessions', () => {
+    history.createSession('session_1', 'Project', '/repo/project', { permissionMode: 'relaxed' })
+
+    expect(history.getSessionPermissionMode('session_1')).toBe('relaxed')
+    expect(history.listSessions('/repo/project')).toEqual([
+      expect.objectContaining({
+        id: 'session_1',
+        permissionMode: 'relaxed',
+      }),
+    ])
   })
 })

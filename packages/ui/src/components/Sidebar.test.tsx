@@ -10,7 +10,7 @@ describe('Sidebar', () => {
         name: 'jdcagnet',
         cwd: '/Users/chenmingxu/Documents/jdcagnet',
         sessions: [
-          { id: 'session-1', projectName: 'jdcagnet', cwd: '/Users/chenmingxu/Documents/jdcagnet', title: 'Review UI' },
+          { id: 'session-1', projectName: 'jdcagnet', cwd: '/Users/chenmingxu/Documents/jdcagnet', title: 'Review UI', externalChannel: 'feishu' },
           { id: 'session-2', projectName: 'jdcagnet', cwd: '/Users/chenmingxu/Documents/jdcagnet', title: 'JDC Dark' },
         ],
       }],
@@ -42,5 +42,12 @@ describe('Sidebar', () => {
 
     expect(html).toContain('sidebar-project-console-trigger')
     expect(html).toContain('aria-label="Open jdcagnet project console"')
+  })
+
+  it('renders Feishu badges for externally mapped sessions', () => {
+    const html = renderToStaticMarkup(<Sidebar />)
+
+    expect(html).toContain('sidebar-session-feishu-badge')
+    expect(html).toContain('飞书')
   })
 })

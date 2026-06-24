@@ -95,9 +95,23 @@ export function shouldShowProcessingIndicator({
   return isStreaming && !streamingText && !isThinking && toolEventsLength === 0 && !isLastTurnActive && !compacting
 }
 
+export function canSyncLocalPermissionMode(externalChannel?: string | null): boolean {
+  return externalChannel !== 'feishu'
+}
+
+export function resolveDisplayedPermissionMode(localMode: string, externalChannel?: string | null, storedMode?: string | null): string {
+  return externalChannel === 'feishu' && storedMode ? storedMode : localMode
+}
+
 export function ChatView({ onOpenMcp }: ChatViewProps) {
   const { messages, streamingText, thinkingText, isStreaming, aborting, compacting, isThinking, toolEvents, sendMessage, abort, error, retry, cancelRetry, dismissError } = useSession()
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const activeSessionMeta = useSessionStore((s) => {
+    const activeId = s.activeSessionId
+    if (!activeId) return undefined
+    return s.projects.flatMap((project) => project.sessions).find((session) => session.id === activeId)
+  })
+  const activeSessionExternalChannel = activeSessionMeta?.externalChannel
   const getActiveModel = useModelStore((s) => s.getActiveModel)
   const groups = useModelStore((s) => s.groups)
   const activeModelId = useModelStore((s) => s.activeModelId)
@@ -126,14 +140,15 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
   const activeModel = getActiveModel()
 
   const allModels = groups.flatMap(g => g.models.map(m => ({ id: m.id, name: m.name, groupName: g.name })))
+  const displayedPermissionMode = resolveDisplayedPermissionMode(permissionMode, activeSessionExternalChannel, activeSessionMeta?.permissionMode)
 
   const handlePermissionChange = useCallback((mode: string) => {
     setPermissionMode(mode)
     localStorage.setItem('jdcagnet-permission-mode', mode)
-    if (activeSessionId && (window as any).electronAPI?.setPermissionMode) {
+    if (activeSessionId && canSyncLocalPermissionMode(activeSessionExternalChannel) && (window as any).electronAPI?.setPermissionMode) {
       (window as any).electronAPI.setPermissionMode(activeSessionId, mode)
     }
-  }, [activeSessionId])
+  }, [activeSessionId, activeSessionExternalChannel])
 
   const setActiveAgent = useAgentStore((s) => s.setActiveAgent)
 
@@ -145,15 +160,15 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     if (activeSessionId && (window as any).electronAPI?.listSkills) {
       (window as any).electronAPI.listSkills(activeSessionId).then(setSkills).catch(() => {})
     }
-    // Sync permission mode to backend on session activation
-    if (activeSessionId && (window as any).electronAPI?.setPermissionMode) {
+    // Sync permission mode to backend on desktop-owned session activation.
+    if (activeSessionId && canSyncLocalPermissionMode(activeSessionExternalChannel) && (window as any).electronAPI?.setPermissionMode) {
       (window as any).electronAPI.setPermissionMode(activeSessionId, permissionMode)
     }
     // Sync effort to backend on session activation
     if (activeSessionId && (window as any).electronAPI?.setEffort) {
       (window as any).electronAPI.setEffort(activeSessionId, effort === 'off' ? undefined : effort)
     }
-  }, [activeSessionId])
+  }, [activeSessionId, activeSessionExternalChannel])
 
   useEffect(() => {
     if (activeSessionId) {
@@ -296,7 +311,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
         break
       case '/permission': {
         const modes = ['standard', 'relaxed', 'strict'] as const
-        const idx = modes.indexOf(permissionMode as typeof modes[number])
+        const idx = modes.indexOf(displayedPermissionMode as typeof modes[number])
         const next = modes[(idx + 1) % modes.length]
         handlePermissionChange(next)
         const labels: Record<string, string> = { standard: '标准模式', relaxed: '完全访问', strict: '严格模式' }
@@ -370,7 +385,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
     >
       {/* Left: main chat */}
       <div className={`relative flex min-w-0 flex-col overflow-hidden ${showRightPanel ? 'w-[60%]' : 'w-full'} transition-all`}>
-        <SessionHeader permissionMode={permissionMode} effort={effort} planMode={planMode} />
+        <SessionHeader permissionMode={displayedPermissionMode} effort={effort} planMode={planMode} />
 
         {/* Conversation Timeline */}
         <div ref={scrollRef} className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-5">
@@ -460,7 +475,7 @@ export function ChatView({ onOpenMcp }: ChatViewProps) {
           isStreaming={isStreaming}
           aborting={aborting}
           onSlashCommand={handleSlashCommand}
-          permissionMode={permissionMode}
+          permissionMode={displayedPermissionMode}
           onPermissionChange={handlePermissionChange}
           effort={effort}
           onEffortChange={handleEffortChange}

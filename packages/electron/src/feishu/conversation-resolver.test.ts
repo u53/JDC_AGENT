@@ -63,7 +63,7 @@ describe('FeishuConversationResolver', () => {
     const result = await resolver.resolve(binding, inbound('hello'))
 
     expect(result.sessionId).toBe('session_new')
-    expect(sessions.createSession).toHaveBeenCalledWith('hr_demo', '/repo/hr_demo')
+    expect(sessions.createSession).toHaveBeenCalledWith('hr_demo', '/repo/hr_demo', { permissionMode: 'standard' })
     expect(history.upsertExternalConversation).toHaveBeenCalledWith(expect.objectContaining({
       channel: 'feishu',
       bindingId: 'binding_1',

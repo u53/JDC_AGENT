@@ -3,6 +3,9 @@ import path from 'node:path'
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type { Message } from './types.js'
+import type { PermissionMode } from './permissions.js'
+
+const EXTERNAL_EVENT_STALE_MS = 10 * 60 * 1000
 
 export interface ExternalConversationInput {
   channel: string
@@ -130,6 +133,13 @@ export class ConversationHistory {
       // Column already exists
     }
 
+    // Migration: add permission_mode column (per-session permission binding)
+    try {
+      this.db!.run(`ALTER TABLE sessions ADD COLUMN permission_mode TEXT`)
+    } catch {
+      // Column already exists
+    }
+
     // Migration: recreate tasks table with composite primary key
     try {
       const tableInfo = this.db!.exec("SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'")
@@ -222,11 +232,11 @@ export class ConversationHistory {
     await this.ready
   }
 
-  createSession(id: string, projectName: string, cwd: string): void {
+  createSession(id: string, projectName: string, cwd: string, options: { permissionMode?: PermissionMode } = {}): void {
     const now = Date.now()
     this.db!.run(
-      'INSERT INTO sessions (id, project_name, cwd, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-      [id, projectName, cwd, now, now]
+      'INSERT INTO sessions (id, project_name, cwd, permission_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, projectName, cwd, options.permissionMode ?? null, now, now]
     )
     this.save()
   }
@@ -236,10 +246,23 @@ export class ConversationHistory {
     this.save()
   }
 
-  listSessions(cwd?: string): Array<{ id: string; projectName: string; cwd: string; title: string | null; createdAt: number; updatedAt: number }> {
+  listSessions(cwd?: string): Array<{ id: string; projectName: string; cwd: string; title: string | null; createdAt: number; updatedAt: number; permissionMode?: PermissionMode; externalChannel?: string }> {
     const stmt = cwd
-      ? this.db!.prepare('SELECT * FROM sessions WHERE cwd = ? ORDER BY updated_at DESC')
-      : this.db!.prepare('SELECT * FROM sessions ORDER BY updated_at DESC')
+      ? this.db!.prepare(`
+        SELECT sessions.*, MIN(external_conversations.channel) AS external_channel
+        FROM sessions
+        LEFT JOIN external_conversations ON external_conversations.session_id = sessions.id AND external_conversations.state = 'active'
+        WHERE sessions.cwd = ?
+        GROUP BY sessions.id
+        ORDER BY sessions.updated_at DESC
+      `)
+      : this.db!.prepare(`
+        SELECT sessions.*, MIN(external_conversations.channel) AS external_channel
+        FROM sessions
+        LEFT JOIN external_conversations ON external_conversations.session_id = sessions.id AND external_conversations.state = 'active'
+        GROUP BY sessions.id
+        ORDER BY sessions.updated_at DESC
+      `)
     if (cwd) stmt.bind([cwd])
     const results: any[] = []
     while (stmt.step()) {
@@ -247,6 +270,8 @@ export class ConversationHistory {
       results.push({
         id: row.id, projectName: row.project_name, cwd: row.cwd,
         title: row.title, createdAt: row.created_at, updatedAt: row.updated_at,
+        ...((row.permission_mode as string | null) ? { permissionMode: row.permission_mode as PermissionMode } : {}),
+        ...((row.external_channel as string | null) ? { externalChannel: row.external_channel as string } : {}),
       })
     }
     stmt.free()
@@ -329,6 +354,24 @@ export class ConversationHistory {
     if (stmt.step()) {
       const row = stmt.getAsObject()
       result = (row.model_id as string) || null
+    }
+    stmt.free()
+    return result
+  }
+
+  setSessionPermissionMode(sessionId: string, mode: PermissionMode): void {
+    this.db!.run('UPDATE sessions SET permission_mode = ?, updated_at = ? WHERE id = ?', [mode, Date.now(), sessionId])
+    this.save()
+  }
+
+  getSessionPermissionMode(sessionId: string): PermissionMode | null {
+    const stmt = this.db!.prepare('SELECT permission_mode FROM sessions WHERE id = ?')
+    stmt.bind([sessionId])
+    let result: PermissionMode | null = null
+    if (stmt.step()) {
+      const row = stmt.getAsObject()
+      const mode = row.permission_mode as string | null
+      result = mode === 'strict' || mode === 'standard' || mode === 'relaxed' ? mode : null
     }
     stmt.free()
     return result
@@ -565,16 +608,31 @@ export class ConversationHistory {
   }
 
   beginExternalEvent(input: ExternalEventInput): { status: 'accepted' | 'duplicate' } {
-    const stmt = this.db!.prepare('SELECT 1 FROM external_events WHERE channel = ? AND event_id = ? LIMIT 1')
+    const now = Date.now()
+    const stmt = this.db!.prepare('SELECT received_at, status FROM external_events WHERE channel = ? AND event_id = ? LIMIT 1')
     stmt.bind([input.channel, input.eventId])
     const exists = stmt.step()
+    const row = exists ? stmt.getAsObject() : null
     stmt.free()
 
-    if (exists) {
-      return { status: 'duplicate' }
+    if (row) {
+      const status = row.status as string
+      const receivedAt = Number(row.received_at) || 0
+      const retryable = status === 'failed' || (status === 'accepted' && now - receivedAt > EXTERNAL_EVENT_STALE_MS)
+      if (!retryable) {
+        return { status: 'duplicate' }
+      }
+
+      this.db!.run(
+        `UPDATE external_events
+         SET message_id = ?, binding_id = ?, received_at = ?, processed_at = NULL, status = ?
+         WHERE channel = ? AND event_id = ?`,
+        [input.messageId ?? null, input.bindingId, now, 'accepted', input.channel, input.eventId]
+      )
+      this.save()
+      return { status: 'accepted' }
     }
 
-    const now = Date.now()
     this.db!.run(
       `INSERT INTO external_events (channel, event_id, message_id, binding_id, received_at, status)
        VALUES (?, ?, ?, ?, ?, ?)`,

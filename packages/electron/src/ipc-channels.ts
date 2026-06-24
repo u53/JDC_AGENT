@@ -2,6 +2,7 @@ export const IPC_CHANNELS = {
   SESSION_CREATE: 'session:create',
   SESSION_LIST: 'session:list',
   SESSION_SWITCH: 'session:switch',
+  SESSION_CHANGED: 'session:changed',
   SESSION_DELETE: 'session:delete',
   QUERY_SEND: 'query:send',
   QUERY_RETRY: 'query:retry',

@@ -32,11 +32,12 @@ export function SessionHeader({ permissionMode, effort, planMode }: Props) {
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const projects = useSessionStore((s) => s.projects)
   const sessionStates = useSessionStore((s) => s.sessionStates)
-  const messageQueue = useSessionStore((s) => s.messageQueue)
+  const messageQueues = useSessionStore((s) => s.messageQueues)
   const activeModelId = useModelStore((s) => s.activeModelId)
   const groups = useModelStore((s) => s.groups)
 
   const state = activeSessionId ? sessionStates[activeSessionId] : undefined
+  const messageQueue = activeSessionId ? (messageQueues[activeSessionId] ?? []) : []
   const usage = state?.usage
   const isStreaming = state?.isStreaming ?? false
 

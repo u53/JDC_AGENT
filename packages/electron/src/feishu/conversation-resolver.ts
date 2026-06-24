@@ -24,10 +24,10 @@ export interface FeishuConversationHistoryPort {
 }
 
 export interface FeishuSessionManagerPort {
-  createSession(projectName: string, cwd: string): string
+  createSession(projectName: string, cwd: string, options?: { permissionMode?: FeishuBinding['permissionMode'] }): string
 }
 
-const slashCommands = new Set<FeishuCommand>(['new', 'status', 'stop', 'compact', 'session'])
+const slashCommands = new Set<FeishuCommand>(['new', 'status', 'stop', 'compact', 'session', 'model'])
 
 export class FeishuConversationResolver {
   constructor(
@@ -50,6 +50,10 @@ export class FeishuConversationResolver {
 
     const mapping = this.history.findExternalConversation(lookup)
     if (command) {
+      if (command === 'model' && parseModelCommandRequest(message.text)) {
+        const sessionId = mapping?.sessionId ?? this.createAndPersistSession(binding, lookup)
+        return { kind: 'command', command, sessionId, text: message.text.trim() }
+      }
       return { kind: 'command', command, sessionId: mapping?.sessionId, text: message.text.trim() }
     }
 
@@ -86,7 +90,7 @@ export class FeishuConversationResolver {
   }
 
   private createAndPersistSession(binding: FeishuBinding, lookup: FeishuConversationLookup): string {
-    const sessionId = this.sessions.createSession(binding.projectName, binding.cwd)
+    const sessionId = this.sessions.createSession(binding.projectName, binding.cwd, { permissionMode: binding.permissionMode })
     this.history.upsertExternalConversation({
       ...lookup,
       cwd: binding.cwd,
@@ -101,4 +105,8 @@ function parseCommand(text: string): FeishuCommand | null {
   if (!trimmed.startsWith('/')) return null
   const command = trimmed.slice(1).split(/\s+/, 1)[0]?.toLowerCase()
   return slashCommands.has(command as FeishuCommand) ? command as FeishuCommand : null
+}
+
+function parseModelCommandRequest(text: string): string {
+  return text.trim().replace(/^\/model(?:\s+)?/i, '').trim()
 }

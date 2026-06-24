@@ -505,6 +505,15 @@ function FeishuTab() {
         <button type="button" onClick={resetDraft} className={btnPrimary}>添加机器人</button>
       </section>
 
+      <section className="settings-section rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
+        <h4 className="text-[13px] font-semibold text-[var(--text)]">飞书命令说明</h4>
+        <div className="mt-2 space-y-1 text-[12px] leading-5 text-[var(--muted)]">
+          <p><span className="font-mono text-[var(--text)]">/model</span>：查看可切换模型列表。</p>
+          <p><span className="font-mono text-[var(--text)]">/model 分组名称:模型名称</span>：切换当前飞书会话模型。</p>
+          <p>模型切换只影响当前飞书会话，不影响客户端全局默认模型。</p>
+        </div>
+      </section>
+
       {error && <div className="rounded-[6px] border border-red-500/30 bg-red-500/10 px-3 py-2 text-[12px] text-red-400">{error}</div>}
 
       <div className="space-y-2">

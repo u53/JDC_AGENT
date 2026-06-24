@@ -137,6 +137,11 @@ export function Sidebar() {
                       <span className="block truncate">
                         {displayName}
                       </span>
+                      {session.externalChannel === 'feishu' && (
+                        <span className="sidebar-session-feishu-badge flex-shrink-0 rounded-[4px] border border-[color-mix(in_srgb,var(--accent)_24%,var(--border))] px-1 py-0.5 text-[9px] font-medium text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]">
+                          飞书
+                        </span>
+                      )}
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(session.id) }}

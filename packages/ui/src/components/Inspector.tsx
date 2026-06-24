@@ -81,7 +81,7 @@ export function Inspector() {
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const sessionStates = useSessionStore((s) => s.sessionStates)
   const tasks = useSessionStore((s) => s.tasks)
-  const messageQueue = useSessionStore((s) => s.messageQueue)
+  const messageQueues = useSessionStore((s) => s.messageQueues)
   const removeFromQueue = useSessionStore((s) => s.removeFromQueue)
   const backgroundTasks = useBackgroundTaskStore((s) => s.tasks)
   const teams = useTeamStore((s) => s.teams)
@@ -93,6 +93,7 @@ export function Inspector() {
   const showContextInspector = shouldShowContextInspector()
 
   const currentState = activeSessionId ? sessionStates[activeSessionId] : undefined
+  const messageQueue = activeSessionId ? (messageQueues[activeSessionId] ?? []) : []
   const usage = currentState?.usage
   const isStreaming = currentState?.isStreaming ?? false
 
@@ -361,7 +362,7 @@ export function Inspector() {
               onOpenTeam={(id) => { setActiveTeam(id); setActiveSection('team') }}
             />
           )}
-          {activeSection === 'queue' && <QueueSection queue={messageQueue} removeFromQueue={removeFromQueue} />}
+          {activeSection === 'queue' && <QueueSection queue={messageQueue} removeFromQueue={(index) => activeSessionId && removeFromQueue(activeSessionId, index)} />}
           {activeSection === 'files' && <FilesSection files={fileChanges} />}
         </div>
       )}

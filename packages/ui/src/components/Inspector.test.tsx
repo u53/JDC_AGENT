@@ -36,7 +36,7 @@ describe('Inspector', () => {
       activeSessionId: 'session-1',
       sessionStates: {},
       tasks: [],
-      messageQueue: [],
+      messageQueues: {},
     })
     useBackgroundTaskStore.setState({ tasks: [] })
     useTeamStore.setState({ teams: {}, activeTeamId: null })

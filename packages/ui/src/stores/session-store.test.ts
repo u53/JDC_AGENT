@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSessionStore } from './session-store'
 
@@ -10,8 +11,16 @@ describe('session stream store', () => {
       isLoading: false,
       sessionStates: {},
       tasks: [],
-      messageQueue: [],
+      messageQueues: {},
       drafts: {},
+    })
+    vi.stubGlobal('window', {
+      electronAPI: {
+        invoke: vi.fn().mockImplementation((channel: string) => {
+          if (channel === 'session:list') return Promise.resolve([])
+          return Promise.resolve({ success: true })
+        }),
+      },
     })
   })
 
@@ -21,6 +30,7 @@ describe('session stream store', () => {
     vi.runOnlyPendingTimers()
     vi.useRealTimers()
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('batches stream deltas so one model response chunk burst does not re-render every token', async () => {
@@ -101,6 +111,52 @@ describe('session stream store', () => {
       message: 'final outage',
       retrying: false,
     })
+  })
+
+  it('keeps queued messages isolated per session and supports editing', () => {
+    const store = useSessionStore.getState()
+
+    store.enqueueMessage('session_1', 'from A')
+    store.enqueueMessage('session_2', 'from B')
+    store.updateQueuedMessage('session_1', 0, 'edited A')
+    store.updateQueuedMessage('session_2', 0, '')
+
+    expect(useSessionStore.getState().messageQueues).toEqual({
+      session_1: ['edited A'],
+      session_2: [''],
+    })
+    expect(useSessionStore.getState().dequeueMessage('session_1')).toBe('edited A')
+    expect(useSessionStore.getState().messageQueues.session_1).toBeUndefined()
+    expect(useSessionStore.getState().messageQueues.session_2).toEqual([''])
+  })
+
+  it('clears a deleted session queue without touching other sessions', async () => {
+    const store = useSessionStore.getState()
+    store.enqueueMessage('session_1', 'delete me')
+    store.enqueueMessage('session_2', 'keep me')
+
+    await store.deleteSession('session_1')
+
+    expect(useSessionStore.getState().messageQueues.session_1).toBeUndefined()
+    expect(useSessionStore.getState().messageQueues.session_2).toEqual(['keep me'])
+  })
+
+  it('auto-dequeues from the completed session instead of a global queue', () => {
+    const hookSource = readFileSync(new URL('../hooks/useSession.ts', import.meta.url), 'utf8')
+
+    expect(hookSource).toContain('dequeueMessage(sessionId)')
+    expect(hookSource).not.toContain('dequeueMessage()')
+  })
+
+  it('refreshes project sessions when the main process reports session changes', () => {
+    const hookSource = readFileSync(new URL('../hooks/useSession.ts', import.meta.url), 'utf8')
+    const ipcSource = readFileSync(new URL('../lib/ipc-client.ts', import.meta.url), 'utf8')
+    const managerSource = readFileSync(new URL('../../../electron/src/session-manager.ts', import.meta.url), 'utf8')
+
+    expect(ipcSource).toContain('onSessionChanged')
+    expect(hookSource).toContain('ipc.session.onSessionChanged')
+    expect(hookSource).toContain('useSessionStore.getState().loadProjects()')
+    expect(managerSource).toContain("webContents.send('session:changed'")
   })
 
   it('opens a project console without losing the selected project', () => {

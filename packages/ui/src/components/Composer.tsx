@@ -100,9 +100,10 @@ export function Composer({
   const isComposingRef = useRef(false)
   const lastCompositionEndAtRef = useRef<number | null>(null)
 
-  const messageQueue = useSessionStore((s) => s.messageQueue)
+  const messageQueues = useSessionStore((s) => s.messageQueues)
   const enqueueMessage = useSessionStore((s) => s.enqueueMessage)
   const removeFromQueue = useSessionStore((s) => s.removeFromQueue)
+  const updateQueuedMessage = useSessionStore((s) => s.updateQueuedMessage)
   const projects = useSessionStore((s) => s.projects)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const draft = useSessionStore((s) => (activeSessionId ? s.drafts[activeSessionId] : undefined))
@@ -111,6 +112,7 @@ export function Composer({
   const clearDraft = useSessionStore((s) => s.clearDraft)
   const text = draft?.text ?? ''
   const images = draft?.images ?? []
+  const messageQueue = activeSessionId ? (messageQueues[activeSessionId] ?? []) : []
   const setText = useCallback(
     (next: string) => {
       if (activeSessionId) setDraftText(activeSessionId, next)
@@ -268,7 +270,7 @@ export function Composer({
       }
       if (text.trim() || images.length > 0) {
         if (isStreaming) {
-          enqueueMessage(text.trim())
+          if (activeSessionId) enqueueMessage(activeSessionId, text.trim())
         } else {
           onSend(text.trim(), images.length > 0 ? images : undefined)
         }
@@ -302,7 +304,9 @@ export function Composer({
 
   const handleClearQueue = () => {
     const len = messageQueue.length
-    for (let i = len - 1; i >= 0; i--) removeFromQueue(i)
+    for (let i = len - 1; i >= 0; i--) {
+      if (activeSessionId) removeFromQueue(activeSessionId, i)
+    }
     setQueueExpanded(false)
   }
 
@@ -342,9 +346,15 @@ export function Composer({
                   key={i}
                   className="flex items-center justify-between gap-2 rounded px-2 py-1 text-[12px] text-[var(--text)] hover:bg-[var(--surface-2)]"
                 >
-                  <span className="truncate">{msg}</span>
+                  <textarea
+                    value={msg}
+                    onChange={(event) => activeSessionId && updateQueuedMessage(activeSessionId, i, event.currentTarget.value)}
+                    className="composer-queued-message-input min-w-0 flex-1 resize-none rounded-[6px] border border-transparent bg-transparent px-2 py-1 text-[12px] text-[var(--text)] outline-none transition-colors hover:bg-[var(--surface-2)] focus:border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] focus:bg-[var(--surface-2)]"
+                    rows={1}
+                    aria-label={`Edit queued message ${i + 1}`}
+                  />
                   <button
-                    onClick={() => removeFromQueue(i)}
+                    onClick={() => activeSessionId && removeFromQueue(activeSessionId, i)}
                     className="shrink-0 text-[var(--muted)] hover:text-[var(--bad)]"
                     aria-label={`Remove queued message ${i + 1}`}
                   >
@@ -405,7 +415,7 @@ export function Composer({
                 {text.trim() && (
                   <button
                     onClick={() => {
-                      enqueueMessage(text.trim())
+                      if (activeSessionId) enqueueMessage(activeSessionId, text.trim())
                       resetDraft()
                     }}
                     className="composer-send-button flex h-9 items-center gap-1.5 rounded-[8px] border border-[color-mix(in_srgb,var(--accent)_34%,transparent)] bg-[color-mix(in_srgb,var(--accent)_84%,var(--text)_16%)] px-3 text-[12px] font-semibold text-[var(--accent-ink)] shadow-[0_12px_32px_-22px_var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_92%,var(--text)_8%)] active:translate-y-px"

@@ -11,6 +11,8 @@ interface Session {
   projectName: string
   cwd: string
   title?: string | null
+  permissionMode?: string
+  externalChannel?: string
 }
 
 interface ProjectGroup {
@@ -75,11 +77,12 @@ interface SessionState {
   isLoading: boolean
   sessionStates: Record<string, SessionStreamState>
   tasks: Array<{ id: string; subject: string; description: string; status: string }>
-  messageQueue: string[]
+  messageQueues: Record<string, string[]>
   drafts: Record<string, ComposerDraft>
-  enqueueMessage: (text: string) => void
-  dequeueMessage: () => string | undefined
-  removeFromQueue: (index: number) => void
+  enqueueMessage: (sessionId: string, text: string) => void
+  dequeueMessage: (sessionId: string) => string | undefined
+  removeFromQueue: (sessionId: string, index: number) => void
+  updateQueuedMessage: (sessionId: string, index: number, text: string) => void
   setDraftText: (sessionId: string, text: string) => void
   setDraftImages: (sessionId: string, images: { data: string; mediaType: string }[]) => void
   clearDraft: (sessionId: string) => void
@@ -185,20 +188,46 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   isLoading: false,
   sessionStates: {},
   tasks: [],
-  messageQueue: [],
+  messageQueues: {},
   drafts: {},
-  enqueueMessage: (text: string) => {
-    set((s) => ({ messageQueue: [...s.messageQueue, text] }))
+  enqueueMessage: (sessionId: string, text: string) => {
+    set((s) => ({
+      messageQueues: {
+        ...s.messageQueues,
+        [sessionId]: [...(s.messageQueues[sessionId] ?? []), text],
+      },
+    }))
   },
-  dequeueMessage: () => {
-    const queue = get().messageQueue
+  dequeueMessage: (sessionId: string) => {
+    const queue = get().messageQueues[sessionId] ?? []
     if (queue.length === 0) return undefined
     const [first, ...rest] = queue
-    set({ messageQueue: rest })
+    set((s) => {
+      if (rest.length === 0) {
+        const { [sessionId]: _, ...messageQueues } = s.messageQueues
+        return { messageQueues }
+      }
+      return { messageQueues: { ...s.messageQueues, [sessionId]: rest } }
+    })
     return first
   },
-  removeFromQueue: (index: number) => {
-    set((s) => ({ messageQueue: s.messageQueue.filter((_, i) => i !== index) }))
+  removeFromQueue: (sessionId: string, index: number) => {
+    set((s) => {
+      const next = (s.messageQueues[sessionId] ?? []).filter((_, i) => i !== index)
+      if (next.length === 0) {
+        const { [sessionId]: _, ...messageQueues } = s.messageQueues
+        return { messageQueues }
+      }
+      return { messageQueues: { ...s.messageQueues, [sessionId]: next } }
+    })
+  },
+  updateQueuedMessage: (sessionId: string, index: number, text: string) => {
+    set((s) => {
+      const queue = s.messageQueues[sessionId]
+      if (!queue || index < 0 || index >= queue.length) return s
+      const next = queue.map((item, i) => (i === index ? text : item))
+      return { messageQueues: { ...s.messageQueues, [sessionId]: next } }
+    })
   },
 
   getDraft: (sessionId: string) => get().drafts[sessionId] ?? EMPTY_DRAFT,
@@ -300,6 +329,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       set({ activeProjectCwd: session?.cwd ?? get().activeProjectCwd, activeSessionId: null, messages: [] })
     }
     get().clearDraft(sessionId)
+    set((s) => {
+      if (!s.messageQueues[sessionId]) return s
+      const { [sessionId]: _, ...messageQueues } = s.messageQueues
+      return { messageQueues }
+    })
     await get().loadProjects()
   },
 

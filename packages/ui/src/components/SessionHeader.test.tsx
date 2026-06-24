@@ -14,7 +14,7 @@ describe('SessionHeader', () => {
         sessions: [{ id: 'session-1', projectName: 'jdcagnet', cwd: '/Users/chenmingxu/Documents/jdcagnet' }],
       }],
       sessionStates: {},
-      messageQueue: [],
+      messageQueues: {},
     }
     useSessionStore.setState(sessionState)
     Object.assign(useSessionStore.getInitialState(), sessionState)

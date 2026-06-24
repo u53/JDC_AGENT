@@ -110,19 +110,21 @@ export function useSession() {
         current.loadTasks(sessionId)
       }
       // Auto-send queued message
-      const next = useSessionStore.getState().dequeueMessage()
-      if (next && sessionId === useSessionStore.getState().activeSessionId) {
-        setTimeout(() => {
-          const userMessage = {
-            id: crypto.randomUUID(),
-            role: 'user' as const,
-            content: [{ type: 'text' as const, text: next }],
-            timestamp: Date.now(),
-          }
-          useSessionStore.setState((s) => ({ messages: [...s.messages, userMessage] }))
-          useSessionStore.getState().markStreaming(sessionId, true)
-          ;(window as any).electronAPI?.invoke('query:send', { sessionId, text: next })
-        }, 100)
+      if (sessionId === useSessionStore.getState().activeSessionId) {
+        const next = useSessionStore.getState().dequeueMessage(sessionId)
+        if (next) {
+          setTimeout(() => {
+            const userMessage = {
+              id: crypto.randomUUID(),
+              role: 'user' as const,
+              content: [{ type: 'text' as const, text: next }],
+              timestamp: Date.now(),
+            }
+            useSessionStore.setState((s) => ({ messages: [...s.messages, userMessage] }))
+            useSessionStore.getState().markStreaming(sessionId, true)
+            ;(window as any).electronAPI?.invoke('query:send', { sessionId, text: next })
+          }, 100)
+        }
       }
     }) || (() => {})
 
@@ -167,6 +169,10 @@ export function useSession() {
       useSessionStore.getState().updateSessionState(sessionId, { aborting: false })
     })
 
+    const unsubSessionChanged = ipc.session.onSessionChanged(() => {
+      void useSessionStore.getState().loadProjects()
+    })
+
     return () => {
       unsubStream()
       unsubTool()
@@ -177,6 +183,7 @@ export function useSession() {
       unsubMessagesUpdated()
       unsubUsage()
       unsubBgNotification()
+      unsubSessionChanged()
     }
   }, [])
 

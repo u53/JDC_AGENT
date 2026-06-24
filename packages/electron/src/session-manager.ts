@@ -9,6 +9,7 @@ import {
   IdeManager, type IdeConnection, type OpenDiffParams, type OpenDiffResult, type DiagnosticFile,
   compressImageForAPI, getContextEngine, ensureCodeIndexJob, resolveConfiguredModel, type ConfiguredModelResolution,
   inspectContext, type ConstraintObservabilitySnapshot,
+  type PermissionMode,
 } from '@jdcagnet/core'
 import { Notification, type BrowserWindow } from 'electron'
 import {
@@ -45,7 +46,7 @@ export class SessionManager {
   private pendingPermissions = new Map<string, { resolve: (allowed: boolean) => void }>()
   private pendingAskUser = new Map<string, { resolve: (answer: string) => void }>()
   private pendingPlanReviews = new Map<string, { resolve: (result: { approved: boolean; feedback?: string }) => void }>()
-  private permissionModes = new Map<string, string>()
+  private permissionModes = new Map<string, PermissionMode>()
   private externalEventSinks = new Map<string, Map<string, SessionEventSink>>()
   private interactionRouter = createInteractionRouter((sessionId) => this.createUiInteractionSink(sessionId))
   private interactionRunKey = new AsyncLocalStorage<string>()
@@ -240,9 +241,17 @@ export class SessionManager {
     return this.ideManager.getDiagnostics(filePaths)
   }
 
-  createSession(projectName: string, cwd: string): string {
+  private notifySessionsChanged(): void {
+    this.window?.webContents.send('session:changed', { sessions: this.listAllProjects() })
+  }
+
+  createSession(projectName: string, cwd: string, options: { permissionMode?: PermissionMode } = {}): string {
     const sessionId = uuid()
-    this.history.createSession(sessionId, projectName, cwd)
+    this.history.createSession(sessionId, projectName, cwd, { permissionMode: options.permissionMode })
+    if (options.permissionMode) {
+      this.permissionModes.set(sessionId, options.permissionMode)
+    }
+    this.notifySessionsChanged()
     return sessionId
   }
 
@@ -302,13 +311,15 @@ export class SessionManager {
     }
   }
 
-  setSessionModel(sessionId: string, modelId: string): void {
+  setSessionModel(sessionId: string, modelId: string, options: { updateGlobal?: boolean } = {}): void {
     this.history.setSessionModel(sessionId, modelId)
-    // Also update global config as "last used" for new sessions
-    const config = loadAppConfig()
-    if (config.modelGroups) {
-      config.modelGroups.activeModelId = modelId
-      saveAppConfig(config)
+    // Desktop model changes remain the "last used" default for new sessions.
+    if (options.updateGlobal !== false) {
+      const config = loadAppConfig()
+      if (config.modelGroups) {
+        config.modelGroups.activeModelId = modelId
+        saveAppConfig(config)
+      }
     }
     // If session is already active, hot-swap the provider
     const session = this.sessions.get(sessionId)
@@ -390,6 +401,11 @@ export class SessionManager {
     }
     session.registerTool(createNotifyTool(onNotify))
     session.loadHistory()
+    const storedPermissionMode = this.permissionModes.get(sessionId) ?? this.history.getSessionPermissionMode(sessionId)
+    if (storedPermissionMode) {
+      this.permissionModes.set(sessionId, storedPermissionMode)
+      session.setPermissionMode(storedPermissionMode)
+    }
     ;(session as any)._protocol = protocol
     session.onNotificationReady = () => {
       this.window?.webContents.send('background:state-changed', { sessionId })
@@ -599,10 +615,12 @@ export class SessionManager {
     this.interactionRouter.clear(sessionId)
     this.sessions.delete(sessionId)
     this.history.deleteSession(sessionId)
+    this.notifySessionsChanged()
   }
 
   renameSession(sessionId: string, title: string): void {
     this.history.updateSessionTitle(sessionId, title)
+    this.notifySessionsChanged()
   }
 
   getMessages(sessionId: string) {
@@ -737,11 +755,12 @@ export class SessionManager {
     }))
   }
 
-  setPermissionMode(sessionId: string, mode: string): void {
+  setPermissionMode(sessionId: string, mode: PermissionMode): void {
     this.permissionModes.set(sessionId, mode)
+    this.history.setSessionPermissionMode(sessionId, mode)
     const session = this.sessions.get(sessionId)
     if (session) {
-      session.setPermissionMode(mode as any)
+      session.setPermissionMode(mode)
     }
   }
 

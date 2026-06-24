@@ -54,6 +54,11 @@ export function createInteractionRouter(fallback: InteractionFallback): Interact
     return values[values.length - 1]
   }
 
+  const pickSink = (sessionId: string, key: string | undefined, method: keyof SessionInteractionSink) => {
+    const sink = current(sessionId, key)
+    return sink?.[method] ? sink : fallbackFor(sessionId)
+  }
+
   return {
     attach(sessionId: string, key: string, sink: SessionInteractionSink) {
       const sessionSinks = sinks.get(sessionId) ?? new Map<string, SessionInteractionSink>()
@@ -69,16 +74,16 @@ export function createInteractionRouter(fallback: InteractionFallback): Interact
       sinks.delete(sessionId)
     },
     requestPermission(sessionId: string, request: PermissionRequest, key?: string) {
-      const fallbackSink = fallbackFor(sessionId)
-      return (current(sessionId, key)?.requestPermission ?? fallbackSink.requestPermission)?.(request) ?? Promise.resolve(false)
+      const sink = pickSink(sessionId, key, 'requestPermission')
+      return sink.requestPermission?.(request) ?? Promise.resolve(false)
     },
     askUser(sessionId: string, question: string, options?: string[], multiSelect?: boolean, key?: string) {
-      const fallbackSink = fallbackFor(sessionId)
-      return (current(sessionId, key)?.askUser ?? fallbackSink.askUser)?.(question, options, multiSelect) ?? Promise.resolve('')
+      const sink = pickSink(sessionId, key, 'askUser')
+      return sink.askUser?.(question, options, multiSelect) ?? Promise.resolve('')
     },
     reviewPlan(sessionId: string, planFile: string, content: string, key?: string) {
-      const fallbackSink = fallbackFor(sessionId)
-      return (current(sessionId, key)?.reviewPlan ?? fallbackSink.reviewPlan)?.(planFile, content) ?? Promise.resolve({ approved: false, feedback: 'No review handler is available.' })
+      const sink = pickSink(sessionId, key, 'reviewPlan')
+      return sink.reviewPlan?.(planFile, content) ?? Promise.resolve({ approved: false, feedback: 'No review handler is available.' })
     },
   }
 }

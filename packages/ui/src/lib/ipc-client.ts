@@ -50,6 +50,7 @@ declare global {
       onMcpStateChanged: (callback: (states: McpServerState[]) => void) => void
       listSkills: (sessionId: string) => Promise<{ name: string; description: string }[]>
       setPermissionMode: (sessionId: string, mode: string) => Promise<void>
+      onSessionChanged: (callback: (payload: { sessions?: unknown }) => void) => () => void
       compactSession: (sessionId: string) => Promise<unknown>
       clearSession: (sessionId: string) => Promise<unknown>
       setEffort: (sessionId: string, effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max') => Promise<void>
@@ -145,7 +146,7 @@ function send(channel: string, data: unknown): void {
 interface ProjectGroup {
   name: string
   cwd: string
-  sessions: { id: string; projectName: string; cwd: string; title?: string | null }[]
+  sessions: { id: string; projectName: string; cwd: string; title?: string | null; permissionMode?: string; externalChannel?: string }[]
 }
 
 export const ipc = {
@@ -164,6 +165,8 @@ export const ipc = {
       invoke('session:set-model', { sessionId, modelId }) as Promise<{ success: boolean }>,
     getModel: (sessionId: string) =>
       invoke('session:get-model', { sessionId }) as Promise<{ modelId: string | null }>,
+    onSessionChanged: (cb: (data: { sessions?: ProjectGroup[] }) => void) =>
+      on('session:changed', (_e, data) => cb(data as any)),
   },
 
   query: {

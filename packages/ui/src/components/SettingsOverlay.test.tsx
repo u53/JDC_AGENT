@@ -109,6 +109,19 @@ describe('SettingsOverlay', () => {
     expect(html).toContain('项目路径')
   })
 
+  it('documents Feishu model switching commands', () => {
+    const settingsState = { isOpen: true, activeTab: 'feishu' as const, theme: 'dark' as const, config: null }
+    useSettingsStore.setState(settingsState)
+    Object.assign(useSettingsStore.getInitialState(), settingsState)
+
+    const html = renderToStaticMarkup(<SettingsOverlay />)
+
+    expect(html).toContain('/model')
+    expect(html).toContain('/model 分组名称:模型名称')
+    expect(html).toContain('查看可切换模型列表')
+    expect(html).toContain('只影响当前飞书会话，不影响客户端全局默认模型')
+  })
+
   it('renders a Chinese product introduction in the about section', () => {
     const settingsState = { isOpen: true, activeTab: 'advanced' as const, theme: 'dark' as const, config: null }
     useSettingsStore.setState(settingsState)
