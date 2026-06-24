@@ -20,7 +20,12 @@ function binding() {
 }
 
 function flushMicrotasks() {
-  return Promise.resolve().then(() => Promise.resolve()).then(() => Promise.resolve())
+  return Promise.resolve()
+    .then(() => Promise.resolve())
+    .then(() => Promise.resolve())
+    .then(() => Promise.resolve())
+    .then(() => Promise.resolve())
+    .then(() => Promise.resolve())
 }
 
 function inboundMessage(eventId = 'event_1') {
@@ -368,7 +373,7 @@ describe('FeishuBridge', () => {
       stop: vi.fn(),
       onMessage: vi.fn(),
       sendText: vi.fn().mockResolvedValue({ messageId: 'reply_1' }),
-      sendMarkdown: vi.fn().mockResolvedValue({ messageId: 'markdown_1' }),
+      sendMarkdown: vi.fn().mockResolvedValueOnce({ messageId: 'status_1' }).mockResolvedValueOnce({ messageId: 'markdown_1' }),
     }
     const history = {
       beginExternalEvent: vi.fn().mockReturnValue({ status: 'accepted' }),
@@ -399,7 +404,7 @@ describe('FeishuBridge', () => {
     await client.onMessage.mock.calls[0][0](inboundMessage('event_final_text'))
     await flushMicrotasks()
 
-    expect(client.sendText).toHaveBeenCalledWith({ chatId: 'chat_1', threadKey: 'thread_1', text: '已收到，正在处理…' })
+    expect(client.sendMarkdown).toHaveBeenCalledWith({ chatId: 'chat_1', threadKey: 'thread_1', text: '已收到，正在处理…' })
     expect(client.sendMarkdown).toHaveBeenCalledWith({ chatId: 'chat_1', threadKey: 'thread_1', text: '**这是最终回复**' })
     expect(history.completeExternalEvent).toHaveBeenCalledWith('feishu', 'event_final_text', 'processed')
   })

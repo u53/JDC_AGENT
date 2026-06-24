@@ -1,5 +1,5 @@
 import { EventDispatcher, Client, LoggerLevel, WSClient } from '@larksuiteoapi/node-sdk'
-import type { FeishuApprovalInput, FeishuBinding, FeishuClientPort, FeishuInboundMessage, FeishuSendMarkdownInput, FeishuSendTextInput } from './types.js'
+import type { FeishuApprovalInput, FeishuBinding, FeishuClientPort, FeishuInboundMessage, FeishuSendMarkdownInput, FeishuSendTextInput, FeishuUpdateTextInput } from './types.js'
 
 type FeishuMessageHandler = (message: FeishuInboundMessage) => Promise<void>
 
@@ -69,24 +69,24 @@ export function createFeishuClient(binding: FeishuBinding): FeishuClientPort & {
     return { messageId }
   }
 
+  async function updateText(input: FeishuUpdateTextInput): Promise<{ messageId: string }> {
+    const response = await (client as any).im.message.patch({
+      path: { message_id: input.messageId },
+      data: {
+        content: createMarkdownCardContent(input.text),
+      },
+    })
+    const messageId = response?.data?.message_id ?? response?.data?.messageId ?? response?.message_id ?? input.messageId
+    return { messageId }
+  }
+
   async function sendMarkdown(input: FeishuSendMarkdownInput): Promise<{ messageId: string }> {
     const response = await (client as any).im.message.create({
       params: { receive_id_type: 'chat_id' },
       data: {
         receive_id: input.chatId,
         msg_type: 'interactive',
-        content: JSON.stringify({
-          config: { wide_screen_mode: true },
-          elements: [
-            {
-              tag: 'div',
-              text: {
-                tag: 'lark_md',
-                content: input.text,
-              },
-            },
-          ],
-        }),
+        content: createMarkdownCardContent(input.text),
       },
     })
     const messageId = response?.data?.message_id ?? response?.data?.messageId ?? response?.message_id ?? ''
@@ -200,6 +200,7 @@ export function createFeishuClient(binding: FeishuBinding): FeishuClientPort & {
 
   return {
     sendText,
+    updateText,
     sendMarkdown,
     sendApproval,
     waitForReply,
@@ -215,6 +216,21 @@ export function createFeishuClient(binding: FeishuBinding): FeishuClientPort & {
       ;(wsClient as any).close?.({ force: true })
     },
   }
+}
+
+function createMarkdownCardContent(text: string): string {
+  return JSON.stringify({
+    config: { wide_screen_mode: true, update_multi: true },
+    elements: [
+      {
+        tag: 'div',
+        text: {
+          tag: 'lark_md',
+          content: text,
+        },
+      },
+    ],
+  })
 }
 
 function parseTextContent(content: string | undefined): string {

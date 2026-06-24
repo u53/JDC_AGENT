@@ -4,9 +4,11 @@ import type { FeishuClientPort } from './types.js'
 
 const MAX_REPLY_CHARS = 3500
 const MAX_STATUS_CHARS = 600
+const MAX_STATUS_HISTORY = 5
 const genericErrorText = '运行失败，请在 JDC 客户端查看详情。'
 
 type FeishuTarget = { chatId: string; threadKey?: string }
+type FeishuStatusOptions = { statusMessageId?: string }
 type FeishuInteractionResolver = {
   waitForReply(input: { chatId: string; threadKey?: string; promptMessageId: string }): Promise<string>
   waitForApproval(requestId: string): Promise<boolean>
@@ -14,15 +16,18 @@ type FeishuInteractionResolver = {
 
 export class FeishuSink implements SessionEventSink, SessionInteractionSink {
   private readonly textBySession = new Map<string, string>()
-  private readonly assistantTextsBySession = new Map<string, string[]>()
+  private readonly assistantMessageIdsBySession = new Map<string, Set<string>>()
   private readonly statusLines: string[] = []
   private sendQueue: Promise<unknown> = Promise.resolve()
   private sawError = false
+  private statusUpdatesDelivered = false
+  private statusUpdateFailed = false
 
   constructor(
     private readonly client: FeishuClientPort,
     private readonly target: FeishuTarget,
-    private readonly interactionResolver?: FeishuInteractionResolver
+    private readonly interactionResolver?: FeishuInteractionResolver,
+    private readonly statusOptions: FeishuStatusOptions = {}
   ) {}
 
   stream(sessionId: string, chunk: StreamChunk): void {
@@ -45,17 +50,10 @@ export class FeishuSink implements SessionEventSink, SessionInteractionSink {
     const text = extractTextFromMessage(message)
     if (!text) return
 
-    const finalText = text.trim()
-    const texts = this.assistantTextsBySession.get(sessionId) ?? []
-    const lastText = texts[texts.length - 1]
-
-    if (lastText === finalText || lastText?.includes(finalText)) return
-    if (lastText && finalText.includes(lastText)) {
-      texts[texts.length - 1] = finalText
-    } else {
-      texts.push(finalText)
-    }
-    this.assistantTextsBySession.set(sessionId, texts)
+    if (this.hasQueuedAssistantMessage(sessionId, message.id)) return
+    this.markAssistantMessageQueued(sessionId, message.id)
+    this.textBySession.delete(sessionId)
+    this.queueAssistantReply(text.trim())
   }
 
   retrying(_sessionId: string, event: RetrySinkEvent): void {
@@ -88,22 +86,29 @@ export class FeishuSink implements SessionEventSink, SessionInteractionSink {
   async finished(sessionId: string): Promise<void> {
     await this.drainPendingSends()
     await this.flushStatus()
+    await this.completeStatusMessage()
 
-    const completedTexts = this.assistantTextsBySession.get(sessionId)
-    const text = (completedTexts?.length ? completedTexts.join('\n\n') : this.textBySession.get(sessionId) ?? '').trim()
+    const text = (this.textBySession.get(sessionId) ?? '').trim()
     if (!text) {
       this.textBySession.delete(sessionId)
-      this.assistantTextsBySession.delete(sessionId)
+      this.assistantMessageIdsBySession.delete(sessionId)
       return
     }
 
     await this.sendSplitReply(text)
     this.textBySession.delete(sessionId)
-    this.assistantTextsBySession.delete(sessionId)
+    this.assistantMessageIdsBySession.delete(sessionId)
   }
 
   async flushStatus(): Promise<void> {
     if (!this.statusLines.length) return
+
+    if (this.canUpdateStatus()) {
+      await this.updateStatusMessage()
+      return
+    }
+
+    if (this.statusOptions.statusMessageId && this.statusUpdatesDelivered && !this.statusUpdateFailed) return
 
     const pending = [...this.statusLines]
     const text = truncate(pending.join('\n'), MAX_REPLY_CHARS)
@@ -164,8 +169,39 @@ export class FeishuSink implements SessionEventSink, SessionInteractionSink {
     return parsed.approved ? { approved: true } : { approved: false, feedback: parsed.feedback }
   }
 
+  private queueAssistantReply(text: string): void {
+    if (!text.trim()) return
+    this.sendQueue = this.sendQueue.then(() => this.sendSplitReply(text))
+  }
+
+  private hasQueuedAssistantMessage(sessionId: string, messageId: string): boolean {
+    return this.assistantMessageIdsBySession.get(sessionId)?.has(messageId) ?? false
+  }
+
+  private markAssistantMessageQueued(sessionId: string, messageId: string): void {
+    const ids = this.assistantMessageIdsBySession.get(sessionId) ?? new Set<string>()
+    ids.add(messageId)
+    this.assistantMessageIdsBySession.set(sessionId, ids)
+  }
+
   private queueStatus(status: string): void {
-    this.statusLines.push(status)
+    if (!this.addStatus(status)) return
+
+    if (this.canUpdateStatus()) {
+      this.sendQueue = this.sendQueue
+        .catch(() => undefined)
+        .then(async () => {
+          try {
+            await this.updateStatusMessage()
+          } catch {
+            this.statusUpdateFailed = true
+          }
+        })
+      return
+    }
+
+    if (this.statusOptions.statusMessageId) return
+
     this.sendQueue = this.sendQueue
       .catch(() => undefined)
       .then(async () => {
@@ -175,6 +211,42 @@ export class FeishuSink implements SessionEventSink, SessionInteractionSink {
           // Keep buffered status lines for the next explicit flush or queued status.
         }
       })
+  }
+
+  private addStatus(status: string): boolean {
+    const normalized = status.trim()
+    if (!normalized) return false
+    if (this.statusLines.includes(normalized)) return false
+    this.statusLines.push(normalized)
+    if (this.statusLines.length > MAX_STATUS_HISTORY) {
+      this.statusLines.splice(0, this.statusLines.length - MAX_STATUS_HISTORY)
+    }
+    return true
+  }
+
+  private canUpdateStatus(): boolean {
+    return Boolean(this.statusOptions.statusMessageId && this.client.updateText && !this.statusUpdateFailed)
+  }
+
+  private async updateStatusMessage(): Promise<void> {
+    const messageId = this.statusOptions.statusMessageId
+    if (!messageId || !this.client.updateText) return
+    await this.client.updateText({
+      ...this.target,
+      messageId,
+      text: formatStatusMessage(this.statusLines),
+    })
+    this.statusUpdatesDelivered = true
+  }
+
+  private async completeStatusMessage(): Promise<void> {
+    const messageId = this.statusOptions.statusMessageId
+    if (!messageId || !this.client.updateText || !this.statusUpdatesDelivered || this.statusUpdateFailed) return
+    await this.client.updateText({
+      ...this.target,
+      messageId,
+      text: formatCompletedStatusMessage(this.statusLines),
+    })
   }
 
   private async sendSplitReply(text: string): Promise<void> {
@@ -232,6 +304,25 @@ function statusFromChunk(chunk: StreamChunk): string | null {
     default:
       return null
   }
+}
+
+function formatStatusMessage(statusLines: string[]): string {
+  const latest = statusLines[statusLines.length - 1] ?? '正在处理…'
+  const recent = statusLines.slice(Math.max(0, statusLines.length - MAX_STATUS_HISTORY), -1)
+  const parts = [`运行中`, `当前：${latest}`]
+  if (recent.length) {
+    parts.push('', '最近步骤：', ...recent.map((line) => `- ${line}`))
+  }
+  return truncate(parts.join('\n'), MAX_STATUS_CHARS)
+}
+
+function formatCompletedStatusMessage(statusLines: string[]): string {
+  const recent = statusLines.slice(-Math.min(MAX_STATUS_HISTORY, statusLines.length))
+  const parts = ['处理完成']
+  if (recent.length) {
+    parts.push('', '执行步骤：', ...recent.map((line) => `- ${line}`))
+  }
+  return truncate(parts.join('\n'), MAX_STATUS_CHARS)
 }
 
 function summarizeToolEvent(event: ToolExecutionEvent): string {

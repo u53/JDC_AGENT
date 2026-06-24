@@ -51,6 +51,13 @@ export interface FeishuSendTextInput {
   text: string
 }
 
+export interface FeishuUpdateTextInput {
+  messageId: string
+  chatId?: string
+  threadKey?: string
+  text: string
+}
+
 export interface FeishuSendMarkdownInput {
   chatId: string
   threadKey?: string
@@ -66,6 +73,7 @@ export interface FeishuApprovalInput {
 
 export interface FeishuClientPort {
   sendText(input: FeishuSendTextInput): Promise<{ messageId: string }>
+  updateText?(input: FeishuUpdateTextInput): Promise<{ messageId: string }>
   sendMarkdown?(input: FeishuSendMarkdownInput): Promise<{ messageId: string }>
   sendApproval?(input: FeishuApprovalInput): Promise<{ requestId: string }>
   waitForApproval?(requestId: string): Promise<boolean>

@@ -53,6 +53,36 @@ describe('FeishuSink', () => {
     expect(client.sendText).toHaveBeenCalledWith({ chatId: 'chat_1', text: '**retry me**' })
   })
 
+  it('sends assistant text segments as each assistant message completes instead of batching at finish', async () => {
+    const client = { sendText: vi.fn().mockResolvedValue({ messageId: 'reply_1' }) }
+    const sink = new FeishuSink(client as any, { chatId: 'chat_1' })
+
+    sink.messageComplete?.('session_1', {
+      id: 'assistant_1',
+      role: 'assistant',
+      timestamp: Date.now(),
+      content: [{ type: 'text', text: '先跑核心测试确认问题。' }],
+    } as any)
+    sink.toolEvent?.('session_1', { type: 'start', toolName: 'Bash', input: { command: 'pnpm test --token SECRET_TOKEN' } } as any)
+    await sink.drainPendingSends()
+
+    expect(client.sendText).toHaveBeenCalledTimes(2)
+    expect(client.sendText.mock.calls[0][0].text).toBe('先跑核心测试确认问题。')
+    expect(client.sendText.mock.calls[1][0].text).toContain('正在运行工具：命令执行')
+
+    sink.messageComplete?.('session_1', {
+      id: 'assistant_2',
+      role: 'assistant',
+      timestamp: Date.now(),
+      content: [{ type: 'text', text: '全仓构建通过；失败用例单独运行通过。' }],
+    } as any)
+    await sink.finished?.('session_1')
+
+    expect(client.sendText).toHaveBeenCalledTimes(3)
+    expect(client.sendText.mock.calls[2][0].text).toBe('全仓构建通过；失败用例单独运行通过。')
+    expect(client.sendText.mock.calls.map((call: any[]) => call[0].text).join('\n')).not.toContain('先跑核心测试确认问题。\n\n全仓构建通过')
+  })
+
   it('uses final assistant message text when stream deltas are unavailable', async () => {
     const client = { sendText: vi.fn().mockResolvedValue({ messageId: 'reply_1' }) }
     const sink = new FeishuSink(client as any, { chatId: 'chat_1' })
@@ -86,6 +116,87 @@ describe('FeishuSink', () => {
 
     expect(client.sendText).toHaveBeenCalledTimes(1)
     expect(client.sendText).toHaveBeenCalledWith(expect.objectContaining({ text: '最终正文' }))
+  })
+
+  it('updates one status message instead of sending a message per tool event', async () => {
+    const client = {
+      sendText: vi.fn().mockResolvedValue({ messageId: 'unexpected_status' }),
+      updateText: vi.fn().mockResolvedValue({ messageId: 'status_1' }),
+    }
+    const sink = new FeishuSink(client as any, { chatId: 'chat_1' }, undefined, { statusMessageId: 'status_1' })
+
+    sink.toolEvent?.('session_1', { type: 'start', toolName: 'Read', input: { file_path: 'a.ts' } } as any)
+    sink.toolEvent?.('session_1', { type: 'complete', toolName: 'Read', result: { content: 'SECRET_FILE_CONTENT' } } as any)
+    sink.toolEvent?.('session_1', { type: 'start', toolName: 'Bash', input: { command: 'pnpm test --token SECRET_TOKEN' } } as any)
+    await sink.drainPendingSends()
+
+    expect(client.sendText).not.toHaveBeenCalled()
+    expect(client.updateText).toHaveBeenCalled()
+    expect(client.updateText.mock.calls.every((call: any[]) => call[0].messageId === 'status_1')).toBe(true)
+    const lastText = client.updateText.mock.calls.at(-1)?.[0].text
+    expect(lastText).toContain('运行中')
+    expect(lastText).toContain('当前：正在运行工具：命令执行')
+    expect(lastText).toContain('正在运行工具：文件操作')
+    expect(lastText).toContain('工具运行完成：文件操作')
+    expect(lastText).not.toContain('SECRET_FILE_CONTENT')
+    expect(lastText).not.toContain('SECRET_TOKEN')
+  })
+
+  it('deduplicates repeated generic processing updates in the status message', async () => {
+    const client = {
+      updateText: vi.fn().mockResolvedValue({ messageId: 'status_1' }),
+    }
+    const sink = new FeishuSink(client as any, { chatId: 'chat_1' }, undefined, { statusMessageId: 'status_1' })
+
+    sink.toolEvent?.('session_1', { type: 'start', toolName: 'UnknownInternalTool', input: { secret: 'SECRET_TASK' } } as any)
+    sink.toolEvent?.('session_1', { type: 'progress', toolName: 'UnknownInternalTool', message: 'SECRET_PROGRESS' } as any)
+    sink.toolEvent?.('session_1', { type: 'start', toolName: 'AnotherUnknownTool', input: { secret: 'SECRET_TASK_2' } } as any)
+    sink.toolEvent?.('session_1', { type: 'complete', toolName: 'UnknownInternalTool', result: { content: 'SECRET_RESULT' } } as any)
+    sink.toolEvent?.('session_1', { type: 'complete', toolName: 'AnotherUnknownTool', result: { content: 'SECRET_RESULT_2' } } as any)
+    await sink.drainPendingSends()
+
+    const lastText = client.updateText.mock.calls.at(-1)?.[0].text
+    expect(lastText.match(/正在处理/g)).toHaveLength(1)
+    expect(lastText.match(/处理步骤完成/g)).toHaveLength(1)
+    expect(lastText).not.toContain('UnknownInternalTool')
+    expect(lastText).not.toContain('AnotherUnknownTool')
+    expect(lastText).not.toContain('SECRET_TASK')
+    expect(lastText).not.toContain('SECRET_RESULT')
+  })
+
+  it('marks the updated status message complete before sending the final reply', async () => {
+    const client = {
+      sendText: vi.fn().mockResolvedValue({ messageId: 'reply_1' }),
+      updateText: vi.fn().mockResolvedValue({ messageId: 'status_1' }),
+    }
+    const sink = new FeishuSink(client as any, { chatId: 'chat_1' }, undefined, { statusMessageId: 'status_1' })
+
+    sink.toolEvent?.('session_1', { type: 'start', toolName: 'Read', input: { file_path: 'a.ts' } } as any)
+    sink.stream('session_1', { type: 'text_delta', text: '最终回复' } as any)
+    await sink.finished?.('session_1')
+
+    const lastStatusText = client.updateText.mock.calls.at(-1)?.[0].text
+    expect(lastStatusText).toContain('处理完成')
+    expect(lastStatusText).not.toContain('运行中')
+    expect(client.updateText.mock.invocationCallOrder.at(-1)).toBeLessThan(client.sendText.mock.invocationCallOrder[0])
+    expect(client.sendText).toHaveBeenCalledWith({ chatId: 'chat_1', text: '最终回复' })
+  })
+
+  it('falls back to one consolidated status message when status updates are unsupported', async () => {
+    const client = { sendText: vi.fn().mockResolvedValue({ messageId: 'status_fallback_1' }) }
+    const sink = new FeishuSink(client as any, { chatId: 'chat_1' }, undefined, { statusMessageId: 'status_1' })
+
+    sink.toolEvent?.('session_1', { type: 'start', toolName: 'Read', input: { file_path: 'a.ts' } } as any)
+    sink.toolEvent?.('session_1', { type: 'complete', toolName: 'Read', result: { content: 'SECRET_FILE_CONTENT' } } as any)
+    await sink.drainPendingSends()
+    expect(client.sendText).not.toHaveBeenCalled()
+
+    await sink.finished?.('session_1')
+
+    expect(client.sendText).toHaveBeenCalledTimes(1)
+    expect(client.sendText.mock.calls[0][0].text).toContain('正在运行工具：文件操作')
+    expect(client.sendText.mock.calls[0][0].text).toContain('工具运行完成：文件操作')
+    expect(client.sendText.mock.calls[0][0].text).not.toContain('SECRET_FILE_CONTENT')
   })
 
   it('summarizes tool events without dumping full tool results or raw input', async () => {
@@ -339,7 +450,7 @@ describe('FeishuSink', () => {
     expect(text).not.toContain('SECRET_AGENT_RESULT')
   })
 
-  it('sends tool status before one consolidated final reply for Feishu', async () => {
+  it('sends tool status and assistant replies as separate Feishu messages', async () => {
     const client = { sendText: vi.fn().mockResolvedValue({ messageId: 'reply_1' }) }
     const sink = new FeishuSink(client as any, { chatId: 'chat_1' })
 
@@ -359,11 +470,12 @@ describe('FeishuSink', () => {
     } as any)
     await sink.finished?.('session_1')
 
-    expect(client.sendText).toHaveBeenCalledTimes(2)
+    expect(client.sendText).toHaveBeenCalledTimes(3)
     expect(client.sendText.mock.calls[0][0].text).toContain('正在运行工具：文件操作')
     expect(client.sendText.mock.calls[0][0].text).toContain('工具运行完成：文件操作')
     expect(client.sendText.mock.calls[0][0].text).not.toContain('SECRET_FILE_CONTENT')
-    expect(client.sendText.mock.calls[1][0].text).toBe('我先看一下。\n\n读取完成。')
+    expect(client.sendText.mock.calls[1][0].text).toBe('我先看一下。')
+    expect(client.sendText.mock.calls[2][0].text).toBe('读取完成。')
   })
 
   it('sends safe runtime errors to Feishu', async () => {

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => {
   const dispatchers: any[] = []
   const create = vi.fn().mockResolvedValue({ data: { message_id: 'sent_1' } })
+  const patch = vi.fn().mockResolvedValue({ data: { message_id: 'updated_1' } })
   class EventDispatcher {
     handlers: Record<string, (event: any) => Promise<void>> = {}
     constructor() {
@@ -13,13 +14,13 @@ const mocks = vi.hoisted(() => {
     }
   }
   class Client {
-    im = { message: { create } }
+    im = { message: { create, patch } }
   }
   class WSClient {
     start = vi.fn()
     close = vi.fn()
   }
-  return { dispatchers, create, EventDispatcher, Client, WSClient }
+  return { dispatchers, create, patch, EventDispatcher, Client, WSClient }
 })
 
 vi.mock('@larksuiteoapi/node-sdk', () => ({
@@ -89,6 +90,22 @@ describe('createFeishuClient interactions', () => {
     expect(forwarded.mock.calls[1][0].threadKey).toBe('chat_1')
   })
 
+  it('updates an existing status card through Feishu message patch API', async () => {
+    const client = createFeishuClient(binding())
+
+    await client.updateText!({ messageId: 'message_1', chatId: 'chat_1', threadKey: 'thread_1', text: '运行中\n当前：正在运行工具：文件操作' })
+
+    expect(mocks.patch).toHaveBeenCalledWith({
+      path: { message_id: 'message_1' },
+      data: {
+        content: JSON.stringify({
+          config: { wide_screen_mode: true, update_multi: true },
+          elements: [{ tag: 'div', text: { tag: 'lark_md', content: '运行中\n当前：正在运行工具：文件操作' } }],
+        }),
+      },
+    })
+  })
+
   it('sends Markdown as an interactive lark_md card', async () => {
     const client = createFeishuClient(binding())
 
@@ -103,6 +120,7 @@ describe('createFeishuClient interactions', () => {
     })
     const content = JSON.parse(mocks.create.mock.calls.at(-1)[0].data.content)
     expect(content).toMatchObject({
+      config: { wide_screen_mode: true, update_multi: true },
       elements: [{ tag: 'div', text: { tag: 'lark_md', content: '**加粗**\n\n```ts\nconst x = 1\n```' } }],
     })
   })

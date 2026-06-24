@@ -214,15 +214,26 @@ export class FeishuBridge {
         return
       }
 
-      const sink = new FeishuSink(client, { chatId: message.chatId, threadKey: message.threadKey }, this.createInteractionResolver(runtime, message))
+      const statusMessage = await this.sendStatusMessage(client, message)
+      const sink = new FeishuSink(client, { chatId: message.chatId, threadKey: message.threadKey }, this.createInteractionResolver(runtime, message), { statusMessageId: statusMessage.messageId })
       this.options.sessions.setPermissionMode?.(resolved.sessionId, binding.permissionMode)
-      await client.sendText({ chatId: message.chatId, threadKey: message.threadKey, text: processingReplyText })
       this.runSessionMessage(runtime, resolved.sessionId, resolved.text, sink, message.eventId)
     } catch {
       runtime.lastError = messageProcessingFailedStatusText
       await this.notifyProcessingFailure(client, message)
       this.options.history.completeExternalEvent('feishu', message.eventId, 'failed')
     }
+  }
+
+  private async sendStatusMessage(client: FeishuRuntimeClient, message: FeishuInboundMessage): Promise<{ messageId: string }> {
+    if (client.sendMarkdown) {
+      try {
+        return await client.sendMarkdown({ chatId: message.chatId, threadKey: message.threadKey, text: processingReplyText })
+      } catch {
+        return client.sendText({ chatId: message.chatId, threadKey: message.threadKey, text: processingReplyText })
+      }
+    }
+    return client.sendText({ chatId: message.chatId, threadKey: message.threadKey, text: processingReplyText })
   }
 
   private runSessionMessage(
